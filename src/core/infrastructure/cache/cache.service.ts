@@ -1,0 +1,98 @@
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
+
+interface CacheKey {
+  prefix: string;
+  key: string;
+}
+
+interface GetOptions {
+  key: CacheKey;
+}
+
+interface SetOptions {
+  key: CacheKey;
+  data: unknown;
+  options?: { ttl?: number };
+}
+
+interface DeleteOptions {
+  key: CacheKey;
+}
+
+@Injectable()
+export class CacheService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(CacheService.name);
+  private client: Redis;
+
+  constructor(private readonly configService: ConfigService) {}
+
+  onModuleInit(): void {
+    const host = this.configService.get<string>('REDIS_HOST', 'localhost');
+    const port = this.configService.get<number>('REDIS_PORT', 6379);
+    const password = this.configService.get<string>('REDIS_PASSWORD');
+    const db = this.configService.get<number>('REDIS_DB', 0);
+
+    this.client = new Redis({
+      host,
+      port,
+      password: password || undefined,
+      db,
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+    });
+
+    this.client.on('error', (err) =>
+      this.logger.error(`Redis cache error: ${err.message}`),
+    );
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.client?.quit();
+  }
+
+  // ── API Pública ──────────────────────────────────────────────────────────
+
+  async get<T>(options: GetOptions): Promise<T | null> {
+    try {
+      const raw = await this.client.get(this.buildKey(options.key));
+      if (!raw) return null;
+      return JSON.parse(raw) as T;
+    } catch (error: any) {
+      this.logger.warn(`Cache GET error [${this.buildKey(options.key)}]: ${error.message}`);
+      return null; // Fail open: si Redis falla, continuamos sin cache
+    }
+  }
+
+  async set(options: SetOptions): Promise<void> {
+    try {
+      const serialized = JSON.stringify(options.data);
+      const k = this.buildKey(options.key);
+      const ttl = options.options?.ttl;
+
+      if (ttl && ttl > 0) {
+        await this.client.setex(k, ttl, serialized);
+      } else {
+        await this.client.set(k, serialized);
+      }
+    } catch (error: any) {
+      this.logger.warn(`Cache SET error [${this.buildKey(options.key)}]: ${error.message}`);
+    }
+  }
+
+  async delete(options: DeleteOptions): Promise<void> {
+    try {
+      await this.client.del(this.buildKey(options.key));
+    } catch (error: any) {
+      this.logger.warn(`Cache DEL error [${this.buildKey(options.key)}]: ${error.message}`);
+    }
+  }
+
+  // ── Helper ───────────────────────────────────────────────────────────────
+
+  private buildKey(cacheKey: CacheKey): string {
+    return `${cacheKey.prefix}:${cacheKey.key}`;
+  }
+}

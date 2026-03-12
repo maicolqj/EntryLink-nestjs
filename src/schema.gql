@@ -1,0 +1,2756 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AssignedChildResult {
+  """ID of the child role"""
+  childId: String!
+
+  """Name of the child role"""
+  childName: String!
+
+  """Whether the assignment was successful"""
+  success: Boolean!
+
+  """Error message if assignment failed"""
+  error: String
+}
+
+type AssignChildrenResponse {
+  """ID of the parent role"""
+  parentId: String!
+
+  """Name of the parent role"""
+  parentName: String!
+
+  """Results of child assignments"""
+  assignedChildren: [AssignedChildResult!]!
+
+  """Number of ancestor roles affected"""
+  affectedAncestorsCount: Int!
+
+  """Success message"""
+  message: String!
+}
+
+type SimplePermissionResponse {
+  """id of the permission"""
+  id: String!
+
+  """name of the permission"""
+  name: ValidPermissions!
+
+  """description of the permission"""
+  description: String
+
+  """category of the permission"""
+  category: String
+
+  """level of the permission"""
+  level: String
+}
+
+enum ValidPermissions {
+  VIEW_USERS
+  VIEW_SENSITIVE_USER_DATA
+  CREATE_USER
+  EDIT_USER
+  BLOCK_USER
+  DELETE_USER
+  MANAGE_USERS
+  VIEW_ROLES
+  CREATE_ROLE
+  EDIT_ROLE
+  ASSIGN_PERMISSIONS
+  DELETE_ROLE
+  MANAGE_ROLES
+  VIEW_RESIDENTS
+  CREATE_RESIDENTS
+  EDIT_RESIDENTS
+  VIEW_RECIDENTS_LOCATION
+  BLOCK_RESIDENTS
+  DELETE_RESIDENTS
+  MANAGE_RESIDENTS
+  APPROVE_RESIDENT
+  REJECT_RESIDENT
+  VIEW_PACKAGES
+  CREATE_PACKAGE
+  EDIT_PACKAGE
+  EXPORT_PACKAGES
+  MANAGE_PACKAGES
+  VIEW_RESIDENCES
+  CREATE_RESIDENCE
+  EDIT_RESIDENCE
+  TOGGLE_RESIDENCE_STATUS
+  DELETE_RESIDENCE
+  MANAGE_RESIDENCES
+  VIEW_PRODUCTS
+  MANAGE_PRODUCTS
+  VIEW_REPORTS
+  EXPORT_REPORTS
+  VIEW_SETTINGS
+  EDIT_SETTINGS
+  VIEW_NOTIFICATIONS
+  SEND_NOTIFICATIONS
+  VIEW_VISITORS
+  VIEW_VISITS
+  REGISTER_VISITOR_ENTRY
+  REGISTER_VISITOR_EXIT
+  SCHEDULE_VISIT
+  APPROVE_VISIT
+  BLACKLIST_VISITOR
+  VIEW_VEHICLES
+  REGISTER_VEHICLE
+  EDIT_VEHICLE
+  APPROVE_VEHICLE
+  REMOVE_VEHICLE
+  CHECK_PLATE
+  VIEW_FEE_CONFIGS
+  MANAGE_FEE_CONFIGS
+  VIEW_CHARGES
+  GENERATE_CHARGES
+  WAIVE_CHARGE
+  VIEW_PAYMENTS
+  REGISTER_PAYMENT
+  REVERSE_PAYMENT
+  VIEW_ACCOUNT_BALANCE
+  VIEW_FINANCIAL_REPORTS
+  SUPERADMIN
+}
+
+"""CountryCode"""
+type Country {
+  code: String!
+  name: String!
+  dialCode: String!
+  flag: String!
+}
+
+"""Entidad que representa un usuario del sistema"""
+type User {
+  """Unique user identifier"""
+  id: String!
+
+  """Name of the user"""
+  name: String!
+
+  """lastName of the user"""
+  lastName: String!
+
+  """Phone Number (only Colombia)"""
+  phoneNumber: String!
+
+  """CountryCode"""
+  countryCode: Country!
+
+  """Identity document number"""
+  identity: String
+
+  """Email address"""
+  email: String!
+
+  """Profile picture URL"""
+  profilePicture: String
+
+  """Profile picture of port URL"""
+  coverPicture: String
+
+  """Password"""
+  password: String
+
+  """token version"""
+  tokenVersion: String
+
+  """Phone verification status"""
+  phoneVerified: Boolean!
+
+  """email verification status"""
+  emailVerified: Boolean!
+
+  """identity verification status"""
+  identityVerified: Boolean!
+
+  """Date of birth"""
+  dateOfBirth: DateTime
+
+  """User gender"""
+  gender: Gender
+
+  """User biography"""
+  bio: String
+
+  """User rating (1-5)"""
+  rating: Float!
+
+  """Users preferred language"""
+  preferredLanguage: String!
+
+  """Preferred time zone"""
+  timezone: String!
+
+  """Token for push notifications"""
+  notificationToken: String
+
+  """Indicates whether the user agrees to receive marketing emails."""
+  acceptsMarketing: Boolean!
+
+  """Indicates whether the user agrees accept terms and conditions."""
+  acceptTermsAdnConditions: Boolean!
+
+  """Date of last password change"""
+  lastPasswordChange: DateTime
+
+  """Date until which the account is blocked due to failed attempts"""
+  failedLoginAttempts: DateTime
+
+  """Date until which the account is blocked due to failed attempts"""
+  accountLockedUntil: DateTime
+
+  """Current status of user account"""
+  status: UserStatus!
+
+  """User creation date"""
+  createdAt: DateTime!
+
+  """Date of last user update"""
+  updatedAt: DateTime!
+
+  """Deletion date (soft delete)"""
+  deletedAt: DateTime
+
+  """Reason for account deletion"""
+  deletionReason: String
+
+  """Código de sistema asignado (solo residentes)"""
+  systemCode: String
+
+  """ID del complejo residencial asociado"""
+  complexId: String
+
+  """Permissions created by this user"""
+  createdPermissions: [Permission!]
+
+  """Permissions last updated by this user"""
+  updatedPermissions: [Permission!]
+  createdRoles: [Role!]
+  updatedRoles: [Role!]
+
+  """Detalles completos de la relación usuario-rol"""
+  userRoles: [UserRole!]
+
+  """Nombre completo del usuario (nombre + apellido)"""
+  fullName: String!
+
+  """Indica si el usuario tiene tanto email como teléfono verificados"""
+  isFullyVerified: Boolean!
+
+  """Edad calculada del usuario basada en su fecha de nacimiento"""
+  age: Float
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+"""Opciones de género disponibles"""
+enum Gender {
+  MALE
+  FEMALE
+  PREFER_NOT_TO_SAY
+}
+
+"""Estados posibles de la cuenta de usuario"""
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  DELETED
+  BANNED
+}
+
+"""Entidad intermedia qeu guarda la relacion entre el usuario y los roles"""
+type UserRole {
+  """Id del rol"""
+  id: String!
+
+  """
+  Indica si el rol está marcado como seleccionado o principal para el usuario
+  """
+  isPrimary: Boolean
+
+  """Indica la fecha de asignación del rol al usuario"""
+  assignedAt: DateTime!
+
+  """Users who have this role"""
+  user: User
+
+  """Roles asignados al usuario"""
+  role: Role!
+}
+
+type SimpleRoleResponse {
+  """id of the role"""
+  id: String!
+
+  """name of the role"""
+  name: ValidRoles
+
+  """name of the role"""
+  frontName: String
+
+  """description of the role"""
+  description: String
+
+  """icon of the role"""
+  icon: String
+
+  """Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)"""
+  hierarchyLevel: Int
+
+  """indicates if role is active"""
+  status: Boolean
+
+  """indicates if role is system role"""
+  isSystem: Boolean
+
+  """Stores dynamic rules."""
+  metadata: JSON
+  createdAt: DateTime
+  updatedAt: DateTime
+
+  """permissions assigned to this role"""
+  permissions: [SimplePermissionResponse!]
+
+  """parent role for hierarchy"""
+  parent: SimpleRoleResponse
+
+  """child roles in hierarchy"""
+  children: [SimpleRoleResponse!]
+  userRoles: [UserRole!]
+  createdByUser: User
+  updatedByUser: User
+}
+
+"""Roles de la paltaforma"""
+enum ValidRoles {
+  SUPER_ADMIN_ROL
+  COMPILANCE_OFFICER_ROL
+  COMPLEX_ROL
+  ACCOUNTANT_ROL
+  SUPERVISOR_ROL
+  RESIDENT_ROL
+  SECURITY_ROL
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type ChangeParentResponse {
+  """ID of the role that was moved"""
+  roleId: String!
+
+  """Name of the role that was moved"""
+  roleName: ValidRoles!
+
+  """Previous parent role information"""
+  oldParent: SimpleRoleResponse
+
+  """New parent role information"""
+  newParent: SimpleRoleResponse
+
+  """Number of roles affected by this change"""
+  affectedRolesCount: Int!
+
+  """Success message"""
+  message: String!
+}
+
+type HierarchyRoleInfo {
+  """Role ID"""
+  id: String!
+
+  """Role name"""
+  name: ValidRoles!
+
+  """Hierarchy level"""
+  hierarchyLevel: Int!
+
+  """Distance from the reference role"""
+  distance: Int!
+}
+
+type HierarchyStats {
+  """Number of ancestors"""
+  ancestorCount: Int!
+
+  """Number of descendants"""
+  descendantCount: Int!
+
+  """Number of direct permissions"""
+  directPermissionCount: Int!
+
+  """Number of effective permissions"""
+  effectivePermissionCount: Int!
+}
+
+type MoveSubtreeResponse {
+  """ID of the root role that was moved"""
+  movedRoleId: String!
+
+  """Name of the root role that was moved"""
+  movedRoleName: String!
+
+  """Number of descendant roles that were also moved"""
+  descendantsCount: Int!
+
+  """New parent role information"""
+  newParent: SimpleRoleResponse
+
+  """Total number of roles affected by this move"""
+  affectedRolesCount: Int!
+
+  """Success message"""
+  message: String!
+}
+
+type PaginationReponse {
+  currentPage: Int!
+  itemsPerPage: Int!
+  totalItems: Int!
+  totalPages: Int!
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+}
+
+type PaginatedRolesResponse {
+  items: [Role!]!
+  meta: PaginationReponse!
+}
+
+type RemoveRoleResponse {
+  """id of the role"""
+  id: String!
+
+  """name of the role"""
+  name: ValidRoles!
+
+  """description of the role"""
+  description: String
+
+  """Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)"""
+  hierarchyLevel: Int!
+
+  """indicates if role is active"""
+  status: Boolean!
+
+  """indicates if role is system role"""
+  isSystem: Boolean!
+
+  """Stores dynamic rules and deletion metadata."""
+  metadata: JSON
+
+  """Creation timestamp"""
+  createdAt: DateTime!
+
+  """Deletion timestamp"""
+  deletedAt: DateTime!
+
+  """parent role for hierarchy"""
+  parent: SimpleRoleResponse
+
+  """permissions assigned to this role"""
+  permissions: [SimplePermissionResponse!]
+
+  """Number of ancestor roles affected by this deletion"""
+  affectedAncestorsCount: Int!
+
+  """Success message about the deletion"""
+  message: String!
+}
+
+type RestoreRoleResponse {
+  """id of the role"""
+  id: String!
+
+  """name of the role"""
+  name: ValidRoles!
+
+  """description of the role"""
+  description: String
+
+  """Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)"""
+  hierarchyLevel: Int
+
+  """indicates if role is active"""
+  status: Boolean
+
+  """indicates if role is system role"""
+  isSystem: Boolean
+
+  """Stores dynamic rules and restoration metadata."""
+  metadata: JSON
+
+  """Creation timestamp"""
+  createdAt: DateTime
+
+  """Restoration timestamp"""
+  restoredAt: DateTime
+
+  """parent role for hierarchy"""
+  parent: SimpleRoleResponse
+
+  """permissions assigned to this role"""
+  permissions: [SimplePermissionResponse!]
+
+  """Number of ancestor roles affected by this restoration"""
+  affectedAncestorsCount: Int
+
+  """Success message about the restoration"""
+  message: String
+}
+
+type PermissionWithSource {
+  """Permission ID"""
+  id: String!
+
+  """Permission name"""
+  name: ValidPermissions!
+
+  """Source of the permission (DIRECT or INHERITED)"""
+  source: String!
+}
+
+type RoleHierarchyResponse {
+  """Role information"""
+  role: SimpleRoleResponse!
+
+  """Ancestor roles"""
+  ancestors: [HierarchyRoleInfo!]!
+
+  """Descendant roles"""
+  descendants: [HierarchyRoleInfo!]!
+
+  """Direct permissions"""
+  directPermissions: [PermissionWithSource!]!
+
+  """All effective permissions"""
+  effectivePermissions: [PermissionWithSource!]!
+
+  """Hierarchy statistics"""
+  stats: HierarchyStats!
+}
+
+type Role {
+  """id of the role"""
+  id: String!
+
+  """name of the role"""
+  name: ValidRoles!
+
+  """name of the role"""
+  frontName: String!
+
+  """icon of the role that will be visible in the frontend """
+  icon: String!
+
+  """description of the role"""
+  description: String
+
+  """Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)"""
+  hierarchyLevel: Int!
+
+  """indicates if role is active"""
+  status: Boolean!
+
+  """indicates if role is system role"""
+  isSystem: Boolean!
+
+  """Stores dynamic rules."""
+  metadata: JSON
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """parent role for hierarchy"""
+  parent: Role
+
+  """child roles in hierarchy"""
+  children: [SimpleRoleResponse!]
+
+  """permissions assigned to this role"""
+  permissions: [Permission!]
+  userRoles: [UserRole!]
+  createdByUser: User
+  updatedByUser: User
+}
+
+"""Permiso del sistema granular."""
+type Permission {
+  id: ID!
+  name: ValidPermissions!
+
+  """Nombre legible (ej: CREAR_USUARIO)"""
+  label: String!
+  description: String
+
+  """Categoría (ej: AUTH, USERS, BILLING)"""
+  group: String!
+
+  """Define si el permiso es crítico o informativo"""
+  level: String!
+  isSystem: Boolean!
+  status: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Usuario que creó el registro"""
+  createdBy: String
+  dependentPermissions: [Permission]
+  dependsOn: [Permission]
+  createdByUser: User!
+  updatedByUser: User!
+}
+
+type PermissionDependencyResponse {
+  id: String!
+  name: ValidPermissions!
+  description: String
+}
+
+type CreatePermissionResponse {
+  """id of the permission"""
+  id: String!
+
+  """name of the permission"""
+  name: ValidPermissions!
+
+  """description of the permission"""
+  description: String
+
+  """indicates the permissions on which the saved permission depends"""
+  dependsOn: [PermissionDependencyResponse!]
+
+  """indicates if permission is active"""
+  status: Boolean
+
+  """level of the permission"""
+  level: PermissionLevel
+
+  """Select critical permissions that cannot be removed"""
+  isSystem: Boolean
+
+  """Stores dynamic rules (e.g., access schedules, usage limits)."""
+  metadata: JSON
+
+  """category to which a permit belongs"""
+  category: String
+
+  """Creation timestamp"""
+  createdAt: DateTime
+}
+
+enum PermissionLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+type PaginatedPermissionsResponse {
+  items: [Permission!]!
+  meta: PaginationReponse!
+}
+
+type UpdatePermissionResponse {
+  """id of the permission"""
+  id: String!
+
+  """name of the permission"""
+  name: ValidPermissions!
+
+  """description of the permission"""
+  description: String
+
+  """indicates the permissions on which the saved permission depends"""
+  dependsOn: [PermissionDependencyResponse!]
+
+  """indicates if permission is active"""
+  status: Boolean
+
+  """level of the permission"""
+  level: PermissionLevel
+
+  """Select critical permissions that cannot be removed"""
+  isSystem: Boolean
+
+  """front name"""
+  label: String
+
+  """group to which a permit belongs"""
+  group: String
+
+  """Creation timestamp"""
+  createdAt: DateTime
+
+  """Creation timestamp"""
+  updatedAt: DateTime
+}
+
+type PermissionDependencyRemoveResponse {
+  id: String!
+  name: ValidPermissions!
+}
+
+type RemovePermissionResponse {
+  """Unique identifier of the permission"""
+  id: String!
+
+  """Name of the permission"""
+  name: ValidPermissions!
+
+  """Description of the permission"""
+  description: String!
+
+  """Status of the permission (false when deleted)"""
+  status: Boolean!
+
+  """Level of the permission"""
+  level: PermissionLevel!
+
+  """Indicates if it is a system permission"""
+  isSystem: Boolean!
+
+  """Additional metadata"""
+  labbel: String
+
+  """Category of the permission"""
+  group: String!
+
+  """Permission dependencies"""
+  dependsOn: [PermissionDependencyRemoveResponse!]!
+
+  """Date when the permission was deleted"""
+  deletedAt: DateTime!
+
+  """Date when the permission was created"""
+  createdAt: DateTime!
+
+  """Success message"""
+  message: String!
+}
+
+type RestorePermissionResponse {
+  """Unique identifier of the permission"""
+  id: String!
+
+  """Name of the permission"""
+  name: ValidPermissions!
+
+  """Description of the permission"""
+  description: String!
+
+  """Status of the permission (true when restored)"""
+  status: Boolean!
+
+  """Level of the permission"""
+  level: PermissionLevel!
+
+  """Indicates if it is a system permission"""
+  isSystem: Boolean!
+
+  """Additional metadata"""
+  label: String
+
+  """group of the permission"""
+  group: String!
+
+  """Permission dependencies"""
+  dependsOn: [PermissionDependencyRemoveResponse!]!
+
+  """Date when the permission was restored"""
+  restoredAt: DateTime!
+
+  """Date when the permission was created"""
+  createdAt: DateTime!
+
+  """Success message"""
+  message: String!
+}
+
+type AssignedUserRolResponse {
+  success: Boolean!
+  message: String!
+}
+
+"""Complejo residencial del sistema"""
+type ResidentialComplex {
+  id: String!
+
+  """Nombre del complejo"""
+  name: String!
+
+  """Slug único derivado del nombre"""
+  slug: String!
+
+  """Descripción del complejo"""
+  description: String
+
+  """Dirección principal del complejo"""
+  address: String!
+
+  """Ciudad"""
+  city: String!
+
+  """Departamento o estado"""
+  state: String!
+
+  """País"""
+  country: String!
+
+  """Código postal"""
+  zipCode: String
+
+  """Tipo de complejo residencial"""
+  type: ComplexType!
+
+  """Plan de suscripción activo"""
+  plan: ComplexPlan!
+
+  """Estado operativo del complejo"""
+  status: ComplexStatus!
+
+  """Máximo de unidades permitidas por el plan"""
+  maxUnits: Int!
+
+  """Teléfono de administración"""
+  phone: String
+
+  """Email administrativo"""
+  email: String
+
+  """Sitio web"""
+  website: String
+
+  """NIT o identificación fiscal"""
+  nit: String
+
+  """Nombre del representante legal"""
+  legalRepresentative: String
+
+  """URL del logo del complejo"""
+  logoUrl: String
+
+  """URL de imagen de portada"""
+  coverUrl: String
+
+  """Configuración avanzada del complejo"""
+  settings: JSON
+
+  """ID del propietario/administrador principal"""
+  ownerId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Propietario/administrador principal"""
+  owner: User
+
+  """Torres o edificios del complejo"""
+  buildings: [Building!]
+}
+
+"""Tipo de complejo residencial"""
+enum ComplexType {
+  """Conjunto cerrado de apartamentos"""
+  APARTMENT_COMPLEX
+
+  """Urbanización de casas"""
+  HOUSES_COMMUNITY
+
+  """Edificio de oficinas o comercial"""
+  OFFICE_BUILDING
+
+  """Uso mixto residencial y comercial"""
+  MIXED
+}
+
+"""Plan de suscripción del complejo residencial"""
+enum ComplexPlan {
+  """Gratuito, hasta 10 unidades"""
+  FREE
+
+  """Básico, hasta 50 unidades"""
+  BASIC
+
+  """Pro, hasta 200 unidades"""
+  PRO
+
+  """Enterprise, ilimitado"""
+  ENTERPRISE
+}
+
+"""Estado operativo del complejo residencial"""
+enum ComplexStatus {
+  PENDING_SETUP
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+"""Torre o edificio dentro de un complejo"""
+type Building {
+  id: String!
+
+  """
+  Nombre de la torre/edificio. Ej: "Torre A"
+  """
+  name: String!
+
+  """
+  Código corto único dentro del complejo. Ej: "TA"
+  """
+  code: String!
+
+  """Descripción opcional"""
+  description: String
+
+  """Número total de pisos"""
+  floors: Int!
+
+  """Estado activo/inactivo"""
+  status: Boolean!
+
+  """ID del complejo al que pertenece"""
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+
+  """Unidades dentro de esta torre"""
+  units: [Unit!]
+}
+
+"""Unidad habitable dentro de un edificio o complejo"""
+type Unit {
+  id: String!
+
+  """
+  Número o identificador de la unidad. Ej: "101", "B-202"
+  """
+  number: String!
+
+  """Piso en el que se ubica la unidad"""
+  floor: Int!
+
+  """Tipo de unidad"""
+  type: UnitType!
+
+  """Estado de disponibilidad"""
+  status: UnitStatus!
+
+  """Área en metros cuadrados"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero asignados"""
+  parkingSpots: Int!
+
+  """Cuartos útiles o bodegas asignadas"""
+  storageRooms: Int!
+
+  """Descripción u observaciones adicionales"""
+  description: String
+
+  """ID del complejo al que pertenece"""
+  complexId: String!
+
+  """ID de la torre/edificio (null si complejo sin torres)"""
+  buildingId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+
+  """Torre o edificio contenedor"""
+  building: Building
+}
+
+"""Tipo de unidad dentro del complejo"""
+enum UnitType {
+  APARTMENT
+  HOUSE
+  OFFICE
+  STUDIO
+  PENTHOUSE
+  COMMERCIAL
+  WAREHOUSE
+}
+
+"""Estado de disponibilidad de la unidad"""
+enum UnitStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  DISABLED
+}
+
+"""Relación entre un Usuario y una Unidad dentro de un Complejo"""
+type Resident {
+  id: String!
+
+  """Rol del residente respecto a la unidad"""
+  type: ResidentType!
+
+  """Estado actual del residente"""
+  status: ResidentStatus!
+
+  """Es el residente principal de la unidad"""
+  isMainResident: Boolean!
+
+  """Fecha de inicio de residencia"""
+  startDate: DateTime!
+
+  """Fecha de fin de contrato (para arrendatarios)"""
+  endDate: DateTime
+
+  """Fecha real de mudanza"""
+  moveOutDate: DateTime
+
+  """Razón de salida"""
+  moveOutReason: String
+
+  """Nombre del contacto de emergencia"""
+  emergencyContactName: String
+
+  """Teléfono del contacto de emergencia"""
+  emergencyContactPhone: String
+
+  """Fecha de aprobación"""
+  approvedAt: DateTime
+
+  """Razón de rechazo por el Compliance Officer"""
+  rejectionReason: String
+
+  """ID del Compliance Officer que aprobó/rechazó"""
+  approvedByUserId: String
+
+  """Notas internas del administrador"""
+  notes: String
+
+  """ID del usuario residente"""
+  userId: String!
+
+  """ID de la unidad asignada"""
+  unitId: String!
+
+  """ID del complejo (desnormalizado para multi-tenant)"""
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Usuario residente"""
+  user: User
+
+  """Unidad asignada"""
+  unit: Unit
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+
+  """Compliance Officer que aprobó/rechazó"""
+  approvedByUser: User
+}
+
+"""Tipo de residente respecto a la unidad"""
+enum ResidentType {
+  """Propietario del inmueble"""
+  OWNER
+
+  """Arrendatario o inquilino"""
+  TENANT
+
+  """Familiar del propietario o inquilino"""
+  FAMILY_MEMBER
+
+  """Cuidador o empleado doméstico permanente"""
+  CARETAKER
+}
+
+"""Estado del residente dentro del complejo"""
+enum ResidentStatus {
+  """Esperando aprobación del Compliance Officer"""
+  PENDING_APPROVAL
+
+  """Residente activo y verificado"""
+  ACTIVE
+
+  """Suspendido temporalmente"""
+  SUSPENDED
+
+  """Se mudó de la unidad"""
+  MOVED_OUT
+
+  """Solicitud rechazada por documentación inválida"""
+  REJECTED
+}
+
+type ChangePasswordResponse {
+  success: Boolean!
+  message: String!
+  changedAt: DateTime
+}
+
+"""Información completa del perfil del usuario autenticado"""
+type UserInfoCompleteResponse {
+  """Identificador único del usuario"""
+  id: String!
+
+  """Identificador público del usuario"""
+  publicId: String!
+
+  """Nombre del usuario"""
+  name: String!
+
+  """Apellido del usuario"""
+  lastName: String!
+
+  """Número de documento de identidad"""
+  identity: String
+
+  """Fecha de nacimiento"""
+  dateOfBirth: DateTime
+
+  """Género del usuario"""
+  gender: Gender
+
+  """Biografía del usuario"""
+  bio: String
+
+  """Número de teléfono"""
+  phoneNumber: String!
+  countryCode: Country!
+
+  """Correo electrónico"""
+  email: String!
+
+  """URL de la foto de perfil"""
+  profilePicture: String
+
+  """URL de la foto de portada"""
+  coverPicture: String
+
+  """Estado de verificación del teléfono"""
+  phoneVerified: Boolean!
+
+  """Estado de verificación del email"""
+  emailVerified: Boolean!
+
+  """Estado de verificación de identidad"""
+  identityVerified: Boolean!
+
+  """Estado actual de la cuenta"""
+  status: UserStatus!
+
+  """Calificación del usuario (1-5)"""
+  rating: Float!
+
+  """Acepta recibir marketing"""
+  acceptsMarketing: Boolean!
+
+  """Idioma preferido"""
+  preferredLanguage: String
+
+  """Zona horaria preferida"""
+  timezone: String
+
+  """Zona horaria preferida"""
+  systemCode: String
+
+  """Zona horaria preferida"""
+  complexId: String
+
+  """Zona horaria preferida"""
+  userRoles: [UserRole!]
+
+  """Token para notificaciones push"""
+  notificationToken: String
+
+  """Fecha de creación de la cuenta"""
+  createdAt: DateTime!
+
+  """Fecha de última actualización"""
+  updatedAt: DateTime!
+
+  """Nombre completo del usuario (nombre + apellido)"""
+  fullName: String!
+
+  """Indica si el usuario tiene tanto email como teléfono verificados"""
+  isFullyVerified: Boolean!
+
+  """Edad calculada del usuario basada en su fecha de nacimiento"""
+  age: Float
+}
+
+"""Respuesta de autenticación exitosa con tokens JWT"""
+type AuthResponse {
+  """Access token JWT (15 min de vigencia)"""
+  accessToken: String!
+
+  """Refresh token para renovar el access token"""
+  refreshToken: String!
+
+  """Segundos hasta que expire el access token"""
+  expiresIn: Int!
+
+  """ID de la sesión activa"""
+  sessionId: String!
+}
+
+"""Respuesta al solicitar OTP"""
+type OtpRequestResponse {
+  success: Boolean!
+  message: String!
+  debugCode: String
+}
+
+type PaginatedComplexesResponse {
+  items: [ResidentialComplex!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedBuildingsResponse {
+  items: [Building!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedUnitsResponse {
+  items: [Unit!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedResidentsResponse {
+  items: [Resident!]!
+  pagination: PaginationReponse!
+}
+
+"""Evento de visita: entrada, salida, estado y QR de acceso"""
+type Visit {
+  id: String!
+
+  """Modalidad de la visita"""
+  type: VisitType!
+
+  """Estado actual de la visita"""
+  status: VisitStatus!
+
+  """Motivo de la visita"""
+  purpose: String
+
+  """Hora de ingreso real"""
+  entryTime: DateTime
+
+  """Hora de salida real"""
+  exitTime: DateTime
+
+  """Fecha/hora esperada de llegada (visitas programadas)"""
+  expectedArrivalAt: DateTime
+
+  """Fecha/hora límite de llegada"""
+  expectedArrivalUntil: DateTime
+
+  """Token único del QR de acceso"""
+  qrToken: String
+
+  """Indica si el QR ya fue utilizado"""
+  qrUsed: Boolean!
+
+  """Fecha de expiración del QR"""
+  qrExpiresAt: DateTime
+
+  """Placa del vehículo del visitante (si aplica)"""
+  vehiclePlate: String
+
+  """Momento en que el residente aprobó la visita"""
+  approvedByResidentAt: DateTime
+
+  """Momento en que el residente rechazó la visita"""
+  deniedByResidentAt: DateTime
+
+  """Razón del rechazo por parte del residente"""
+  denialReason: String
+
+  """Notas del guardia de seguridad"""
+  notes: String
+  visitorId: String!
+  unitId: String!
+  complexId: String!
+
+  """ID del residente que recibe la visita"""
+  hostResidentId: String!
+
+  """ID del guardia que registró la visita"""
+  registeredByUserId: String!
+
+  """ID del guardia que registró la salida"""
+  exitRegisteredByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  visitor: Visitor
+  unit: Unit
+  complex: ResidentialComplex
+
+  """Residente anfitrión"""
+  hostResident: Resident
+
+  """Guardia que registró la visita"""
+  registeredByUser: User
+
+  """Guardia que registró la salida"""
+  exitRegisteredByUser: User
+}
+
+"""Modalidad de la visita"""
+enum VisitType {
+  """Sin cita — requiere aprobación del residente en tiempo real"""
+  WALK_IN
+
+  """Pre-autorizada — genera QR de acceso"""
+  SCHEDULED
+
+  """Domicilio o entrega de paquete"""
+  DELIVERY
+
+  """Proveedor de servicio: técnico, mantenimiento, etc."""
+  SERVICE_PROVIDER
+}
+
+"""Estado actual de la visita"""
+enum VisitStatus {
+  PENDING_APPROVAL
+  APPROVED
+  DENIED
+  INSIDE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  NO_SHOW
+}
+
+"""Persona que realiza una o más visitas al complejo"""
+type Visitor {
+  id: String!
+
+  """Nombre del visitante"""
+  name: String!
+
+  """Apellido del visitante"""
+  lastName: String!
+
+  """Número de documento de identidad"""
+  identity: String!
+
+  """Tipo de documento"""
+  identityType: VisitorIdentityType!
+
+  """Teléfono de contacto"""
+  phone: String
+
+  """URL de la foto capturada en portería"""
+  photoUrl: String
+
+  """Visitante en lista negra — no puede ingresar"""
+  isBlacklisted: Boolean!
+
+  """Razón del bloqueo"""
+  blacklistReason: String
+
+  """Fecha en que fue bloqueado"""
+  blacklistedAt: DateTime
+
+  """ID del usuario que lo bloqueó"""
+  blacklistedByUserId: String
+
+  """Complejo al que pertenece este registro"""
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  complex: ResidentialComplex
+
+  """Supervisor que lo bloqueó"""
+  blacklistedByUser: User
+
+  """Historial de visitas"""
+  visits: [Visit!]
+
+  """Nombre completo del visitante"""
+  fullName: String!
+}
+
+"""Tipo de documento de identidad del visitante"""
+enum VisitorIdentityType {
+  CC
+  CE
+  PASSPORT
+  TI
+  FOREIGN_ID
+  OTHER
+}
+
+type PaginatedVisitorsResponse {
+  items: [Visitor!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedVisitsResponse {
+  items: [Visit!]!
+  pagination: PaginationReponse!
+}
+
+type QrValidationResponse {
+  """Indica si el QR es válido y permite ingreso"""
+  isValid: Boolean!
+
+  """Mensaje de resultado del escaneo"""
+  message: String!
+
+  """Datos de la visita si el QR es válido"""
+  visit: Visit
+
+  """Datos del visitante"""
+  visitor: Visitor
+}
+
+"""Vehículo de un residente registrado en el complejo"""
+type Vehicle {
+  id: String!
+
+  """Placa del vehículo (normalizada: sin espacios, mayúsculas)"""
+  plate: String!
+
+  """Tipo de vehículo"""
+  type: VehicleType!
+
+  """Marca del vehículo. Ej: Toyota, Renault"""
+  brand: String
+
+  """Modelo. Ej: Corolla, Logan"""
+  model: String
+
+  """Año del modelo"""
+  year: Int
+
+  """Color del vehículo"""
+  color: String
+
+  """Tipo de combustible"""
+  fuelType: VehicleFuelType
+
+  """URL de la foto del vehículo"""
+  photoUrl: String
+
+  """Número o código del parqueadero asignado"""
+  parkingSpot: String
+
+  """Estado del vehículo en el complejo"""
+  status: VehicleStatus!
+
+  """Fecha de aprobación"""
+  approvedAt: DateTime
+
+  """Razón de rechazo o suspensión"""
+  rejectionReason: String
+
+  """Notas internas del administrador"""
+  notes: String
+
+  """ID del residente propietario del vehículo"""
+  residentId: String!
+
+  """ID de la unidad (desnormalizado de residente)"""
+  unitId: String!
+
+  """ID del complejo (desnormalizado para multi-tenant)"""
+  complexId: String!
+
+  """ID del usuario que aprobó o rechazó"""
+  approvedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Residente propietario"""
+  resident: Resident
+
+  """Unidad a la que pertenece"""
+  unit: Unit
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+
+  """Usuario que aprobó/rechazó el vehículo"""
+  approvedByUser: User
+}
+
+"""Tipo de vehículo registrado"""
+enum VehicleType {
+  """Automóvil / carro"""
+  CAR
+
+  """Motocicleta"""
+  MOTORCYCLE
+
+  """Camioneta o camión"""
+  TRUCK
+
+  """Van o furgoneta"""
+  VAN
+
+  """Bicicleta (no ocupa parqueadero vehicular)"""
+  BICYCLE
+
+  """Patineta eléctrica"""
+  ELECTRIC_SCOOTER
+
+  """Otro tipo de vehículo"""
+  OTHER
+}
+
+"""Tipo de combustible del vehículo"""
+enum VehicleFuelType {
+  GASOLINE
+  DIESEL
+  GAS
+  ELECTRIC
+  HYBRID
+  OTHER
+}
+
+"""Estado del vehículo dentro del complejo"""
+enum VehicleStatus {
+  """Esperando aprobación del administrador"""
+  PENDING_APPROVAL
+
+  """Autorizado para circular y parquear"""
+  ACTIVE
+
+  """Acceso suspendido temporalmente"""
+  SUSPENDED
+
+  """Solicitud rechazada"""
+  REJECTED
+
+  """Removido definitivamente del complejo"""
+  REMOVED
+}
+
+type PaginatedVehiclesResponse {
+  items: [Vehicle!]!
+  pagination: PaginationReponse!
+}
+
+type PlateCheckResponse {
+  """Placa registrada en el complejo"""
+  isRegistered: Boolean!
+
+  """Vehículo autorizado para ingresar"""
+  isAuthorized: Boolean!
+
+  """Mensaje explicativo para el guardia"""
+  message: String!
+
+  """Datos del vehículo si está registrado"""
+  vehicle: Vehicle
+}
+
+type Package {
+  id: ID!
+  trackingCode: String
+  senderName: String!
+  description: String
+  type: PackageType!
+  status: PackageStatus!
+  photoUrl: String
+  receivedAt: DateTime!
+  notifiedAt: DateTime
+  deliveredAt: DateTime
+  returnedAt: DateTime
+  maxStorageDays: Float
+  receivedByName: String
+  receivedByIdentity: String
+  notes: String
+  returnReason: String
+  complexId: String!
+  unitId: String!
+  registeredByUserId: String!
+  deliveredByUserId: String
+  unit: Unit!
+  complex: ResidentialComplex!
+  registeredBy: User!
+  deliveredBy: User
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Tipo / categoría del paquete recibido"""
+enum PackageType {
+  PARCEL
+  ENVELOPE
+  FOOD
+  FRAGILE
+  DOCUMENT
+  OTHER
+}
+
+"""Estado del paquete en el ciclo de vida de la paquetería"""
+enum PackageStatus {
+  RECEIVED
+  NOTIFIED
+  READY_FOR_PICKUP
+  DELIVERED
+  RETURNED
+  LOST
+}
+
+type Notification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: String
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  complexId: String!
+  entityId: String
+  entityType: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de evento que originó la notificación"""
+enum NotificationType {
+  PACKAGE_RECEIVED
+  PACKAGE_READY
+  PACKAGE_DELIVERED
+  PACKAGE_RETURNED
+  VISITOR_WALK_IN
+  VISIT_APPROVED
+  VISIT_DENIED
+  VISIT_REMINDER
+  VISITOR_ARRIVED
+  RESIDENT_APPROVED
+  RESIDENT_REJECTED
+  RESIDENT_PENDING
+  VEHICLE_APPROVED
+  VEHICLE_REJECTED
+  VEHICLE_SUSPENDED
+  VEHICLE_PENDING
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  PAYMENT_RECEIVED
+  SYSTEM_ANNOUNCEMENT
+  COMPLEX_ALERT
+  AMENITY_REMINDER
+}
+
+"""Prioridad de entrega de la notificación"""
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+type PaginatedPackagesResponse {
+  items: [Package!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedNotificationsResponse {
+  items: [Notification!]!
+  pagination: PaginationReponse!
+}
+
+type UnreadCountResponse {
+  count: Int!
+}
+
+type FeeConfig {
+  id: ID!
+  name: String!
+  description: String
+  amount: Float!
+  frequency: FeeFrequency!
+  dueDayOfMonth: Float!
+  unitId: String
+  unitType: UnitType
+  isActive: Boolean!
+  complexId: String!
+  createdByUserId: String!
+  complex: ResidentialComplex!
+  unit: Unit
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Frecuencia de facturación de una configuración de cuota"""
+enum FeeFrequency {
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  ANNUAL
+  ONE_TIME
+}
+
+type FeeCharge {
+  id: ID!
+  period: String!
+  dueDate: DateTime!
+  amount: Float!
+  paidAmount: Float!
+  balance: Float!
+  description: String!
+  status: ChargeStatus!
+  cancellationReason: String
+  cancelledByUserId: String
+  cancelledAt: DateTime
+  complexId: String!
+  unitId: String!
+  feeConfigId: String!
+  complex: ResidentialComplex!
+  unit: Unit!
+  feeConfig: FeeConfig!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Estado de un cargo (cuota) de una unidad"""
+enum ChargeStatus {
+  PENDING
+  OVERDUE
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  WAIVED
+}
+
+type Payment {
+  id: ID!
+  chargeId: String!
+  amount: Float!
+  method: PaymentMethod!
+  reference: String
+  receiptUrl: String
+  paidAt: DateTime!
+  notes: String
+  isReversed: Boolean!
+  reversalReason: String
+  reversedByUserId: String
+  reversedAt: DateTime
+  complexId: String!
+  unitId: String!
+  registeredByUserId: String!
+  complex: ResidentialComplex!
+  unit: Unit!
+  charge: FeeCharge!
+  registeredBy: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Método de pago utilizado"""
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  PSE
+  CREDIT_CARD
+  DEBIT_CARD
+  NEQUI
+  DAVIPLATA
+  OTHER
+}
+
+type PaginatedChargesResponse {
+  items: [FeeCharge!]!
+  pagination: PaginationReponse!
+}
+
+type GenerateChargesResponse {
+  generated: Int!
+  skipped: Int!
+  period: String!
+}
+
+type UnitBalanceResponse {
+  unitId: String!
+  unitNumber: String!
+  totalDebt: Float!
+  overdueCount: Int!
+  pendingCount: Int!
+  totalPaid: Float!
+}
+
+type ComplexFinancialSummaryResponse {
+  complexId: String!
+  period: String!
+  totalCharged: Float!
+  totalCollected: Float!
+  totalOutstanding: Float!
+  collectionRate: Float!
+  unitsWithDebt: Int!
+  unitsFullyPaid: Int!
+}
+
+type Query {
+  permissions(input: SearchPermissionsInput!): PaginatedPermissionsResponse!
+  permission(id: String!): Permission!
+  roles(input: SearchRolesInput!): PaginatedRolesResponse!
+  role(term: String!): Role!
+  getRoleHierarchy(roleId: String!): RoleHierarchyResponse!
+  users: [User!]!
+  user(id: String!): UserInfoCompleteResponse
+
+  """Perfil completo del usuario autenticado"""
+  me: UserInfoCompleteResponse!
+  complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
+  complex(id: String!): ResidentialComplex!
+  buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
+  building(id: String!): Building!
+  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus): PaginatedUnitsResponse!
+  unit(id: String!): Unit!
+  residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
+  pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
+  resident(id: String!): Resident!
+  residentHistoryByUnit(unitId: String!): [Resident!]!
+  visitors(complexId: String!, pagination: PaginationInput, search: String, onlyBlacklisted: Boolean): PaginatedVisitorsResponse!
+  visitor(id: String!): Visitor!
+  visits(complexId: String!, pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
+  activeVisits(complexId: String!): [Visit!]!
+  pendingApprovalVisits(complexId: String!): [Visit!]!
+  scheduledVisitsToday(complexId: String!): [Visit!]!
+  visit(id: String!): Visit!
+  vehicles(complexId: String!, pagination: PaginationInput, filters: FilterVehiclesInput): PaginatedVehiclesResponse!
+  vehiclesByResident(residentId: String!): [Vehicle!]!
+  pendingVehicles(complexId: String!): [Vehicle!]!
+  checkPlate(plate: String!, complexId: String!): PlateCheckResponse!
+  vehicle(id: String!): Vehicle!
+  packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
+  pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
+  package(packageId: String!): Package!
+  myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  unreadNotificationsCount(complexId: String!): UnreadCountResponse!
+  feeConfigs(complexId: String!): [FeeConfig!]!
+  charges(complexId: String!, pagination: PaginationInput, filters: FilterChargesInput): PaginatedChargesResponse!
+  paymentsByCharge(chargeId: String!): [Payment!]!
+  unitBalance(unitId: String!, complexId: String!): UnitBalanceResponse!
+  complexFinancialSummary(complexId: String!, period: String!): ComplexFinancialSummaryResponse!
+}
+
+input SearchPermissionsInput {
+  filters: PermissionFiltersInput
+  pagination: PaginationInput
+  sort: SortInput
+}
+
+input PermissionFiltersInput {
+  status: Boolean
+  level: PermissionLevel
+  isSystem: Boolean
+  category: String
+  hasDependentPermissions: Boolean
+  createdAt: DateRangeInput
+  search: String
+}
+
+input DateRangeInput {
+  from: String
+  to: String
+}
+
+input PaginationInput {
+  page: Int! = 1
+  limit: Int! = 10
+}
+
+input SortInput {
+  field: String = "createdAt"
+  direction: SortDirection = DESC
+}
+
+"""Dirección del ordenamiento"""
+enum SortDirection {
+  ASC
+  DESC
+}
+
+input SearchRolesInput {
+  filters: RolesFiltersInput
+  pagination: PaginationInput
+  sort: SortInput
+}
+
+input RolesFiltersInput {
+  status: Boolean
+  hierarchyLevel: Int
+  isSystem: Boolean
+  createdAt: DateRangeInput
+  search: String
+}
+
+input FilterComplexInput {
+  """Buscar por nombre, ciudad o dirección"""
+  search: String
+  type: ComplexType
+  plan: ComplexPlan
+  status: ComplexStatus
+
+  """Filtrar por ciudad"""
+  city: String
+}
+
+input FilterResidentsInput {
+  """Buscar por nombre, apellido o email del usuario"""
+  search: String
+  status: ResidentStatus
+  type: ResidentType
+
+  """Filtrar por edificio/torre"""
+  buildingId: String
+
+  """Filtrar por unidad específica"""
+  unitId: String
+}
+
+input FilterVisitsInput {
+  status: VisitStatus
+  type: VisitType
+
+  """Filtrar por unidad"""
+  unitId: String
+
+  """Filtrar por residente anfitrión"""
+  hostResidentId: String
+
+  """Desde esta fecha (ISO 8601)"""
+  dateFrom: String
+
+  """Hasta esta fecha (ISO 8601)"""
+  dateTo: String
+}
+
+input FilterVehiclesInput {
+  """Buscar por placa, marca, modelo o color"""
+  search: String
+  status: VehicleStatus
+  type: VehicleType
+
+  """Filtrar por residente"""
+  residentId: String
+
+  """Filtrar por unidad"""
+  unitId: String
+}
+
+input FilterPackagesInput {
+  status: PackageStatus
+  type: PackageType
+  unitId: String
+  trackingCode: String
+  receivedFrom: String
+  receivedUntil: String
+}
+
+input FilterNotificationsInput {
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: Boolean
+}
+
+input FilterChargesInput {
+  status: ChargeStatus
+  unitId: String
+  period: String
+}
+
+type Mutation {
+  createPermission(input: CreatePermissionInput!): CreatePermissionResponse!
+
+  """Update an existing permission"""
+  updatePermission(id: String!, updatePermissionInput: UpdatePermissionInput!): UpdatePermissionResponse!
+
+  """Soft delete a permission by setting status to false"""
+  removePermission(id: String!): RemovePermissionResponse!
+
+  """Restore a soft deleted permission by setting status to true"""
+  restorePermission(id: String!): RestorePermissionResponse!
+  createRole(input: CreateRoleInput!): SimpleRoleResponse!
+  updateRole(id: String!, input: UpdateRoleInput!): Role!
+  changeRoleParent(roleId: String!, newParentId: String): ChangeParentResponse!
+  moveRoleSubtree(roleId: String!, newParentId: String): MoveSubtreeResponse!
+  assignMultipleChildren(parentId: String!, childrenIds: [String!]!): AssignChildrenResponse!
+
+  """Soft delete a role by setting status to false"""
+  removeRole(id: String!): RemoveRoleResponse!
+
+  """Restore a soft deleted role by setting status to true"""
+  restoreRole(id: String!): RestoreRoleResponse!
+
+  """Asigna un rol a un usuario"""
+  assignRoleToUser(userId: String!, roleName: String!): AssignedUserRolResponse!
+
+  """Asigna un rol a un usuario"""
+  userHasRole(userId: String!, roleName: String!): AssignedUserRolResponse!
+
+  """
+  Crea un usuario administrativo (COMPLIANCE_OFFICER, COMPLEX, ACCOUNTANT, SUPERVISOR). Requiere rol SUPER_ADMIN_ROL.
+  """
+  createAdminUser(input: CreateAdminUserInput!): User!
+
+  """
+  Registra un nuevo residente en el complejo. Requiere rol COMPLEX_ROL. El residente recibirá su código de acceso.
+  """
+  registerResident(input: CreateResidentUserInput!): User!
+
+  """
+  Crea una cuenta de guardia de seguridad asignado al complejo. Requiere rol COMPLEX_ROL.
+  """
+  createSecurityGuard(input: CreateSecurityGuardInput!): User!
+
+  """Cambiar la contraseña del usuario autenticado"""
+  changePassword(input: ChangePasswordInput!): ChangePasswordResponse!
+  updateUser(updateUserInput: UpdateUserInput!): User!
+  removeUser(id: Int!): User!
+
+  """
+  Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL
+  """
+  loginWithEmail(input: LoginEmailInput!): AuthResponse!
+
+  """
+  Solicita un código OTP al número de celular. Exclusivo para residentes (RESIDENT_ROL). El código se envía por SMS y tiene validez de 5 minutos.
+  """
+  requestOtp(input: RequestOtpInput!): OtpRequestResponse!
+
+  """
+  Verifica el código OTP del residente y devuelve los tokens JWT de acceso.
+  """
+  verifyOtp(input: VerifyOtpInput!): AuthResponse!
+
+  """
+  Renueva el access token usando el refresh token. Implementa rotación de tokens.
+  """
+  refreshToken(refreshToken: String!): AuthResponse!
+
+  """Cierra la sesión actual e invalida los tokens."""
+  logout: Boolean!
+  createComplex(input: CreateComplexInput!): ResidentialComplex!
+  updateComplex(input: UpdateComplexInput!): ResidentialComplex!
+  changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
+  removeComplex(id: String!): Boolean!
+  restoreComplex(id: String!): ResidentialComplex!
+  createBuilding(input: CreateBuildingInput!): Building!
+  updateBuilding(input: UpdateBuildingInput!): Building!
+  toggleBuildingStatus(id: String!): Building!
+  removeBuilding(id: String!): Boolean!
+  createUnit(input: CreateUnitInput!): Unit!
+  updateUnit(input: UpdateUnitInput!): Unit!
+  removeUnit(id: String!): Boolean!
+  createResident(input: CreateResidentInput!): Resident!
+  updateResident(input: UpdateResidentInput!): Resident!
+  suspendResident(residentId: String!, reason: String!): Resident!
+  reactivateResident(residentId: String!): Resident!
+  moveOutResident(input: MoveOutResidentInput!): Resident!
+  removeResident(id: String!): Boolean!
+  approveResident(input: ApproveResidentInput!): Resident!
+  rejectResident(input: RejectResidentInput!): Resident!
+  blacklistVisitor(input: BlacklistVisitorInput!): Visitor!
+  removeVisitorFromBlacklist(visitorId: String!): Visitor!
+  registerWalkIn(input: RegisterWalkInInput!): Visit!
+  validateQrAccess(qrToken: String!): QrValidationResponse!
+  registerVisitorEntry(visitId: String!): Visit!
+  registerVisitorExit(visitId: String!, notes: String): Visit!
+  scheduleVisit(input: ScheduleVisitInput!): Visit!
+  approveVisitEntry(visitId: String!): Visit!
+  denyVisitEntry(visitId: String!, reason: String!): Visit!
+  cancelVisit(visitId: String!): Visit!
+  registerVehicle(input: RegisterVehicleInput!): Vehicle!
+  updateVehicle(input: UpdateVehicleInput!): Vehicle!
+  approveVehicle(input: ApproveVehicleInput!): Vehicle!
+  rejectVehicle(vehicleId: String!, reason: String!): Vehicle!
+  suspendVehicle(vehicleId: String!, reason: String!): Vehicle!
+  reactivateVehicle(vehicleId: String!): Vehicle!
+  removeVehicle(vehicleId: String!): Boolean!
+  registerPackage(input: RegisterPackageInput!): Package!
+  markPackageAsNotified(packageId: String!): Package!
+  confirmPackageDelivery(input: ConfirmDeliveryInput!): Package!
+  returnPackage(packageId: String!, reason: String!): Package!
+  markPackageAsLost(packageId: String!, reason: String!): Package!
+  markNotificationAsRead(notificationId: String!): Notification!
+  markAllNotificationsAsRead(complexId: String!): Int!
+  createFeeConfig(input: CreateFeeConfigInput!): FeeConfig!
+  toggleFeeConfig(configId: String!): FeeConfig!
+  generateCharges(input: GenerateChargesInput!): GenerateChargesResponse!
+  waiveCharge(chargeId: String!, reason: String!): FeeCharge!
+  registerPayment(input: RegisterPaymentInput!): Payment!
+  reversePayment(paymentId: String!, reason: String!): Payment!
+}
+
+"""Datos requeridos para crear un nuevo permiso"""
+input CreatePermissionInput {
+  """name of the permission"""
+  name: ValidPermissions!
+
+  """Nombre legible para mostrar en la UI"""
+  label: String!
+
+  """description of the permission"""
+  description: String!
+
+  """level of the permission"""
+  level: PermissionLevel!
+
+  """Recurso del sistema al que aplica el permiso"""
+  group: String!
+
+  """
+  Obliges to have a previous permission to assign another (e.g., need "user:read" to get "user:edit").
+  """
+  dependsOn: [PermissionDependencyInput!]!
+
+  """Estado inicial del permiso"""
+  status: Boolean = true
+
+  """Si es true, no podrá borrarse por API"""
+  isSystem: Boolean = false
+}
+
+input PermissionDependencyInput {
+  """ID of the dependency permission"""
+  id: String!
+}
+
+input UpdatePermissionInput {
+  """name of the permission"""
+  name: ValidPermissions
+
+  """Nombre legible para mostrar en la UI"""
+  label: String
+
+  """description of the permission"""
+  description: String
+
+  """level of the permission"""
+  level: PermissionLevel
+
+  """Recurso del sistema al que aplica el permiso"""
+  group: String
+
+  """
+  Obliges to have a previous permission to assign another (e.g., need "user:read" to get "user:edit").
+  """
+  dependsOn: [PermissionDependencyInput!]
+
+  """Estado inicial del permiso"""
+  status: Boolean = true
+
+  """Si es true, no podrá borrarse por API"""
+  isSystem: Boolean = false
+  id: Int!
+}
+
+input CreateRoleInput {
+  """name of the permisison"""
+  name: ValidRoles!
+
+  """name of the permisison visiblen to end user"""
+  frontName: String!
+
+  """icon of the permisison"""
+  icon: String!
+
+  """description of the permisison"""
+  description: String!
+
+  """level of the permisison"""
+  hierarchyLevel: Int
+  parentId: String
+  isSystem: Boolean
+  permissionIds: [String!]!
+
+  """Stores dynamic rules (e.g., access schedules, usage limits)."""
+  metadata: JSON!
+}
+
+input UpdateRoleInput {
+  """name of the permisison"""
+  name: ValidRoles
+
+  """name of the permisison visiblen to end user"""
+  frontName: String
+
+  """icon of the permisison"""
+  icon: String
+
+  """description of the permisison"""
+  description: String
+
+  """level of the permisison"""
+  hierarchyLevel: Int
+  parentId: String
+  isSystem: Boolean
+  permissionIds: [String!]
+
+  """Stores dynamic rules (e.g., access schedules, usage limits)."""
+  metadata: JSON
+}
+
+"""Datos para crear un usuario administrativo (no residente)"""
+input CreateAdminUserInput {
+  name: String!
+  lastName: String!
+  email: String!
+  password: String!
+  phoneNumber: String!
+  identity: String
+
+  """
+  Rol a asignar. Permitidos: COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL, SUPERVISOR_ROL
+  """
+  role: ValidRoles!
+  complexId: String
+}
+
+"""Datos para registrar un residente en el sistema"""
+input CreateResidentUserInput {
+  """Nombre(s) del residente"""
+  name: String!
+
+  """Apellido(s) del residente"""
+  lastName: String!
+
+  """Número de celular (solo Colombia, ej: 3001234567)"""
+  phoneNumber: String!
+
+  """Número de documento de identidad"""
+  identityNumber: String!
+
+  """Correo electrónico (opcional)"""
+  email: String
+
+  """ID de la unidad (apartamento) asignada"""
+  unitId: String!
+
+  """ID del complejo residencial"""
+  complexId: String!
+}
+
+"""Datos para crear un guardia de seguridad"""
+input CreateSecurityGuardInput {
+  name: String!
+  lastName: String!
+  phoneNumber: String!
+  identityNumber: String!
+  email: String!
+  password: String!
+
+  """ID del complejo al que se asigna el guardia"""
+  complexId: String!
+
+  """Turno asignado (MAÑANA, TARDE, NOCHE)"""
+  shift: String
+}
+
+input ChangePasswordInput {
+  """Contraseña actual del usuario"""
+  currentPassword: String!
+
+  """Nueva contraseña"""
+  newPassword: String!
+
+  """Confirmación de la nueva contraseña"""
+  confirmPassword: String!
+}
+
+input UpdateUserInput {
+  id: Int!
+}
+
+"""Credenciales para inicio de sesión con email y contraseña"""
+input LoginEmailInput {
+  """Correo electrónico del usuario"""
+  email: String!
+
+  """Contraseña del usuario"""
+  password: String!
+
+  """Mantener sesión activa por más tiempo"""
+  rememberMe: Boolean
+}
+
+"""Solicitud de OTP para residentes"""
+input RequestOtpInput {
+  """Número de celular del residente (ej: 3001234567)"""
+  phoneNumber: String!
+}
+
+"""Verificación de OTP para completar el login del residente"""
+input VerifyOtpInput {
+  """Número de celular del residente"""
+  phoneNumber: String!
+
+  """Código OTP de 6 dígitos recibido por SMS"""
+  code: String!
+}
+
+input CreateComplexInput {
+  name: String!
+  description: String
+  address: String!
+  city: String!
+  state: String!
+  country: String! = "Colombia"
+  zipCode: String
+  type: ComplexType! = APARTMENT_COMPLEX
+  plan: ComplexPlan! = FREE
+  phone: String
+  email: String
+  website: String
+  nit: String
+  legalRepresentative: String
+  logoUrl: String
+  coverUrl: String
+  settings: JSON
+}
+
+input UpdateComplexInput {
+  name: String
+  description: String
+  address: String
+  city: String
+  state: String
+  country: String = "Colombia"
+  zipCode: String
+  type: ComplexType = APARTMENT_COMPLEX
+  plan: ComplexPlan = FREE
+  phone: String
+  email: String
+  website: String
+  nit: String
+  legalRepresentative: String
+  logoUrl: String
+  coverUrl: String
+  settings: JSON
+
+  """ID del complejo a actualizar"""
+  id: String!
+}
+
+input CreateBuildingInput {
+  """
+  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
+  """
+  name: String!
+
+  """
+  Código corto único dentro del complejo. Ej: "TA", "EN"
+  """
+  code: String!
+
+  """Número de pisos"""
+  floors: Int! = 1
+  description: String
+
+  """ID del complejo al que pertenece"""
+  complexId: String!
+}
+
+input UpdateBuildingInput {
+  """
+  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
+  """
+  name: String
+
+  """
+  Código corto único dentro del complejo. Ej: "TA", "EN"
+  """
+  code: String
+
+  """Número de pisos"""
+  floors: Int = 1
+  description: String
+
+  """ID de la torre a actualizar"""
+  id: String!
+}
+
+input CreateUnitInput {
+  """
+  Número o código de la unidad. Ej: "101", "B-302"
+  """
+  number: String!
+
+  """Piso donde se ubica la unidad"""
+  floor: Int! = 1
+
+  """Tipo de unidad"""
+  type: UnitType! = APARTMENT
+
+  """Área en m²"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero"""
+  parkingSpots: Int! = 0
+
+  """Cuartos de bodega"""
+  storageRooms: Int! = 0
+  description: String
+
+  """ID del complejo"""
+  complexId: String!
+
+  """ID de la torre (opcional, para complejos con edificios)"""
+  buildingId: String
+}
+
+input UpdateUnitInput {
+  """
+  Número o código de la unidad. Ej: "101", "B-302"
+  """
+  number: String
+
+  """Piso donde se ubica la unidad"""
+  floor: Int = 1
+
+  """Tipo de unidad"""
+  type: UnitType = APARTMENT
+
+  """Área en m²"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero"""
+  parkingSpots: Int = 0
+
+  """Cuartos de bodega"""
+  storageRooms: Int = 0
+  description: String
+
+  """ID de la unidad a actualizar"""
+  id: String!
+
+  """Cambiar estado de la unidad"""
+  status: UnitStatus
+}
+
+input CreateResidentInput {
+  """ID del usuario que será asignado como residente"""
+  userId: String!
+
+  """ID de la unidad a la que se asignará"""
+  unitId: String!
+
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Tipo de residente"""
+  type: ResidentType! = OWNER
+
+  """Es el residente principal de la unidad"""
+  isMainResident: Boolean! = false
+
+  """Fecha de inicio de residencia (YYYY-MM-DD)"""
+  startDate: String!
+
+  """Fecha de fin de contrato — para arrendatarios (YYYY-MM-DD)"""
+  endDate: String
+
+  """Nombre del contacto de emergencia"""
+  emergencyContactName: String
+
+  """Teléfono del contacto de emergencia"""
+  emergencyContactPhone: String
+
+  """Notas internas del administrador"""
+  notes: String
+}
+
+input UpdateResidentInput {
+  """Tipo de residente"""
+  type: ResidentType = OWNER
+
+  """Es el residente principal de la unidad"""
+  isMainResident: Boolean = false
+
+  """Fecha de inicio de residencia (YYYY-MM-DD)"""
+  startDate: String
+
+  """Fecha de fin de contrato — para arrendatarios (YYYY-MM-DD)"""
+  endDate: String
+
+  """Nombre del contacto de emergencia"""
+  emergencyContactName: String
+
+  """Teléfono del contacto de emergencia"""
+  emergencyContactPhone: String
+
+  """Notas internas del administrador"""
+  notes: String
+
+  """ID del registro de residente a actualizar"""
+  id: String!
+}
+
+input MoveOutResidentInput {
+  """ID del registro de residente"""
+  residentId: String!
+
+  """Fecha de mudanza (YYYY-MM-DD)"""
+  moveOutDate: String
+
+  """Razón de la salida"""
+  moveOutReason: String
+}
+
+input ApproveResidentInput {
+  """ID del registro de residente a aprobar"""
+  residentId: String!
+
+  """Notas opcionales del Compliance Officer"""
+  notes: String
+}
+
+input RejectResidentInput {
+  """ID del registro de residente a rechazar"""
+  residentId: String!
+
+  """Razón del rechazo (obligatoria)"""
+  rejectionReason: String!
+}
+
+input BlacklistVisitorInput {
+  """ID del visitante a bloquear"""
+  visitorId: String!
+
+  """Razón del bloqueo (obligatoria)"""
+  reason: String!
+}
+
+input RegisterWalkInInput {
+  visitorName: String!
+  visitorLastName: String!
+
+  """Número de documento"""
+  visitorIdentity: String!
+
+  """Teléfono del visitante"""
+  visitorPhone: String
+
+  """URL de la foto capturada en portería"""
+  visitorPhotoUrl: String
+
+  """ID del residente anfitrión"""
+  hostResidentId: String!
+
+  """ID de la unidad destino"""
+  unitId: String!
+
+  """ID del complejo"""
+  complexId: String!
+  type: VisitType! = WALK_IN
+
+  """Motivo de la visita"""
+  purpose: String
+
+  """Placa del vehículo (si aplica)"""
+  vehiclePlate: String
+
+  """Observaciones del guardia"""
+  notes: String
+}
+
+input ScheduleVisitInput {
+  visitorName: String!
+  visitorLastName: String!
+
+  """Número de documento del visitante"""
+  visitorIdentity: String!
+  visitorPhone: String
+
+  """ID del residente que agenda (anfitrión)"""
+  hostResidentId: String!
+
+  """ID de la unidad destino"""
+  unitId: String!
+
+  """ID del complejo"""
+  complexId: String!
+
+  """Fecha y hora de llegada esperada (ISO 8601)"""
+  expectedArrivalAt: String!
+
+  """Fecha y hora límite de llegada (ISO 8601)"""
+  expectedArrivalUntil: String
+
+  """Motivo de la visita"""
+  purpose: String
+
+  """Placa del vehículo (si aplica)"""
+  vehiclePlate: String
+  notes: String
+}
+
+input RegisterVehicleInput {
+  """Placa del vehículo. Ej: ABC123, ABC12D"""
+  plate: String!
+
+  """Tipo de vehículo"""
+  type: VehicleType! = CAR
+
+  """Marca. Ej: Toyota, Renault"""
+  brand: String
+
+  """Modelo. Ej: Corolla, Logan"""
+  model: String
+
+  """Año del modelo"""
+  year: Int
+
+  """Color del vehículo"""
+  color: String
+  fuelType: VehicleFuelType
+
+  """URL de la foto del vehículo"""
+  photoUrl: String
+
+  """Número de parqueadero asignado (opcional)"""
+  parkingSpot: String
+
+  """Notas adicionales"""
+  notes: String
+
+  """ID del residente propietario del vehículo"""
+  residentId: String!
+
+  """ID del complejo"""
+  complexId: String!
+}
+
+input UpdateVehicleInput {
+  """Tipo de vehículo"""
+  type: VehicleType = CAR
+
+  """Marca. Ej: Toyota, Renault"""
+  brand: String
+
+  """Modelo. Ej: Corolla, Logan"""
+  model: String
+
+  """Año del modelo"""
+  year: Int
+
+  """Color del vehículo"""
+  color: String
+  fuelType: VehicleFuelType
+
+  """URL de la foto del vehículo"""
+  photoUrl: String
+
+  """Número de parqueadero asignado (opcional)"""
+  parkingSpot: String
+
+  """Notas adicionales"""
+  notes: String
+
+  """ID del vehículo a actualizar"""
+  id: String!
+}
+
+input ApproveVehicleInput {
+  """ID del vehículo a aprobar"""
+  vehicleId: String!
+
+  """Parqueadero asignado (opcional en la aprobación)"""
+  parkingSpot: String
+
+  """Notas del administrador"""
+  notes: String
+}
+
+input RegisterPackageInput {
+  unitId: String!
+  complexId: String!
+  senderName: String!
+  type: PackageType! = PARCEL
+  trackingCode: String
+  description: String
+  photoUrl: String
+  maxStorageDays: Float
+  notes: String
+}
+
+input ConfirmDeliveryInput {
+  packageId: String!
+  receivedByName: String
+  receivedByIdentity: String
+  notes: String
+}
+
+input CreateFeeConfigInput {
+  name: String!
+  description: String
+  amount: Float!
+  frequency: FeeFrequency! = MONTHLY
+  dueDayOfMonth: Int! = 5
+  complexId: String!
+  unitId: String
+  unitType: UnitType
+}
+
+input GenerateChargesInput {
+  complexId: String!
+  period: String!
+  feeConfigId: String
+}
+
+input RegisterPaymentInput {
+  chargeId: String!
+  amount: Float!
+  method: PaymentMethod!
+  paidAt: String!
+  reference: String
+  receiptUrl: String
+  notes: String
+}
+
+type Subscription {
+  notificationAdded(complexId: String!): Notification!
+}

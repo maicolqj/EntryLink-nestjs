@@ -1,0 +1,78 @@
+
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { seedPermissions } from './permissions.seed';
+import { seedRoles } from './roles.seed';
+import { runUserSeed } from './users.seed';
+// import { seedRoles } from './seed-roles';
+// import seedSystemCategories from './seed-categories';
+
+
+@Injectable()
+export class SeedService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  /**
+   * Ejecutar seed de permisos
+   */
+  async runPermissionsSeed(): Promise<void> {
+    console.log('\n🌱 Ejecutando seed de permisos...');
+    await seedPermissions(this.dataSource);
+    console.log('✅ Seed de permisos completado\n');
+  }
+
+  /**
+   * Ejecutar seed de roles
+   */
+  async runRolesSeed(): Promise<void> {
+    console.log('\n🌱 Ejecutando seed de roles...');
+    await seedRoles(this.dataSource);
+    console.log('✅ Seed de roles completado\n');
+  }
+
+  /**
+   * Ejecutar seed de categorías del sistema
+   */
+  async runUsersSeed(): Promise<void> {
+    console.log('\n🌱 Ejecutando seed de usuarios...');
+    await runUserSeed(this.dataSource);
+    console.log('✅ Seed de usuarios completado\n');
+  }
+
+  /**
+   * Ejecutar todos los seeds en orden
+   */
+  async runAllSeeds(): Promise<void> {
+    console.log('\n🌱 Iniciando seeds completos...\n');
+    
+    try {
+      await this.runPermissionsSeed();
+    //   await this.runRolesSeed();
+    //   await this.runCategoriesSeed();
+      
+      console.log('🎉 Todos los seeds ejecutados exitosamente!\n');
+    } catch (error) {
+      console.error('❌ Error ejecutando seeds:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Limpiar todas las categorías (útil para desarrollo)
+   */
+  async clearCategories(): Promise<void> {
+    console.log('\n🗑️  Limpiando categorías...');
+    
+    await this.dataSource.query('DELETE FROM system_categories');
+    
+    console.log('✅ Categorías eliminadas\n');
+  }
+
+  /**
+   * Re-ejecutar seed de categorías (limpiar + crear)
+   */
+  async refreshCategoriesSeed(): Promise<void> {
+    await this.clearCategories();
+    // await this.runCategoriesSeed();
+  }
+}

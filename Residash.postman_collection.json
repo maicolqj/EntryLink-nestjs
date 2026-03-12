@@ -1,0 +1,1387 @@
+{
+  "info": {
+    "name": "Residash SaaS API",
+    "description": "Colección completa de la plataforma de gestión de complejos residenciales Residash.\n\n**Instrucciones de uso:**\n1. Importa también el Environment `Residash.postman_environment.json`\n2. Ejecuta `loginWithEmail` o `verifyOtp` → el token se guarda automáticamente en la variable `accessToken`\n3. Todas las demás peticiones usan ese token automáticamente\n\n**GraphQL URL:** `{{graphqlUrl}}`\n**REST URL:** `{{baseUrl}}`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "residash-saas-api-v1"
+  },
+  "variable": [
+    { "key": "baseUrl",    "value": "http://localhost:3001/api/v1", "type": "string" },
+    { "key": "graphqlUrl", "value": "http://localhost:3001/graphql", "type": "string" },
+    { "key": "accessToken",  "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "complexId",  "value": "REEMPLAZA-CON-UUID-DEL-COMPLEJO", "type": "string" },
+    { "key": "unitId",     "value": "REEMPLAZA-CON-UUID-DE-UNIDAD",   "type": "string" },
+    { "key": "userId",     "value": "REEMPLAZA-CON-UUID-DE-USUARIO",  "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Auth",
+      "description": "Autenticación por rol: email+password para admins, OTP por SMS para residentes.",
+      "item": [
+        {
+          "name": "Login con Email (Admin / Complex / Compliance)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.loginWithEmail) {",
+            "  pm.collectionVariables.set('accessToken',  res.data.loginWithEmail.accessToken);",
+            "  pm.collectionVariables.set('refreshToken', res.data.loginWithEmail.refreshToken);",
+            "  pm.test('Login exitoso', () => pm.expect(res.data.loginWithEmail.accessToken).to.be.a('string'));",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation LoginWithEmail($input: LoginEmailInput!) {\n  loginWithEmail(input: $input) {\n    accessToken\n    refreshToken\n    expiresIn\n    sessionId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"email\": \"superadmin@residash.co\",\n    \"password\": \"Admin@123!\",\n    \"rememberMe\": false\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Solicitar OTP (Residente)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.requestOtp) {",
+            "  pm.test('OTP solicitado', () => pm.expect(res.data.requestOtp.success).to.be.true);",
+            "  if (res.data.requestOtp.debugCode) {",
+            "    pm.collectionVariables.set('otpDebugCode', res.data.requestOtp.debugCode);",
+            "    console.log('OTP DEBUG:', res.data.requestOtp.debugCode);",
+            "  }",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RequestOtp($input: RequestOtpInput!) {\n  requestOtp(input: $input) {\n    success\n    message\n    debugCode\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"phoneNumber\": \"3001234567\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Verificar OTP (Residente → obtiene tokens)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.verifyOtp) {",
+            "  pm.collectionVariables.set('accessToken',  res.data.verifyOtp.accessToken);",
+            "  pm.collectionVariables.set('refreshToken', res.data.verifyOtp.refreshToken);",
+            "  pm.test('OTP verificado', () => pm.expect(res.data.verifyOtp.accessToken).to.be.a('string'));",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation VerifyOtp($input: VerifyOtpInput!) {\n  verifyOtp(input: $input) {\n    accessToken\n    refreshToken\n    expiresIn\n    sessionId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"phoneNumber\": \"3001234567\",\n    \"code\": \"123456\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Renovar Token (Refresh)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.refreshToken) {",
+            "  pm.collectionVariables.set('accessToken',  res.data.refreshToken.accessToken);",
+            "  pm.collectionVariables.set('refreshToken', res.data.refreshToken.refreshToken);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST", "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RefreshToken($refreshToken: String!) {\n  refreshToken(refreshToken: $refreshToken) {\n    accessToken\n    refreshToken\n    expiresIn\n    sessionId\n  }\n}",
+              "variables": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Cerrar Sesión (Logout)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation {\n  logout\n}",
+              "variables": "{}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👤 Usuarios",
+      "description": "Gestión de usuarios. Creación de admins, residentes y guardias. Importación masiva por Excel.",
+      "item": [
+        {
+          "name": "Mi Perfil (me)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query {\n  me {\n    id\n    name\n    lastName\n    fullName\n    email\n    phoneNumber\n    status\n    systemCode\n    complexId\n    createdAt\n    userRoles {\n      id\n      isPrimary\n      role {\n        id\n        name\n      }\n    }\n  }\n}",
+              "variables": "{}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Buscar Usuario por ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetUser($id: String!) {\n  user(id: $id) {\n    id\n    name\n    lastName\n    fullName\n    email\n    phoneNumber\n    status\n    systemCode\n    complexId\n    createdAt\n    userRoles {\n      id\n      isPrimary\n      role { id name }\n    }\n  }\n}",
+              "variables": "{\n  \"id\": \"{{userId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Usuario Administrativo (SUPER_ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateAdminUser($input: CreateAdminUserInput!) {\n  createAdminUser(input: $input) {\n    id\n    name\n    lastName\n    email\n    status\n    createdAt\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Mendoza\",\n    \"email\": \"carlos.mendoza@residash.co\",\n    \"password\": \"Admin@123!\",\n    \"phoneNumber\": \"3109876543\",\n    \"role\": \"COMPILANCE_OFFICER_ROL\",\n    \"identity\": \"1098765432\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Admin Complejo (COMPLEX_ROL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateAdminUser($input: CreateAdminUserInput!) {\n  createAdminUser(input: $input) {\n    id\n    name\n    lastName\n    email\n    complexId\n    status\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Administracion\",\n    \"lastName\": \"Torres del Parque\",\n    \"email\": \"admin@torresdelparque.co\",\n    \"password\": \"Complex@456!\",\n    \"phoneNumber\": \"3201234567\",\n    \"role\": \"COMPLEX_ROL\",\n    \"complexId\": \"{{complexId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Residente (Individual)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterResident($input: CreateResidentUserInput!) {\n  registerResident(input: $input) {\n    id\n    name\n    lastName\n    phoneNumber\n    systemCode\n    email\n    status\n    complexId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"María José\",\n    \"lastName\": \"Rodríguez Peña\",\n    \"phoneNumber\": \"3154567890\",\n    \"identityNumber\": \"1023456789\",\n    \"email\": \"mjrodriguez@gmail.com\",\n    \"unitId\": \"{{unitId}}\",\n    \"complexId\": \"{{complexId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Guardia de Seguridad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateSecurityGuard($input: CreateSecurityGuardInput!) {\n  createSecurityGuard(input: $input) {\n    id\n    name\n    lastName\n    email\n    phoneNumber\n    complexId\n    status\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Pedro\",\n    \"lastName\": \"Vargas Castro\",\n    \"phoneNumber\": \"3005556677\",\n    \"identityNumber\": \"79456123\",\n    \"email\": \"pvargas@torresdelparque.co\",\n    \"password\": \"Guard@789!\",\n    \"complexId\": \"{{complexId}}\",\n    \"shift\": \"NOCHE\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Cambiar Contraseña",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ChangePassword($input: ChangePasswordInput!) {\n  changePassword(input: $input) {\n    success\n    message\n    changedAt\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"currentPassword\": \"Admin@123!\",\n    \"newPassword\": \"NuevoAdmin@456!\",\n    \"confirmPassword\": \"NuevoAdmin@456!\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Importar Residentes por Excel (REST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",      "type": "file",  "description": "Archivo Excel .xlsx con columnas: Nombre | Apellido | Teléfono | Cédula | Email | NumUnidad | Torre" },
+                { "key": "complexId", "type": "text",  "value": "{{complexId}}", "description": "UUID del complejo residencial" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/bulk-import",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "bulk-import"]
+            },
+            "description": "Importación masiva de residentes desde Excel.\n\n**Columnas esperadas (sin encabezado de fila 1):**\n| Col | Campo |\n|-----|-------|\n| A   | Nombre |\n| B   | Apellido |\n| C   | Teléfono (ej: 3001234567) |\n| D   | Cédula |\n| E   | Email (opcional) |\n| F   | Número de Unidad |\n| G   | Torre (opcional) |\n\n**Respuesta:** `{ importId, message }` — usa el `importId` para consultar el estado del proceso."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏢 Complejos Residenciales",
+      "description": "CRUD de complejos residenciales. Solo SUPER_ADMIN puede crear. COMPLEX_ROL puede ver y editar el suyo.",
+      "item": [
+        {
+          "name": "Listar Complejos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetComplexes($pagination: PaginationInput, $filters: FilterComplexInput) {\n  complexes(pagination: $pagination, filters: $filters) {\n    data {\n      id\n      name\n      address\n      city\n      status\n      plan\n      type\n      phone\n      email\n      createdAt\n    }\n    pagination {\n      total\n      page\n      limit\n      totalPages\n    }\n  }\n}",
+              "variables": "{\n  \"pagination\": { \"page\": 1, \"limit\": 10 },\n  \"filters\": {}\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Obtener Complejo por ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetComplex($id: String!) {\n  complex(id: $id) {\n    id\n    name\n    description\n    address\n    city\n    state\n    country\n    phone\n    email\n    website\n    nit\n    legalRepresentative\n    status\n    plan\n    type\n    createdAt\n    updatedAt\n  }\n}",
+              "variables": "{\n  \"id\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Complejo",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.createComplex) {",
+            "  pm.collectionVariables.set('complexId', res.data.createComplex.id);",
+            "  pm.test('Complejo creado', () => pm.expect(res.data.createComplex.id).to.be.a('string'));",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateComplex($input: CreateComplexInput!) {\n  createComplex(input: $input) {\n    id\n    name\n    address\n    city\n    status\n    plan\n    type\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Torres del Parque\",\n    \"description\": \"Conjunto residencial en el norte de Bogotá\",\n    \"address\": \"Calle 90 # 15-30\",\n    \"city\": \"Bogotá\",\n    \"state\": \"Cundinamarca\",\n    \"country\": \"Colombia\",\n    \"phone\": \"3012345678\",\n    \"email\": \"admin@torresdelparque.co\",\n    \"nit\": \"900123456-7\",\n    \"legalRepresentative\": \"Juan Carlos Gómez\",\n    \"type\": \"APARTMENT_COMPLEX\",\n    \"plan\": \"PROFESSIONAL\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Actualizar Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation UpdateComplex($input: UpdateComplexInput!) {\n  updateComplex(input: $input) {\n    id\n    name\n    phone\n    email\n    updatedAt\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"id\": \"{{complexId}}\",\n    \"phone\": \"3017654321\",\n    \"email\": \"contacto@torresdelparque.co\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Cambiar Estado del Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ChangeComplexStatus($id: String!, $status: ComplexStatus!) {\n  changeComplexStatus(id: $id, status: $status) {\n    id\n    name\n    status\n  }\n}",
+              "variables": "{\n  \"id\": \"{{complexId}}\",\n  \"status\": \"ACTIVE\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Eliminar Complejo (Soft Delete)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemoveComplex($id: String!) {\n  removeComplex(id: $id)\n}",
+              "variables": "{\n  \"id\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Restaurar Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RestoreComplex($id: String!) {\n  restoreComplex(id: $id) {\n    id\n    name\n    status\n  }\n}",
+              "variables": "{\n  \"id\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏗️ Torres / Edificios",
+      "description": "Gestión de edificios/torres dentro de un complejo.",
+      "item": [
+        {
+          "name": "Listar Torres del Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetBuildings($complexId: String!, $pagination: PaginationInput) {\n  buildings(complexId: $complexId, pagination: $pagination) {\n    data {\n      id\n      name\n      code\n      floors\n      isActive\n      description\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Torre",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.createBuilding) {",
+            "  pm.collectionVariables.set('buildingId', res.data.createBuilding.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateBuilding($input: CreateBuildingInput!) {\n  createBuilding(input: $input) {\n    id\n    name\n    code\n    floors\n    isActive\n    complexId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Torre A\",\n    \"code\": \"TA\",\n    \"floors\": 12,\n    \"description\": \"Torre principal del conjunto\",\n    \"complexId\": \"{{complexId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Actualizar Torre",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation UpdateBuilding($input: UpdateBuildingInput!) {\n  updateBuilding(input: $input) {\n    id\n    name\n    floors\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"id\": \"{{buildingId}}\",\n    \"name\": \"Torre A - Actualizada\",\n    \"floors\": 15\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Activar / Desactivar Torre",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ToggleBuildingStatus($id: String!) {\n  toggleBuildingStatus(id: $id) {\n    id\n    name\n    isActive\n  }\n}",
+              "variables": "{\n  \"id\": \"{{buildingId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Eliminar Torre",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemoveBuilding($id: String!) {\n  removeBuilding(id: $id)\n}",
+              "variables": "{\n  \"id\": \"{{buildingId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏠 Unidades / Apartamentos",
+      "description": "Gestión de unidades residenciales (apartamentos, casas, locales) dentro de un complejo.",
+      "item": [
+        {
+          "name": "Listar Unidades",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetUnits($complexId: String!, $pagination: PaginationInput, $buildingId: String, $status: UnitStatus) {\n  units(complexId: $complexId, pagination: $pagination, buildingId: $buildingId, status: $status) {\n    data {\n      id\n      number\n      floor\n      type\n      status\n      area\n      bedrooms\n      bathrooms\n      parkingSpots\n      buildingId\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Obtener Unidad por ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetUnit($id: String!) {\n  unit(id: $id) {\n    id\n    number\n    floor\n    type\n    status\n    area\n    bedrooms\n    bathrooms\n    parkingSpots\n    storageRooms\n    complexId\n    buildingId\n  }\n}",
+              "variables": "{\n  \"id\": \"{{unitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Unidad",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.createUnit) {",
+            "  pm.collectionVariables.set('unitId', res.data.createUnit.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateUnit($input: CreateUnitInput!) {\n  createUnit(input: $input) {\n    id\n    number\n    floor\n    type\n    status\n    area\n    bedrooms\n    bathrooms\n    parkingSpots\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"number\": \"101\",\n    \"floor\": 1,\n    \"type\": \"APARTMENT\",\n    \"area\": 75.5,\n    \"bedrooms\": 3,\n    \"bathrooms\": 2,\n    \"parkingSpots\": 1,\n    \"storageRooms\": 1,\n    \"complexId\": \"{{complexId}}\",\n    \"buildingId\": \"{{buildingId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Actualizar Unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation UpdateUnit($input: UpdateUnitInput!) {\n  updateUnit(input: $input) {\n    id\n    number\n    area\n    parkingSpots\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"id\": \"{{unitId}}\",\n    \"area\": 82.0,\n    \"parkingSpots\": 2\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Eliminar Unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemoveUnit($id: String!) {\n  removeUnit(id: $id)\n}",
+              "variables": "{\n  \"id\": \"{{unitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👥 Residentes",
+      "description": "Gestión del ciclo de vida de residentes: registro, aprobación, suspensión, mudanza.",
+      "item": [
+        {
+          "name": "Listar Residentes del Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetResidents($complexId: String!, $pagination: PaginationInput, $filters: FilterResidentsInput) {\n  residents(complexId: $complexId, pagination: $pagination, filters: $filters) {\n    data {\n      id\n      type\n      status\n      isMainResident\n      startDate\n      userId\n      unitId\n      user { id name lastName phoneNumber email }\n      unit { id number floor }\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Residentes Pendientes de Aprobación (Compliance)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query PendingResidents($pagination: PaginationInput) {\n  pendingResidents(pagination: $pagination) {\n    data {\n      id\n      type\n      status\n      startDate\n      user { id name lastName phoneNumber identity }\n      unit { id number }\n      complex { id name }\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Obtener Residente por ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetResident($id: String!) {\n  resident(id: $id) {\n    id\n    type\n    status\n    isMainResident\n    startDate\n    endDate\n    approvedAt\n    emergencyContactName\n    emergencyContactPhone\n    notes\n    user { id name lastName phoneNumber email systemCode }\n    unit { id number floor }\n  }\n}",
+              "variables": "{\n  \"id\": \"{{residentId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Residente (Registro en módulo Residents)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.createResident) {",
+            "  pm.collectionVariables.set('residentId', res.data.createResident.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateResident($input: CreateResidentInput!) {\n  createResident(input: $input) {\n    id\n    type\n    status\n    isMainResident\n    startDate\n    userId\n    unitId\n    complexId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"userId\": \"{{userId}}\",\n    \"unitId\": \"{{unitId}}\",\n    \"complexId\": \"{{complexId}}\",\n    \"type\": \"OWNER\",\n    \"isMainResident\": true,\n    \"startDate\": \"2025-01-15\",\n    \"emergencyContactName\": \"Ana Rodríguez\",\n    \"emergencyContactPhone\": \"3001112233\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Aprobar Residente (Compliance Officer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ApproveResident($input: ApproveResidentInput!) {\n  approveResident(input: $input) {\n    id\n    status\n    approvedAt\n    approvedByUserId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"residentId\": \"{{residentId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Rechazar Residente (Compliance Officer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RejectResident($input: RejectResidentInput!) {\n  rejectResident(input: $input) {\n    id\n    status\n    rejectionReason\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"residentId\": \"{{residentId}}\",\n    \"reason\": \"Documentación incompleta: falta copia del contrato de arrendamiento.\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Suspender Residente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation SuspendResident($residentId: String!, $reason: String!) {\n  suspendResident(residentId: $residentId, reason: $reason) {\n    id\n    status\n  }\n}",
+              "variables": "{\n  \"residentId\": \"{{residentId}}\",\n  \"reason\": \"Mora en el pago de administración por 3 meses.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Reactivar Residente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ReactivateResident($residentId: String!) {\n  reactivateResident(residentId: $residentId) {\n    id\n    status\n  }\n}",
+              "variables": "{\n  \"residentId\": \"{{residentId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Mudanza (Move Out)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation MoveOutResident($input: MoveOutResidentInput!) {\n  moveOutResident(input: $input) {\n    id\n    status\n    moveOutDate\n    moveOutReason\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"residentId\": \"{{residentId}}\",\n    \"moveOutDate\": \"2025-03-31\",\n    \"reason\": \"Venta del inmueble\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Historial de Residentes por Unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query ResidentHistoryByUnit($unitId: String!) {\n  residentHistoryByUnit(unitId: $unitId) {\n    id\n    type\n    status\n    startDate\n    endDate\n    moveOutDate\n    user { id name lastName }\n  }\n}",
+              "variables": "{\n  \"unitId\": \"{{unitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👋 Visitantes y Visitas",
+      "description": "Control de acceso de visitantes: walk-in, visitas programadas con QR, aprobación por residente, lista negra.",
+      "item": [
+        {
+          "name": "Listar Visitantes",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetVisitors($complexId: String!, $pagination: PaginationInput, $search: String, $onlyBlacklisted: Boolean) {\n  visitors(complexId: $complexId, pagination: $pagination, search: $search, onlyBlacklisted: $onlyBlacklisted) {\n    data {\n      id\n      name\n      lastName\n      identity\n      phone\n      isBlacklisted\n      blacklistReason\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 },\n  \"onlyBlacklisted\": false\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Listar Visitas",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetVisits($complexId: String!, $pagination: PaginationInput, $filters: FilterVisitsInput) {\n  visits(complexId: $complexId, pagination: $pagination, filters: $filters) {\n    data {\n      id\n      type\n      status\n      purpose\n      entryAt\n      exitAt\n      vehiclePlate\n      visitor { id name lastName identity }\n      unit { id number }\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Visitas Activas (en el complejo ahora)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query ActiveVisits($complexId: String!) {\n  activeVisits(complexId: $complexId) {\n    id\n    type\n    status\n    entryAt\n    purpose\n    visitor { id name lastName }\n    unit { id number }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Visitas Pendientes de Aprobación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query PendingApprovalVisits($complexId: String!) {\n  pendingApprovalVisits(complexId: $complexId) {\n    id\n    type\n    status\n    createdAt\n    visitor { id name lastName identity }\n    unit { id number }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Visitas Programadas Hoy",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query ScheduledVisitsToday($complexId: String!) {\n  scheduledVisitsToday(complexId: $complexId) {\n    id\n    status\n    expectedArrivalAt\n    purpose\n    visitor { id name lastName }\n    unit { id number }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Visitante Walk-In (Guardia)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.registerWalkIn) {",
+            "  pm.collectionVariables.set('visitId', res.data.registerWalkIn.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterWalkIn($input: RegisterWalkInInput!) {\n  registerWalkIn(input: $input) {\n    id\n    type\n    status\n    purpose\n    visitor { id name lastName identity }\n    unit { id number }\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"visitorName\": \"Roberto\",\n    \"visitorLastName\": \"Jiménez Torres\",\n    \"visitorIdentity\": \"80456789\",\n    \"visitorPhone\": \"3112345678\",\n    \"hostResidentId\": \"{{residentId}}\",\n    \"unitId\": \"{{unitId}}\",\n    \"complexId\": \"{{complexId}}\",\n    \"purpose\": \"Visita familiar\",\n    \"vehiclePlate\": \"ABC123\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Programar Visita con QR (Residente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ScheduleVisit($input: ScheduleVisitInput!) {\n  scheduleVisit(input: $input) {\n    id\n    type\n    status\n    expectedArrivalAt\n    qrToken\n    visitor { id name lastName }\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"visitorName\": \"Laura\",\n    \"visitorLastName\": \"Castillo Mora\",\n    \"visitorIdentity\": \"52987654\",\n    \"visitorPhone\": \"3009876543\",\n    \"hostResidentId\": \"{{residentId}}\",\n    \"unitId\": \"{{unitId}}\",\n    \"complexId\": \"{{complexId}}\",\n    \"expectedArrivalAt\": \"2025-03-15T14:00:00Z\",\n    \"expectedArrivalUntil\": \"2025-03-15T18:00:00Z\",\n    \"purpose\": \"Reunión de trabajo\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Validar QR de Acceso (Guardia)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ValidateQrAccess($qrToken: String!) {\n  validateQrAccess(qrToken: $qrToken) {\n    valid\n    message\n    visit {\n      id\n      status\n      visitor { id name lastName }\n      unit { id number }\n    }\n  }\n}",
+              "variables": "{\n  \"qrToken\": \"TOKEN_DEL_QR_AQUI\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Entrada de Visitante (Guardia)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterVisitorEntry($visitId: String!) {\n  registerVisitorEntry(visitId: $visitId) {\n    id\n    status\n    entryAt\n    visitor { id name lastName }\n  }\n}",
+              "variables": "{\n  \"visitId\": \"{{visitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Salida de Visitante (Guardia)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterVisitorExit($visitId: String!, $notes: String) {\n  registerVisitorExit(visitId: $visitId, notes: $notes) {\n    id\n    status\n    entryAt\n    exitAt\n    visitor { id name lastName }\n  }\n}",
+              "variables": "{\n  \"visitId\": \"{{visitId}}\",\n  \"notes\": \"Salida sin novedades\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Aprobar Visita (Residente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ApproveVisitEntry($visitId: String!) {\n  approveVisitEntry(visitId: $visitId) {\n    id\n    status\n    visitor { id name lastName }\n  }\n}",
+              "variables": "{\n  \"visitId\": \"{{visitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Denegar Visita (Residente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation DenyVisitEntry($visitId: String!, $reason: String!) {\n  denyVisitEntry(visitId: $visitId, reason: $reason) {\n    id\n    status\n    visitor { id name lastName }\n  }\n}",
+              "variables": "{\n  \"visitId\": \"{{visitId}}\",\n  \"reason\": \"No espero visitas en este momento.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Cancelar Visita Programada",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CancelVisit($visitId: String!) {\n  cancelVisit(visitId: $visitId) {\n    id\n    status\n  }\n}",
+              "variables": "{\n  \"visitId\": \"{{visitId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Agregar Visitante a Lista Negra",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation BlacklistVisitor($input: BlacklistVisitorInput!) {\n  blacklistVisitor(input: $input) {\n    id\n    isBlacklisted\n    blacklistReason\n    blacklistedAt\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"visitorId\": \"{{visitorId}}\",\n    \"complexId\": \"{{complexId}}\",\n    \"reason\": \"Comportamiento agresivo hacia la portería.\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Quitar de Lista Negra",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemoveVisitorFromBlacklist($visitorId: String!) {\n  removeVisitorFromBlacklist(visitorId: $visitorId) {\n    id\n    isBlacklisted\n  }\n}",
+              "variables": "{\n  \"visitorId\": \"{{visitorId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 Vehículos",
+      "description": "Registro y control de vehículos de residentes. Incluye consulta rápida de placa para portería.",
+      "item": [
+        {
+          "name": "Listar Vehículos del Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetVehicles($complexId: String!, $pagination: PaginationInput) {\n  vehicles(complexId: $complexId, pagination: $pagination) {\n    data {\n      id\n      plate\n      type\n      brand\n      model\n      year\n      color\n      status\n      parkingSpot\n      residentId\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Consultar Placa (Portería)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query CheckPlate($plate: String!, $complexId: String!) {\n  checkPlate(plate: $plate, complexId: $complexId) {\n    found\n    plate\n    status\n    vehicle {\n      id\n      plate\n      brand\n      model\n      color\n      type\n    }\n    resident {\n      id\n      type\n      user { id name lastName }\n      unit { id number }\n    }\n  }\n}",
+              "variables": "{\n  \"plate\": \"ABC123\",\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Vehículos Pendientes de Aprobación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query PendingVehicles($complexId: String!) {\n  pendingVehicles(complexId: $complexId) {\n    id\n    plate\n    type\n    brand\n    model\n    color\n    status\n    residentId\n    createdAt\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Vehículo",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.registerVehicle) {",
+            "  pm.collectionVariables.set('vehicleId', res.data.registerVehicle.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterVehicle($input: RegisterVehicleInput!) {\n  registerVehicle(input: $input) {\n    id\n    plate\n    type\n    brand\n    model\n    year\n    color\n    status\n    parkingSpot\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"plate\": \"XYZ789\",\n    \"type\": \"CAR\",\n    \"brand\": \"Renault\",\n    \"model\": \"Logan\",\n    \"year\": 2022,\n    \"color\": \"Blanco\",\n    \"fuelType\": \"GASOLINE\",\n    \"parkingSpot\": \"P-101\",\n    \"residentId\": \"{{residentId}}\",\n    \"complexId\": \"{{complexId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Aprobar Vehículo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ApproveVehicle($input: ApproveVehicleInput!) {\n  approveVehicle(input: $input) {\n    id\n    plate\n    status\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"vehicleId\": \"{{vehicleId}}\",\n    \"parkingSpot\": \"P-101\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Rechazar Vehículo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RejectVehicle($vehicleId: String!, $reason: String!) {\n  rejectVehicle(vehicleId: $vehicleId, reason: $reason) {\n    id\n    plate\n    status\n  }\n}",
+              "variables": "{\n  \"vehicleId\": \"{{vehicleId}}\",\n  \"reason\": \"El cupo de parqueo para esta unidad está completo.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Suspender Vehículo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation SuspendVehicle($vehicleId: String!, $reason: String!) {\n  suspendVehicle(vehicleId: $vehicleId, reason: $reason) {\n    id\n    plate\n    status\n  }\n}",
+              "variables": "{\n  \"vehicleId\": \"{{vehicleId}}\",\n  \"reason\": \"Mora en el pago de administración.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Reactivar Vehículo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ReactivateVehicle($vehicleId: String!) {\n  reactivateVehicle(vehicleId: $vehicleId) {\n    id\n    plate\n    status\n  }\n}",
+              "variables": "{\n  \"vehicleId\": \"{{vehicleId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Eliminar Vehículo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemoveVehicle($vehicleId: String!) {\n  removeVehicle(vehicleId: $vehicleId)\n}",
+              "variables": "{\n  \"vehicleId\": \"{{vehicleId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📦 Paquetes",
+      "description": "Control de paquetes y correspondencia recibida en portería.",
+      "item": [
+        {
+          "name": "Listar Paquetes",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetPackages($complexId: String!, $pagination: PaginationInput) {\n  packages(complexId: $complexId, pagination: $pagination) {\n    data {\n      id\n      type\n      status\n      senderName\n      trackingCode\n      receivedAt\n      notifiedAt\n      deliveredAt\n      unitId\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Paquetes Pendientes por Unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query PendingPackagesByUnit($unitId: String!, $complexId: String!) {\n  pendingPackagesByUnit(unitId: $unitId, complexId: $complexId) {\n    id\n    type\n    status\n    senderName\n    trackingCode\n    receivedAt\n    description\n  }\n}",
+              "variables": "{\n  \"unitId\": \"{{unitId}}\",\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Paquete (Portería/Guardia)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.registerPackage) {",
+            "  pm.collectionVariables.set('packageId', res.data.registerPackage.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterPackage($input: RegisterPackageInput!) {\n  registerPackage(input: $input) {\n    id\n    type\n    status\n    senderName\n    trackingCode\n    receivedAt\n    unit { id number }\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"unitId\": \"{{unitId}}\",\n    \"complexId\": \"{{complexId}}\",\n    \"senderName\": \"Amazon Colombia\",\n    \"type\": \"PARCEL\",\n    \"trackingCode\": \"AMZ-2025-001234\",\n    \"description\": \"Caja pequeña, 1kg aprox.\",\n    \"maxStorageDays\": 15\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Marcar como Notificado al Residente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation MarkPackageAsNotified($packageId: String!) {\n  markPackageAsNotified(packageId: $packageId) {\n    id\n    status\n    notifiedAt\n  }\n}",
+              "variables": "{\n  \"packageId\": \"{{packageId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Confirmar Entrega al Residente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ConfirmPackageDelivery($input: ConfirmDeliveryInput!) {\n  confirmPackageDelivery(input: $input) {\n    id\n    status\n    deliveredAt\n    deliveredToName\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"packageId\": \"{{packageId}}\",\n    \"deliveredToName\": \"María José Rodríguez\",\n    \"notes\": \"Entregado directamente a la residente.\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Devolver Paquete al Remitente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ReturnPackage($packageId: String!, $reason: String!) {\n  returnPackage(packageId: $packageId, reason: $reason) {\n    id\n    status\n  }\n}",
+              "variables": "{\n  \"packageId\": \"{{packageId}}\",\n  \"reason\": \"El residente no reclamó el paquete en el tiempo establecido (15 días).\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Marcar Paquete como Perdido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation MarkPackageAsLost($packageId: String!, $reason: String!) {\n  markPackageAsLost(packageId: $packageId, reason: $reason) {\n    id\n    status\n  }\n}",
+              "variables": "{\n  \"packageId\": \"{{packageId}}\",\n  \"reason\": \"No se encontró evidencia del paquete en portería.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🔔 Notificaciones",
+      "description": "Notificaciones in-app en tiempo real. Incluye Subscription GraphQL para push en WebSocket.",
+      "item": [
+        {
+          "name": "Mis Notificaciones",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query MyNotifications($complexId: String!, $pagination: PaginationInput) {\n  myNotifications(complexId: $complexId, pagination: $pagination) {\n    data {\n      id\n      type\n      title\n      message\n      isRead\n      priority\n      createdAt\n      metadata\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Contador de No Leídas",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query UnreadNotificationsCount($complexId: String!) {\n  unreadNotificationsCount(complexId: $complexId) {\n    count\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Marcar Notificación como Leída",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation MarkNotificationAsRead($notificationId: String!) {\n  markNotificationAsRead(notificationId: $notificationId) {\n    id\n    isRead\n    readAt\n  }\n}",
+              "variables": "{\n  \"notificationId\": \"{{notificationId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Marcar Todas como Leídas",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation MarkAllNotificationsAsRead($complexId: String!) {\n  markAllNotificationsAsRead(complexId: $complexId)\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "[WS] Subscription — Notificaciones en Tiempo Real",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "subscription NotificationAdded($complexId: String!) {\n  notificationAdded(complexId: $complexId) {\n    id\n    type\n    title\n    message\n    isRead\n    priority\n    createdAt\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] },
+            "description": "⚠️ Las subscriptions requieren conexión WebSocket (graphql-ws).\n\nUsa un cliente como GraphQL Playground, Altair GraphQL Client o Apollo Studio.\n\n**URL WS:** `ws://localhost:3001/graphql`\n\n**Header en el handshake WS:**\n```\n{ \"Authorization\": \"Bearer {{accessToken}}\" }\n```"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💰 Finanzas",
+      "description": "Cuotas de administración, cobros, pagos y estados de cuenta. Sistema financiero del complejo.",
+      "item": [
+        {
+          "name": "Listar Configuraciones de Cuota",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query FeeConfigs($complexId: String!) {\n  feeConfigs(complexId: $complexId) {\n    id\n    name\n    description\n    amount\n    frequency\n    dueDayOfMonth\n    isActive\n    unitId\n    unitType\n    createdAt\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Listar Cobros / Cargos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetCharges($complexId: String!, $pagination: PaginationInput, $filters: FilterChargesInput) {\n  charges(complexId: $complexId, pagination: $pagination, filters: $filters) {\n    data {\n      id\n      status\n      amount\n      dueDate\n      paidAmount\n      balance\n      period\n      unitId\n      feeConfigId\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"pagination\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Pagos por Cargo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query PaymentsByCharge($chargeId: String!) {\n  paymentsByCharge(chargeId: $chargeId) {\n    id\n    amount\n    method\n    paidAt\n    reference\n    receiptUrl\n    notes\n    createdAt\n  }\n}",
+              "variables": "{\n  \"chargeId\": \"{{chargeId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Saldo de Unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query UnitBalance($unitId: String!, $complexId: String!) {\n  unitBalance(unitId: $unitId, complexId: $complexId) {\n    unitId\n    totalCharged\n    totalPaid\n    balance\n    overdueAmount\n    pendingCharges\n    lastPaymentDate\n  }\n}",
+              "variables": "{\n  \"unitId\": \"{{unitId}}\",\n  \"complexId\": \"{{complexId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Resumen Financiero del Complejo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query ComplexFinancialSummary($complexId: String!, $period: String!) {\n  complexFinancialSummary(complexId: $complexId, period: $period) {\n    complexId\n    period\n    totalCharged\n    totalCollected\n    totalPending\n    totalOverdue\n    collectionRate\n    unitsWithDebt\n  }\n}",
+              "variables": "{\n  \"complexId\": \"{{complexId}}\",\n  \"period\": \"2025-03\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Configuración de Cuota",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.createFeeConfig) {",
+            "  pm.collectionVariables.set('feeConfigId', res.data.createFeeConfig.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateFeeConfig($input: CreateFeeConfigInput!) {\n  createFeeConfig(input: $input) {\n    id\n    name\n    amount\n    frequency\n    dueDayOfMonth\n    isActive\n    complexId\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"Cuota de Administración Mensual\",\n    \"description\": \"Cuota ordinaria de administración para todos los apartamentos\",\n    \"amount\": 250000,\n    \"frequency\": \"MONTHLY\",\n    \"dueDayOfMonth\": 5,\n    \"complexId\": \"{{complexId}}\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Activar / Desactivar Cuota",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ToggleFeeConfig($configId: String!) {\n  toggleFeeConfig(configId: $configId) {\n    id\n    name\n    isActive\n  }\n}",
+              "variables": "{\n  \"configId\": \"{{feeConfigId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Generar Cobros del Período (Bulk, Idempotente)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation GenerateCharges($input: GenerateChargesInput!) {\n  generateCharges(input: $input) {\n    created\n    skipped\n    total\n    period\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"complexId\": \"{{complexId}}\",\n    \"feeConfigId\": \"{{feeConfigId}}\",\n    \"period\": \"2025-03\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Condonar Cargo (Waive)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation WaiveCharge($chargeId: String!, $reason: String!) {\n  waiveCharge(chargeId: $chargeId, reason: $reason) {\n    id\n    status\n    amount\n  }\n}",
+              "variables": "{\n  \"chargeId\": \"{{chargeId}}\",\n  \"reason\": \"Residente en situación de vulnerabilidad económica comprobada.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Registrar Pago",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const res = pm.response.json();",
+            "if (res.data && res.data.registerPayment) {",
+            "  pm.collectionVariables.set('paymentId', res.data.registerPayment.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RegisterPayment($input: RegisterPaymentInput!) {\n  registerPayment(input: $input) {\n    id\n    amount\n    method\n    paidAt\n    reference\n    createdAt\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"chargeId\": \"{{chargeId}}\",\n    \"amount\": 250000,\n    \"method\": \"BANK_TRANSFER\",\n    \"paidAt\": \"2025-03-05\",\n    \"reference\": \"TRANSF-20250305-001\",\n    \"notes\": \"Pago oportuno cuota marzo 2025\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Reversar Pago",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation ReversePayment($paymentId: String!, $reason: String!) {\n  reversePayment(paymentId: $paymentId, reason: $reason) {\n    id\n    amount\n    reversedAt\n    reversalReason\n  }\n}",
+              "variables": "{\n  \"paymentId\": \"{{paymentId}}\",\n  \"reason\": \"Pago registrado por error. El residente pagó a otra cuenta.\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🛡️ Roles",
+      "description": "Gestión de roles del sistema con jerarquía. Solo SUPER_ADMIN puede crear/modificar roles.",
+      "item": [
+        {
+          "name": "Listar Roles",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetRoles($input: SearchRolesInput) {\n  roles(input: $input) {\n    data {\n      id\n      name\n      description\n      isActive\n      createdAt\n      permissions { id name }\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"input\": { \"page\": 1, \"limit\": 20 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Jerarquía de Roles",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetRoleHierarchy($roleId: String!) {\n  getRoleHierarchy(roleId: $roleId) {\n    id\n    name\n    level\n    children {\n      id\n      name\n    }\n  }\n}",
+              "variables": "{\n  \"roleId\": \"{{roleId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Asignar Rol a Usuario",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation AssignRoleToUser($userId: String!, $roleName: ValidRoles!) {\n  assignRoleToUser(userId: $userId, roleName: $roleName) {\n    userId\n    roleName\n    assignedAt\n  }\n}",
+              "variables": "{\n  \"userId\": \"{{userId}}\",\n  \"roleName\": \"COMPLEX_ROL\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Rol",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreateRole($input: CreateRoleInput!) {\n  createRole(input: $input) {\n    id\n    name\n    description\n    isActive\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"MANTENIMIENTO_ROL\",\n    \"description\": \"Personal de mantenimiento del complejo\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🔑 Permisos",
+      "description": "Gestión granular de permisos del sistema con niveles de criticidad y dependencias.",
+      "item": [
+        {
+          "name": "Listar Permisos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetPermissions($input: SearchPermissionsInput) {\n  permissions(input: $input) {\n    data {\n      id\n      name\n      description\n      level\n      group\n      isActive\n    }\n    pagination { total page limit totalPages }\n  }\n}",
+              "variables": "{\n  \"input\": { \"page\": 1, \"limit\": 50 }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Obtener Permiso por ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "query GetPermission($id: String!) {\n  permission(id: $id) {\n    id\n    name\n    description\n    level\n    group\n    isActive\n    dependsOn { id name }\n  }\n}",
+              "variables": "{\n  \"id\": \"{{permissionId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Crear Permiso",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation CreatePermission($input: CreatePermissionInput!) {\n  createPermission(input: $input) {\n    id\n    name\n    description\n    level\n    group\n  }\n}",
+              "variables": "{\n  \"input\": {\n    \"name\": \"VIEW_MAINTENANCE_LOGS\",\n    \"description\": \"Ver registros de mantenimiento\",\n    \"level\": \"LOW\",\n    \"group\": \"SETTINGS\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Actualizar Permiso",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation UpdatePermission($id: String!, $updatePermissionInput: UpdatePermissionInput!) {\n  updatePermission(id: $id, updatePermissionInput: $updatePermissionInput) {\n    id\n    name\n    description\n    level\n  }\n}",
+              "variables": "{\n  \"id\": \"{{permissionId}}\",\n  \"updatePermissionInput\": {\n    \"description\": \"Descripción actualizada del permiso\",\n    \"level\": \"MEDIUM\"\n  }\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Eliminar Permiso",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RemovePermission($id: String!) {\n  removePermission(id: $id) {\n    success\n    message\n  }\n}",
+              "variables": "{\n  \"id\": \"{{permissionId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        },
+        {
+          "name": "Restaurar Permiso",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "graphql", "graphql": {
+              "query": "mutation RestorePermission($id: String!) {\n  restorePermission(id: $id) {\n    success\n    message\n  }\n}",
+              "variables": "{\n  \"id\": \"{{permissionId}}\"\n}"
+            }},
+            "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}

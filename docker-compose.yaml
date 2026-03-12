@@ -1,0 +1,80 @@
+# version: '3.8'
+
+services:
+  # PostgreSQL 17.5 - Versión más reciente y estable
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: always
+    ports:
+      - "${DB_PORT_LOCAL}:${DB_PORT_DOCKER}"
+    environment:
+      POSTGRES_PASSWORD: ${PASSDB_POSTGRES}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      TZ: ${POSTGRES_TIMEZONE:-UTC}
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS}
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE}
+    command: [ 
+      'postgres',
+      '-c', 'timezone=America/Bogota',
+      '-c', 'max_connections=$POSTGRES_MAX_CONNECTIONS',
+      '-c', 'shared_buffers=$POSTGRES_SHARED_BUFFERS',
+      '-c', 'effective_cache_size=$POSTGRES_EFFECTIVE_CACHE_SIZE',
+      '-c', 'maintenance_work_mem=64MB',
+      '-c', 'checkpoint_completion_target=0.9',
+      '-c', 'wal_buffers=16MB',
+      '-c', 'default_statistics_target=100',
+      '-c', 'random_page_cost=1.1',
+      '-c', 'effective_io_concurrency=200',
+      '-c', 'work_mem=4MB',
+      '-c', 'min_wal_size=1GB',
+      '-c', 'max_wal_size=4GB' 
+      ]
+    container_name: ${CONTAINER_NAME_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis-node:
+    image: redis:7.2
+    restart: always
+    ports:
+      - '6379:6379'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data_1:/data
+    networks:
+      - app-network
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    container_name: redis-node
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    
+
+volumes:
+  postgres_data:
+  redis_data_1:
+# driver: local
+
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
