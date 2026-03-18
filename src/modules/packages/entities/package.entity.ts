@@ -138,21 +138,19 @@ export class Package {
 
   @Field(() => Unit)
   @ManyToOne(() => Unit, { eager: false })
-  @JoinColumn({ name: 'unitId' })
   unit: Unit;
 
   @Field(() => ResidentialComplex)
   @ManyToOne(() => ResidentialComplex, { eager: false })
-  @JoinColumn({ name: 'complexId' })
   complex: ResidentialComplex;
 
-  @Field(() => User)
-  @ManyToOne(() => User, { eager: false })
+  @Field(() => User, { nullable: true })
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'registeredByUserId' })
-  registeredBy: User;
+  registeredBy?: User;
 
   @Field(() => User, { nullable: true })
-  @ManyToOne(() => User, { eager: false, nullable: true })
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'deliveredByUserId' })
   deliveredBy?: User;
 

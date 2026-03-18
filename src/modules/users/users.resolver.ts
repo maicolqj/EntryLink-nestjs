@@ -7,9 +7,13 @@ import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
 import { UserInfoCompleteResponse } from './dto/responses/user-info-complete.response';
+import { UsersFilterInput } from './dto/inputs/users-filter.input';
+import { UsersListResponse } from './dto/responses/users-list.response';
 import { CreateAdminUserInput } from './dto/inputs/create-admin-user.input';
 import { CreateResidentUserInput } from './dto/inputs/create-resident-user.input';
-import { CreateSecurityGuardInput } from './dto/inputs/create-security-guard.input';
+import { CreateStaffMemberInput } from './dto/inputs/create-staff-member.input';
+import { RemoveStaffMemberInput } from './dto/inputs/remove-staff-member.input';
+import { RemoveStaffMemberResponse } from './dto/responses/remove-staff-member.response';
 
 import { Auth } from '../shared/decorators/auth.decorator';
 import { CurrentUser, CurrentUserId } from '../shared/decorators/current-user.decorator';
@@ -24,9 +28,16 @@ export class UsersResolver {
 
   // ── Consultas ──────────────────────────────────────────────────────────
 
-  @Query(() => [User], { name: 'users' })
-  findAll() {
-    return this.usersService.findAll();
+  @Query(() => UsersListResponse, {
+    name: 'users',
+    description: 'Lista paginada de usuarios. Filtrable por status y complexId.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
+  findAll(
+    @CurrentUser() user: User,
+    @Args('input', { nullable: true }) filter?: UsersFilterInput,
+  ): Promise<UsersListResponse> {
+    return this.usersService.findAll(filter);
   }
 
   @Query(() => UserInfoCompleteResponse, { name: 'user', nullable: true })
@@ -74,17 +85,33 @@ export class UsersResolver {
   }
 
   @Mutation(() => User, {
-    name: 'createSecurityGuard',
+    name: 'createStaffMember',
     description:
-      'Crea una cuenta de guardia de seguridad asignado al complejo. ' +
-      'Requiere rol COMPLEX_ROL.',
+      'Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). ' +
+      'El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.',
   })
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
-  async createSecurityGuard(
-    @Args('input') input: CreateSecurityGuardInput,
+  async createStaffMember(
+    @Args('input') input: CreateStaffMemberInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
-    return this.usersService.createSecurityGuard(input, payload.sub);
+    return this.usersService.createStaffMember(input, payload.sub);
+  }
+
+  @Mutation(() => RemoveStaffMemberResponse, {
+    name: 'removeStaffMember',
+    description:
+      'Elimina a un miembro del personal del complejo. ' +
+      'Si el usuario tiene residencia activa en algún complejo, solo se le quita el rol de personal. ' +
+      'Si no tiene ninguna residencia activa, se elimina del sistema. ' +
+      'Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.',
+  })
+  @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
+  async removeStaffMember(
+    @Args('input') input: RemoveStaffMemberInput,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<RemoveStaffMemberResponse> {
+    return this.usersService.removeStaffMember(input, payload.sub);
   }
 
   // ── Cambio de contraseña ─────────────────────────────────────────────────
