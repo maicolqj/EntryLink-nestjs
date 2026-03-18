@@ -9,3 +9,4 @@ export * from './remove-roles.response';
 export * from './restore-roles.response';
 export * from './role-hierarchy.response';
 export * from './simple-roles.response';
+export * from './role-detail.response';
