@@ -11,9 +11,13 @@ import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
 import { UserInfoCompleteResponse } from './dto/responses/user-info-complete.response';
+import { UsersFilterInput } from './dto/inputs/users-filter.input';
+import { UsersListResponse } from './dto/responses/users-list.response';
 import { CreateAdminUserInput } from './dto/inputs/create-admin-user.input';
 import { CreateResidentUserInput } from './dto/inputs/create-resident-user.input';
-import { CreateSecurityGuardInput } from './dto/inputs/create-security-guard.input';
+import { CreateStaffMemberInput, STAFF_ROLES } from './dto/inputs/create-staff-member.input';
+import { RemoveStaffMemberInput } from './dto/inputs/remove-staff-member.input';
+import { RemoveStaffMemberResponse, RemoveStaffAction } from './dto/responses/remove-staff-member.response';
 import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
 import { Role } from '../roles/entities/role.entity';
@@ -47,6 +51,9 @@ export class UsersService {
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
 
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
 
@@ -60,8 +67,28 @@ export class UsersService {
 
   // ── Consultas ────────────────────────────────────────────────────────────
 
-  findAll() {
-    return `This action returns all users`;
+  async findAll(filter: UsersFilterInput = {}): Promise<UsersListResponse> {
+    const { status, complexId, limit = 20, offset = 0 } = filter;
+
+    const qb = this.userRepo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .orderBy('user.createdAt', 'DESC')
+      .take(limit)
+      .skip(offset);
+
+    if (status) {
+      qb.andWhere('user.status = :status', { status });
+    }
+
+    if (complexId) {
+      qb.andWhere('user.complexId = :complexId', { complexId });
+    }
+
+    const [items, total] = await qb.getManyAndCount();
+
+    return { items, total, limit, offset };
   }
 
   async findUserByPhone(phoneNumber: string): Promise<User | null> {
@@ -73,7 +100,7 @@ export class UsersService {
   }
 
   async getMyProfile(userId: string): Promise<UserInfoCompleteResponse> {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const user = await this.userRepo.findOne({ where: { id: userId }, relations: ['userRoles', 'userRoles.role'] });
 
     if (!user) {
       throw new CustomError({
@@ -250,20 +277,29 @@ export class UsersService {
     return user;
   }
 
-  // ── Creación de guardias de seguridad ─────────────────────────────────────
+  // ── Creación de personal del complejo ────────────────────────────────────
 
   /**
-   * Crea un guardia de seguridad asignado a un complejo.
-   * Solo el COMPLEX_ROL puede hacerlo.
+   * Crea un miembro del personal del complejo (guardia, supervisor, contador).
+   * El rol llega desde el frontend; solo se permiten SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL.
+   * Solo el COMPLEX_ROL o SUPER_ADMIN pueden ejecutar esta operación.
    */
-  async createSecurityGuard(
-    input: CreateSecurityGuardInput,
+  async createStaffMember(
+    input: CreateStaffMemberInput,
     adminUserId: string,
   ): Promise<User> {
+    if (!(STAFF_ROLES as readonly string[]).includes(input.role)) {
+      throw new CustomError({
+        message: `El rol '${input.role}' no está permitido. Roles válidos: ${STAFF_ROLES.join(', ')}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
     await this.assertEmailNotTaken(input.email);
     await this.assertPhoneNotTaken(input.phoneNumber);
 
-    const role = await this.findRoleOrFail(ValidRoles.SECURITY_ROL);
+    const role = await this.findRoleOrFail(input.role);
 
     const user = await this.dataSource.transaction(async (manager) => {
       const newUser = manager.create(User, {
@@ -295,8 +331,135 @@ export class UsersService {
       return saved;
     });
 
-    this.logger.log(`Guardia creado: ${user.id} | complejo: ${input.complexId} | por: ${adminUserId}`);
+    this.logger.log(
+      `Personal creado: ${user.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
+    );
     return user;
+  }
+
+  // ── Eliminación de personal del complejo ─────────────────────────────────
+
+  /**
+   * Elimina a un miembro del personal de un complejo.
+   *
+   * Lógica:
+   * - Si el usuario tiene residencia activa en CUALQUIER complejo
+   *   (status PENDING_APPROVAL, ACTIVE o SUSPENDED) → solo se le quitan los
+   *   roles de personal (SECURITY, SUPERVISOR, ACCOUNTANT) y se limpia su
+   *   complexId. El usuario conserva el RESIDENT_ROL y sigue activo.
+   * - Si NO tiene ninguna residencia activa → soft delete del usuario.
+   */
+  async removeStaffMember(
+    input: RemoveStaffMemberInput,
+    adminUserId: string,
+  ): Promise<RemoveStaffMemberResponse> {
+    // 1. Cargar usuario con sus roles
+    const user = await this.userRepo.findOne({
+      where: { id: input.userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user) {
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    if (user.deletedAt) {
+      throw new CustomError({
+        message: 'El usuario ya fue eliminado del sistema',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    // 2. Verificar que el usuario pertenece al complejo indicado
+    if (user.complexId !== input.complexId) {
+      throw new CustomError({
+        message: 'El usuario no pertenece al complejo indicado',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    // 3. Identificar roles de personal que se deben quitar
+    const staffRolesToRemove = (user.userRoles ?? []).filter(
+      (ur) => ur.role && (STAFF_ROLES as readonly string[]).includes(ur.role.name),
+    );
+
+    if (staffRolesToRemove.length === 0) {
+      throw new CustomError({
+        message: 'El usuario no tiene ningún rol de personal asignado en este complejo',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    // 4. Verificar si el usuario tiene residencia activa en algún complejo
+    const activeResidency = await this.residentRepo.findOne({
+      where: [
+        { userId: input.userId, status: ResidentStatus.ACTIVE },
+        { userId: input.userId, status: ResidentStatus.PENDING_APPROVAL },
+        { userId: input.userId, status: ResidentStatus.SUSPENDED },
+      ],
+      select: ['id'],
+    });
+
+    await this.dataSource.transaction(async (manager) => {
+      // Quitar todos los roles de personal del usuario
+      await manager.remove(staffRolesToRemove);
+
+      if (activeResidency) {
+        // Solo limpiar el complexId de staff — el usuario sigue activo como residente
+        await manager.update(User, input.userId, { complexId: null });
+      } else {
+        // Sin residencia activa → eliminar físicamente del sistema
+
+        // 1. Limpiar OTP codes (columna plana sin FK a nivel de constraint)
+        await manager.query(
+          `DELETE FROM otp_codes WHERE user_id = $1`,
+          [input.userId],
+        );
+
+        // 2. Eliminar todos los roles restantes del usuario (por si el usuario tenía otros roles)
+        await manager.query(
+          `DELETE FROM user_has_roles WHERE user_id = $1`,
+          [input.userId],
+        );
+
+        // 3. Hard delete del usuario.
+        //    - user_sessions, refresh_tokens → CASCADE definido en la entidad
+        //    - packages.registeredByUserId, packages.deliveredByUserId → SET NULL (corregido en entity)
+        //    - payments.registeredByUserId → SET NULL (corregido en entity)
+        //    - notes, visits, visitors, vehicles (campos auditoria) → SET NULL
+        await manager.query(
+          `DELETE FROM users WHERE id = $1`,
+          [input.userId],
+        );
+      }
+    });
+
+    if (activeResidency) {
+      this.logger.log(
+        `Personal removido (conserva residencia): usuario ${input.userId} | complejo ${input.complexId} | por ${adminUserId}`,
+      );
+      return {
+        success: true,
+        action:  RemoveStaffAction.STAFF_ROLE_REMOVED,
+        message: 'Rol de personal eliminado. El usuario continúa activo como residente.',
+      };
+    }
+
+    this.logger.warn(
+      `Usuario eliminado FÍSICAMENTE del sistema: ${input.userId} | complejo ${input.complexId} | por ${adminUserId}`,
+    );
+    return {
+      success: true,
+      action:  RemoveStaffAction.USER_DELETED,
+      message: 'El usuario fue eliminado del sistema al no tener residencia activa en ningún complejo.',
+    };
   }
 
   // ── Importación masiva por Excel ──────────────────────────────────────────

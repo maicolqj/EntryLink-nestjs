@@ -1,7 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  ManyToOne, JoinColumn, Index, OneToMany,
+  ManyToOne, Index, OneToMany,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
@@ -99,17 +99,14 @@ export class FeeCharge {
 
   @Field(() => ResidentialComplex)
   @ManyToOne(() => ResidentialComplex, { eager: false })
-  @JoinColumn({ name: 'complexId' })
   complex: ResidentialComplex;
 
   @Field(() => Unit)
   @ManyToOne(() => Unit, { eager: false })
-  @JoinColumn({ name: 'unitId' })
   unit: Unit;
 
   @Field(() => FeeConfig)
   @ManyToOne(() => FeeConfig, { eager: false })
-  @JoinColumn({ name: 'feeConfigId' })
   feeConfig: FeeConfig;
 
   // ─── Auditoría ────────────────────────────────────────────────

@@ -15,7 +15,7 @@ export class CreateResidentUserInput {
   @IsString()
   @IsNotEmpty({ message: 'El nombre es obligatorio' })
   @MaxLength(100)
-  name: string;
+  name: string; 
 
   @Field(() => String, { description: 'Apellido(s) del residente' })
   @IsString()

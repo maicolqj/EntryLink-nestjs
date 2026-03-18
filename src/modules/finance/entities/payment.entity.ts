@@ -104,23 +104,20 @@ export class Payment {
 
   @Field(() => ResidentialComplex)
   @ManyToOne(() => ResidentialComplex, { eager: false })
-  @JoinColumn({ name: 'complexId' })
   complex: ResidentialComplex;
 
   @Field(() => Unit)
   @ManyToOne(() => Unit, { eager: false })
-  @JoinColumn({ name: 'unitId' })
   unit: Unit;
 
   @Field(() => FeeCharge)
   @ManyToOne(() => FeeCharge, { eager: false })
-  @JoinColumn({ name: 'chargeId' })
   charge: FeeCharge;
 
-  @Field(() => User)
-  @ManyToOne(() => User, { eager: false })
+  @Field(() => User, { nullable: true })
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'registeredByUserId' })
-  registeredBy: User;
+  registeredBy?: User;
 
   // ─── Auditoría ────────────────────────────────────────────────
 
