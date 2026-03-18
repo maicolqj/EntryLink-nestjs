@@ -65,33 +65,33 @@ export class VehiclesResolver {
   /**
    * Aprueba un vehículo pendiente — lo activa para circular en el complejo.
    */
-  @Mutation(() => Vehicle, { name: 'approveVehicle' })
-  @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
-    permissions: [ValidPermissions.APPROVE_VEHICLE],
-  })
-  approve(
-    @Args('input') input: ApproveVehicleInput,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<Vehicle> {
-    return this.vehiclesService.approve(input, currentUser);
-  }
+  // @Mutation(() => Vehicle, { name: 'approveVehicle' })
+  // @Auth({
+  //   roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+  //   permissions: [ValidPermissions.APPROVE_VEHICLE],
+  // })
+  // approve(
+  //   @Args('input') input: ApproveVehicleInput,
+  //   @CurrentUser() currentUser: JwtAccessPayload,
+  // ): Promise<Vehicle> {
+  //   return this.vehiclesService.approve(input, currentUser);
+  // }
 
   /**
    * Rechaza un vehículo pendiente (documentos inválidos, fraude, etc.).
    */
-  @Mutation(() => Vehicle, { name: 'rejectVehicle' })
-  @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
-    permissions: [ValidPermissions.APPROVE_VEHICLE],
-  })
-  reject(
-    @Args('vehicleId') vehicleId: string,
-    @Args('reason')    reason: string,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<Vehicle> {
-    return this.vehiclesService.reject(vehicleId, reason, currentUser);
-  }
+  // @Mutation(() => Vehicle, { name: 'rejectVehicle' })
+  // @Auth({
+  //   roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+  //   permissions: [ValidPermissions.APPROVE_VEHICLE],
+  // })
+  // reject(
+  //   @Args('vehicleId') vehicleId: string,
+  //   @Args('reason')    reason: string,
+  //   @CurrentUser() currentUser: JwtAccessPayload,
+  // ): Promise<Vehicle> {
+  //   return this.vehiclesService.reject(vehicleId, reason, currentUser);
+  // }
 
   /**
    * Suspende un vehículo activo (morosidad, infracción de normas).
@@ -186,17 +186,17 @@ export class VehiclesResolver {
   /**
    * Vehículos pendientes de aprobación — panel del administrador del complejo.
    */
-  @Query(() => [Vehicle], { name: 'pendingVehicles' })
-  @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
-    permissions: [ValidPermissions.APPROVE_VEHICLE],
-  })
-  findPending(
-    @Args('complexId') complexId: string,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<Vehicle[]> {
-    return this.vehiclesService.findPending(complexId, currentUser);
-  }
+  // @Query(() => [Vehicle], { name: 'pendingVehicles' })
+  // @Auth({
+  //   roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+  //   permissions: [ValidPermissions.APPROVE_VEHICLE],
+  // })
+  // findPending(
+  //   @Args('complexId') complexId: string,
+  //   @CurrentUser() currentUser: JwtAccessPayload,
+  // ): Promise<Vehicle[]> {
+  //   return this.vehiclesService.findPending(complexId, currentUser);
+  // }
 
   /**
    * Consulta rápida de placa — herramienta del guardia de seguridad.

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { Vehicle } from './entities/vehicle.entity';
+import { Vehicle }               from './entities/vehicle.entity';
+import { ParkingRotationConfig } from './entities/parking-rotation-config.entity';
 
 import { VehiclesService }  from './services/vehicles.service';
 import { VehiclesResolver } from './resolvers/vehicles.resolver';
@@ -11,7 +12,7 @@ import { ResidentsModule }          from '../residents/residents.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vehicle]),
+    TypeOrmModule.forFeature([Vehicle, ParkingRotationConfig]),
     ResidentialComplexModule, // ResidentialComplexService + UnitService
     ResidentsModule,          // ResidentsService
   ],
