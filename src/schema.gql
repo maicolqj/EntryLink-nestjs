@@ -105,6 +105,7 @@ enum ValidPermissions {
   APPROVE_VEHICLE
   REMOVE_VEHICLE
   CHECK_PLATE
+  MANAGE_PARKING_ROTATION
   VIEW_FEE_CONFIGS
   MANAGE_FEE_CONFIGS
   VIEW_CHARGES
@@ -115,6 +116,9 @@ enum ValidPermissions {
   REVERSE_PAYMENT
   VIEW_ACCOUNT_BALANCE
   VIEW_FINANCIAL_REPORTS
+  VIEW_NOTES
+  CREATE_NOTE
+  DELETE_NOTE
   SUPERADMIN
 }
 
@@ -340,8 +344,8 @@ enum ValidRoles {
   COMPLEX_ROL
   ACCOUNTANT_ROL
   SUPERVISOR_ROL
-  RESIDENT_ROL
   SECURITY_ROL
+  RESIDENT_ROL
 }
 
 """
@@ -542,6 +546,45 @@ type RoleHierarchyResponse {
 
   """Hierarchy statistics"""
   stats: HierarchyStats!
+}
+
+type PermissionGroupSummary {
+  """Nombre del grupo de permisos (ej: USERS, PACKAGES)"""
+  group: String!
+
+  """Cantidad de permisos en este grupo"""
+  count: Int!
+
+  """Permisos de este grupo"""
+  permissions: [Permission!]!
+}
+
+type RoleDetailResponse {
+  id: String!
+  name: ValidRoles!
+  frontName: String!
+  icon: String!
+  description: String
+  hierarchyLevel: Int!
+  status: Boolean!
+  isSystem: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Rol padre en la jerarquía"""
+  parent: SimpleRoleResponse
+
+  """Roles hijos en la jerarquía"""
+  children: [SimpleRoleResponse!]
+
+  """Todos los permisos asignados al rol"""
+  permissions: [Permission!]!
+
+  """Total de permisos asignados"""
+  permissionCount: Int!
+
+  """Permisos organizados por grupo"""
+  permissionsByGroup: [PermissionGroupSummary!]!
 }
 
 type Role {
@@ -785,6 +828,22 @@ type AssignedUserRolResponse {
   message: String!
 }
 
+"""Resultado de eliminar un miembro del personal"""
+type RemoveStaffMemberResponse {
+  success: Boolean!
+  action: RemoveStaffAction!
+  message: String!
+}
+
+"""Resultado de la operación de eliminación de personal"""
+enum RemoveStaffAction {
+  """Se quitó el rol de personal; el usuario continúa como residente"""
+  STAFF_ROLE_REMOVED
+
+  """El usuario fue eliminado del sistema"""
+  USER_DELETED
+}
+
 """Complejo residencial del sistema"""
 type ResidentialComplex {
   id: String!
@@ -909,11 +968,6 @@ type Building {
   """
   name: String!
 
-  """
-  Código corto único dentro del complejo. Ej: "TA"
-  """
-  code: String!
-
   """Descripción opcional"""
   description: String
 
@@ -1021,7 +1075,7 @@ type Resident {
   isMainResident: Boolean!
 
   """Fecha de inicio de residencia"""
-  startDate: DateTime!
+  startDate: String!
 
   """Fecha de fin de contrato (para arrendatarios)"""
   endDate: DateTime
@@ -1034,6 +1088,9 @@ type Resident {
 
   """Nombre del contacto de emergencia"""
   emergencyContactName: String
+
+  """Apellido del contacto de emergencia"""
+  emergencyContactLastName: String
 
   """Teléfono del contacto de emergencia"""
   emergencyContactPhone: String
@@ -1203,6 +1260,21 @@ type UserInfoCompleteResponse {
 
   """Edad calculada del usuario basada en su fecha de nacimiento"""
   age: Float
+}
+
+type UsersListResponse {
+  items: [User!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+type DeviceInfo {
+  userAgent: String!
+  ip: String!
+  platform: String!
+  deviceId: String
+  appVersion: String
 }
 
 """Respuesta de autenticación exitosa con tokens JWT"""
@@ -1489,6 +1561,19 @@ type Vehicle {
 
   """ID del usuario que aprobó o rechazó"""
   approvedByUserId: String
+
+  """
+  Indica si la suspensión actual fue generada por rotación automática de parqueaderos
+  """
+  suspendedByRotation: Boolean!
+
+  """Última vez que fue suspendido por rotación (referencia de equidad)"""
+  rotationSuspendedAt: DateTime
+
+  """
+  Veces que ha salido por rotación en el gran ciclo actual (se reinicia al completar el ciclo)
+  """
+  rotationCycleCount: Int!
   createdAt: DateTime!
   updatedAt: DateTime!
   deletedAt: DateTime
@@ -1600,7 +1685,7 @@ type Package {
   deliveredByUserId: String
   unit: Unit!
   complex: ResidentialComplex!
-  registeredBy: User!
+  registeredBy: User
   deliveredBy: User
   updatedAt: DateTime!
   deletedAt: DateTime
@@ -1771,7 +1856,7 @@ type Payment {
   complex: ResidentialComplex!
   unit: Unit!
   charge: FeeCharge!
-  registeredBy: User!
+  registeredBy: User
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -1819,13 +1904,164 @@ type ComplexFinancialSummaryResponse {
   unitsFullyPaid: Int!
 }
 
+"""Tarifa de parqueadero por tipo de vehículo"""
+type ParkingRate {
+  id: String!
+
+  """Tipo de vehículo al que aplica la tarifa"""
+  vehicleType: VehicleType!
+
+  """Tarifa por minuto (en moneda local)"""
+  ratePerMinute: Float!
+
+  """Indica si la tarifa está activa"""
+  isActive: Boolean!
+
+  """Descripción o nombre de la tarifa"""
+  description: String
+
+  """ID del complejo al que pertenece la tarifa"""
+  complexId: String!
+
+  """Usuario que creó la tarifa"""
+  createdByUserId: String!
+
+  """Usuario que actualizó la tarifa"""
+  updatedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  complex: ResidentialComplex
+  createdByUser: User
+}
+
+"""Registro de vehículo visitante en el parqueadero"""
+type VisitorVehicle {
+  id: String!
+
+  """Placa del vehículo (normalizada: mayúsculas, sin espacios)"""
+  plate: String!
+
+  """Tipo de vehículo"""
+  vehicleType: VehicleType!
+
+  """Nombre del conductor"""
+  driverName: String
+
+  """Hora de ingreso al parqueadero"""
+  entryTime: DateTime!
+
+  """Hora de salida del parqueadero"""
+  exitTime: DateTime
+
+  """Costo total generado al momento de la salida"""
+  parkingCost: Float
+
+  """Tarifa por hora aplicada al momento de la salida"""
+  rateApplied: Float
+
+  """Minutos totales en el parqueadero"""
+  minutesParked: Float
+
+  """Estado actual del registro"""
+  status: ParkingStatus!
+
+  """Motivo de cancelación"""
+  cancellationReason: String
+
+  """Notas adicionales del registro"""
+  notes: String
+
+  """ID del residente anfitrión"""
+  hostResidentId: String!
+
+  """ID del complejo"""
+  complexId: String!
+
+  """Usuario que registró el ingreso"""
+  registeredByUserId: String!
+
+  """Usuario que registró la salida"""
+  exitRegisteredByUserId: String
+
+  """Usuario que canceló el registro"""
+  cancelledByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Residente anfitrión"""
+  hostResident: Resident
+  complex: ResidentialComplex
+
+  """Usuario que registró el ingreso"""
+  registeredByUser: User
+
+  """Usuario que registró la salida"""
+  exitRegisteredByUser: User
+}
+
+"""Estado del vehículo visitante en el parqueadero"""
+enum ParkingStatus {
+  """Vehículo actualmente en el parqueadero"""
+  INSIDE
+
+  """Vehículo que ya salió (cobro generado)"""
+  EXITED
+
+  """Registro cancelado manualmente"""
+  CANCELLED
+}
+
+type PaginatedVisitorVehiclesResponse {
+  items: [VisitorVehicle!]!
+  pagination: PaginationReponse!
+}
+
+"""Nota/minuta operativa del complejo residencial"""
+type Note {
+  id: String!
+
+  """Título de la nota"""
+  title: String!
+
+  """Cuerpo de la nota"""
+  content: String!
+
+  """URLs de imágenes adjuntas (Cloudinary)"""
+  imageUrls: [String!]
+  complexId: String!
+  createdByUserId: String!
+  createdAt: DateTime!
+
+  """Fecha de eliminación lógica (solo SUPER_ADMIN)"""
+  deletedAt: DateTime
+  complex: ResidentialComplex
+
+  """Usuario que creó la nota"""
+  createdByUser: User
+}
+
+type PaginatedNotesResponse {
+  items: [Note!]!
+  pagination: PaginationReponse!
+}
+
 type Query {
   permissions(input: SearchPermissionsInput!): PaginatedPermissionsResponse!
   permission(id: String!): Permission!
   roles(input: SearchRolesInput!): PaginatedRolesResponse!
   role(term: String!): Role!
+
+  """
+  Obtiene la información completa de un rol con sus permisos agrupados por categoría
+  """
+  roleDetail(
+    """UUID del rol"""
+    id: String!
+  ): RoleDetailResponse!
   getRoleHierarchy(roleId: String!): RoleHierarchyResponse!
-  users: [User!]!
+
+  """Lista paginada de usuarios. Filtrable por status y complexId."""
+  users(input: UsersFilterInput): UsersListResponse!
   user(id: String!): UserInfoCompleteResponse
 
   """Perfil completo del usuario autenticado"""
@@ -1849,7 +2085,6 @@ type Query {
   visit(id: String!): Visit!
   vehicles(complexId: String!, pagination: PaginationInput, filters: FilterVehiclesInput): PaginatedVehiclesResponse!
   vehiclesByResident(residentId: String!): [Vehicle!]!
-  pendingVehicles(complexId: String!): [Vehicle!]!
   checkPlate(plate: String!, complexId: String!): PlateCheckResponse!
   vehicle(id: String!): Vehicle!
   packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
@@ -1862,6 +2097,12 @@ type Query {
   paymentsByCharge(chargeId: String!): [Payment!]!
   unitBalance(unitId: String!, complexId: String!): UnitBalanceResponse!
   complexFinancialSummary(complexId: String!, period: String!): ComplexFinancialSummaryResponse!
+  parkingRates(complexId: String!): [ParkingRate!]!
+  activeVisitorVehicles(complexId: String!): [VisitorVehicle!]!
+  visitorVehicles(filters: FilterVisitorVehiclesInput!, pagination: PaginationInput! = {page: 1, limit: 10}): PaginatedVisitorVehiclesResponse!
+  visitorVehicle(id: String!): VisitorVehicle!
+  findnotes(complexId: String!, pagination: PaginationInput, filters: FilterNotesInput): PaginatedNotesResponse!
+  note(id: String!): Note!
 }
 
 input SearchPermissionsInput {
@@ -1913,6 +2154,20 @@ input RolesFiltersInput {
   isSystem: Boolean
   createdAt: DateRangeInput
   search: String
+}
+
+input UsersFilterInput {
+  """Filtrar por estado del usuario"""
+  status: UserStatus
+
+  """Filtrar por complejo residencial"""
+  complexId: String
+
+  """Cantidad de resultados (máx. 100)"""
+  limit: Int = 20
+
+  """Desplazamiento para paginación"""
+  offset: Int = 0
 }
 
 input FilterComplexInput {
@@ -1990,6 +2245,41 @@ input FilterChargesInput {
   period: String
 }
 
+"""Filtros para listar vehículos visitantes"""
+input FilterVisitorVehiclesInput {
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Filtrar por estado del registro"""
+  status: ParkingStatus
+
+  """Filtrar por tipo de vehículo"""
+  vehicleType: VehicleType
+
+  """Buscar por placa (parcial o completa)"""
+  plate: String
+
+  """Filtrar por residente anfitrión"""
+  hostResidentId: String
+
+  """Registros con ingreso desde esta fecha"""
+  dateFrom: DateTime
+
+  """Registros con ingreso hasta esta fecha"""
+  dateTo: DateTime
+}
+
+input FilterNotesInput {
+  """Filtrar por usuario creador (solo SUPER_ADMIN y COMPLEX_ROL)"""
+  createdByUserId: String
+
+  """Fecha de inicio del rango (ISO 8601)"""
+  dateFrom: String
+
+  """Fecha de fin del rango (ISO 8601)"""
+  dateTo: String
+}
+
 type Mutation {
   createPermission(input: CreatePermissionInput!): CreatePermissionResponse!
 
@@ -2030,9 +2320,14 @@ type Mutation {
   registerResident(input: CreateResidentUserInput!): User!
 
   """
-  Crea una cuenta de guardia de seguridad asignado al complejo. Requiere rol COMPLEX_ROL.
+  Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
   """
-  createSecurityGuard(input: CreateSecurityGuardInput!): User!
+  createStaffMember(input: CreateStaffMemberInput!): User!
+
+  """
+  Elimina a un miembro del personal del complejo. Si el usuario tiene residencia activa en algún complejo, solo se le quita el rol de personal. Si no tiene ninguna residencia activa, se elimina del sistema. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
+  """
+  removeStaffMember(input: RemoveStaffMemberInput!): RemoveStaffMemberResponse!
 
   """Cambiar la contraseña del usuario autenticado"""
   changePassword(input: ChangePasswordInput!): ChangePasswordResponse!
@@ -2093,8 +2388,6 @@ type Mutation {
   cancelVisit(visitId: String!): Visit!
   registerVehicle(input: RegisterVehicleInput!): Vehicle!
   updateVehicle(input: UpdateVehicleInput!): Vehicle!
-  approveVehicle(input: ApproveVehicleInput!): Vehicle!
-  rejectVehicle(vehicleId: String!, reason: String!): Vehicle!
   suspendVehicle(vehicleId: String!, reason: String!): Vehicle!
   reactivateVehicle(vehicleId: String!): Vehicle!
   removeVehicle(vehicleId: String!): Boolean!
@@ -2111,6 +2404,12 @@ type Mutation {
   waiveCharge(chargeId: String!, reason: String!): FeeCharge!
   registerPayment(input: RegisterPaymentInput!): Payment!
   reversePayment(paymentId: String!, reason: String!): Payment!
+  setParkingRate(input: SetParkingRateInput!): ParkingRate!
+  toggleParkingRate(rateId: String!): ParkingRate!
+  registerVisitorVehicleEntry(input: RegisterVisitorVehicleInput!): VisitorVehicle!
+  registerVisitorVehicleExit(visitorVehicleId: String!): VisitorVehicle!
+  cancelVisitorVehicleEntry(visitorVehicleId: String!, cancellationReason: String!): VisitorVehicle!
+  deleteNote(id: String!): Note!
 }
 
 """Datos requeridos para crear un nuevo permiso"""
@@ -2262,8 +2561,10 @@ input CreateResidentUserInput {
   complexId: String!
 }
 
-"""Datos para crear un guardia de seguridad"""
-input CreateSecurityGuardInput {
+"""
+Datos para crear un miembro del personal del complejo (guardia, supervisor, contador)
+"""
+input CreateStaffMemberInput {
   name: String!
   lastName: String!
   phoneNumber: String!
@@ -2271,11 +2572,23 @@ input CreateSecurityGuardInput {
   email: String!
   password: String!
 
-  """ID del complejo al que se asigna el guardia"""
+  """ID del complejo al que se asigna el personal"""
   complexId: String!
+
+  """Rol a asignar: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL"""
+  role: ValidRoles!
 
   """Turno asignado (MAÑANA, TARDE, NOCHE)"""
   shift: String
+}
+
+"""Datos para eliminar un miembro del personal del complejo"""
+input RemoveStaffMemberInput {
+  """ID del usuario a eliminar del personal"""
+  userId: String!
+
+  """ID del complejo del que se elimina al personal"""
+  complexId: String!
 }
 
 input ChangePasswordInput {
@@ -2369,16 +2682,11 @@ input CreateBuildingInput {
   """
   name: String!
 
-  """
-  Código corto único dentro del complejo. Ej: "TA", "EN"
-  """
-  code: String!
-
   """Número de pisos"""
   floors: Int! = 1
   description: String
 
-  """ID del complejo al que pertenece"""
+  """ID del complejo"""
   complexId: String!
 }
 
@@ -2388,14 +2696,12 @@ input UpdateBuildingInput {
   """
   name: String
 
-  """
-  Código corto único dentro del complejo. Ej: "TA", "EN"
-  """
-  code: String
-
   """Número de pisos"""
   floors: Int = 1
   description: String
+
+  """ID del complejo"""
+  complexId: String
 
   """ID de la torre a actualizar"""
   id: String!
@@ -2472,61 +2778,56 @@ input UpdateUnitInput {
 }
 
 input CreateResidentInput {
-  """ID del usuario que será asignado como residente"""
-  userId: String!
+  """Nombre del residente"""
+  name: String!
+
+  """Apellido del residente"""
+  lastName: String!
+
+  """Correo electrónico del residente"""
+  email: String!
+
+  """Número de teléfono del residente"""
+  phoneNumber: String!
+
+  """Número de documento de identidad del residente"""
+  identityNumber: String!
 
   """ID de la unidad a la que se asignará"""
   unitId: String!
 
   """ID del complejo residencial"""
   complexId: String!
-
-  """Tipo de residente"""
   type: ResidentType! = OWNER
-
-  """Es el residente principal de la unidad"""
   isMainResident: Boolean! = false
 
-  """Fecha de inicio de residencia (YYYY-MM-DD)"""
-  startDate: String!
-
-  """Fecha de fin de contrato — para arrendatarios (YYYY-MM-DD)"""
-  endDate: String
-
   """Nombre del contacto de emergencia"""
-  emergencyContactName: String
+  emergencyContactName: String!
+
+  """Apellido del contacto de emergencia"""
+  emergencyContactLastName: String!
 
   """Teléfono del contacto de emergencia"""
-  emergencyContactPhone: String
-
-  """Notas internas del administrador"""
+  emergencyContactPhone: String!
+  startDate: String
+  endDate: String
   notes: String
 }
 
 input UpdateResidentInput {
-  """Tipo de residente"""
-  type: ResidentType = OWNER
-
-  """Es el residente principal de la unidad"""
-  isMainResident: Boolean = false
-
-  """Fecha de inicio de residencia (YYYY-MM-DD)"""
-  startDate: String
-
-  """Fecha de fin de contrato — para arrendatarios (YYYY-MM-DD)"""
-  endDate: String
-
-  """Nombre del contacto de emergencia"""
-  emergencyContactName: String
-
-  """Teléfono del contacto de emergencia"""
-  emergencyContactPhone: String
-
-  """Notas internas del administrador"""
-  notes: String
-
   """ID del registro de residente a actualizar"""
   id: String!
+  type: ResidentType
+  isMainResident: Boolean
+  emergencyContactName: String
+  emergencyContactLastName: String
+  emergencyContactPhone: String
+  startDate: String
+  endDate: String
+  notes: String
+
+  """ID de la unidad a la que se asignará"""
+  unitId: String!
 }
 
 input MoveOutResidentInput {
@@ -2694,17 +2995,6 @@ input UpdateVehicleInput {
   id: String!
 }
 
-input ApproveVehicleInput {
-  """ID del vehículo a aprobar"""
-  vehicleId: String!
-
-  """Parqueadero asignado (opcional en la aprobación)"""
-  parkingSpot: String
-
-  """Notas del administrador"""
-  notes: String
-}
-
 input RegisterPackageInput {
   unitId: String!
   complexId: String!
@@ -2748,6 +3038,45 @@ input RegisterPaymentInput {
   paidAt: String!
   reference: String
   receiptUrl: String
+  notes: String
+}
+
+"""Datos para configurar o actualizar la tarifa de parqueadero"""
+input SetParkingRateInput {
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Tipo de vehículo al que aplica la tarifa"""
+  vehicleType: VehicleType!
+
+  """Tarifa cobrada por minuto de parqueo (en moneda local)"""
+  ratePerMinute: Float!
+
+  """Si la tarifa está activa"""
+  isActive: Boolean = true
+
+  """Descripción o etiqueta de la tarifa"""
+  description: String
+}
+
+"""Datos para registrar el ingreso de un vehículo visitante"""
+input RegisterVisitorVehicleInput {
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Placa del vehículo visitante"""
+  plate: String!
+
+  """Tipo de vehículo (carro, moto, etc.)"""
+  vehicleType: VehicleType!
+
+  """ID del residente anfitrión que recibe la visita"""
+  hostResidentId: String!
+
+  """Nombre del conductor (opcional)"""
+  driverName: String
+
+  """Notas adicionales"""
   notes: String
 }
 

@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 export enum SessionStatus {
@@ -19,10 +19,9 @@ export class UserSession {
   userId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ type: 'varchar', length: 64 })
+  @Column({ type: 'text' })
   deviceFingerprint: string;
 
   @Column({ type: 'jsonb' })

@@ -208,6 +208,9 @@ export enum ValidPermissions {
   /** Consultar placa en portería. ➜ Nivel: [LOW] */
   CHECK_PLATE                = 'CHECK_PLATE',
 
+  /** Configurar y ejecutar la rotación de parqueaderos del complejo. ➜ Nivel: [HIGH] */
+  MANAGE_PARKING_ROTATION    = 'MANAGE_PARKING_ROTATION',
+
   // ═══════════════════════════════════════════════════════
   // FINANZAS
   // ═══════════════════════════════════════════════════════
@@ -241,6 +244,19 @@ export enum ValidPermissions {
 
   /** Ver reportes financieros del complejo. ➜ Nivel: [MEDIUM] */
   VIEW_FINANCIAL_REPORTS     = 'VIEW_FINANCIAL_REPORTS',
+
+  // ═══════════════════════════════════════════════════════
+  // NOTAS / MINUTAS
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver notas/minutas del complejo. ➜ Nivel: [LOW] */
+  VIEW_NOTES                 = 'VIEW_NOTES',
+
+  /** Crear notas/minutas operativas. ➜ Nivel: [MEDIUM] */
+  CREATE_NOTE                = 'CREATE_NOTE',
+
+  /** Eliminar notas (solo SUPER_ADMIN). ➜ Nivel: [CRITICAL] */
+  DELETE_NOTE                = 'DELETE_NOTE',
 
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN                = 'SUPERADMIN',

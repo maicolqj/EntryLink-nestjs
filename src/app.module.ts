@@ -6,11 +6,13 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { GraphQLFormattedError } from 'graphql';
 import { join } from 'node:path';
 
-import databaseConfig from './core/config/database.config';
-import redisConfig from './core/config/redis.config';
+import databaseConfig    from './core/config/database.config';
+import redisConfig       from './core/config/redis.config';
+import cloudinaryConfig  from './core/config/cloudinary.config';
 
-import { CacheModule } from './core/infrastructure/cache/cache.module';
+import { CacheModule }      from './core/infrastructure/cache/cache.module';
 import { BullConfigModule } from './core/config/bull-config';
+import { CloudinaryModule } from './core/infrastructure/cloudinary/cloudinary.module';
 
 import { PermissionsModule }        from './modules/permissions/permissions.module';
 import { SharedModule }             from './modules/shared/shared.module';
@@ -25,13 +27,15 @@ import { VehiclesModule }           from './modules/vehicles/vehicles.module';
 import { PackagesModule }           from './modules/packages/packages.module';
 import { NotificationsModule }      from './modules/notifications/notifications.module';
 import { FinanceModule }            from './modules/finance/finance.module';
+import { VisitorParkingModule }    from './modules/visitor-parking/visitor-parking.module';
+import { NotesModule }            from './modules/notes/notes.module';
 
 @Module({
   imports: [
     // ── Configuración global ─────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [redisConfig, databaseConfig],
+      load: [redisConfig, databaseConfig, cloudinaryConfig],
       envFilePath: ['.env'],
       expandVariables: true,
     }),
@@ -72,6 +76,7 @@ import { FinanceModule }            from './modules/finance/finance.module';
     // ── Infraestructura ───────────────────────────────────────────────────
     CacheModule,          // Global — disponible en todos los módulos
     BullConfigModule,     // Configura BullMQ con Redis
+    CloudinaryModule,     // Global — subida de imágenes
 
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
@@ -87,6 +92,8 @@ import { FinanceModule }            from './modules/finance/finance.module';
     PackagesModule,
     NotificationsModule,
     FinanceModule,
+    VisitorParkingModule,
+    NotesModule,
   ],
 })
 export class AppModule {}
