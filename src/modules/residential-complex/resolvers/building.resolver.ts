@@ -22,12 +22,12 @@ export class BuildingResolver {
   // ================================================================
 
   @Mutation(() => Building, { name: 'createBuilding' })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL], permissions: [ValidPermissions.CREATE_RESIDENCE] })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
   create(
     @Args('input') input: CreateBuildingInput,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Building> {
-    return this.buildingService.create(input, currentUser);
+    return this.buildingService.create({ ...input, complexId: currentUser.complexId }, currentUser);
   }
 
   @Mutation(() => Building, { name: 'updateBuilding' })

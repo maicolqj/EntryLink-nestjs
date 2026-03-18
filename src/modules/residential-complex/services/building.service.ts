@@ -27,24 +27,32 @@ export class BuildingService {
   // ================================================================
 
   async create(
-    input: CreateBuildingInput,
+    input: CreateBuildingInput & { complexId: string },
     currentUser: JwtAccessPayload,
   ): Promise<Building> {
+    if (!input.complexId) {
+      throw new CustomError({
+        message: 'No hay un complejo asociado a la sesión del usuario',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
     // Verificar que el complejo exista y el usuario tenga acceso
     const complex = await this.complexService.findById(input.complexId, currentUser);
 
-    // Verificar código único dentro del complejo
+    // Verificar nombre único dentro del complejo
     const existing = await this.buildingRepo.findOne({
       where: {
         complexId: input.complexId,
-        code:      input.code.toUpperCase().trim(),
+        name:      input.name.toUpperCase().trim(),
         deletedAt: IsNull(),
       },
     });
 
     if (existing) {
       throw new CustomError({
-        message: `Ya existe una torre con el código "${input.code}" en este complejo`,
+        message: `Ya existe una torre con el nombre "${input.name}" en este complejo`,
         statusCode: HttpStatus.CONFLICT,
         errorCode: GeneralErrorCode.CONFLICT,
       });
@@ -125,24 +133,24 @@ export class BuildingService {
   // ================================================================
 
   async update(
-    input: UpdateBuildingInput,
+    input: UpdateBuildingInput & { name?: string },
     currentUser: JwtAccessPayload,
   ): Promise<Building> {
     const building = await this.findById(input.id, currentUser);
 
-    // Si cambia el código, verificar que no haya conflicto
-    if (input.code && input.code.toUpperCase() !== building.code) {
+    // Si cambia el nombre, verificar que no haya conflicto
+    if (input.name && input.name.toUpperCase() !== building.name) {
       const conflict = await this.buildingRepo.findOne({
         where: {
           complexId: building.complexId,
-          code:      input.code.toUpperCase().trim(),
+          name:      input.name.toUpperCase().trim(),
           deletedAt: IsNull(),
         },
       });
 
       if (conflict) {
         throw new CustomError({
-          message: `Ya existe una torre con el código "${input.code}" en este complejo`,
+          message: `Ya existe una torre con el nombre "${input.name}" en este complejo`,
           statusCode: HttpStatus.CONFLICT,
           errorCode: GeneralErrorCode.CONFLICT,
         });

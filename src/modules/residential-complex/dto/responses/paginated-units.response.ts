@@ -4,7 +4,6 @@ import { Unit } from '../../entities/unit.entity';
 
 @ObjectType()
 export class PaginatedUnitsResponse {
-
   @Field(() => [Unit])
   items: Unit[];
 

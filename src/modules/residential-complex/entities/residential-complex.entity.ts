@@ -24,7 +24,7 @@ import { Building }      from './building.entity';
 @Entity({ name: 'residential_complexes' })
 @Index(['status', 'plan'])
 @Index(['slug'], { unique: true, where: '"deleted_at" IS NULL' })
-@Index(['ownerId'])
+// @Index(['ownerId'])
 export class ResidentialComplex {
 
   @Field(() => String)
@@ -130,7 +130,7 @@ export class ResidentialComplex {
   // ==================== AUDITORÍA ====================
 
   @Field(() => String, { description: 'ID del propietario/administrador principal' })
-  @Column({ type: 'uuid', name: 'owner_id', insert: false, update: false })
+  @Column({ type: 'uuid', name: 'owner_id', nullable: true })
   ownerId: string;
 
   @Field(() => Date)

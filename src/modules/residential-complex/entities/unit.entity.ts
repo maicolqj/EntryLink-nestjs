@@ -5,7 +5,6 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  JoinColumn,
   BeforeInsert,
   BeforeUpdate,
   Index,
@@ -20,8 +19,8 @@ import { ResidentialComplex } from './residential-complex.entity';
 @ObjectType({ description: 'Unidad habitable dentro de un edificio o complejo' })
 @Entity({ name: 'units' })
 @Index(['complexId', 'status'])
-@Index(['buildingId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "building_id" IS NOT NULL' })
-@Index(['complexId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "building_id" IS NULL' })
+@Index(['buildingId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "buildingId" IS NOT NULL' })
+@Index(['complexId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "buildingId" IS NULL' })
 export class Unit {
 
   @Field(() => String)
@@ -75,11 +74,11 @@ export class Unit {
   // ==================== MULTI-TENANT ====================
 
   @Field(() => String, { description: 'ID del complejo al que pertenece' })
-  @Column({ type: 'uuid', name: 'complex_id' })
+  @Column({ type: 'uuid' })
   complexId: string;
 
   @Field(() => String, { description: 'ID de la torre/edificio (null si complejo sin torres)', nullable: true })
-  @Column({ type: 'uuid', name: 'building_id', nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   buildingId?: string;
 
   // ==================== AUDITORÍA ====================
@@ -100,12 +99,10 @@ export class Unit {
 
   @Field(() => ResidentialComplex, { description: 'Complejo al que pertenece', nullable: true })
   @ManyToOne(() => ResidentialComplex, { onDelete: 'CASCADE', nullable: false })
-  @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
   @Field(() => Building, { description: 'Torre o edificio contenedor', nullable: true })
   @ManyToOne(() => Building, (building) => building.units, { onDelete: 'SET NULL', nullable: true })
-  @JoinColumn({ name: 'building_id' })
   building?: Building;
 
   // ==================== HOOKS ====================

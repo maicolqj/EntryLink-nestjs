@@ -1,25 +1,33 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { hash } from 'bcrypt';
+import { randomBytes } from 'crypto';
 
-import { Resident }               from '../entities/resident.entity';
-import { ResidentStatus }         from '../enums/resident-status.enum';
-import { CreateResidentInput }    from '../dto/inputs/create-resident.input';
-import { UpdateResidentInput }    from '../dto/inputs/update-resident.input';
-import { FilterResidentsInput }   from '../dto/inputs/filter-residents.input';
-import { ApproveResidentInput }   from '../dto/inputs/approve-resident.input';
-import { RejectResidentInput }    from '../dto/inputs/reject-resident.input';
-import { MoveOutResidentInput }   from '../dto/inputs/move-out-resident.input';
+import { Resident } from '../entities/resident.entity';
+import { ResidentStatus } from '../enums/resident-status.enum';
+import { ResidentType } from '../enums/resident-type.enum';
+import { CreateResidentInput } from '../dto/inputs/create-resident.input';
+import { UpdateResidentInput } from '../dto/inputs/update-resident.input';
+import { FilterResidentsInput } from '../dto/inputs/filter-residents.input';
+import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
+import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
+import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
 
-import { PaginationInput }            from '../../shared/dto/inputs/pagination.input';
-import { CustomError }                from '../../shared/utils/errors.utils';
+import { User } from '../../users/entities/user.entity';
+import { UserRole } from '../../users/entities/user_has_roles.entity';
+import { UserStatus } from '../../users/enums/user.enums';
+import { Role } from '../../roles/entities/role.entity';
+
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { ResidentErrorCode, GeneralErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }           from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }                 from '../../roles/enums/valid-roles';
-import { ResidentialComplexService }  from '../../residential-complex/services/residential-complex.service';
-import { UnitService }                from '../../residential-complex/services/unit.service';
-import { UnitStatus }                 from '../../residential-complex/enums/unit-status.enum';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { UnitService } from '../../residential-complex/services/unit.service';
+import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 
 @Injectable()
 export class ResidentsService {
@@ -28,14 +36,22 @@ export class ResidentsService {
   constructor(
     @InjectRepository(Resident)
     private readonly residentRepo: Repository<Resident>,
+
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+
+    @InjectRepository(Role)
+    private readonly roleRepo: Repository<Role>,
+
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   // ================================================================
   // CREAR RESIDENTE (lo hace COMPLEX_ROL o SUPER_ADMIN)
-  // Queda en estado PENDING_APPROVAL hasta que el Compliance lo apruebe
+  // Crea o reutiliza el usuario y activa el residente directamente (sin aprobación).
+  // Transacción: usuario + rol + residente + unidad OCCUPIED
   // ================================================================
 
   async create(
@@ -63,57 +79,160 @@ export class ResidentsService {
       });
     }
 
-    // 3. Verificar que el usuario no sea ya residente ACTIVO en el mismo complejo en otra unidad
-    const activeInComplex = await this.residentRepo.findOne({
-      where: {
-        userId:    input.userId,
-        complexId: input.complexId,
-        status:    ResidentStatus.ACTIVE,
-        deletedAt: IsNull(),
-      },
+    // 3. Buscar usuario existente (por teléfono, luego por email)
+    let existingUser = await this.userRepo.findOne({
+      where: { phoneNumber: input.phoneNumber.trim() },
+      select: ['id', 'phoneNumber', 'email'],
     });
 
-    if (activeInComplex) {
-      throw new CustomError({
-        message: 'El usuario ya es residente activo en una unidad de este complejo',
-        statusCode: HttpStatus.CONFLICT,
-        errorCode: ResidentErrorCode.USER_ALREADY_RESIDENT_IN_COMPLEX,
+    if (!existingUser) {
+      existingUser = await this.userRepo.findOne({
+        where: { email: input.email.toLowerCase().trim() },
+        select: ['id', 'phoneNumber', 'email'],
       });
     }
 
-    // 4. Verificar que el mismo usuario no tenga ya una solicitud PENDIENTE en la misma unidad
-    const pendingInUnit = await this.residentRepo.findOne({
-      where: {
-        userId:    input.userId,
-        unitId:    input.unitId,
-        status:    ResidentStatus.PENDING_APPROVAL,
-        deletedAt: IsNull(),
-      },
-    });
+    const userId = existingUser?.id;
 
-    if (pendingInUnit) {
-      throw new CustomError({
-        message: 'Ya existe una solicitud pendiente para este usuario en esta unidad',
-        statusCode: HttpStatus.CONFLICT,
-        errorCode: ResidentErrorCode.RESIDENT_ALREADY_PENDING,
+    // 4. Si el usuario ya existe, verificar que no sea ya residente ACTIVO en esta misma unidad
+    // (el mismo usuario puede estar en diferentes unidades del complejo; distintos usuarios pueden
+    //  compartir la misma unidad sin ningún límite)
+    if (userId) {
+      const alreadyInUnit = await this.residentRepo.findOne({
+        where: {
+          userId,
+          unitId: input.unitId,
+          status: ResidentStatus.ACTIVE,
+          deletedAt: IsNull(),
+        },
       });
+
+      if (alreadyInUnit) {
+        throw new CustomError({
+          message: 'Este usuario ya figura como residente activo en esta unidad',
+          statusCode: HttpStatus.CONFLICT,
+          errorCode: ResidentErrorCode.USER_ALREADY_RESIDENT_IN_COMPLEX,
+        });
+      }
     }
 
-    // 5. Si se marca como residente principal, verificar que no haya otro principal activo en esa unidad
+    // 5. Si se marca como residente principal, verificar que no haya otro principal activo
     if (input.isMainResident) {
       await this.assertNoMainResident(input.unitId);
     }
 
-    const resident = this.residentRepo.create({
-      ...input,
-      status: ResidentStatus.PENDING_APPROVAL,
-    });
+    // 6. Ejecutar todo en una transacción
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const saved = await this.residentRepo.save(resident);
-    this.logger.log(
-      `Residente creado (pendiente): ${saved.id} — usuario ${input.userId} en unidad ${input.unitId}`,
-    );
-    return saved;
+    try {
+      let resolvedUserId: string;
+
+      if (existingUser) {
+        // Usar el usuario existente
+        resolvedUserId = existingUser.id;
+        this.logger.log(`Residente vinculado a usuario existente: ${resolvedUserId}`);
+      } else {
+        // Crear nuevo usuario con contraseña aleatoria y rol RESIDENTE
+        const residentRole = await this.roleRepo.findOne({
+          where: { name: ValidRoles.RESIDENT_ROL },
+        });
+
+        if (!residentRole) {
+          throw new CustomError({
+            message: `El rol '${ValidRoles.RESIDENT_ROL}' no está configurado en el sistema`,
+            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+            errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
+          });
+        }
+
+        const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
+        const systemCode = this.generateSystemCode();
+        const email = input.email.trim().toLowerCase();
+
+        const newUser = queryRunner.manager.create(User, {
+          name: input.name,
+          lastName: input.lastName,
+          email,
+          password: dummyPassword,
+          phoneNumber: input.phoneNumber,
+          identity: input.identityNumber,
+          systemCode,
+          complexId: input.complexId,
+          status: UserStatus.ACTIVE,
+          phoneVerified: false,
+          emailVerified: false,
+          identityVerified: false,
+          acceptTermsAdnConditions: false,
+          acceptsMarketing: false,
+        });
+
+        const savedUser = await queryRunner.manager.save(User, newUser);
+
+        await queryRunner.manager.save(
+          queryRunner.manager.create(UserRole, {
+            user: { id: savedUser.id },
+            role: { id: residentRole.id },
+            isPrimary: true,
+          }),
+        );
+
+        resolvedUserId = savedUser.id;
+        this.logger.log(
+          `Nuevo usuario residente creado: ${resolvedUserId} | systemCode: ${systemCode}`,
+        );
+      }
+
+      // Crear el residente como ACTIVO directamente
+      const resident = queryRunner.manager.create(Resident, {
+        userId: resolvedUserId,
+        unitId: input.unitId,
+        complexId: input.complexId,
+        type: input.type ?? ResidentType.OWNER,
+        isMainResident: input.isMainResident ?? false,
+        status: ResidentStatus.ACTIVE,
+        startDate: input.startDate ? new Date(input.startDate) : new Date(),
+        endDate: input.endDate ? new Date(input.endDate) : undefined,
+        emergencyContactName: input.emergencyContactName,
+        emergencyContactLastName: input.emergencyContactLastName,
+        emergencyContactPhone: input.emergencyContactPhone,
+        notes: input.notes,
+        approvedAt: new Date(),
+        approvedByUserId: currentUser.sub,
+      });
+
+      const savedResident = await queryRunner.manager.save(Resident, resident);
+
+      // Marcar unidad como OCCUPIED
+      await queryRunner.manager.update(
+        'units',
+        { id: input.unitId },
+        { status: UnitStatus.OCCUPIED },
+      );
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Residente creado y activado: ${savedResident.id} — usuario ${resolvedUserId} en unidad ${input.unitId}`,
+      );
+
+      return this.residentRepo.findOne({
+        where: { id: savedResident.id },
+        relations: ['user', 'unit', 'unit.building', 'complex'],
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      if (error instanceof CustomError) throw error;
+      this.logger.error('Error al crear residente', error);
+      throw new CustomError({
+        message: 'Error interno al crear el residente',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
+      });
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // ================================================================
@@ -141,8 +260,8 @@ export class ResidentsService {
     await queryRunner.startTransaction();
 
     try {
-      resident.status          = ResidentStatus.ACTIVE;
-      resident.approvedAt      = new Date();
+      resident.status = ResidentStatus.ACTIVE;
+      resident.approvedAt = new Date();
       resident.approvedByUserId = currentUser.sub;
       if (input.notes) resident.notes = input.notes;
 
@@ -191,8 +310,8 @@ export class ResidentsService {
       });
     }
 
-    resident.status           = ResidentStatus.REJECTED;
-    resident.rejectionReason  = input.rejectionReason;
+    resident.status = ResidentStatus.REJECTED;
+    resident.rejectionReason = input.rejectionReason;
     resident.approvedByUserId = currentUser.sub;
 
     const saved = await this.residentRepo.save(resident);
@@ -224,8 +343,8 @@ export class ResidentsService {
     await queryRunner.startTransaction();
 
     try {
-      resident.status       = ResidentStatus.MOVED_OUT;
-      resident.moveOutDate  = input.moveOutDate ? new Date(input.moveOutDate) : new Date();
+      resident.status = ResidentStatus.MOVED_OUT;
+      resident.moveOutDate = input.moveOutDate ? new Date(input.moveOutDate) : new Date();
       resident.moveOutReason = input.moveOutReason ?? null;
 
       await queryRunner.manager.save(Resident, resident);
@@ -233,10 +352,10 @@ export class ResidentsService {
       // Verificar si quedan residentes ACTIVOS en la misma unidad
       const remainingActiveCount = await queryRunner.manager.count(Resident, {
         where: {
-          unitId:    resident.unitId,
-          status:    ResidentStatus.ACTIVE,
+          unitId: resident.unitId,
+          status: ResidentStatus.ACTIVE,
           deletedAt: IsNull(),
-          id:        Not(resident.id),
+          id: Not(resident.id),
         },
       });
 
@@ -286,7 +405,7 @@ export class ResidentsService {
     }
 
     resident.status = ResidentStatus.SUSPENDED;
-    resident.notes  = reason;
+    resident.notes = reason;
     return this.residentRepo.save(resident);
   }
 
@@ -361,12 +480,12 @@ export class ResidentsService {
       .leftJoinAndSelect('unit.building', 'building')
       .leftJoinAndSelect('r.approvedByUser', 'approvedByUser')
       .where('r.complex_id = :complexId', { complexId })
-      .andWhere('r.deleted_at IS NULL');
+      // .andWhere('r.createdAt IS NULL');
 
-    if (filters?.status)     qb.andWhere('r.status = :status',         { status: filters.status });
-    if (filters?.type)       qb.andWhere('r.type = :type',             { type: filters.type });
-    if (filters?.unitId)     qb.andWhere('r.unit_id = :unitId',        { unitId: filters.unitId });
-    if (filters?.buildingId) qb.andWhere('unit.building_id = :bid',    { bid: filters.buildingId });
+    if (filters?.status) qb.andWhere('r.status = :status', { status: filters.status });
+    if (filters?.type) qb.andWhere('r.type = :type', { type: filters.type });
+    if (filters?.unitId) qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
+    if (filters?.buildingId) qb.andWhere('unit.building_id = :bid', { bid: filters.buildingId });
 
     if (filters?.search) {
       qb.andWhere(
@@ -378,7 +497,7 @@ export class ResidentsService {
       );
     }
 
-    qb.orderBy('r.created_at', 'DESC').skip(skip).take(limit);
+    qb.orderBy('r.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
@@ -386,11 +505,11 @@ export class ResidentsService {
     return {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -424,11 +543,11 @@ export class ResidentsService {
     return {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -443,7 +562,7 @@ export class ResidentsService {
     currentUser: JwtAccessPayload,
   ): Promise<Resident> {
     const resident = await this.residentRepo.findOne({
-      where:     { id, deletedAt: IsNull() },
+      where: { id, deletedAt: IsNull() },
       relations: ['user', 'unit', 'unit.building', 'complex', 'approvedByUser'],
     });
 
@@ -457,8 +576,8 @@ export class ResidentsService {
 
     // Verificar acceso: COMPLIANCE_OFFICER puede ver todos los pendientes;
     // el resto solo puede ver los de su complejo
-    const isSuperAdmin  = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isCompliance  = currentUser.roles.includes(ValidRoles.COMPILANCE_OFFICER_ROL);
+    const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isCompliance = currentUser.roles.includes(ValidRoles.COMPILANCE_OFFICER_ROL);
 
     if (!isSuperAdmin && !isCompliance) {
       await this.complexService.assertAccess(resident.complex, currentUser);
@@ -507,9 +626,9 @@ export class ResidentsService {
     await this.complexService.findById(unit.complexId, currentUser);
 
     return this.residentRepo.find({
-      where:     { unitId },
+      where: { unitId },
       relations: ['user', 'approvedByUser'],
-      order:     { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -530,6 +649,13 @@ export class ResidentsService {
   // ================================================================
   // HELPER INTERNO
   // ================================================================
+
+  /** Genera un código de sistema legible para el residente (ej: RES-A3F9-K2M1) */
+  private generateSystemCode(): string {
+    const p1 = randomBytes(2).toString('hex').toUpperCase();
+    const p2 = randomBytes(2).toString('hex').toUpperCase();
+    return `RES-${p1}-${p2}`;
+  }
 
   /**
    * Verifica que no exista ya un residente principal activo en la unidad.

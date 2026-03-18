@@ -1,26 +1,26 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Resident }                   from '../entities/resident.entity';
-import { ResidentsService }           from '../services/residents.service';
-import { CreateResidentInput }        from '../dto/inputs/create-resident.input';
-import { UpdateResidentInput }        from '../dto/inputs/update-resident.input';
-import { FilterResidentsInput }       from '../dto/inputs/filter-residents.input';
-import { ApproveResidentInput }       from '../dto/inputs/approve-resident.input';
-import { RejectResidentInput }        from '../dto/inputs/reject-resident.input';
-import { MoveOutResidentInput }       from '../dto/inputs/move-out-resident.input';
+import { Resident } from '../entities/resident.entity';
+import { ResidentsService } from '../services/residents.service';
+import { CreateResidentInput } from '../dto/inputs/create-resident.input';
+import { UpdateResidentInput } from '../dto/inputs/update-resident.input';
+import { FilterResidentsInput } from '../dto/inputs/filter-residents.input';
+import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
+import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
+import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
-import { PaginationInput }            from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }           from '../../shared/decorators/auth.decorator';
-import { CurrentUser }    from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }     from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Resident)
 export class ResidentsResolver {
 
-  constructor(private readonly residentsService: ResidentsService) {}
+  constructor(private readonly residentsService: ResidentsService) { }
 
   // ================================================================
   // MUTATIONS — Administración del Complejo
@@ -28,12 +28,11 @@ export class ResidentsResolver {
 
   /**
    * Registra una nueva solicitud de residencia.
-   * Queda en PENDING_APPROVAL hasta que el Compliance Officer la gestione.
    */
   @Mutation(() => Resident, { name: 'createResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    permissions: [ValidPermissions.CREATE_RESIDENTS],
+    // permissions: [ValidPermissions.CREATE_RESIDENTS],
   })
   create(
     @Args('input') input: CreateResidentInput,
@@ -48,7 +47,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'updateResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    permissions: [ValidPermissions.EDIT_RESIDENTS],
+    // permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   update(
     @Args('input') input: UpdateResidentInput,
@@ -63,11 +62,11 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'suspendResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    permissions: [ValidPermissions.BLOCK_RESIDENTS],
+    // permissions: [ValidPermissions.BLOCK_RESIDENTS],
   })
   suspend(
     @Args('residentId') residentId: string,
-    @Args('reason')     reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Resident> {
     return this.residentsService.suspend(residentId, reason, currentUser);
@@ -79,7 +78,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'reactivateResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    permissions: [ValidPermissions.EDIT_RESIDENTS],
+    // permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   reactivate(
     @Args('residentId') residentId: string,
@@ -95,7 +94,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'moveOutResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    permissions: [ValidPermissions.EDIT_RESIDENTS],
+    // permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   moveOut(
     @Args('input') input: MoveOutResidentInput,
@@ -167,16 +166,16 @@ export class ResidentsResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.ACCOUNTANT_ROL,
       ValidRoles.SECURITY_ROL,
     ],
-    permissions: [ValidPermissions.VIEW_RESIDENTS],
+    // permissions: [ValidPermissions.VIEW_RESIDENTS],
   })
   findByComplex(
-    @Args('complexId')                     complexId: string,
+    @Args('complexId') complexId: string,
     @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterResidentsInput = {},
+    @Args('filters', { nullable: true }) filters: FilterResidentsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedResidentsResponse> {
     return this.residentsService.findByComplex(complexId, pagination, filters, currentUser);

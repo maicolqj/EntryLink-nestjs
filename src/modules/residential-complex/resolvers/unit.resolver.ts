@@ -63,7 +63,7 @@ export class UnitResolver {
       ValidRoles.SECURITY_ROL,
       ValidRoles.ACCOUNTANT_ROL,
     ],
-    permissions: [ValidPermissions.VIEW_RESIDENCES],
+    // permissions: [ValidPermissions.VIEW_RESIDENCES],
   })
   findByComplex(
     @Args('complexId')                       complexId: string,

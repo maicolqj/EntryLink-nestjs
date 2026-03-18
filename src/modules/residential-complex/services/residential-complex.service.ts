@@ -2,24 +2,26 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, IsNull, Repository } from 'typeorm';
 
-import { ResidentialComplex }      from '../entities/residential-complex.entity';
-import { CreateComplexInput }      from '../dto/inputs/create-complex.input';
-import { UpdateComplexInput }      from '../dto/inputs/update-complex.input';
-import { FilterComplexInput }      from '../dto/inputs/filter-complex.input';
+import { ResidentialComplex } from '../entities/residential-complex.entity';
+import { CreateComplexInput } from '../dto/inputs/create-complex.input';
+import { UpdateComplexInput } from '../dto/inputs/update-complex.input';
+import { FilterComplexInput } from '../dto/inputs/filter-complex.input';
 import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes.response';
-import { PaginationInput }         from '../../shared/dto/inputs/pagination.input';
-import { ComplexStatus }           from '../enums/complex-status.enum';
-import { ComplexPlan }             from '../enums/complex-plan.enum';
-import { CustomError }             from '../../shared/utils/errors.utils';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { ComplexStatus } from '../enums/complex-status.enum';
+import { ComplexPlan } from '../enums/complex-plan.enum';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }        from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }              from '../../roles/enums/valid-roles';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { UserRole } from '../../users/entities/user_has_roles.entity';
+import { User } from '../../users/entities/user.entity';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
-  [ComplexPlan.FREE]:       10,
-  [ComplexPlan.BASIC]:      50,
-  [ComplexPlan.PRO]:        200,
+  [ComplexPlan.FREE]: 10,
+  [ComplexPlan.BASIC]: 50,
+  [ComplexPlan.PRO]: 200,
   [ComplexPlan.ENTERPRISE]: 99_999,
 };
 
@@ -31,7 +33,7 @@ export class ResidentialComplexService {
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   // ================================================================
   // CREAR COMPLEJO
@@ -55,15 +57,15 @@ export class ResidentialComplexService {
       });
     }
 
-    const plan      = input.plan ?? ComplexPlan.FREE;
-    const maxUnits  = PLAN_UNIT_LIMITS[plan];
+    const plan = input.plan ?? ComplexPlan.FREE;
+    const maxUnits = PLAN_UNIT_LIMITS[plan];
 
     const complex = this.complexRepo.create({
       ...input,
       plan,
       maxUnits,
-      ownerId: currentUser.sub,
       status: ComplexStatus.PENDING_SETUP,
+      ownerId: currentUser.sub,
     });
 
     const saved = await this.complexRepo.save(complex);
@@ -103,12 +105,12 @@ export class ResidentialComplexService {
       );
     }
 
-    if (filters?.type)   qb.andWhere('complex.type = :type',     { type: filters.type });
-    if (filters?.plan)   qb.andWhere('complex.plan = :plan',     { plan: filters.plan });
+    if (filters?.type) qb.andWhere('complex.type = :type', { type: filters.type });
+    if (filters?.plan) qb.andWhere('complex.plan = :plan', { plan: filters.plan });
     if (filters?.status) qb.andWhere('complex.status = :status', { status: filters.status });
-    if (filters?.city)   qb.andWhere('complex.city ILIKE :city', { city: `%${filters.city}%` });
+    if (filters?.city) qb.andWhere('complex.city ILIKE :city', { city: `%${filters.city}%` });
 
-    qb.orderBy('complex.created_at', 'DESC').skip(skip).take(limit);
+    qb.orderBy('complex.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
@@ -116,14 +118,14 @@ export class ResidentialComplexService {
     return {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
-    }; 
+    };
   }
 
   // ================================================================
@@ -230,7 +232,7 @@ export class ResidentialComplexService {
     }
 
     complex.deletedAt = null;
-    complex.status    = ComplexStatus.PENDING_SETUP;
+    complex.status = ComplexStatus.PENDING_SETUP;
     return this.complexRepo.save(complex);
   }
 
@@ -243,10 +245,66 @@ export class ResidentialComplexService {
    * SUPER_ADMIN siempre tiene acceso. Los demás solo al suyo.
    */
   assertAccess(complex: ResidentialComplex, user: JwtAccessPayload): void {
-    const isSuperAdmin = user.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    if (!isSuperAdmin && complex.ownerId !== user.sub) {
+    // SUPER_ADMIN tiene acceso irrestricto a cualquier complejo
+    if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
+
+    // COMPLEX_ROL: debe ser el owner del complejo
+    if (
+      user.roles.includes(ValidRoles.COMPLEX_ROL) &&
+      complex.ownerId !== user.sub
+    ) {
       throw new CustomError({
         message: 'No tienes permiso para acceder a este complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    // SECURITY / SUPERVISOR / otros: deben pertenecer al complejo via complexId en JWT
+    if (
+      !user.roles.includes(ValidRoles.COMPLEX_ROL) &&
+      user.complexId !== complex.id
+    ) {
+      throw new CustomError({
+        message: 'No tienes permiso para acceder a este complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+  }
+
+  /**
+   * Verifica acceso al complejo sin cargar relaciones.
+   *
+   * - SUPER_ADMIN:  acceso irrestricto.
+   * - COMPLEX_ROL:  es owner del complejo (ownerId === user.sub)
+   *                 O tiene el complejo asignado en su perfil (user.complexId === complexId).
+   * - Otros roles:  su complexId en el JWT debe coincidir con el ID del complejo.
+   */
+  async assertComplexAccess(complexId: string, user: JwtAccessPayload): Promise<void> {
+    if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
+
+    if (user.roles.includes(ValidRoles.COMPLEX_ROL)) {
+      // Caso 1: el complejo está asignado en el JWT del usuario
+      if (user.complexId === complexId) return;
+
+      // Caso 2: el usuario es el owner directo del complejo en BD
+      const complex = await this.complexRepo.findOne({
+        where: { id: complexId },
+        select: ['id', 'ownerId'],
+      });
+      if (complex && complex.ownerId === user.sub) return;
+
+      throw new CustomError({
+        message: 'No tienes permiso para acceder a este complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    if (user.complexId !== complexId) {
+      throw new CustomError({
+        message: 'No tienes acceso a recursos de otro complejo residencial',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });

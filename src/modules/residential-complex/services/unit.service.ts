@@ -26,19 +26,22 @@ export class UnitService {
   ) {}
 
   // ================================================================
-  // CREAR UNIDAD
+  // CREAR UNIDAD (CASA O APARTAMENTO)
   // ================================================================
 
   async create(
     input: CreateUnitInput,
     currentUser: JwtAccessPayload,
   ): Promise<Unit> {
+
     // 1. Verificar acceso al complejo
-    await this.complexService.findById(input.complexId, currentUser);
+    const response = await this.complexService.findById(input.complexId, currentUser);
+
 
     // 2. Si viene buildingId, verificar que la torre exista y pertenezca al complejo
     if (input.buildingId) {
       const building = await this.buildingService.findById(input.buildingId, currentUser);
+      
       if (building.complexId !== input.complexId) {
         throw new CustomError({
           message: 'La torre especificada no pertenece al complejo indicado',
@@ -52,6 +55,7 @@ export class UnitService {
     const currentCount = await this.unitRepo.count({
       where: { complexId: input.complexId, deletedAt: IsNull() },
     });
+    
     await this.complexService.assertUnitsLimit(input.complexId, currentCount);
 
     // 4. Verificar número de unidad único dentro del mismo scope
@@ -68,7 +72,7 @@ export class UnitService {
       });
     }
 
-    const unit  = this.unitRepo.create({ ...input, status: UnitStatus.AVAILABLE });
+    const unit  = this.unitRepo.create({ ...input, complexId: input.complexId, status: UnitStatus.AVAILABLE });
     const saved = await this.unitRepo.save(unit);
     this.logger.log(`Unidad creada: ${saved.id} — N°${saved.number} en complejo ${input.complexId}`);
     return saved;
@@ -93,12 +97,12 @@ export class UnitService {
     const qb = this.unitRepo
       .createQueryBuilder('unit')
       .leftJoinAndSelect('unit.building', 'building')
-      .where('unit.complex_id = :complexId', { complexId })
+      .where('unit.complexId = :complexId', { complexId })
       .andWhere('unit.deleted_at IS NULL');
 
     if (buildingId) qb.andWhere('unit.building_id = :buildingId', { buildingId });
     if (status)     qb.andWhere('unit.status = :status',          { status });
-
+ 
     qb.orderBy('unit.floor', 'ASC')
       .addOrderBy('unit.number', 'ASC')
       .skip(skip)

@@ -6,9 +6,13 @@ import { ResidentsService }       from './services/residents.service';
 import { ResidentsResolver }      from './resolvers/residents.resolver';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 
+import { User }     from '../users/entities/user.entity';
+import { UserRole } from '../users/entities/user_has_roles.entity';
+import { Role }     from '../roles/entities/role.entity';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Resident]),
+    TypeOrmModule.forFeature([Resident, User, UserRole, Role]),
     // Importamos el módulo de complejos para acceder a
     // ResidentialComplexService y UnitService (ya exportados)
     ResidentialComplexModule,

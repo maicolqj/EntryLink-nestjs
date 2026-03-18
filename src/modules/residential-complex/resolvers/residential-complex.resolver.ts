@@ -119,7 +119,7 @@ export class ResidentialComplexResolver {
   @Query(() => ResidentialComplex, { name: 'complex' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL, ValidRoles.SUPERVISOR_ROL],
-    permissions: [ValidPermissions.VIEW_RESIDENCES],
+    // permissions: [ValidPermissions.VIEW_RESIDENCES],
   })
   findOne(
     @Args('id') id: string,

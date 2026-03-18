@@ -47,7 +47,7 @@ export class Resident {
 
   // ==================== FECHAS DE RESIDENCIA ====================
 
-  @Field(() => Date, { description: 'Fecha de inicio de residencia' })
+  @Field(() => String, { description: 'Fecha de inicio de residencia' })
   @Column({ name: 'start_date', type: 'date' })
   startDate: Date;
 
@@ -68,6 +68,10 @@ export class Resident {
   @Field(() => String, { description: 'Nombre del contacto de emergencia', nullable: true })
   @Column({ name: 'emergency_contact_name', type: 'varchar', length: 200, nullable: true })
   emergencyContactName?: string;
+
+  @Field(() => String, { description: 'Apellido del contacto de emergencia', nullable: true })
+  @Column({ name: 'emergency_contact_last_name', type: 'varchar', length: 200, nullable: true })
+  emergencyContactLastName?: string;
 
   @Field(() => String, { description: 'Teléfono del contacto de emergencia', nullable: true })
   @Column({ name: 'emergency_contact_phone', type: 'varchar', length: 20, nullable: true })
@@ -150,6 +154,9 @@ export class Resident {
   normalizeFields() {
     if (this.emergencyContactName) {
       this.emergencyContactName = this.emergencyContactName.trim().toUpperCase();
+    }
+    if (this.emergencyContactLastName) {
+      this.emergencyContactLastName = this.emergencyContactLastName.trim().toUpperCase();
     }
     if (this.moveOutReason) {
       this.moveOutReason = this.moveOutReason.trim();

@@ -12,10 +12,11 @@ import { UnitService }                  from './services/unit.service';
 import { ResidentialComplexResolver }   from './resolvers/residential-complex.resolver';
 import { BuildingResolver }             from './resolvers/building.resolver';
 import { UnitResolver }                 from './resolvers/unit.resolver';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResidentialComplex, Building, Unit]),
+    TypeOrmModule.forFeature([ResidentialComplex, Building, Unit, User]),
   ],
   providers: [
     // Servicios

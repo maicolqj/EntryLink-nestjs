@@ -1,8 +1,10 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
 import {
-  IsString, IsOptional, IsUUID,
+  IsString, IsOptional,
   MaxLength, MinLength, IsInt, Min, Max,
+  IsUUID,
 } from 'class-validator';
+
 
 @InputType()
 export class CreateBuildingInput {
@@ -12,12 +14,6 @@ export class CreateBuildingInput {
   @MinLength(1)
   @MaxLength(100)
   name: string;
-
-  @Field(() => String, { description: 'Código corto único dentro del complejo. Ej: "TA", "EN"' })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(10)
-  code: string;
 
   @Field(() => Int, { description: 'Número de pisos', defaultValue: 1 })
   @IsOptional()
@@ -32,7 +28,8 @@ export class CreateBuildingInput {
   @MaxLength(500)
   description?: string;
 
-  @Field(() => String, { description: 'ID del complejo al que pertenece' })
+  @Field(() => String, { description: 'ID del complejo' })
   @IsUUID()
   complexId: string;
+
 }

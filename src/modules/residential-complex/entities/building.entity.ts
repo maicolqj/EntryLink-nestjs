@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
   BeforeInsert,
   BeforeUpdate,
   Index,
@@ -18,7 +17,7 @@ import { Unit }               from './unit.entity';
 
 @ObjectType({ description: 'Torre o edificio dentro de un complejo' })
 @Entity({ name: 'buildings' })
-@Index(['complexId', 'code'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index(['complexId', 'name'], { unique: true, where: '"deleted_at" IS NULL' })
 @Index(['complexId', 'status'])
 export class Building {
 
@@ -31,10 +30,6 @@ export class Building {
   @Field(() => String, { description: 'Nombre de la torre/edificio. Ej: "Torre A"' })
   @Column({ type: 'varchar', length: 100 })
   name: string;
-
-  @Field(() => String, { description: 'Código corto único dentro del complejo. Ej: "TA"' })
-  @Column({ type: 'varchar', length: 10 })
-  code: string;
 
   @Field(() => String, { description: 'Descripción opcional', nullable: true })
   @Column({ type: 'text', nullable: true })
@@ -53,7 +48,7 @@ export class Building {
   // ==================== MULTI-TENANT ====================
 
   @Field(() => String, { description: 'ID del complejo al que pertenece' })
-  @Column({ type: 'uuid', name: 'complex_id' })
+  @Column({ type: 'uuid' })
   complexId: string;
 
   // ==================== AUDITORÍA ====================
@@ -74,7 +69,6 @@ export class Building {
 
   @Field(() => ResidentialComplex, { description: 'Complejo al que pertenece', nullable: true })
   @ManyToOne(() => ResidentialComplex, (complex) => complex.buildings, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
   @Field(() => [Unit], { description: 'Unidades dentro de esta torre', nullable: true })
@@ -87,6 +81,5 @@ export class Building {
   @BeforeUpdate()
   normalizeFields() {
     this.name = this.name?.trim().toUpperCase();
-    this.code = this.code?.trim().toUpperCase();
   }
 }
