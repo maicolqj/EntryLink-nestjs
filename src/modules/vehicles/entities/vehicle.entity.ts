@@ -10,7 +10,7 @@ import {
   BeforeUpdate,
   Index,
 } from 'typeorm';
-import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { ObjectType, Field, Int, Float } from '@nestjs/graphql';
 
 import { VehicleType }     from '../enums/vehicle-type.enum';
 import { VehicleStatus }   from '../enums/vehicle-status.enum';
@@ -111,6 +111,38 @@ export class Vehicle {
   @Field(() => String, { description: 'ID del usuario que aprobó o rechazó', nullable: true })
   @Column({ name: 'approved_by_user_id', type: 'uuid', nullable: true })
   approvedByUserId?: string;
+
+  // ==================== ROTACIÓN DE PARQUEADEROS ====================
+
+  /**
+   * true cuando la suspensión actual fue originada por el sistema de rotación,
+   * no por una acción manual del administrador. Permite distinguir ambos casos.
+   */
+  @Field(() => Boolean, {
+    description: 'Indica si la suspensión actual fue generada por rotación automática de parqueaderos',
+    defaultValue: false,
+  })
+  @Column({ name: 'suspended_by_rotation', type: 'boolean', default: false })
+  suspendedByRotation: boolean;
+
+  /** Fecha en que fue suspendido por rotación por última vez. Usado para la cola de equidad. */
+  @Field(() => Date, {
+    description: 'Última vez que fue suspendido por rotación (referencia de equidad)',
+    nullable: true,
+  })
+  @Column({ name: 'rotation_suspended_at', type: 'timestamptz', nullable: true })
+  rotationSuspendedAt?: Date;
+
+  /**
+   * Cantidad de veces que fue suspendido por rotación en el gran ciclo actual.
+   * Se reinicia a 0 cuando todos los vehículos del mismo tipo han rotado al menos una vez.
+   */
+  @Field(() => Int, {
+    description: 'Veces que ha salido por rotación en el gran ciclo actual (se reinicia al completar el ciclo)',
+    defaultValue: 0,
+  })
+  @Column({ name: 'rotation_cycle_count', type: 'int', default: 0 })
+  rotationCycleCount: number;
 
   // ==================== AUDITORÍA ====================
 
