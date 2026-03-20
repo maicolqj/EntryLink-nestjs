@@ -231,6 +231,9 @@ type User {
   """ID del complejo residencial asociado"""
   complexId: String
 
+  """Indica si el usuario tiene contraseña establecida"""
+  passwordSet: Boolean!
+
   """Permissions created by this user"""
   createdPermissions: [Permission!]
 
@@ -344,8 +347,8 @@ enum ValidRoles {
   COMPLEX_ROL
   ACCOUNTANT_ROL
   SUPERVISOR_ROL
-  SECURITY_ROL
   RESIDENT_ROL
+  SECURITY_ROL
 }
 
 """
@@ -546,45 +549,6 @@ type RoleHierarchyResponse {
 
   """Hierarchy statistics"""
   stats: HierarchyStats!
-}
-
-type PermissionGroupSummary {
-  """Nombre del grupo de permisos (ej: USERS, PACKAGES)"""
-  group: String!
-
-  """Cantidad de permisos en este grupo"""
-  count: Int!
-
-  """Permisos de este grupo"""
-  permissions: [Permission!]!
-}
-
-type RoleDetailResponse {
-  id: String!
-  name: ValidRoles!
-  frontName: String!
-  icon: String!
-  description: String
-  hierarchyLevel: Int!
-  status: Boolean!
-  isSystem: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-
-  """Rol padre en la jerarquía"""
-  parent: SimpleRoleResponse
-
-  """Roles hijos en la jerarquía"""
-  children: [SimpleRoleResponse!]
-
-  """Todos los permisos asignados al rol"""
-  permissions: [Permission!]!
-
-  """Total de permisos asignados"""
-  permissionCount: Int!
-
-  """Permisos organizados por grupo"""
-  permissionsByGroup: [PermissionGroupSummary!]!
 }
 
 type Role {
@@ -907,6 +871,11 @@ type ResidentialComplex {
 
   """Configuración avanzada del complejo"""
   settings: JSON
+
+  """
+  Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.
+  """
+  enabledModules: [String!]
 
   """ID del propietario/administrador principal"""
   ownerId: String!
@@ -1297,6 +1266,24 @@ type OtpRequestResponse {
   success: Boolean!
   message: String!
   debugCode: String
+}
+
+"""Respuesta con el token QR generado y su fecha de expiración"""
+type QrLoginTokenResponse {
+  """Token UUID de un solo uso para el login por QR"""
+  token: String!
+
+  """Fecha y hora de expiración del token (72 horas)"""
+  expiresAt: DateTime!
+}
+
+type SetPasswordResponse {
+  success: Boolean!
+}
+
+type RequestPasswordResetResponse {
+  success: Boolean!
+  message: String!
 }
 
 type PaginatedComplexesResponse {
@@ -2050,14 +2037,6 @@ type Query {
   permission(id: String!): Permission!
   roles(input: SearchRolesInput!): PaginatedRolesResponse!
   role(term: String!): Role!
-
-  """
-  Obtiene la información completa de un rol con sus permisos agrupados por categoría
-  """
-  roleDetail(
-    """UUID del rol"""
-    id: String!
-  ): RoleDetailResponse!
   getRoleHierarchy(roleId: String!): RoleHierarchyResponse!
 
   """Lista paginada de usuarios. Filtrable por status y complexId."""
@@ -2350,16 +2329,42 @@ type Mutation {
   verifyOtp(input: VerifyOtpInput!): AuthResponse!
 
   """
+  Genera un token QR de un solo uso (72 h de vigencia) para que un usuario inicie sesión sin contraseña. Solo accesible por SUPER_ADMIN.
+  """
+  generateQrLoginToken(userId: String!): QrLoginTokenResponse!
+
+  """
+  Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del documento). No requiere autenticación previa.
+  """
+  redeemQrToken(token: String!, pin: String!): AuthResponse!
+
+  """
+  Establece la contraseña inicial del usuario autenticado. Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.
+  """
+  setInitialPassword(newPassword: String!): SetPasswordResponse!
+
+  """
   Renueva el access token usando el refresh token. Implementa rotación de tokens.
   """
   refreshToken(refreshToken: String!): AuthResponse!
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
+
+  """
+  Solicita un enlace de restablecimiento de contraseña por email. Siempre devuelve respuesta genérica para no revelar si el email existe.
+  """
+  requestPasswordReset(email: String!): RequestPasswordResetResponse!
+
+  """
+  Restablece la contraseña usando el token recibido por email. El token es de un solo uso y tiene una validez de 30 minutos.
+  """
+  resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
   removeComplex(id: String!): Boolean!
+  updateComplexModules(complexId: String!, modules: [String!]!): ResidentialComplex!
   restoreComplex(id: String!): ResidentialComplex!
   createBuilding(input: CreateBuildingInput!): Building!
   updateBuilding(input: UpdateBuildingInput!): Building!
@@ -2631,6 +2636,14 @@ input VerifyOtpInput {
 
   """Código OTP de 6 dígitos recibido por SMS"""
   code: String!
+}
+
+input ResetPasswordInput {
+  """Token de restablecimiento recibido por email"""
+  token: String!
+
+  """Nueva contraseña"""
+  newPassword: String!
 }
 
 input CreateComplexInput {

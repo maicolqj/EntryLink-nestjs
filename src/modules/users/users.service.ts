@@ -29,6 +29,8 @@ import { ResidentType } from '../residents/enums/resident-type.enum';
 import { CustomError } from '../shared/utils/errors.utils';
 import { GeneralErrorCode, UserErrorCode } from '../shared/constans/error-codes.constants';
 import { GraphQLError } from 'graphql/error';
+import { CacheService } from '../../core/infrastructure/cache/cache.service';
+import { AUTH_CONSTANTS } from '../auth/constants/auth.constants';
 
 /** Roles que inician sesión con email + contraseña */
 const PASSWORD_BASED_ROLES = [
@@ -63,6 +65,7 @@ export class UsersService {
     private readonly rolesService: RolesService,
     private readonly dataSource: DataSource,
     private readonly excelImportProducer: ExcelImportProducer,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ── Consultas ────────────────────────────────────────────────────────────
@@ -533,7 +536,13 @@ export class UsersService {
     await this.userRepo.update(id, {
       password: hashed,
       lastPasswordChange: new Date(),
-      tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
+      passwordSet: true,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+
+    // Limpiar cache de tokenVersion para que el próximo validate() cargue el valor nuevo de BD
+    await this.cacheService.delete({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.TOKEN_VERSION, key: id },
     });
 
     return {
