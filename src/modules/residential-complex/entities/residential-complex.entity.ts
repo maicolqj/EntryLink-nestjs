@@ -127,6 +127,10 @@ export class ResidentialComplex {
   @Column({ type: 'jsonb', nullable: true, default: {} })
   settings?: Record<string, any>;
 
+  @Field(() => [String], { description: 'Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.', nullable: true })
+  @Column({ type: 'simple-array', nullable: true })
+  enabledModules?: string[];
+
   // ==================== AUDITORÍA ====================
 
   @Field(() => String, { description: 'ID del propietario/administrador principal' })
