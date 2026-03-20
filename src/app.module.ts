@@ -29,6 +29,8 @@ import { NotificationsModule }      from './modules/notifications/notifications.
 import { FinanceModule }            from './modules/finance/finance.module';
 import { VisitorParkingModule }    from './modules/visitor-parking/visitor-parking.module';
 import { NotesModule }            from './modules/notes/notes.module';
+import { MailModule }             from './mail/mail.module';
+import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-board.module';
 
 @Module({
   imports: [
@@ -77,6 +79,8 @@ import { NotesModule }            from './modules/notes/notes.module';
     CacheModule,          // Global — disponible en todos los módulos
     BullConfigModule,     // Configura BullMQ con Redis
     CloudinaryModule,     // Global — subida de imágenes
+    MailModule,           // Cola de emails (BullMQ + Nodemailer)
+    BullBoardAppModule,   // UI de monitoreo de colas en /admin/bull-board
 
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
