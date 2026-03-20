@@ -216,6 +216,36 @@ export class User {
     @Field(() => String, { description: 'ID del complejo residencial asociado', nullable: true })
     complexId?: string;
 
+    // ================== LOGIN POR QR ==================
+
+    /** Token de un solo uso para login por código QR. Oculto por defecto en queries. */
+    @Column({ name: 'qr_login_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+    qrLoginToken?: string;
+
+    @Column({ name: 'qr_login_token_exp', type: 'timestamptz', nullable: true, select: false })
+    qrLoginTokenExp?: Date;
+
+    @Column({ name: 'qr_login_token_used', type: 'boolean', default: false })
+    qrLoginTokenUsed: boolean;
+
+    // ================== RESET DE CONTRASEÑA ==================
+
+    /**
+     * Indica si el usuario ya estableció su contraseña al menos una vez.
+     * false  → solo accedió por QR sin haber llamado a setInitialPassword.
+     * true   → contraseña activa: puede usar requestPasswordReset por email.
+     */
+    @Column({ name: 'password_set', type: 'boolean', default: false })
+    @Field(() => Boolean, { description: 'Indica si el usuario tiene contraseña establecida' })
+    passwordSet: boolean;
+
+    /** Token UUID de un solo uso para restablecimiento de contraseña por email. */
+    @Column({ name: 'password_reset_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+    passwordResetToken?: string;
+
+    @Column({ name: 'password_reset_token_exp', type: 'timestamptz', nullable: true, select: false })
+    passwordResetTokenExp?: Date;
+
     //**************************************************************************************************************************
     //**************************************************************************************************************************
     //*************************************************************RELACIONES***************************************************
