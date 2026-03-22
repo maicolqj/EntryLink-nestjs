@@ -1,7 +1,7 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { RolesService } from './roles.service';
 import { Role } from './entities/role.entity';
-import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse } from './dto/responses';
+import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse, RoleDetailResponse } from './dto/responses';
 import { CreateRoleInput } from './dto/inputs/create-role.input';
 import { SearchRolesInput } from './dto/inputs/search-roles.input';
 import { UpdateRoleInput } from './dto/inputs/update-role.input';
@@ -35,6 +35,17 @@ export class RolesResolver {
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   findOne(@Args('term', { type: () => String }) term: string) {
     return this.rolesService.findOne(term);
+  }
+
+  @Query(() => RoleDetailResponse, {
+    name: 'roleDetail',
+    description: 'Obtiene la información completa de un rol con sus permisos agrupados por categoría',
+  })
+  @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
+  findRoleDetail(
+    @Args('id', { type: () => String, description: 'UUID del rol' }) id: string,
+  ): Promise<RoleDetailResponse> {
+    return this.rolesService.findRoleDetail(id);
   }
 
   @Mutation(() => Role)

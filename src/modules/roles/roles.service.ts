@@ -5,7 +5,7 @@ import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, QueryRunner, Repository, SelectQueryBuilder } from "typeorm";
 import { Permission } from "../permissions/entities/permission.entity";
 
-import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse } from "./dto/responses";
+import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse, RoleDetailResponse, PermissionGroupSummary } from "./dto/responses";
 import { CreateRoleInput } from "./dto/inputs/create-role.input";
 import { SearchRolesInput } from "./dto/inputs/search-roles.input";
 import { GraphQLError } from "graphql";
@@ -714,6 +714,63 @@ export class RolesService {
     }
   }
 
+
+  async findRoleDetail(id: string): Promise<RoleDetailResponse> {
+    if (!validate(id)) {
+      throw new CustomError({
+        message: 'ID de rol inválido',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const role = await this.rolesRepository
+      .createQueryBuilder('role')
+      .leftJoinAndSelect('role.parent', 'parent')
+      .leftJoinAndSelect('role.children', 'children')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .where('role.id = :id', { id })
+      .getOne();
+
+    if (!role) {
+      throw new CustomError({
+        message: `Rol con id "${id}" no encontrado`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    const permissions = role.permissions ?? [];
+
+    const groupMap = new Map<string, Permission[]>();
+    for (const perm of permissions) {
+      const list = groupMap.get(perm.group) ?? [];
+      list.push(perm);
+      groupMap.set(perm.group, list);
+    }
+
+    const permissionsByGroup: PermissionGroupSummary[] = Array.from(groupMap.entries()).map(
+      ([group, perms]) => ({ group, count: perms.length, permissions: perms }),
+    );
+
+    return {
+      id: role.id,
+      name: role.name,
+      frontName: role.frontName,
+      icon: role.icon,
+      description: role.description,
+      hierarchyLevel: role.hierarchyLevel,
+      status: role.status,
+      isSystem: role.isSystem,
+      createdAt: role.createdAt,
+      updatedAt: role.updatedAt,
+      parent: role.parent ?? null,
+      children: role.children ?? [],
+      permissions,
+      permissionCount: permissions.length,
+      permissionsByGroup,
+    };
+  }
 
   async update(id: string, updateRoleInput: UpdateRoleInput): Promise<Role> {
     const queryRunner = this.dataSource.createQueryRunner();
