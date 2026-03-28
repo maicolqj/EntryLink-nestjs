@@ -20,6 +20,9 @@ import { ResidentialComplexService } from '../../residential-complex/services/re
 import { VisitorsService }         from './visitors.service';
 import { ResidentsService }        from '../../residents/services/residents.service';
 import { ResidentStatus }          from '../../residents/enums/resident-status.enum';
+import { AuditService }            from '../../audit/services/audit.service';
+import { AuditAction }             from '../../audit/enums/audit-action.enum';
+import { AuditEntityType }         from '../../audit/enums/audit-entity-type.enum';
 
 // Duración por defecto del QR: 48 horas
 const QR_DEFAULT_TTL_HOURS = 48;
@@ -34,6 +37,7 @@ export class VisitsService {
     private readonly visitorsService: VisitorsService,
     private readonly complexService:  ResidentialComplexService,
     private readonly residentsService: ResidentsService,
+    private readonly auditService:    AuditService,
   ) {}
 
   // ================================================================
@@ -88,6 +92,18 @@ export class VisitsService {
     this.logger.log(
       `Walk-in registrado: ${saved.id} — visitante: ${visitor.fullName} → unidad ${input.unitId}`,
     );
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, visitorId: visitor.id, unitId: input.unitId, status: saved.status },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       input.complexId,
+      description:     `Walk-in registrado: ${visitor.fullName} → unidad ${input.unitId}`,
+    });
 
     // TODO: Fase de notificaciones — notificar al residente en tiempo real via WebSocket
     return this.loadRelations(saved.id);
@@ -153,6 +169,19 @@ export class VisitsService {
 
     const saved = await this.visitRepo.save(visit);
     this.logger.log(`Visita agendada: ${saved.id} con QR ${saved.qrToken}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, visitorId: visitor.id, unitId: input.unitId, type: 'SCHEDULED', status: saved.status },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       input.complexId,
+      description:     `Visita agendada con QR: ${visitor.fullName} → unidad ${input.unitId}`,
+    });
+
     return this.loadRelations(saved.id);
   }
 
@@ -179,6 +208,20 @@ export class VisitsService {
 
     const saved = await this.visitRepo.save(visit);
     this.logger.log(`Visita aprobada por residente: ${visitId}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visitId,
+      action:          AuditAction.APPROVE,
+      previousValue:   { status: VisitStatus.PENDING_APPROVAL },
+      newValue:        { status: VisitStatus.APPROVED, approvedByResidentAt: saved.approvedByResidentAt },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Visita aprobada por residente`,
+    });
+
     // TODO: Notificar al guardia en tiempo real
     return this.loadRelations(saved.id);
   }
@@ -207,6 +250,20 @@ export class VisitsService {
     visit.denialReason        = reason;
 
     this.logger.warn(`Visita denegada por residente: ${visitId} — razón: ${reason}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visitId,
+      action:          AuditAction.REJECT,
+      previousValue:   { status: VisitStatus.PENDING_APPROVAL },
+      newValue:        { status: VisitStatus.DENIED, denialReason: reason },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Visita denegada — razón: ${reason}`,
+    });
+
     // TODO: Notificar al guardia en tiempo real
     return this.visitRepo.save(visit);
   }
@@ -233,6 +290,20 @@ export class VisitsService {
     visit.entryTime = new Date();
 
     this.logger.log(`Entrada registrada: ${visitId} a las ${visit.entryTime.toISOString()}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visitId,
+      action:          AuditAction.UPDATE,
+      previousValue:   { status: VisitStatus.APPROVED },
+      newValue:        { status: VisitStatus.INSIDE, entryTime: visit.entryTime },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Entrada de visitante registrada en unidad ${visit.unitId}`,
+    });
+
     return this.visitRepo.save(visit);
   }
 
@@ -293,6 +364,18 @@ export class VisitsService {
     await this.visitRepo.save(visit);
     this.logger.log(`QR validado y entrada registrada: visita ${visit.id}`);
 
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visit.id,
+      action:          AuditAction.APPROVE,
+      newValue:        { status: VisitStatus.INSIDE, entryTime: visit.entryTime, qrUsed: true },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Acceso por QR: ${visit.visitor?.fullName} → unidad ${visit.unitId}`,
+    });
+
     return {
       isValid:  true,
       message:  `Acceso autorizado. Bienvenido ${visit.visitor?.fullName}`,
@@ -326,6 +409,20 @@ export class VisitsService {
     if (notes) visit.notes        = notes;
 
     this.logger.log(`Salida registrada: ${visitId} a las ${visit.exitTime.toISOString()}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visitId,
+      action:          AuditAction.UPDATE,
+      previousValue:   { status: VisitStatus.INSIDE },
+      newValue:        { status: VisitStatus.COMPLETED, exitTime: visit.exitTime },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Salida de visitante registrada desde unidad ${visit.unitId}`,
+    });
+
     return this.visitRepo.save(visit);
   }
 
@@ -348,8 +445,23 @@ export class VisitsService {
       });
     }
 
+    const prevStatus = visit.status;
     visit.status = VisitStatus.CANCELLED;
     this.logger.log(`Visita cancelada: ${visitId} por ${currentUser.sub}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Visit,
+      entityId:        visitId,
+      action:          AuditAction.DELETE,
+      previousValue:   { status: prevStatus },
+      newValue:        { status: VisitStatus.CANCELLED },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       visit.complexId,
+      description:     `Visita cancelada`,
+    });
+
     return this.visitRepo.save(visit);
   }
 

@@ -12,12 +12,14 @@ import { VisitsResolver }   from './resolvers/visits.resolver';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule }          from '../residents/residents.module';
+import { AuditModule }              from '../audit/audit.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Visitor, Visit]),
     ResidentialComplexModule, // provee ResidentialComplexService y UnitService
     ResidentsModule,          // provee ResidentsService
+    AuditModule,
   ],
   providers: [
     VisitorsService,
