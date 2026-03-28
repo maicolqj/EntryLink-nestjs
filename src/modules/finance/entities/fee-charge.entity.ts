@@ -36,9 +36,9 @@ export class FeeCharge {
   @Column({ length: 7 })
   period: string;
 
-  @Field()
-  @Column({ type: 'date' })
-  dueDate: Date;
+  @Field(() => Date, { nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
+  dueDate: Date | null;
 
   // ─── Monto ────────────────────────────────────────────────────
 
@@ -50,6 +50,15 @@ export class FeeCharge {
   @Field(() => Float)
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   paidAmount: number;
+
+  /**
+   * Monto normal antes del descuento de pronto pago.
+   * Solo se establece cuando el cargo fue generado con earlyPaymentAmount < amount.
+   * El cron diario revierte `amount` a este valor si el cargo no fue pagado antes del vencimiento.
+   */
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  normalAmount?: number | null;
 
   /** Saldo pendiente = amount - paidAmount */
   @Field(() => Float)
@@ -91,9 +100,10 @@ export class FeeCharge {
   @Column()
   unitId: string;
 
-  @Field()
-  @Column()
-  feeConfigId: string;
+  /** Null para cargos directos (sin FeeConfig asociada) */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  feeConfigId?: string;
 
   // ─── Relaciones ───────────────────────────────────────────────
 
@@ -105,9 +115,9 @@ export class FeeCharge {
   @ManyToOne(() => Unit, { eager: false })
   unit: Unit;
 
-  @Field(() => FeeConfig)
-  @ManyToOne(() => FeeConfig, { eager: false })
-  feeConfig: FeeConfig;
+  @Field(() => FeeConfig, { nullable: true })
+  @ManyToOne(() => FeeConfig, { eager: false, nullable: true })
+  feeConfig?: FeeConfig;
 
   // ─── Auditoría ────────────────────────────────────────────────
 

@@ -1,11 +1,12 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, Min, Max, IsPositive, MaxLength,
+  IsNumber, Min, Max, IsPositive, MaxLength, IsInt,
 } from 'class-validator';
 
 import { FeeFrequency } from '../../enums/fee-frequency.enum';
-import { UnitType }     from '../../../residential-complex/enums/unit-type.enum';
+import { ChargeType } from '../../enums/charge-type.enum';
+import { UnitType } from '../../../residential-complex/enums/unit-type.enum';
 
 @InputType()
 export class CreateFeeConfigInput {
@@ -26,6 +27,12 @@ export class CreateFeeConfigInput {
   @IsNumber()
   @IsPositive()
   amount: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  earlyPaymentAmount?: number;
 
   @Field(() => FeeFrequency, { defaultValue: FeeFrequency.MONTHLY })
   @IsEnum(FeeFrequency)
@@ -48,9 +55,30 @@ export class CreateFeeConfigInput {
   @IsString()
   unitId?: string;
 
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
   /** Si se especifica, aplica a todas las unidades de este tipo */
   @Field(() => UnitType, { nullable: true })
   @IsOptional()
   @IsEnum(UnitType)
   unitType?: UnitType;
+
+  /** Tipo de recurrencia (MONTHLY por defecto) */
+  @Field(() => ChargeType, { defaultValue: ChargeType.MONTHLY })
+  @IsOptional()
+  @IsEnum(ChargeType)
+  chargeType?: ChargeType;
+
+  /**
+   * Solo aplica cuando chargeType = LIMITED.
+   * Número total de cuotas a generar.
+   */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  installments?: number;
 }
