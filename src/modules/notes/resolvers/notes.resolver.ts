@@ -11,11 +11,9 @@ import { CurrentUser }      from '../../shared/decorators/current-user.decorator
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
-import { Logger } from '@nestjs/common';
 
 @Resolver(() => Note)
 export class NotesResolver {
-  private readonly logger: Logger = new Logger(NotesResolver.name);
 
   constructor(private readonly notesService: NotesService) {}
 
@@ -57,7 +55,6 @@ export class NotesResolver {
     @Args('filters',    { nullable: true }) filters: FilterNotesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedNotesResponse> {
-    this.logger.warn(`DATOS RECIBIDOS EN EL CONTROLADOR complexId: ${complexId} `)
     return this.notesService.findNotesByComplex(complexId, pagination, filters, currentUser);
   }
 
