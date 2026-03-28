@@ -17,7 +17,14 @@ import { GeneralErrorCode, ParkingErrorCode, ResidentErrorCode } from '../../sha
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { ResidentsService } from '../../residents/services/residents.service';
-import { ResidentStatus } from '../../residents/enums/resident-status.enum';
+import { Resident }        from '../../residents/entities/resident.entity';
+import { ResidentStatus }  from '../../residents/enums/resident-status.enum';
+import { AuditService }   from '../../audit/services/audit.service';
+import { AuditAction }    from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType }     from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 
 @Injectable()
 export class VisitorParkingService {
@@ -30,8 +37,13 @@ export class VisitorParkingService {
     @InjectRepository(VisitorVehicle)
     private readonly vehicleRepo: Repository<VisitorVehicle>,
 
+    @InjectRepository(Resident)
+    private readonly residentRepo: Repository<Resident>,
+
     private readonly complexService: ResidentialComplexService,
     private readonly residentsService: ResidentsService,
+    private readonly auditService:    AuditService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   // ================================================================
@@ -170,6 +182,19 @@ export class VisitorParkingService {
     this.logger.log(
       `Ingreso vehículo [${input.plate}] al complejo ${input.complexId} — residente: ${input.hostResidentId}`,
     );
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.VisitorVehicle,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, plate: saved.plate, vehicleType: saved.vehicleType, status: saved.status, entryTime: saved.entryTime },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       input.complexId,
+      description:     `Ingreso de vehículo visitante [${input.plate}] — residente anfitrión: ${input.hostResidentId}`,
+    });
+
     return this.loadRelations(saved.id);
   }
 
@@ -235,12 +260,32 @@ export class VisitorParkingService {
 
     const saved = await this.vehicleRepo.save(vehicle);
 
-    
     this.logger.log(
-    `Salida vehículo [${vehicle.plate}] — ${exactMinutes.toFixed(2)} min reales → ` +
-    `${minutesToCharge} min cobrados × $${rateApplied}/min = $${parkingCost}`,
-  );
-    return this.loadRelations(saved.id);
+      `Salida vehículo [${vehicle.plate}] — ${exactMinutes.toFixed(2)} min reales → ` +
+      `${minutesToCharge} min cobrados × $${rateApplied}/min = $${parkingCost}`,
+    );
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.VisitorVehicle,
+      entityId:        saved.id,
+      action:          AuditAction.UPDATE,
+      previousValue:   { status: ParkingStatus.INSIDE },
+      newValue:        { status: ParkingStatus.EXITED, exitTime: saved.exitTime, minutesParked: saved.minutesParked, parkingCost: saved.parkingCost },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Salida vehículo visitante [${vehicle.plate}] — ${minutesToCharge} min → $${parkingCost}`,
+    });
+
+    const withRelations = await this.loadRelations(saved.id);
+
+    // Notificar al residente principal si se generó un cargo (fire-and-forget)
+    if (parkingCost > 0) {
+      this.notifyResidentsOfCharge(withRelations).catch(() => null);
+    }
+
+    return withRelations;
   }
 
   /**
@@ -278,7 +323,22 @@ export class VisitorParkingService {
     vehicle.cancellationReason = cancellationReason;
     vehicle.cancelledByUserId = currentUser.sub;
 
-    return this.vehicleRepo.save(vehicle);
+    const saved = await this.vehicleRepo.save(vehicle);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.VisitorVehicle,
+      entityId:        visitorVehicleId,
+      action:          AuditAction.DELETE,
+      previousValue:   { status: ParkingStatus.INSIDE },
+      newValue:        { status: ParkingStatus.CANCELLED, cancellationReason },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Registro de parqueadero cancelado — placa: ${vehicle.plate} — razón: ${cancellationReason}`,
+    });
+
+    return saved;
   }
 
   // ================================================================
@@ -401,6 +461,55 @@ export class VisitorParkingService {
         'registeredByUser',
         'exitRegisteredByUser',
       ],
+    });
+  }
+
+  /**
+   * Notifica al residente principal activo de la unidad visitada
+   * cuando se genera un cargo de parqueadero.
+   * Solo se llama cuando parkingCost > 0.
+   */
+  private async notifyResidentsOfCharge(vehicle: VisitorVehicle): Promise<void> {
+    const unitId = vehicle.hostResident?.unitId;
+    if (!unitId) return;
+
+    const mainResidents = await this.residentRepo.find({
+      where: {
+        unitId,
+        complexId:      vehicle.complexId,
+        status:         ResidentStatus.ACTIVE,
+        isMainResident: true,
+      },
+    });
+
+    const userIds = mainResidents.map(r => r.userId);
+    if (userIds.length === 0) return;
+
+    const cost = Number(vehicle.parkingCost ?? 0);
+    const totalFormatted = new Intl.NumberFormat('es-CO', {
+      style:                 'currency',
+      currency:              'COP',
+      maximumFractionDigits: 0,
+    }).format(cost);
+
+    const unitNumber = vehicle.hostResident?.unit?.number ?? unitId;
+
+    await this.notificationsService.notify({
+      complexId:  vehicle.complexId,
+      userIds,
+      type:       NotificationType.PARKING_ASSIGNED,
+      priority:   NotificationPriority.HIGH,
+      title:      'Cargo de parqueadero a tu unidad',
+      body:       `Se generó un cargo de ${totalFormatted} por parqueadero visitante (${vehicle.plate}). Revisa tu estado de cuenta.`,
+      entityId:   vehicle.id,
+      entityType: 'visitor_vehicle',
+      metadata: {
+        visitorVehicleId: vehicle.id,
+        plate:            vehicle.plate,
+        total:            cost,
+        unitNumber,
+        exitTime:         vehicle.exitTime?.toISOString(),
+      },
     });
   }
 }

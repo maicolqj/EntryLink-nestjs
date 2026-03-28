@@ -104,6 +104,21 @@ export class ResidentsResolver {
   }
 
   /**
+   * Deshace la baja de un residente (MOVED_OUT → ACTIVE).
+   * Reactiva el residente y marca la unidad como OCCUPIED.
+   */
+  @Mutation(() => Resident, { name: 'undoMoveOutResident' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+  })
+  undoMoveOut(
+    @Args('residentId') residentId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident> {
+    return this.residentsService.undoMoveOut(residentId, currentUser);
+  }
+
+  /**
    * Soft delete de un residente. Solo si NO está activo.
    */
   @Mutation(() => Boolean, { name: 'removeResident' })
