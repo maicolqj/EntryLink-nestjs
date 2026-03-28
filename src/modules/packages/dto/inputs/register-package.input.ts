@@ -56,6 +56,12 @@ export class RegisterPackageInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  recipientName?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   notes?: string;
 }

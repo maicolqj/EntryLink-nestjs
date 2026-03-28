@@ -48,10 +48,10 @@ export class PackagesResolver {
   @Mutation(() => Package, { name: 'markPackageAsNotified' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, 
       ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
     ],
-    permissions: [ValidPermissions.EDIT_PACKAGE],
+    permissions: [ValidPermissions.EDIT_PACKAGE],  
   })
   markAsNotified(
     @Args('packageId') packageId: string,
@@ -76,13 +76,13 @@ export class PackagesResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Package> {
     return this.packagesService.confirmDelivery(input, currentUser);
-  }
+  } 
 
   /**
    * Registra la devolución de un paquete al remitente.
    */
   @Mutation(() => Package, { name: 'returnPackage' })
-  @Auth({
+  @Auth({ 
     roles: [
       ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
       ValidRoles.SUPERVISOR_ROL,

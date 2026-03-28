@@ -63,7 +63,7 @@ export class PackagesService {
     const pkg = this.packageRepo.create({
       ...input,
       status: PackageStatus.RECEIVED,
-      registeredByUserId: currentUser.sub,
+      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.packageRepo.save(pkg);
@@ -141,7 +141,7 @@ export class PackagesService {
 
     pkg.status              = PackageStatus.DELIVERED;
     pkg.deliveredAt         = new Date();
-    pkg.deliveredByUserId   = currentUser.sub;
+    pkg.deliveredByUserId   = currentUser.entityType === 'user' ? currentUser.sub : undefined;
     if (receivedByName)     pkg.receivedByName     = receivedByName;
     if (receivedByIdentity) pkg.receivedByIdentity = receivedByIdentity;
     if (notes)              pkg.notes              = notes;
@@ -231,7 +231,9 @@ export class PackagesService {
     if (filters.receivedFrom) qb.andWhere('pkg.receivedAt >= :from', { from: new Date(filters.receivedFrom) });
     if (filters.receivedUntil) qb.andWhere('pkg.receivedAt <= :until', { until: new Date(filters.receivedUntil) });
 
-    qb.orderBy('pkg.receivedAt', 'DESC');
+    qb.leftJoinAndSelect('pkg.unit',    'unit')
+      .leftJoinAndSelect('pkg.complex', 'complex')
+      .orderBy('pkg.receivedAt', 'DESC');
 
     const totalItems = await qb.getCount();
     const items = await qb
@@ -271,6 +273,7 @@ export class PackagesService {
         { unitId, complexId, status: PackageStatus.NOTIFIED },
         { unitId, complexId, status: PackageStatus.READY_FOR_PICKUP },
       ],
+      relations: ['unit', 'complex'],
       order: { receivedAt: 'ASC' },
     });
   }
@@ -287,6 +290,14 @@ export class PackagesService {
     return pkg;
   }
 
+  /**
+   * Actualiza la URL de la foto del paquete (llamado desde el controller REST tras subir a Cloudinary).
+   */
+  async updatePhotoUrl(packageId: string, photoUrl: string): Promise<Package> {
+    await this.packageRepo.update(packageId, { photoUrl });
+    return this.findByIdOrFail(packageId);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // HELPERS PRIVADOS
   // ─────────────────────────────────────────────────────────────────────────────
@@ -294,6 +305,7 @@ export class PackagesService {
   private async findByIdOrFail(packageId: string): Promise<Package> {
     const pkg = await this.packageRepo.findOne({
       where: { id: packageId, deletedAt: null as any },
+      relations: ['unit', 'complex'],
     });
     if (!pkg) {
       throw new CustomError({
