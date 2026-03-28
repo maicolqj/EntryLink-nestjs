@@ -25,6 +25,7 @@ import { User } from '../users/entities/user.entity';
 
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
+import { MailModule } from '../../mail/mail.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     TypeOrmModule.forFeature([User, OtpCode, RefreshToken, UserSession]),
     BullModule.registerQueue({ name: OTP_QUEUE_NAME }),
     CacheModule,
+    MailModule,
   ],
   providers: [
     // Resolvers

@@ -77,6 +77,19 @@ export class ResidentialComplexResolver {
   }
 
   /**
+   * Actualiza los módulos habilitados de un complejo.
+   * Solo SUPER_ADMIN puede configurar esto.
+   */
+  @Mutation(() => ResidentialComplex, { name: 'updateComplexModules' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  updateComplexModules(
+    @Args('complexId') complexId: string,
+    @Args('modules', { type: () => [String] }) modules: string[],
+  ): Promise<ResidentialComplex> {
+    return this.complexService.updateModules(complexId, modules);
+  }
+
+  /**
    * Restaura un complejo eliminado.
    */
   @Mutation(() => ResidentialComplex, { name: 'restoreComplex' })

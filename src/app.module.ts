@@ -35,7 +35,6 @@ import { NotificationsModule }      from './modules/notifications/notifications.
 import { FinanceModule }            from './modules/finance/finance.module';
 import { VisitorParkingModule }    from './modules/visitor-parking/visitor-parking.module';
 import { NotesModule }            from './modules/notes/notes.module';
-import { AuditModule }           from './modules/audit/audit.module';
 
 @Module({
   imports: [
@@ -118,7 +117,6 @@ import { AuditModule }           from './modules/audit/audit.module';
     CacheModule,          // Global — disponible en todos los módulos
     BullConfigModule,     // Configura BullMQ con Redis
     CloudinaryModule,     // Global — subida de imágenes
-    ScheduleModule.forRoot(), // Cron jobs
 
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
@@ -136,7 +134,6 @@ import { AuditModule }           from './modules/audit/audit.module';
     FinanceModule,
     VisitorParkingModule,
     NotesModule,
-    AuditModule,
   ],
   providers: [
     // Aplica rate limiting globalmente a todos los endpoints REST y GraphQL

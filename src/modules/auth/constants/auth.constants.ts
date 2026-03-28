@@ -1,6 +1,7 @@
 export const AUTH_CONSTANTS = {
   // ── Tokens ──────────────────────────────────────────────────────────────
   ACCESS_TOKEN_EXPIRY: '15m',
+  PASSWORD_RESET_EXPIRY_MINUTES: 30,   // 30 minutos
   REFRESH_TOKEN_EXPIRY: '7d',
   REFRESH_TOKEN_EXPIRY_REMEMBER: '30d',
 
