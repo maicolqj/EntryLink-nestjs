@@ -45,6 +45,7 @@ export class ApplyWalletToChargeInput {
   @IsNotEmpty()
   chargeId: string;
 
+
   @Field(() => Float)
   @IsNumber()
   @IsPositive()

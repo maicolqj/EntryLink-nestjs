@@ -96,9 +96,9 @@ export class Payment {
   @Column()
   unitId: string;
 
-  @Field()
-  @Column()
-  registeredByUserId: string;
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  registeredByUserId: string | null;
 
   // ─── Relaciones ───────────────────────────────────────────────
 

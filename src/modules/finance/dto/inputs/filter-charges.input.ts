@@ -20,4 +20,16 @@ export class FilterChargesInput {
   @IsOptional()
   @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'Formato de período: YYYY-MM' })
   period?: string;
+
+  /** Búsqueda libre por número de unidad o nombre de torre (ILIKE) */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  unitSearch?: string;
+
+  /** Filtrar por concepto de cobro */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  feeConfigId?: string;
 }
