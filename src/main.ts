@@ -5,12 +5,21 @@ import moment from 'moment-timezone';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import * as os from 'os';
+import * as express from 'express';
+import * as helmet from 'helmet';
 import { UniversalExceptionFilter } from './modules/shared/filters/custom-errors.filters';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['debug', 'error', 'fatal', 'log', 'verbose', 'warn']
   });
+
+  // Cabeceras de seguridad HTTP
+  app.use(helmet.default());
+
+  // Aumentar límite del body parser para GraphQL (queries/mutations con payloads grandes)
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   const prefix = 'api/v1';
   app.useGlobalFilters(new UniversalExceptionFilter());
