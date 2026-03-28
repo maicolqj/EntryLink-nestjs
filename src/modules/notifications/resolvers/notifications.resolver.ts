@@ -3,15 +3,21 @@ import { Resolver, Query, Mutation, Subscription, Args, Int } from '@nestjs/grap
 import { Notification }                   from '../entities/notification.entity';
 import { NotificationsService }           from '../services/notifications.service';
 import { FilterNotificationsInput }       from '../dto/inputs/filter-notifications.input';
+import { SavePushSubscriptionInput }      from '../dto/inputs/save-push-subscription.input';
+import { SaveMobileTokenInput }           from '../dto/inputs/save-mobile-token.input';
+import { SendNotificationInput }          from '../dto/inputs/send-notification.input';
 import { PaginatedNotificationsResponse } from '../dto/responses/paginated-notifications.response';
 import { UnreadCountResponse }            from '../dto/responses/unread-count.response';
-import { PaginationInput }                from '../../shared/dto/inputs/pagination.input';
+import { PushSubscriptionResult }              from '../dto/responses/push-subscription-result.response';
+import { SendNotificationResult }              from '../dto/responses/send-notification.response';
+import { SentNotificationPaginatedResult }     from '../dto/responses/sent-notifications.response';
+import { TriggerPanicAlertResult }             from '../dto/responses/trigger-panic-alert.response';
+import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
 import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
-import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Notification)
 export class NotificationsResolver {
@@ -47,6 +53,62 @@ export class NotificationsResolver {
     return this.notificationsService.markAllAsRead(complexId, currentUser);
   }
 
+  /**
+   * Envía una notificación masiva al complejo.
+   * Solo disponible para administradores del complejo y supervisores.
+   */
+  @Mutation(() => SendNotificationResult, { name: 'sendNotification' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
+  })
+  sendNotification(
+    @Args('input') input: SendNotificationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<SendNotificationResult> {
+    return this.notificationsService.sendNotification(input, currentUser);
+  }
+
+  /**
+   * Registra o actualiza una suscripción Web Push para el dashboard web.
+   */
+  @Mutation(() => PushSubscriptionResult, { name: 'savePushSubscription' })
+  @Auth()
+  savePushSubscription(
+    @Args('input') input: SavePushSubscriptionInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PushSubscriptionResult> {
+    return this.notificationsService.savePushSubscription(input, currentUser);
+  }
+
+  /**
+   * Activa una alerta de pánico. Disponible para RESIDENT_ROL y SECURITY_ROL.
+   * El routing de destinatarios se determina automáticamente según el rol y la unidad del activador.
+   */
+  @Mutation(() => TriggerPanicAlertResult, { name: 'triggerPanicAlert' })
+  @Auth({ roles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL] })
+  triggerPanicAlert(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<TriggerPanicAlertResult> {
+    return this.notificationsService.triggerPanicAlert(complexId, currentUser);
+  }
+
+  /**
+   * Registra o activa un token FCM de dispositivo móvil (Android / iOS).
+   */
+  @Mutation(() => PushSubscriptionResult, { name: 'saveMobileToken' })
+  @Auth()
+  saveMobileToken(
+    @Args('input') input: SaveMobileTokenInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PushSubscriptionResult> {
+    return this.notificationsService.saveMobileToken(input, currentUser);
+  }
+
   // ================================================================
   // QUERIES
   // ================================================================
@@ -66,6 +128,27 @@ export class NotificationsResolver {
   }
 
   /**
+   * Lista todas las notificaciones del complejo (para admins/staff).
+   * Útil para que el panel de administración vea comunicados enviados a residentes.
+   */
+  @Query(() => PaginatedNotificationsResponse, { name: 'complexNotifications' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
+  findByComplex(
+    @Args('complexId')                      complexId: string,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters',    { nullable: true }) filters: FilterNotificationsInput = {},
+  ): Promise<PaginatedNotificationsResponse> {
+    return this.notificationsService.findByComplex(complexId, pagination, filters);
+  }
+
+  /**
    * Número de notificaciones no leídas del usuario en el complejo.
    * Ideal para el badge del ícono de campana en la app.
    */
@@ -78,6 +161,35 @@ export class NotificationsResolver {
     return this.notificationsService.getUnreadCount(complexId, currentUser);
   }
 
+  /**
+   * Historial paginado de envíos masivos realizados por el usuario autenticado.
+   * Solo disponible para administradores del complejo y supervisores.
+   */
+  @Query(() => SentNotificationPaginatedResult, { name: 'sentNotifications' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
+  })
+  sentNotifications(
+    @Args('complexId')                      complexId: string,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<SentNotificationPaginatedResult> {
+    return this.notificationsService.sentNotifications(complexId, pagination, currentUser);
+  }
+
+  /**
+   * Retorna la clave pública VAPID para configurar el Service Worker del dashboard.
+   * No requiere autenticación.
+   */
+  @Query(() => String, { name: 'vapidPublicKey' })
+  vapidPublicKey(): string {
+    return this.notificationsService.getVapidPublicKey();
+  }
+
   // ================================================================
   // SUBSCRIPTIONS — Tiempo real via graphql-ws
   // ================================================================
@@ -85,22 +197,9 @@ export class NotificationsResolver {
   /**
    * Suscripción en tiempo real.
    * El cliente recibe notificaciones nuevas sin necesidad de polling.
-   *
-   * Uso en el cliente (graphql-ws):
-   *   subscription {
-   *     notificationAdded(complexId: "uuid") { id title body type isRead createdAt }
-   *   }
-   *
-   * El token JWT se envía en el header de conexión WebSocket y el contexto
-   * del gateway lo inyecta en `connection.context.user`.
    */
   @Subscription(() => Notification, {
     name: 'notificationAdded',
-    /**
-     * `filter` se ejecuta en el servidor por cada evento publicado.
-     * Aquí no filtramos en el decorator porque ya lo hace el filterIterator
-     * del servicio. Lo dejamos como pass-through.
-     */
     filter: () => true,
     resolve: (payload: { notificationAdded: Notification }) => payload.notificationAdded,
   })
