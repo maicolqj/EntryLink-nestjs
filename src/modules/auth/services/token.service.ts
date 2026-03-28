@@ -7,6 +7,8 @@ import { Repository, LessThan } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../../users/entities/user.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { Role } from '../../roles/entities/role.entity';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { JwtAccessPayload, JwtRefreshPayload, DeviceInfo, TokenPair } from '../interfaces/jwt-payload.interface';
@@ -24,14 +26,74 @@ export class TokenService {
     private readonly cacheService: CacheService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(ResidentialComplex)
+    private readonly complexRepo: Repository<ResidentialComplex>,
+    @InjectRepository(Role)
+    private readonly roleRepo: Repository<Role>,
   ) { }
 
-  async generateTokenPair(user: User, deviceInfo: DeviceInfo, rememberMe = false): Promise<TokenPair> {
+  async generateTokenPair(user: User, deviceInfo: DeviceInfo, rememberMe = false, entityType: 'user' | 'complex' = 'user'): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
-    const accessToken = await this.generateAccessToken(user, sessionId);
-    const refreshToken = await this.generateRefreshToken(user.id, sessionId, tokenFamily, deviceInfo, rememberMe);
+    const accessToken = await this.generateAccessToken(user, sessionId, entityType);
+    const refreshToken = await this.generateRefreshToken(user.id, sessionId, tokenFamily, deviceInfo, rememberMe, entityType);
     return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId };
+  }
+
+  /**
+   * Genera un par de tokens para un ResidentialComplex.
+   * sub  = complex.id  (no el owner)
+   * email = complex.email
+   * tokenVersion = complex.tokenVersion
+   * roles/permissions = del owner (complex.owner debe estar cargado)
+   * El refresh token usa complex.ownerId como userId (FK a users).
+   */
+  async generateTokenPairForComplex(complex: ResidentialComplex, deviceInfo: DeviceInfo, rememberMe = false): Promise<TokenPair> {
+    const sessionId = this.generateSecureId();
+    const tokenFamily = this.generateSecureId();
+    const accessToken = await this.generateAccessTokenForComplex(complex, sessionId);
+    const refreshToken = await this.generateRefreshToken(
+      complex.ownerId,
+      sessionId,
+      tokenFamily,
+      deviceInfo,
+      rememberMe,
+      'complex',
+      complex.id,
+    );
+    return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId };
+  }
+
+  private async generateAccessTokenForComplex(complex: ResidentialComplex, sessionId: string): Promise<string> {
+    const complexRole = await this.roleRepo.findOne({
+      where: { name: ValidRoles.COMPLEX_ROL },
+      relations: ['permissions'],
+    });
+
+    const permissions: ValidPermissions[] = (complexRole?.permissions ?? [])
+      .map(p => p.name as ValidPermissions)
+      .filter(p => Object.values(ValidPermissions).includes(p));
+
+    const payload: JwtAccessPayload = {
+      sub: complex.id,
+      email: complex.email ?? '',
+      type: 'access',
+      entityType: 'complex',
+      tokenVersion: complex.tokenVersion ?? 0,
+      sessionId,
+      roles: [ValidRoles.COMPLEX_ROL],
+      permissions,
+      complexId: complex.id,
+    };
+
+    const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    const issuer = this.configService.get<string>('JWT_ISSUER');
+
+    return this.jwtService.signAsync(payload, {
+      secret,
+      expiresIn: AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY,
+      issuer,
+    });
   }
 
   private extractRoles(user: User): ValidRoles[] {
@@ -55,11 +117,12 @@ export class TokenService {
     return Array.from(perms);
   }
 
-private async generateAccessToken(user: User, sessionId: string): Promise<string> {
+private async generateAccessToken(user: User, sessionId: string, entityType: 'user' | 'complex' = 'user'): Promise<string> {
   const payload: JwtAccessPayload = {
     sub: user.id,
     email: user.email,
     type: 'access',
+    entityType,
     tokenVersion: user.tokenVersion ?? 0,
     sessionId,
     roles: this.extractRoles(user),
@@ -93,12 +156,12 @@ private async generateAccessToken(user: User, sessionId: string): Promise<string
   return token;
 }
 
-  private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean): Promise<string> {
+  private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean, entityType: 'user' | 'complex' = 'user', complexId?: string): Promise<string> {
     const tokenId = this.generateSecureId();
     const expiresIn = rememberMe ? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER : AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: userId, type: 'refresh', sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+      { sub: userId, type: 'refresh', entityType, complexId, sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
       { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn, jwtid: tokenId }
     );
 
@@ -130,21 +193,46 @@ private async generateAccessToken(user: User, sessionId: string): Promise<string
   
     await this.refreshTokenRepo.update(storedToken.id, { isRevoked: true, revokedReason: 'rotated', lastUsedAt: new Date() });
 
-    const accessToken = await this.generateAccessToken(storedToken.user, storedToken.sessionId);
+    const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
-    const refreshToken = await this.jwtService.signAsync(
-      { sub: storedToken.user.id, type: 'refresh', sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint },
-      { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY, jwtid: tokenId }
-    );
+    let accessToken: string;
+    let newRefreshToken: string;
+
+    if (entityType === 'complex' && payload.complexId) {
+      // Recargar el complejo con el owner para reconstruir el token de complejo
+      const complex = await this.complexRepo
+        .createQueryBuilder('complex')
+        .leftJoinAndSelect('complex.owner', 'owner')
+        .leftJoinAndSelect('owner.userRoles', 'userRoles')
+        .leftJoinAndSelect('userRoles.role', 'role')
+        .leftJoinAndSelect('role.permissions', 'permissions')
+        .where('complex.id = :id', { id: payload.complexId })
+        .andWhere('complex.deleted_at IS NULL')
+        .getOne();
+
+      if (!complex) throw new UnauthorizedException('Complejo no encontrado o eliminado');
+
+      accessToken = await this.generateAccessTokenForComplex(complex, storedToken.sessionId);
+      newRefreshToken = await this.jwtService.signAsync(
+        { sub: storedToken.user.id, type: 'refresh', entityType, complexId: complex.id, sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+        { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY, jwtid: tokenId }
+      );
+    } else {
+      accessToken = await this.generateAccessToken(storedToken.user, storedToken.sessionId, 'user');
+      newRefreshToken = await this.jwtService.signAsync(
+        { sub: storedToken.user.id, type: 'refresh', entityType: 'user', sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+        { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY, jwtid: tokenId }
+      );
+    }
 
     await this.refreshTokenRepo.save({
-      id: tokenId, userId: storedToken.user.id, tokenHash: this.hashToken(refreshToken), tokenFamily: payload.tokenFamily,
+      id: tokenId, userId: storedToken.user.id, tokenHash: this.hashToken(newRefreshToken), tokenFamily: payload.tokenFamily,
       sessionId: storedToken.sessionId, deviceFingerprint: deviceInfo.fingerprint,
       deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform },
       expiresAt: this.calculateExpiry(AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY), lastUsedAt: new Date(),
     });
 
-    return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId: storedToken.sessionId };
+    return { accessToken, refreshToken: newRefreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId: storedToken.sessionId };
   }
 
   async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {

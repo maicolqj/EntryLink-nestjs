@@ -2,6 +2,7 @@ import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { AuthService } from './services/auth.service';
 import { LoginEmailInput } from './dto/inputs/login-email.input';
+import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
@@ -10,10 +11,14 @@ import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from './interfaces/jwt-payload.interface';
 import { Public } from '../shared/decorators/public.decorator';
+import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
+import { ValidRoles } from '../roles/enums/valid-roles';
+import { Auth } from '../shared/decorators/auth.decorator';
+import { SetPasswordResponse } from './dto/responses/set-password.response';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // ── Login por email (SUPER_ADMIN, COMPLIANCE_OFFICER, COMPLEX_ROL) ──────
 
@@ -22,7 +27,7 @@ export class AuthResolver {
     name: 'loginWithEmail',
     description:
       'Inicia sesión con email y contraseña. ' +
-      'Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL',
+      'Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL',
   })
   async loginWithEmail(
     @Args('input') input: LoginEmailInput,
@@ -30,6 +35,23 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.loginWithEmail(input, deviceInfo);
+  }
+
+  // ── Login por email + código de sistema ──────────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'loginWithSystemCode',
+    description:
+      'Inicia sesión con email y código de sistema. ' +
+      'Disponible para: SUPERVISOR_ROL, SECURITY_ROL, RESIDENT_ROL',
+  })
+  async loginWithSystemCode(
+    @Args('input') input: LoginSystemCodeInput,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.loginWithSystemCode(input, deviceInfo);
   }
 
   // ── OTP: Solicitar código (RESIDENT_ROL) ─────────────────────────────────
@@ -64,6 +86,55 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.verifyOtp(input, deviceInfo);
+  }
+
+  // ── QR Login: Generar token ───────────────────────────────────────────────
+
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Mutation(() => QrLoginTokenResponse, {
+    name: 'generateQrLoginToken',
+    description:
+      'Genera un token QR de un solo uso (72 h de vigencia) para que un usuario inicie sesión sin contraseña. ' +
+      'Solo accesible por SUPER_ADMIN.',
+  })
+  async generateQrLoginToken(
+    @Args('complexId', { type: () => String }) complexId: string,
+  ): Promise<QrLoginTokenResponse> {
+    return this.authService.generateQrLoginToken(complexId);
+  }
+
+  // ── QR Login: Canjear token ───────────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'redeemQrToken',
+    description:
+      'Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del documento). ' +
+      'No requiere autenticación previa.',
+  })
+  async redeemQrToken(
+    @Args('token', { type: () => String }) token: string,
+    @Args('pin', { type: () => String }) pin: string,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.redeemQrToken(token, pin, deviceInfo);
+  }
+
+  // ── Establecer contraseña inicial ────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Mutation(() => SetPasswordResponse, {
+    name: 'setInitialPassword',
+    description:
+      'Establece la contraseña inicial del usuario autenticado. ' +
+      'Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.',
+  })
+  async setInitialPassword(
+    @Args('newPassword', { type: () => String }) newPassword: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<SetPasswordResponse> {
+    return this.authService.setInitialPassword(payload.sub, newPassword);
   }
 
   // ── Refresh Token ────────────────────────────────────────────────────────

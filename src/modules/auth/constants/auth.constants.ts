@@ -15,10 +15,10 @@ export const AUTH_CONSTANTS = {
   // ── Login por email ──────────────────────────────────────────────────────
   MAX_LOGIN_ATTEMPTS: 5,
   LOGIN_BLOCK_DURATION: 15 * 60,     // 15 minutos en segundos
-  MAX_IP_ATTEMPTS: 20,
+  MAX_IP_ATTEMPTS: 60 /* //?20 */,
 
   // ── Sesiones ─────────────────────────────────────────────────────────────
-  MAX_SESSIONS_PER_USER: 5,
+  MAX_SESSIONS_PER_USER: 5, 
 
   // ── Cache prefixes ───────────────────────────────────────────────────────
   CACHE_PREFIX: {
