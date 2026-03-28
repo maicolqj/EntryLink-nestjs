@@ -211,6 +211,15 @@ export enum ValidPermissions {
   /** Configurar y ejecutar la rotación de parqueaderos del complejo. ➜ Nivel: [HIGH] */
   MANAGE_PARKING_ROTATION    = 'MANAGE_PARKING_ROTATION',
 
+  /** Configurar parámetros de rotación (slots, intervalo). ➜ Nivel: [HIGH] */
+  CONFIGURE_ROTATION         = 'CONFIGURE_ROTATION',
+
+  /** Ejecutar manualmente un ciclo de rotación. ➜ Nivel: [HIGH] */
+  EXECUTE_ROTATION           = 'EXECUTE_ROTATION',
+
+  /** Ver el estado actual de la rotación de parqueaderos. ➜ Nivel: [LOW] */
+  VIEW_ROTATION              = 'VIEW_ROTATION',
+
   // ═══════════════════════════════════════════════════════
   // FINANZAS
   // ═══════════════════════════════════════════════════════

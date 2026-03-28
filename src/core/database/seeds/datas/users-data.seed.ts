@@ -11,11 +11,15 @@ export interface UserSeedData {
     identity: string
     email: string
     password: string
+    systemCode: string
     phoneVerified: boolean
     emailVerified: boolean
     identityVerified: boolean
     dateOfBirth: Date
     gender: Gender
+    bio: string,
+    rating: number,
+    preferredLanguage: string
     acceptsMarketing: boolean
     acceptTermsAdnConditions: boolean,
     userRoles: UserRole[]
@@ -41,10 +45,14 @@ export const USER_TO_SEED: UserSeedData[] = [
         identityVerified: true,
         dateOfBirth: new Date('1995-11-07T15:30:00.000Z'),
         gender: Gender.MALE,
+        bio: 'Administradir del sistema',
+        rating: 5,
+        preferredLanguage: 'es-CO',
+        systemCode: 'REs-2026-2620',
         acceptsMarketing: true,
         acceptTermsAdnConditions: true,
         userRoles: [
-            
-        ]
+
+        ] 
     },
 ]

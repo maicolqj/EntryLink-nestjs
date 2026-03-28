@@ -42,11 +42,11 @@ export class CreateStaffMemberInput {
   @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
   phoneNumber: string;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(20)
-  identityNumber: string;
+  identityNumber?: string;
 
   @Field(() => String)
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })
