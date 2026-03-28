@@ -35,6 +35,9 @@ import { NotificationsModule }      from './modules/notifications/notifications.
 import { FinanceModule }            from './modules/finance/finance.module';
 import { VisitorParkingModule }    from './modules/visitor-parking/visitor-parking.module';
 import { NotesModule }            from './modules/notes/notes.module';
+import { AuditModule }           from './modules/audit/audit.module';
+import { MailModule }             from './mail/mail.module';
+import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-board.module';
 
 @Module({
   imports: [
@@ -134,6 +137,7 @@ import { NotesModule }            from './modules/notes/notes.module';
     FinanceModule,
     VisitorParkingModule,
     NotesModule,
+    AuditModule,
   ],
   providers: [
     // Aplica rate limiting globalmente a todos los endpoints REST y GraphQL
