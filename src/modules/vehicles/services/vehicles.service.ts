@@ -22,8 +22,11 @@ import { GeneralErrorCode, LogisticsErrorCode } from '../../shared/constans/erro
 import { JwtAccessPayload }          from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }                from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { AuditService }              from '../../audit/services/audit.service';
+import { AuditAction }               from '../../audit/enums/audit-action.enum';
+import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
+import { UnitService }               from '../../residential-complex/services/unit.service';
 import { ResidentsService }          from '../../residents/services/residents.service';
-import { ResidentStatus }            from '../../residents/enums/resident-status.enum';
 
 // Tipos de vehículo que NO ocupan cupo de parqueadero vehicular
 const NON_PARKING_TYPES = new Set([VehicleType.BICYCLE, VehicleType.ELECTRIC_SCOOTER]);
@@ -40,8 +43,10 @@ export class VehiclesService {
     private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(ParkingRotationConfig)
     private readonly rotationConfigRepo: Repository<ParkingRotationConfig>,
-    private readonly complexService:  ResidentialComplexService,
+    private readonly complexService:   ResidentialComplexService,
+    private readonly unitService:      UnitService,
     private readonly residentsService: ResidentsService,
+    private readonly auditService:     AuditService,
   ) {}
 
   // ================================================================
@@ -55,20 +60,12 @@ export class VehiclesService {
     // 1. Verificar acceso al complejo
     await this.complexService.findById(input.complexId, currentUser);
 
-    // 2. Verificar que el residente existe y está ACTIVO en el complejo
-    const resident = await this.residentsService.findById(input.residentId, currentUser);
+    // 2. Verificar que la unidad existe y pertenece al complejo
+    const unit = await this.unitService.findById(input.unitId, currentUser);
 
-    if (resident.status !== ResidentStatus.ACTIVE) {
+    if (unit.complexId !== input.complexId) {
       throw new CustomError({
-        message: 'Solo se pueden registrar vehículos para residentes activos',
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: GeneralErrorCode.BAD_REQUEST,
-      });
-    }
-
-    if (resident.complexId !== input.complexId) {
-      throw new CustomError({
-        message: 'El residente no pertenece al complejo indicado',
+        message: 'La unidad no pertenece al complejo indicado',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
@@ -98,21 +95,33 @@ export class VehiclesService {
     const needsParkingSlot = !NON_PARKING_TYPES.has(input.type ?? VehicleType.CAR);
 
     if (needsParkingSlot) {
-      await this.assertParkingAvailable(resident.unitId, input.complexId);
+      await this.assertParkingAvailable(input.unitId, input.complexId);
     }
 
-    // 5. Crear el vehículo en PENDING_APPROVAL
+    // 5. Crear el vehículo
     const vehicle = this.vehicleRepo.create({
       ...input,
       plate,
-      unitId: resident.unitId,
       status: VehicleStatus.ACTIVE,
     });
 
     const saved = await this.vehicleRepo.save(vehicle);
     this.logger.log(
-      `Vehículo registrado: ${saved.id} — placa ${plate} — residente ${input.residentId}`,
+      `Vehículo registrado: ${saved.id} — placa ${plate} — unidad ${input.unitId}`,
     );
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, plate: saved.plate, type: saved.type, status: saved.status, unitId: input.unitId, complexId: input.complexId },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       input.complexId,
+      description:     `Vehículo registrado: placa ${plate} — unidad ${input.unitId}`,
+    });
+
     return this.loadRelations(saved.id);
   }
 
@@ -142,6 +151,20 @@ export class VehiclesService {
 
     const saved = await this.vehicleRepo.save(vehicle);
     this.logger.log(`Vehículo aprobado: ${vehicle.id} — placa ${vehicle.plate}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        vehicle.id,
+      action:          AuditAction.APPROVE,
+      previousValue:   { status: VehicleStatus.PENDING_APPROVAL },
+      newValue:        { status: VehicleStatus.ACTIVE, parkingSpot: input.parkingSpot },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Vehículo aprobado: placa ${vehicle.plate}`,
+    });
+
     return this.loadRelations(saved.id);
   }
 
@@ -169,7 +192,22 @@ export class VehiclesService {
     vehicle.approvedByUserId = currentUser.sub;
 
     this.logger.warn(`Vehículo rechazado: ${vehicle.id} — razón: ${reason}`);
-    return this.vehicleRepo.save(vehicle);
+    const saved = await this.vehicleRepo.save(vehicle);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        vehicle.id,
+      action:          AuditAction.REJECT,
+      previousValue:   { status: VehicleStatus.PENDING_APPROVAL },
+      newValue:        { status: VehicleStatus.REJECTED, reason },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Vehículo rechazado: placa ${vehicle.plate} — razón: ${reason}`,
+    });
+
+    return saved;
   }
 
   // ================================================================
@@ -194,7 +232,22 @@ export class VehiclesService {
     vehicle.status          = VehicleStatus.SUSPENDED;
     vehicle.rejectionReason = reason;
     this.logger.warn(`Vehículo suspendido: ${vehicle.id} — ${vehicle.plate}`);
-    return this.vehicleRepo.save(vehicle);
+    const savedSuspend = await this.vehicleRepo.save(vehicle);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        vehicle.id,
+      action:          AuditAction.SUSPEND,
+      previousValue:   { status: VehicleStatus.ACTIVE },
+      newValue:        { status: VehicleStatus.SUSPENDED, reason },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Vehículo suspendido: placa ${vehicle.plate} — razón: ${reason}`,
+    });
+
+    return savedSuspend;
   }
 
   async reactivate(
@@ -213,7 +266,22 @@ export class VehiclesService {
 
     vehicle.status          = VehicleStatus.ACTIVE;
     vehicle.rejectionReason = null;
-    return this.vehicleRepo.save(vehicle);
+    const savedReactivate = await this.vehicleRepo.save(vehicle);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        vehicle.id,
+      action:          AuditAction.ACTIVATE,
+      previousValue:   { status: VehicleStatus.SUSPENDED },
+      newValue:        { status: VehicleStatus.ACTIVE },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Vehículo reactivado: placa ${vehicle.plate}`,
+    });
+
+    return savedReactivate;
   }
 
   // ================================================================
@@ -239,6 +307,20 @@ export class VehiclesService {
     await this.vehicleRepo.save(vehicle);
 
     this.logger.log(`Vehículo retirado: ${vehicleId} — placa ${vehicle.plate}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Vehicle,
+      entityId:        vehicleId,
+      action:          AuditAction.DELETE,
+      previousValue:   { status: vehicle.status },
+      newValue:        { status: VehicleStatus.REMOVED, deletedAt: vehicle.deletedAt },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       vehicle.complexId,
+      description:     `Vehículo retirado del complejo: placa ${vehicle.plate}`,
+    });
+
     return {
       success: true,
       message: `Vehículo con placa ${vehicle.plate} retirado del complejo`,
@@ -446,6 +528,8 @@ export class VehiclesService {
       where: { complexId: input.complexId },
     });
 
+    const actorUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
+
     if (!config) {
       config = this.rotationConfigRepo.create({
         complexId:              input.complexId,
@@ -454,14 +538,14 @@ export class VehiclesService {
         slotsByType,
         isActive:               input.isActive ?? true,
         grandCycleByType:       {},
-        createdByUserId:        currentUser.sub,
+        createdByUserId:        actorUserId,
       });
     } else {
       config.rotationIntervalValue = input.rotationIntervalValue;
       config.rotationIntervalUnit  = input.rotationIntervalUnit;
       config.slotsByType           = slotsByType;
       if (input.isActive !== undefined) config.isActive = input.isActive;
-      config.updatedByUserId = currentUser.sub;
+      config.updatedByUserId = actorUserId;
     }
 
     // Calcular próxima ejecución desde ahora

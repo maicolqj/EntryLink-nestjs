@@ -8,6 +8,9 @@ import { FilterVehiclesInput }       from '../dto/inputs/filter-vehicles.input';
 import { ApproveVehicleInput }       from '../dto/inputs/approve-vehicle.input';
 import { PaginatedVehiclesResponse } from '../dto/responses/paginated-vehicles.response';
 import { PlateCheckResponse }        from '../dto/responses/plate-check.response';
+import { ConfigureRotationInput }    from '../dto/inputs/configure-rotation.input';
+import { ParkingRotationConfig }     from '../entities/parking-rotation-config.entity';
+import { RotationStatusResponse }    from '../dto/responses/rotation-status.response';
 import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
@@ -234,5 +237,48 @@ export class VehiclesResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Vehicle> {
     return this.vehiclesService.findById(id, currentUser);
+  }
+
+  // ================================================================
+  // ROTACIÓN DE PARQUEADEROS
+  // ================================================================
+
+  @Mutation(() => ParkingRotationConfig, { name: 'configureRotation' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.CONFIGURE_ROTATION],
+  })
+  configureRotation(
+    @Args('input') input: ConfigureRotationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ParkingRotationConfig> {
+    return this.vehiclesService.configureRotation(input, currentUser);
+  }
+
+  @Mutation(() => RotationStatusResponse, { name: 'executeRotation' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EXECUTE_ROTATION],
+  })
+  executeRotation(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<RotationStatusResponse> {
+    return this.vehiclesService.executeRotation(complexId, currentUser);
+  }
+
+  @Query(() => RotationStatusResponse, { name: 'rotationStatus' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,  ValidRoles.ACCOUNTANT_ROL,
+    ],
+    permissions: [ValidPermissions.VIEW_ROTATION],
+  })
+  rotationStatus(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<RotationStatusResponse> {
+    return this.vehiclesService.getRotationStatus(complexId, currentUser);
   }
 }
