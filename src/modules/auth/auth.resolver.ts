@@ -5,11 +5,17 @@ import { LoginEmailInput } from './dto/inputs/login-email.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
+import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
+import { SetPasswordResponse } from './dto/responses/set-password.response';
+import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
+import { ResetPasswordInput } from './dto/inputs/reset-password.input';
 import { DeviceInfo } from './interfaces/jwt-payload.interface';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from './interfaces/jwt-payload.interface';
 import { Public } from '../shared/decorators/public.decorator';
+import { Auth } from '../shared/decorators/auth.decorator';
+import { ValidRoles } from '../roles/enums/valid-roles';
 
 @Resolver()
 export class AuthResolver {
@@ -66,6 +72,55 @@ export class AuthResolver {
     return this.authService.verifyOtp(input, deviceInfo);
   }
 
+  // ── QR Login: Generar token ───────────────────────────────────────────────
+
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Mutation(() => QrLoginTokenResponse, {
+    name: 'generateQrLoginToken',
+    description:
+      'Genera un token QR de un solo uso (72 h de vigencia) para que un usuario inicie sesión sin contraseña. ' +
+      'Solo accesible por SUPER_ADMIN.',
+  })
+  async generateQrLoginToken(
+    @Args('userId', { type: () => String }) userId: string,
+  ): Promise<QrLoginTokenResponse> {
+    return this.authService.generateQrLoginToken(userId);
+  }
+
+  // ── QR Login: Canjear token ───────────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'redeemQrToken',
+    description:
+      'Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del documento). ' +
+      'No requiere autenticación previa.',
+  })
+  async redeemQrToken(
+    @Args('token', { type: () => String }) token: string,
+    @Args('pin', { type: () => String }) pin: string,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.redeemQrToken(token, pin, deviceInfo);
+  }
+
+  // ── Establecer contraseña inicial ────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Mutation(() => SetPasswordResponse, {
+    name: 'setInitialPassword',
+    description:
+      'Establece la contraseña inicial del usuario autenticado. ' +
+      'Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.',
+  })
+  async setInitialPassword(
+    @Args('newPassword', { type: () => String }) newPassword: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<SetPasswordResponse> {
+    return this.authService.setInitialPassword(payload.sub, newPassword);
+  }
+
   // ── Refresh Token ────────────────────────────────────────────────────────
 
   @Public()
@@ -94,6 +149,34 @@ export class AuthResolver {
   ): Promise<boolean> {
     const accessToken = context.req?.headers?.authorization?.replace('Bearer ', '') ?? '';
     return this.authService.logout(payload.sub, payload.sessionId, accessToken);
+  }
+
+  // ── Reset de contraseña por email ────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => RequestPasswordResetResponse, {
+    name: 'requestPasswordReset',
+    description:
+      'Solicita un enlace de restablecimiento de contraseña por email. ' +
+      'Siempre devuelve respuesta genérica para no revelar si el email existe.',
+  })
+  async requestPasswordReset(
+    @Args('email', { type: () => String }) email: string,
+  ): Promise<RequestPasswordResetResponse> {
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Public()
+  @Mutation(() => SetPasswordResponse, {
+    name: 'resetPassword',
+    description:
+      'Restablece la contraseña usando el token recibido por email. ' +
+      'El token es de un solo uso y tiene una validez de 30 minutos.',
+  })
+  async resetPassword(
+    @Args('input') input: ResetPasswordInput,
+  ): Promise<SetPasswordResponse> {
+    return this.authService.resetPassword(input.token, input.newPassword);
   }
 
   // ── Helpers privados ─────────────────────────────────────────────────────

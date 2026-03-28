@@ -1,31 +1,42 @@
-import { InputType, Field, Float } from '@nestjs/graphql';
+
+import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, IsPositive, IsDateString, MaxLength,
+  IsNumber, IsPositive, IsDateString, MaxLength, Min,
+
 } from 'class-validator';
 
 import { PaymentMethod } from '../../enums/payment-method.enum';
 
-/**
- * Pago masivo FIFO: aplica el monto recibido a los cargos pendientes/vencidos
- * más antiguos de la unidad, en orden ascendente de vencimiento.
- * Si sobra saldo después de pagar todos los cargos, se crea una entrada
- * de crédito en el wallet de la unidad.
- */
 @InputType()
 export class RegisterBulkPaymentInput {
 
   @Field()
   @IsString()
   @IsNotEmpty()
-  unitId: string;
+  complexId: string;
 
   @Field()
   @IsString()
   @IsNotEmpty()
-  complexId: string;
+  unitId: string;
 
-  /** Monto total a distribuir entre los cargos pendientes */
+  /** Cargo del período actual — se paga primero */
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  baseChargeId: string;
+
+  /**
+   * Cantidad de meses adelantados a crear y pagar.
+   * 0 = solo paga el cargo actual.
+   */
+  @Field(() => Int)
+  @IsNumber()
+  @Min(0)
+  advanceMonths: number;
+
+  /** Monto del cargo base y de cada mes adelantado */
   @Field(() => Float)
   @IsNumber()
   @IsPositive()

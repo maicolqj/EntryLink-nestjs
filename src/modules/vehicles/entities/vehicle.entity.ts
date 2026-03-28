@@ -96,9 +96,9 @@ export class Vehicle {
 
   // ==================== FKs — MULTI-TENANT ====================
 
-  @Field(() => String, { description: 'ID del residente propietario del vehículo' })
-  @Column({ name: 'resident_id', type: 'uuid' })
-  residentId: string;
+  @Field(() => String, { description: 'ID del residente propietario del vehículo', nullable: true })
+  @Column({ name: 'resident_id', type: 'uuid', nullable: true })
+  residentId?: string;
 
   @Field(() => String, { description: 'ID de la unidad (desnormalizado de residente)' })
   @Column({ name: 'unit_id', type: 'uuid' })

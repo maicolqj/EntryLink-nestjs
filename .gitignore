@@ -12,6 +12,12 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+.claude/
+
+firebase.json
+*-service-account*.json
+firebase-adminsdk*.json
+
 # OS
 .DS_Store
 

@@ -2,12 +2,14 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  NotFoundException,
   Logger,
   HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 
 import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
@@ -21,7 +23,11 @@ import { LoginEmailInput } from '../dto/inputs/login-email.input';
 import { RequestOtpInput } from '../dto/inputs/request-otp.input';
 import { VerifyOtpInput } from '../dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from '../dto/responses/auth-response';
+import { QrLoginTokenResponse } from '../dto/responses/qr-login-token.response';
+import { SetPasswordResponse } from '../dto/responses/set-password.response';
 import { DeviceInfo, TokenPair } from '../interfaces/jwt-payload.interface';
+import { MailService } from '../../../mail/mail.service';
+import { RequestPasswordResetResponse } from '../dto/responses/request-password-reset.response';
 
 /** Roles que pueden iniciar sesión con email + contraseña */
 const EMAIL_LOGIN_ROLES: ValidRoles[] = [
@@ -41,6 +47,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly otpService: OtpService,
     private readonly cacheService: CacheService,
+    private readonly mailService: MailService,
   ) {}
 
   // ── Login con Email + Contraseña ────────────────────────────────────────
@@ -100,6 +107,11 @@ export class AuthService {
 
     // Login exitoso — limpiar intentos fallidos
     await this.clearFailedAttempts(email);
+
+    // Marcar contraseña como establecida (best-effort, por si no estaba marcada aún)
+    if (!user.passwordSet) {
+      await this.userRepo.update(user.id, { passwordSet: true });
+    }
 
     return this.createSession(user, deviceInfo, rememberMe ?? false);
   }
@@ -195,6 +207,113 @@ export class AuthService {
     return this.createSession(user, deviceInfo, false);
   }
 
+  // ── QR Login: Generar token ─────────────────────────────────────────────
+
+  /**
+   * Genera un token UUID de un solo uso válido por 72 horas para login por QR.
+   * Solo accesible por SUPER_ADMIN.
+   */
+  async generateQrLoginToken(userId: string): Promise<QrLoginTokenResponse> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID "${userId}" no encontrado`);
+    }
+
+    this.assertAccountActive(user);
+
+    const token = uuidv4();
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1_000);
+
+    await this.userRepo.update(userId, {
+      qrLoginToken: token,
+      qrLoginTokenExp: expiresAt,
+      qrLoginTokenUsed: false,
+    });
+
+    this.logger.log(`QR login token generado para usuario ${userId}`);
+    return { token, expiresAt };
+  }
+
+  // ── QR Login: Canjear token ─────────────────────────────────────────────
+
+  /**
+   * Canjea el token QR de un solo uso y abre una sesión autenticada.
+   * No requiere autenticación previa.
+   */
+  async redeemQrToken(token: string, pin: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.qrLoginToken')
+      .addSelect('user.qrLoginTokenExp')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .where('user.qr_login_token = :token', { token })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('Token QR no válido');
+    }
+
+    if (user.qrLoginTokenUsed) {
+      throw new UnauthorizedException('Este token QR ya fue utilizado');
+    }
+
+    if (!user.qrLoginTokenExp || new Date() > user.qrLoginTokenExp) {
+      throw new UnauthorizedException('El token QR ha expirado');
+    }
+
+    // Validar PIN (últimos 4 dígitos del documento de identidad)
+    if (!user.identity) {
+      throw new BadRequestException('El usuario no tiene documento de identidad registrado');
+    }
+
+    const expectedPin = user.identity.slice(-4);
+    if (pin !== expectedPin) {
+      this.logger.warn(`PIN incorrecto al canjear QR — userId: ${user.id}`);
+      throw new UnauthorizedException('PIN incorrecto');
+    }
+
+    // Invalidar el token antes de crear la sesión
+    await this.userRepo.update(user.id, {
+      qrLoginTokenUsed: true,
+      qrLoginToken: null,
+    });
+
+    this.logger.log(`QR token canjeado — userId: ${user.id}`);
+    return this.createSession(user, deviceInfo, false);
+  }
+
+  // ── Establecer contraseña inicial ──────────────────────────────────────
+
+  /**
+   * Permite al usuario autenticado establecer su contraseña por primera vez
+   * (flujo post-login por QR). No requiere contraseña anterior.
+   */
+  async setInitialPassword(userId: string, newPassword: string): Promise<SetPasswordResponse> {
+    const hashedPassword = await bcrypt.hash(newPassword, Number(process.env.HASHSALT) || 10);
+
+    await this.userRepo.update(userId, {
+      password: hashedPassword,
+      lastPasswordChange: new Date(),
+      status: UserStatus.ACTIVE,
+      passwordSet: true,
+      qrLoginToken: null,
+      qrLoginTokenExp: null,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+
+    // Invalida el JWT actual del QR para forzar re-login con email+contraseña
+    await this.tokenService.clearUserTokenVersionCache(userId);
+
+    this.logger.log(`Contraseña inicial establecida para usuario ${userId}`);
+    return { success: true };
+  }
+
   // ── Refresh Token ───────────────────────────────────────────────────────
 
   async refreshToken(
@@ -215,21 +334,121 @@ export class AuthService {
     sessionId: string,
     accessToken: string,
   ): Promise<boolean> {
+    // Limpiar sesión y cache siempre, aunque el token ya esté expirado
+    await Promise.allSettled([
+      this.tokenService.revokeSession(sessionId, 'logout'),
+      this.sessionService.terminateSession(sessionId),
+      this.tokenService.clearUserTokenVersionCache(userId),
+    ]);
+
+    // Blacklist del access token solo si aún es válido (best-effort)
     try {
       const payload = await this.tokenService.verifyAccessToken(accessToken);
       const expiresAt = payload.exp ? new Date(payload.exp * 1_000) : new Date();
-
-      await Promise.all([
-        this.tokenService.blacklistAccessToken(accessToken, expiresAt),
-        this.tokenService.revokeSession(sessionId, 'logout'),
-        this.sessionService.terminateSession(sessionId),
-        this.tokenService.clearUserTokenVersionCache(userId),
-      ]);
-
-      return true;
+      await this.tokenService.blacklistAccessToken(accessToken, expiresAt);
     } catch {
-      return false;
+      // Token expirado o inválido — la sesión ya fue terminada arriba
     }
+
+    return true;
+  }
+
+  // ── Reset de contraseña por email ───────────────────────────────────────
+
+  /**
+   * Genera un token de restablecimiento y lo envía por email.
+   * Lanza excepciones descriptivas (los mensajes se muestran directamente al usuario).
+   */
+  async requestPasswordReset(email: string): Promise<RequestPasswordResetResponse> {
+    // 1. Buscar usuario (error explícito — flujo de recuperación, no de login)
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = LOWER(:email)', { email: email.trim() })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('No encontramos una cuenta con ese correo electrónico.');
+    }
+
+    // 2. Verificar que la cuenta esté activa
+    const blockedStatuses: UserStatus[] = [UserStatus.SUSPENDED, UserStatus.BANNED];
+    if (blockedStatuses.includes(user.status)) {
+      throw new BadRequestException(
+        'Esta cuenta está suspendida o inactiva. Contacta al administrador.',
+      );
+    }
+
+    // 3. Verificar que ya tenga contraseña establecida
+    if (!user.passwordSet) {
+      throw new BadRequestException(
+        'Debes establecer tu contraseña por primera vez usando el código QR ' +
+        'que te proporcionó el administrador del sistema.',
+      );
+    }
+
+    // 4. Generar token y enviar email
+    const token = uuidv4();
+    const expiresAt = new Date(
+      Date.now() + AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1_000,
+    );
+
+    await this.userRepo.update(user.id, {
+      passwordResetToken: token,
+      passwordResetTokenExp: expiresAt,
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/auth/reset-password?token=${token}`;
+
+    await this.mailService.queuePasswordResetEmail({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      resetUrl,
+      expiresInMinutes: AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES,
+    });
+
+    this.logger.log(`Password reset token generado para usuario ${user.id}`);
+    return { success: true, message: 'Te enviamos un enlace a tu correo.' };
+  }
+
+  /**
+   * Valida el token de restablecimiento y actualiza la contraseña.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<SetPasswordResponse> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.passwordResetToken')
+      .addSelect('user.passwordResetTokenExp')
+      .where('user.password_reset_token = :token', { token })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) {
+      throw new BadRequestException('El enlace de restablecimiento no es válido');
+    }
+
+    if (!user.passwordResetTokenExp || new Date() > user.passwordResetTokenExp) {
+      throw new BadRequestException('El enlace de restablecimiento ha expirado. Solicita uno nuevo');
+    }
+
+    this.assertAccountActive(user);
+
+    const hashedPassword = await bcrypt.hash(newPassword, Number(process.env.HASHSALT) || 10);
+
+    await this.userRepo.update(user.id, {
+      password: hashedPassword,
+      lastPasswordChange: new Date(),
+      passwordSet: true,
+      passwordResetToken: null,
+      passwordResetTokenExp: null,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+
+    await this.tokenService.clearUserTokenVersionCache(user.id);
+
+    this.logger.log(`Contraseña restablecida para usuario ${user.id}`);
+    return { success: true };
   }
 
   // ── Helpers privados ────────────────────────────────────────────────────

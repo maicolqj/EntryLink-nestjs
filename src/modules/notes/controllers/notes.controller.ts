@@ -118,10 +118,11 @@ export class NotesController {
       // Si este paso falla, el catch elimina las imágenes de Cloudinary
       const note = await this.notesService.createNote(
         {
-          complexId: body.complexId,
-          title:     body.title,
-          content:   body.content,
+          complexId:     body.complexId,
+          title:         body.title,
+          content:       body.content,
           imageUrls,
+          createdByRole: currentUser.roles?.[0] ?? null,
         },
         currentUser,
       );

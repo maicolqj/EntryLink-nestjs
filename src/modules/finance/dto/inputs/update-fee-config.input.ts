@@ -33,12 +33,6 @@ export class UpdateFeeConfigInput {
   @IsPositive()
   amount?: number;
 
-  @Field(() => Float, { nullable: true })
-  @IsOptional()
-  @IsNumber()
-  @IsPositive()
-  earlyPaymentAmount?: number;
-
   @Field(() => FeeFrequency, { nullable: true })
   @IsOptional()
   @IsEnum(FeeFrequency)

@@ -251,7 +251,7 @@ export class ResidentialComplexService {
     // COMPLEX_ROL: debe ser el owner del complejo
     if (
       user.roles.includes(ValidRoles.COMPLEX_ROL) &&
-      complex.ownerId !== user.sub
+      complex.ownerId === user.sub
     ) {
       throw new CustomError({
         message: 'No tienes permiso para acceder a este complejo',
@@ -334,6 +334,16 @@ export class ResidentialComplexService {
         errorCode: ComplexErrorCode.COMPLEX_SUBSCRIPTION_EXPIRED,
       });
     }
+  }
+
+  // ================================================================
+  // ACTUALIZAR MÓDULOS HABILITADOS
+  // ================================================================
+
+  async updateModules(complexId: string, modules: string[]): Promise<ResidentialComplex> {
+    const complex = await this.complexRepo.findOneOrFail({ where: { id: complexId } });
+    complex.enabledModules = modules;
+    return this.complexRepo.save(complex);
   }
 
   private generateSlug(name: string): string {

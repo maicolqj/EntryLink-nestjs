@@ -12,12 +12,16 @@ import { NoteErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { AuditService }    from '../../audit/services/audit.service';
+import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 interface CreateNoteData {
   complexId: string;
   title: string;
   content: string;
   imageUrls: string[];
+  createdByRole: string | null;
 }
 
 @Injectable()
@@ -28,6 +32,7 @@ export class NotesService {
     @InjectRepository(Note)
     private readonly noteRepo: Repository<Note>,
     private readonly complexService: ResidentialComplexService,
+    private readonly auditService:   AuditService,
   ) { }
 
   // ================================================================
@@ -45,17 +50,30 @@ export class NotesService {
     }
 
     const note = this.noteRepo.create({
-      title: data.title.trim(),
-      content: data.content.trim(),
-      imageUrls: data.imageUrls,
-      complexId: data.complexId,
-      createdByUserId: currentUser.sub,
+      title:           data.title.trim(),
+      content:         data.content.trim(),
+      imageUrls:       data.imageUrls,
+      complexId:       data.complexId,
+      createdByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+      createdByRole:   data.createdByRole,
     });
 
     const saved = await this.noteRepo.save(note);
     this.logger.log(
       `Nota creada: ${saved.id} | usuario: ${currentUser.sub} | complejo: ${data.complexId} | imágenes: ${data.imageUrls.length}`,
     );
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Note,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, title: saved.title, complexId: saved.complexId },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: data.createdByRole ?? currentUser.roles?.[0] ?? '',
+      complexId:       data.complexId,
+      description:     `Nota creada: "${saved.title}"`,
+    });
 
     return this.loadRelations(saved.id);
   }
@@ -71,9 +89,7 @@ export class NotesService {
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedNotesResponse> {
     if (!this.isSuperAdmin(currentUser)) {
-      const resp = await this.complexService.assertComplexAccess(complexId, currentUser);
-      this.logger.warn(`COMPLEX ECONTRADO en findNotesByComplex ${JSON.stringify(resp, null, 5)} `)
-
+      await this.complexService.assertComplexAccess(complexId, currentUser);
     }
 
     const { page, limit } = pagination;
@@ -82,39 +98,40 @@ export class NotesService {
     const qb = this.noteRepo
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.createdByUser', 'author')
-      .leftJoinAndSelect('n.complex', 'complex')
-      .where('n.complex_id = :complexId', { complexId })
-      // .andWhere('n.deletedAt IS NULL');
+      .where('n.complexId = :complexId', { complexId })
+      .andWhere('n.deletedAt IS NULL');
 
     // SECURITY y SUPERVISOR: solo sus propias notas
-    // if (this.isLimitedToOwnNotes(currentUser)) {
-    //   qb.andWhere('n.created_by_user_id = :userId', { userId: currentUser.sub });
-    // }
+    if (this.isLimitedToOwnNotes(currentUser)) {
+      qb.andWhere('n.created_by_user_id = :userId', { userId: currentUser.sub });
+    }
 
-    // // Filtros opcionales (ignorados si el rol está limitado a sus propias notas)
-    // if (filters?.createdByUserId && !this.isLimitedToOwnNotes(currentUser)) {
-    //   qb.andWhere('n.created_by_user_id = :filterUserId', { filterUserId: filters.createdByUserId });
-    // }
-    // if (filters?.dateFrom) {
-    //   qb.andWhere('n.created_at >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
-    // }
-    // if (filters?.dateTo) {
-    //   qb.andWhere('n.created_at <= :dateTo', { dateTo: new Date(filters.dateTo) });
-    // }
+    // Filtros opcionales (solo para SUPER_ADMIN y COMPLEX_ROL)
+    if (filters?.createdByUserId && !this.isLimitedToOwnNotes(currentUser)) {
+      qb.andWhere('n.created_by_user_id = :filterUserId', {
+        filterUserId: filters.createdByUserId,
+      });
+    }
+    if (filters?.dateFrom) {
+      qb.andWhere('n.createdAt >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+    }
+    if (filters?.dateTo) {
+      qb.andWhere('n.createdAt <= :dateTo', { dateTo: new Date(filters.dateTo) });
+    }
 
     qb.orderBy('n.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(totalItems / limit); 
 
     return {
       items,
       pagination: {
-        currentPage: page,
-        itemsPerPage: limit,
+        currentPage:     page,
+        itemsPerPage:    limit,
         totalItems,
         totalPages,
-        hasNextPage: page < totalPages,
+        hasNextPage:     page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -178,6 +195,19 @@ export class NotesService {
 
     await this.noteRepo.softDelete(id);
     this.logger.warn(`Nota eliminada (soft): ${id} por SUPER_ADMIN ${currentUser.sub}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.Note,
+      entityId:        id,
+      action:          AuditAction.DELETE,
+      previousValue:   { id: note.id, title: note.title, complexId: note.complexId, deletedAt: null },
+      newValue:        { deletedAt: new Date() },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       note.complexId,
+      description:     `Nota eliminada (soft-delete): "${note.title}"`,
+    });
 
     return { ...note, deletedAt: new Date() };
   }

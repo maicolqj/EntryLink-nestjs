@@ -231,6 +231,9 @@ type User {
   """ID del complejo residencial asociado"""
   complexId: String
 
+  """Indica si el usuario tiene contraseña establecida"""
+  passwordSet: Boolean!
+
   """Permissions created by this user"""
   createdPermissions: [Permission!]
 
@@ -344,8 +347,8 @@ enum ValidRoles {
   COMPLEX_ROL
   ACCOUNTANT_ROL
   SUPERVISOR_ROL
-  SECURITY_ROL
   RESIDENT_ROL
+  SECURITY_ROL
 }
 
 """
@@ -546,45 +549,6 @@ type RoleHierarchyResponse {
 
   """Hierarchy statistics"""
   stats: HierarchyStats!
-}
-
-type PermissionGroupSummary {
-  """Nombre del grupo de permisos (ej: USERS, PACKAGES)"""
-  group: String!
-
-  """Cantidad de permisos en este grupo"""
-  count: Int!
-
-  """Permisos de este grupo"""
-  permissions: [Permission!]!
-}
-
-type RoleDetailResponse {
-  id: String!
-  name: ValidRoles!
-  frontName: String!
-  icon: String!
-  description: String
-  hierarchyLevel: Int!
-  status: Boolean!
-  isSystem: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-
-  """Rol padre en la jerarquía"""
-  parent: SimpleRoleResponse
-
-  """Roles hijos en la jerarquía"""
-  children: [SimpleRoleResponse!]
-
-  """Todos los permisos asignados al rol"""
-  permissions: [Permission!]!
-
-  """Total de permisos asignados"""
-  permissionCount: Int!
-
-  """Permisos organizados por grupo"""
-  permissionsByGroup: [PermissionGroupSummary!]!
 }
 
 type Role {
@@ -907,6 +871,11 @@ type ResidentialComplex {
 
   """Configuración avanzada del complejo"""
   settings: JSON
+
+  """
+  Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.
+  """
+  enabledModules: [String!]
 
   """ID del propietario/administrador principal"""
   ownerId: String!
@@ -1299,6 +1268,24 @@ type OtpRequestResponse {
   debugCode: String
 }
 
+"""Respuesta con el token QR generado y su fecha de expiración"""
+type QrLoginTokenResponse {
+  """Token UUID de un solo uso para el login por QR"""
+  token: String!
+
+  """Fecha y hora de expiración del token (72 horas)"""
+  expiresAt: DateTime!
+}
+
+type SetPasswordResponse {
+  success: Boolean!
+}
+
+type RequestPasswordResetResponse {
+  success: Boolean!
+  message: String!
+}
+
 type PaginatedComplexesResponse {
   items: [ResidentialComplex!]!
   pagination: PaginationReponse!
@@ -1551,7 +1538,7 @@ type Vehicle {
   notes: String
 
   """ID del residente propietario del vehículo"""
-  residentId: String!
+  residentId: String
 
   """ID de la unidad (desnormalizado de residente)"""
   unitId: String!
@@ -1643,6 +1630,374 @@ enum VehicleStatus {
   REMOVED
 }
 
+"""Configuración de rotación de parqueaderos del complejo"""
+type ParkingRotationConfig {
+  id: String!
+
+  """ID del complejo al que pertenece la configuración"""
+  complexId: String!
+
+  """Valor numérico del intervalo (ej: 3 si es "cada 3 meses")"""
+  rotationIntervalValue: Int!
+
+  """Unidad de tiempo del intervalo (DAYS | WEEKS | MONTHS)"""
+  rotationIntervalUnit: RotationIntervalUnit!
+
+  """
+  Mapa de cupos disponibles por tipo de vehículo. Ej: { "CAR": 20, "MOTORCYCLE": 13 }. Solo los tipos listados participan en la rotación.
+  """
+  slotsByType: JSON!
+
+  """Si la rotación automática está habilitada"""
+  isActive: Boolean!
+
+  """Última vez que se ejecutó la rotación"""
+  lastExecutedAt: DateTime
+
+  """Próxima ejecución programada de la rotación"""
+  nextExecutionAt: DateTime
+
+  """
+  Número del gran ciclo actual por tipo de vehículo. Se incrementa cuando todos los vehículos de ese tipo han rotado al menos una vez.
+  """
+  grandCycleByType: JSON!
+  createdByUserId: String
+  updatedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  createdByUser: User
+  updatedByUser: User
+}
+
+"""Unidad de tiempo para el intervalo de rotación de parqueaderos"""
+enum RotationIntervalUnit {
+  """Días (ej: cada 30 días)"""
+  DAYS
+
+  """Semanas (ej: cada 2 semanas)"""
+  WEEKS
+
+  """Meses (ej: cada 3 meses)"""
+  MONTHS
+}
+
+"""Configuración de tarifas del parqueadero visitante por complejo"""
+type ParkingConfig {
+  id: ID!
+
+  """Tipo de tarifa aplicada"""
+  rateType: ParkingRateType!
+
+  """Valor unitario de la tarifa"""
+  rateAmount: Float!
+
+  """Minutos de gracia sin cobro"""
+  gracePeriodMinutes: Int
+
+  """Tope máximo de cobro por día"""
+  maxDailyAmount: Float
+
+  """Moneda (ISO 4217)"""
+  currency: String!
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  complex: ResidentialComplex
+}
+
+"""Tipo de tarifa aplicada en el parqueadero"""
+enum ParkingRateType {
+  """Cobro por minuto"""
+  PER_MINUTE
+
+  """Cobro por hora (se redondea al alza)"""
+  PER_HOUR
+
+  """Cobro por día (se redondea al alza)"""
+  DAILY
+
+  """Tarifa fija independiente del tiempo"""
+  FIXED
+
+  """Tarifa especial de evento"""
+  EVENT
+}
+
+"""Registro de entrada/salida de vehículo visitante en el parqueadero"""
+type ParkingRecord {
+  id: ID!
+
+  """Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)"""
+  invoiceNumber: String!
+
+  """Placa del vehículo (normalizada: mayúsculas, sin espacios)"""
+  plate: String!
+
+  """Tipo de vehículo"""
+  vehicleType: VehicleType!
+
+  """Marca del vehículo"""
+  brand: String
+
+  """Color del vehículo"""
+  color: String
+
+  """Fecha/hora de entrada (asignada por el servidor)"""
+  entryDate: DateTime!
+
+  """Alias de entryDate"""
+  createdAt: DateTime!
+
+  """Fecha/hora de salida"""
+  exitDate: DateTime
+
+  """Duración en minutos (calculada en la salida)"""
+  duration: Int
+
+  """Tarifa unitaria aplicada"""
+  rate: Float
+
+  """Total cobrado"""
+  total: Float
+
+  """Método de pago (disponible tras el cierre)"""
+  paymentMethod: ParkingPaymentMethod
+
+  """Estado del registro"""
+  status: ParkingRecordStatus!
+
+  """ID de la unidad visitada"""
+  unitId: String
+
+  """ID del complejo"""
+  complexId: String!
+  updatedAt: DateTime!
+  unit: Unit
+  complex: ResidentialComplex
+}
+
+"""Método de pago del parqueadero visitante"""
+enum ParkingPaymentMethod {
+  """Efectivo"""
+  CASH
+
+  """Transferencia bancaria / QR"""
+  TRANSFER
+
+  """Cargo a la cuenta de la unidad visitada"""
+  CHARGE_TO_UNIT
+}
+
+"""Estado del registro de parqueadero visitante"""
+enum ParkingRecordStatus {
+  """Vehículo dentro del parqueadero, sin liquidar"""
+  OPEN
+
+  """Cobro liquidado (efectivo o transferencia)"""
+  PAID
+
+  """Cobro cargado a la cuenta de la unidad visitada"""
+  CHARGED_TO_UNIT
+
+  """Registro anulado"""
+  CANCELLED
+}
+
+"""Registro de auditoría de una acción realizada en el sistema"""
+type AuditLog {
+  id: ID!
+
+  """Número de referencia único (AUD-YYYYMMDD-XXXX)"""
+  referenceNumber: String!
+
+  """Tipo de entidad afectada"""
+  entityType: AuditEntityType!
+
+  """ID de la entidad afectada"""
+  entityId: String!
+
+  """Acción realizada"""
+  action: AuditAction!
+
+  """Descripción legible de la acción"""
+  description: String
+
+  """Estado de la entidad ANTES de la acción (null en CREATE)"""
+  previousValue: JSON
+
+  """Estado de la entidad DESPUÉS de la acción (null en DELETE)"""
+  newValue: JSON
+
+  """ID del usuario o complejo que realizó la acción"""
+  performedById: String!
+
+  """Nombre para mostrar del actor (email, nombre, etc.)"""
+  performedByName: String
+
+  """Rol del actor al momento de la acción"""
+  performedByRole: String!
+
+  """ID del complejo (para filtrado multi-tenant)"""
+  complexId: String
+
+  """Indica si esta acción fue revertida"""
+  isReverted: Boolean!
+
+  """Fecha en que fue revertida"""
+  revertedAt: DateTime
+
+  """ID del usuario que revirtió la acción"""
+  revertedById: String
+  createdAt: DateTime!
+}
+
+"""Tipo de entidad afectada en el historial de auditoría"""
+enum AuditEntityType {
+  User
+  Vehicle
+  ParkingRecord
+  ParkingConfig
+  Resident
+  FeeCharge
+  FeeConfig
+  Payment
+  Note
+  ResidentialComplex
+  Unit
+  Building
+  VisitorVehicle
+  Visit
+  Visitor
+}
+
+"""Tipo de acción registrada en el historial de auditoría"""
+enum AuditAction {
+  """Creación de un registro"""
+  CREATE
+
+  """Modificación de un registro existente"""
+  UPDATE
+
+  """Eliminación (soft o hard delete)"""
+  DELETE
+
+  """Restauración de un registro eliminado"""
+  RESTORE
+
+  """Suspensión de una entidad"""
+  SUSPEND
+
+  """Activación o reactivación de una entidad"""
+  ACTIVATE
+
+  """Aprobación de una solicitud o entidad"""
+  APPROVE
+
+  """Rechazo de una solicitud o entidad"""
+  REJECT
+
+  """Inicio de sesión"""
+  LOGIN
+
+  """Cierre de sesión"""
+  LOGOUT
+
+  """Reversión a estado anterior"""
+  REVERT
+}
+
+type ChargeCategory {
+  id: ID!
+  name: String!
+  description: String
+  color: String
+  isActive: Boolean!
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type FeeConfig {
+  id: ID!
+  name: String!
+  description: String
+  amount: Float!
+  earlyPaymentAmount: Float
+  frequency: FeeFrequency!
+  dueDayOfMonth: Float!
+  chargeType: ChargeType!
+  installments: Int
+  installmentsPaid: Int!
+  unitId: String
+  unitType: UnitType
+  isActive: Boolean!
+  complexId: String!
+  createdByUserId: String!
+  categoryId: String
+  complex: ResidentialComplex!
+  unit: Unit
+  category: ChargeCategory
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Frecuencia de facturación de una configuración de cuota"""
+enum FeeFrequency {
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  ONE_TIME
+}
+
+"""Tipo de recurrencia de la configuración de cuota"""
+enum ChargeType {
+  """Recurrente indefinido (mes a mes hasta cancelación manual)"""
+  MONTHLY
+
+  """Cobro único, se genera una sola vez"""
+  ONCE
+
+  """Recurrente por un número fijo de cuotas"""
+  LIMITED
+}
+
+type FeeCharge {
+  id: ID!
+  period: String!
+  dueDate: DateTime
+  amount: Float!
+  paidAmount: Float!
+  normalAmount: Float
+  balance: Float!
+  description: String!
+  status: ChargeStatus!
+  cancellationReason: String
+  cancelledByUserId: String
+  cancelledAt: DateTime
+  complexId: String!
+  unitId: String!
+  feeConfigId: String
+  complex: ResidentialComplex!
+  unit: Unit!
+  feeConfig: FeeConfig
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Estado de un cargo (cuota) de una unidad"""
+enum ChargeStatus {
+  PENDING
+  OVERDUE
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  WAIVED
+}
+
 type PaginatedVehiclesResponse {
   items: [Vehicle!]!
   pagination: PaginationReponse!
@@ -1662,6 +2017,77 @@ type PlateCheckResponse {
   vehicle: Vehicle
 }
 
+"""Estado de la rotación para un tipo de vehículo"""
+type RotationTypeStatus {
+  """Tipo de vehículo (ej: CAR, MOTORCYCLE)"""
+  vehicleType: String!
+
+  """Cupos de parqueadero disponibles para este tipo"""
+  availableSlots: Int!
+
+  """Total de vehículos registrados activos y en rotación"""
+  totalVehicles: Int!
+
+  """Vehículos activos con acceso a parqueadero"""
+  activeVehicles: Int!
+
+  """Vehículos actualmente fuera por rotación"""
+  suspendedByRotationCount: Int!
+
+  """
+  Exceso de vehículos (totalVehicles - availableSlots). 0 si no hay exceso.
+  """
+  excessVehicles: Int!
+
+  """Número del gran ciclo actual para este tipo"""
+  grandCycleNumber: Int!
+
+  """Vehículos actualmente fuera por rotación"""
+  vehiclesSuspendedByRotation: [Vehicle!]!
+
+  """
+  Próximos candidatos a ser suspendidos en la siguiente rotación (ordenados por prioridad: menos rotaciones → más antiguo en rotación)
+  """
+  nextRotationCandidates: [Vehicle!]!
+}
+
+"""Estado completo de la rotación de parqueaderos del complejo"""
+type RotationStatusResponse {
+  """Configuración activa de la rotación"""
+  config: ParkingRotationConfig
+
+  """Si hay configuración de rotación definida para el complejo"""
+  isConfigured: Boolean!
+
+  """Estado de la rotación desglosado por tipo de vehículo"""
+  byType: [RotationTypeStatus!]!
+}
+
+"""Lista paginada de registros de parqueadero"""
+type ParkingRecordsResult {
+  total: Int!
+  limit: Int!
+  offset: Int!
+  items: [ParkingRecord!]!
+}
+
+"""Lista paginada de registros de auditoría"""
+type PaginatedAuditLogsResponse {
+  items: [AuditLog!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+"""Resultado de la reversión de una acción de auditoría"""
+type RevertAuditResponse {
+  success: Boolean!
+  message: String!
+
+  """El registro de auditoría que fue revertido"""
+  auditLog: AuditLog!
+}
+
 type Package {
   id: ID!
   trackingCode: String
@@ -1675,13 +2101,14 @@ type Package {
   deliveredAt: DateTime
   returnedAt: DateTime
   maxStorageDays: Float
+  recipientName: String
   receivedByName: String
   receivedByIdentity: String
   notes: String
   returnReason: String
   complexId: String!
   unitId: String!
-  registeredByUserId: String!
+  registeredByUserId: String
   deliveredByUserId: String
   unit: Unit!
   complex: ResidentialComplex!
@@ -1742,6 +2169,7 @@ enum NotificationType {
   RESIDENT_APPROVED
   RESIDENT_REJECTED
   RESIDENT_PENDING
+  PARKING_ASSIGNED
   VEHICLE_APPROVED
   VEHICLE_REJECTED
   VEHICLE_SUSPENDED
@@ -1749,6 +2177,10 @@ enum NotificationType {
   PAYMENT_DUE
   PAYMENT_OVERDUE
   PAYMENT_RECEIVED
+  PAYMENT_CONFIRMED
+  CHARGE_ADDED
+  DIRECT_CHARGE
+  PANIC_ALERT
   SYSTEM_ANNOUNCEMENT
   COMPLEX_ALERT
   AMENITY_REMINDER
@@ -1776,65 +2208,51 @@ type UnreadCountResponse {
   count: Int!
 }
 
-type FeeConfig {
+type PushSubscriptionResult {
+  success: Boolean!
+}
+
+type SendNotificationResult {
   id: ID!
-  name: String!
-  description: String
-  amount: Float!
-  frequency: FeeFrequency!
-  dueDayOfMonth: Float!
-  unitId: String
-  unitType: UnitType
-  isActive: Boolean!
+  title: String!
+  body: String!
+  createdAt: DateTime!
+}
+
+"""Notificación masiva enviada por el administrador"""
+type SentNotification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+
+  """Total de destinatarios al momento del envío"""
+  recipientsCount: Int!
+
+  """Roles destinatarios. Vacío = todos los usuarios."""
+  targetRoles: [String!]
+  createdAt: DateTime!
+}
+
+type SentNotificationPaginatedResult {
+  items: [SentNotification!]!
+  pagination: PaginationReponse!
+}
+
+type TriggerPanicAlertResult {
+  success: Boolean!
+}
+
+type ComplexFinanceConfig {
+  id: ID!
   complexId: String!
-  createdByUserId: String!
-  complex: ResidentialComplex!
-  unit: Unit
+  moraRate: Float!
+  moraGraceDays: Int!
+  autoApplyMora: Boolean!
+  autoGenerateCharges: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
-  deletedAt: DateTime
-}
-
-"""Frecuencia de facturación de una configuración de cuota"""
-enum FeeFrequency {
-  MONTHLY
-  BIMONTHLY
-  QUARTERLY
-  ANNUAL
-  ONE_TIME
-}
-
-type FeeCharge {
-  id: ID!
-  period: String!
-  dueDate: DateTime!
-  amount: Float!
-  paidAmount: Float!
-  balance: Float!
-  description: String!
-  status: ChargeStatus!
-  cancellationReason: String
-  cancelledByUserId: String
-  cancelledAt: DateTime
-  complexId: String!
-  unitId: String!
-  feeConfigId: String!
-  complex: ResidentialComplex!
-  unit: Unit!
-  feeConfig: FeeConfig!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  deletedAt: DateTime
-}
-
-"""Estado de un cargo (cuota) de una unidad"""
-enum ChargeStatus {
-  PENDING
-  OVERDUE
-  PARTIALLY_PAID
-  PAID
-  CANCELLED
-  WAIVED
 }
 
 type Payment {
@@ -1852,7 +2270,7 @@ type Payment {
   reversedAt: DateTime
   complexId: String!
   unitId: String!
-  registeredByUserId: String!
+  registeredByUserId: String
   complex: ResidentialComplex!
   unit: Unit!
   charge: FeeCharge!
@@ -1884,6 +2302,16 @@ type GenerateChargesResponse {
   period: String!
 }
 
+type CreateDirectChargesResponse {
+  created: Int!
+  skipped: Int!
+}
+
+type RegisterBulkPaymentResponse {
+  paid: Int!
+  created: Int!
+}
+
 type UnitBalanceResponse {
   unitId: String!
   unitNumber: String!
@@ -1902,6 +2330,92 @@ type ComplexFinancialSummaryResponse {
   collectionRate: Float!
   unitsWithDebt: Int!
   unitsFullyPaid: Int!
+}
+
+type WalletEntryObject {
+  id: String!
+  type: String!
+  amount: Float!
+  description: String!
+  unitId: String!
+  chargeId: String
+  createdAt: String!
+}
+
+type UnitWalletResponse {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  currentBalance: Float!
+  totalCredits: Float!
+  totalDebits: Float!
+  entries: [WalletEntryObject!]!
+}
+
+type WalletSummaryItem {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  currentBalance: Float!
+  totalCredits: Float!
+  totalDebits: Float!
+}
+
+type WalletSummaryPaginated {
+  items: [WalletSummaryItem!]!
+  pagination: PaginationReponse!
+}
+
+type ApplyWalletResult {
+  chargeId: String!
+  appliedAmount: Float!
+  remainingWalletBalance: Float!
+  chargeStatus: String!
+}
+
+type AccountMovement {
+  id: String!
+  date: String!
+  type: String!
+  description: String!
+  debit: Float!
+  credit: Float!
+  balance: Float!
+  reference: String
+}
+
+type UnitAccountStatementResponse {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  totalDebits: Float!
+  totalCredits: Float!
+  currentBalance: Float!
+  walletBalance: Float!
+  movements: [AccountMovement!]!
+}
+
+type UnitFinancialStatusItem {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  status: String!
+  totalDebt: Float!
+  walletBalance: Float!
+  overdueCount: Int!
+  pendingCount: Int!
+}
+
+type UnitFinancialStatusPaginated {
+  items: [UnitFinancialStatusItem!]!
+  pagination: PaginationReponse!
+}
+
+type MoraApplicationResult {
+  period: String!
+  applied: Int!
+  totalMoraAmount: Float!
+  skipped: Int!
 }
 
 """Tarifa de parqueadero por tipo de vehículo"""
@@ -2029,7 +2543,10 @@ type Note {
   """URLs de imágenes adjuntas (Cloudinary)"""
   imageUrls: [String!]
   complexId: String!
-  createdByUserId: String!
+  createdByUserId: String
+
+  """Rol del creador al momento de registrar la nota"""
+  createdByRole: String
   createdAt: DateTime!
 
   """Fecha de eliminación lógica (solo SUPER_ADMIN)"""
@@ -2050,14 +2567,6 @@ type Query {
   permission(id: String!): Permission!
   roles(input: SearchRolesInput!): PaginatedRolesResponse!
   role(term: String!): Role!
-
-  """
-  Obtiene la información completa de un rol con sus permisos agrupados por categoría
-  """
-  roleDetail(
-    """UUID del rol"""
-    id: String!
-  ): RoleDetailResponse!
   getRoleHierarchy(roleId: String!): RoleHierarchyResponse!
 
   """Lista paginada de usuarios. Filtrable por status y complexId."""
@@ -2087,16 +2596,44 @@ type Query {
   vehiclesByResident(residentId: String!): [Vehicle!]!
   checkPlate(plate: String!, complexId: String!): PlateCheckResponse!
   vehicle(id: String!): Vehicle!
+  rotationStatus(complexId: String!): RotationStatusResponse!
+
+  """
+  Lista paginada de registros de parqueadero visitante. Filtrable por estado y placa.
+  """
+  parkingRecords(filter: FilterParkingRecordsInput!): ParkingRecordsResult!
+
+  """Configuración de tarifas del parqueadero para un complejo."""
+  parkingConfig(complexId: String!): ParkingConfig
+
+  """
+  Historial de auditoría paginado. SUPER_ADMIN ve todo el sistema. COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.
+  """
+  auditLogs(filter: FilterAuditLogsInput): PaginatedAuditLogsResponse!
+
+  """
+  Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX).
+  """
+  auditLog(referenceNumber: String!): AuditLog!
   packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
   pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
   package(packageId: String!): Package!
   myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   unreadNotificationsCount(complexId: String!): UnreadCountResponse!
+  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
+  vapidPublicKey: String!
+  complexFinanceConfig(complexId: String!): ComplexFinanceConfig!
+  chargeCategories(complexId: String!): [ChargeCategory!]!
   feeConfigs(complexId: String!): [FeeConfig!]!
   charges(complexId: String!, pagination: PaginationInput, filters: FilterChargesInput): PaginatedChargesResponse!
   paymentsByCharge(chargeId: String!): [Payment!]!
   unitBalance(unitId: String!, complexId: String!): UnitBalanceResponse!
   complexFinancialSummary(complexId: String!, period: String!): ComplexFinancialSummaryResponse!
+  unitWallet(unitId: String!, complexId: String!): UnitWalletResponse!
+  walletsSummary(complexId: String!, pagination: PaginationInput): WalletSummaryPaginated!
+  unitAccountStatement(unitId: String!, complexId: String!, period: String): UnitAccountStatementResponse!
+  unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
   parkingRates(complexId: String!): [ParkingRate!]!
   activeVisitorVehicles(complexId: String!): [VisitorVehicle!]!
   visitorVehicles(filters: FilterVisitorVehiclesInput!, pagination: PaginationInput! = {page: 1, limit: 10}): PaginatedVisitorVehiclesResponse!
@@ -2224,6 +2761,52 @@ input FilterVehiclesInput {
   unitId: String
 }
 
+"""Filtros para listar registros de parqueadero"""
+input FilterParkingRecordsInput {
+  """ID del complejo"""
+  complexId: String!
+
+  """Filtrar por estado"""
+  status: ParkingRecordStatus
+
+  """Búsqueda parcial por placa"""
+  plate: String
+  limit: Int = 20
+  offset: Int = 0
+}
+
+"""Filtros para consultar el historial de auditoría"""
+input FilterAuditLogsInput {
+  """Filtrar por ID del complejo"""
+  complexId: String
+
+  """Filtrar por tipo de acción"""
+  action: AuditAction
+
+  """Filtrar por tipo de entidad"""
+  entityType: AuditEntityType
+
+  """Filtrar por ID de la entidad"""
+  entityId: String
+
+  """Filtrar por ID del actor"""
+  performedById: String
+
+  """Filtrar por rol del actor"""
+  performedByRole: String
+
+  """Número de referencia exacto"""
+  referenceNumber: String
+
+  """Desde esta fecha (ISO 8601)"""
+  from: String
+
+  """Hasta esta fecha (ISO 8601)"""
+  to: String
+  limit: Int = 20
+  offset: Int = 0
+}
+
 input FilterPackagesInput {
   status: PackageStatus
   type: PackageType
@@ -2243,6 +2826,8 @@ input FilterChargesInput {
   status: ChargeStatus
   unitId: String
   period: String
+  unitSearch: String
+  feeConfigId: String
 }
 
 """Filtros para listar vehículos visitantes"""
@@ -2350,16 +2935,42 @@ type Mutation {
   verifyOtp(input: VerifyOtpInput!): AuthResponse!
 
   """
+  Genera un token QR de un solo uso (72 h de vigencia) para que un usuario inicie sesión sin contraseña. Solo accesible por SUPER_ADMIN.
+  """
+  generateQrLoginToken(userId: String!): QrLoginTokenResponse!
+
+  """
+  Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del documento). No requiere autenticación previa.
+  """
+  redeemQrToken(token: String!, pin: String!): AuthResponse!
+
+  """
+  Establece la contraseña inicial del usuario autenticado. Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.
+  """
+  setInitialPassword(newPassword: String!): SetPasswordResponse!
+
+  """
   Renueva el access token usando el refresh token. Implementa rotación de tokens.
   """
   refreshToken(refreshToken: String!): AuthResponse!
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
+
+  """
+  Solicita un enlace de restablecimiento de contraseña por email. Siempre devuelve respuesta genérica para no revelar si el email existe.
+  """
+  requestPasswordReset(email: String!): RequestPasswordResetResponse!
+
+  """
+  Restablece la contraseña usando el token recibido por email. El token es de un solo uso y tiene una validez de 30 minutos.
+  """
+  resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
   removeComplex(id: String!): Boolean!
+  updateComplexModules(complexId: String!, modules: [String!]!): ResidentialComplex!
   restoreComplex(id: String!): ResidentialComplex!
   createBuilding(input: CreateBuildingInput!): Building!
   updateBuilding(input: UpdateBuildingInput!): Building!
@@ -2391,6 +3002,31 @@ type Mutation {
   suspendVehicle(vehicleId: String!, reason: String!): Vehicle!
   reactivateVehicle(vehicleId: String!): Vehicle!
   removeVehicle(vehicleId: String!): Boolean!
+  configureRotation(input: ConfigureRotationInput!): ParkingRotationConfig!
+  executeRotation(complexId: String!): RotationStatusResponse!
+
+  """
+  Registra la entrada de un vehículo visitante al parqueadero. Genera el número de factura automáticamente (PKG-YYYYMMDD-XXXX). La fecha de entrada la asigna el servidor.
+  """
+  registerParkingEntry(input: RegisterParkingEntryInput!): ParkingRecord!
+
+  """
+  Registra la salida, calcula el cobro según la tarifa configurada y cierra el registro. Si paymentMethod = CHARGE_TO_UNIT, genera un FeeCharge en la unidad visitada.
+  """
+  registerParkingExit(input: RegisterParkingExitInput!): ParkingRecord!
+
+  """Cancela un registro de parqueadero con estado OPEN."""
+  cancelParkingRecord(id: String!): ParkingRecord!
+
+  """
+  Crea o actualiza la configuración de tarifas del parqueadero para un complejo (upsert). 
+  """
+  saveParkingConfig(input: SaveParkingConfigInput!): ParkingConfig!
+
+  """
+  Revierte una acción registrada en el historial a su estado anterior. Solo disponible para SUPER_ADMIN_ROL. Una acción solo puede revertirse una vez.
+  """
+  revertAudit(referenceNumber: String!): RevertAuditResponse!
   registerPackage(input: RegisterPackageInput!): Package!
   markPackageAsNotified(packageId: String!): Package!
   confirmPackageDelivery(input: ConfirmDeliveryInput!): Package!
@@ -2398,12 +3034,27 @@ type Mutation {
   markPackageAsLost(packageId: String!, reason: String!): Package!
   markNotificationAsRead(notificationId: String!): Notification!
   markAllNotificationsAsRead(complexId: String!): Int!
+  sendNotification(input: SendNotificationInput!): SendNotificationResult!
+  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
+  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
+  upsertComplexFinanceConfig(input: UpsertComplexFinanceConfigInput!): ComplexFinanceConfig!
+  createChargeCategory(input: CreateChargeCategoryInput!): ChargeCategory!
+  updateChargeCategory(input: UpdateChargeCategoryInput!): ChargeCategory!
+  deleteChargeCategory(id: String!): Boolean!
   createFeeConfig(input: CreateFeeConfigInput!): FeeConfig!
+  updateFeeConfig(input: UpdateFeeConfigInput!): FeeConfig!
+  deleteFeeConfig(id: String!): Boolean!
   toggleFeeConfig(configId: String!): FeeConfig!
   generateCharges(input: GenerateChargesInput!): GenerateChargesResponse!
   waiveCharge(chargeId: String!, reason: String!): FeeCharge!
+  createDirectCharges(input: CreateDirectChargesInput!): CreateDirectChargesResponse!
   registerPayment(input: RegisterPaymentInput!): Payment!
+  registerBulkPayment(input: RegisterBulkPaymentInput!): RegisterBulkPaymentResponse!
   reversePayment(paymentId: String!, reason: String!): Payment!
+  createWalletCredit(input: CreateWalletCreditInput!): WalletEntryObject!
+  applyWalletToCharge(input: ApplyWalletToChargeInput!): ApplyWalletResult!
+  applyMoraToPeriod(input: ApplyMoraInput!): MoraApplicationResult!
   setParkingRate(input: SetParkingRateInput!): ParkingRate!
   toggleParkingRate(rateId: String!): ParkingRate!
   registerVisitorVehicleEntry(input: RegisterVisitorVehicleInput!): VisitorVehicle!
@@ -2631,6 +3282,14 @@ input VerifyOtpInput {
 
   """Código OTP de 6 dígitos recibido por SMS"""
   code: String!
+}
+
+input ResetPasswordInput {
+  """Token de restablecimiento recibido por email"""
+  token: String!
+
+  """Nueva contraseña"""
+  newPassword: String!
 }
 
 input CreateComplexInput {
@@ -2958,8 +3617,8 @@ input RegisterVehicleInput {
   """Notas adicionales"""
   notes: String
 
-  """ID del residente propietario del vehículo"""
-  residentId: String!
+  """ID de la unidad a la que pertenece el vehículo"""
+  unitId: String!
 
   """ID del complejo"""
   complexId: String!
@@ -2995,6 +3654,90 @@ input UpdateVehicleInput {
   id: String!
 }
 
+"""Datos para configurar la rotación de parqueaderos del complejo"""
+input ConfigureRotationInput {
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Valor numérico del intervalo de rotación (ej: 3 para "cada 3 meses")"""
+  rotationIntervalValue: Int!
+
+  """Unidad de tiempo del intervalo (DAYS | WEEKS | MONTHS)"""
+  rotationIntervalUnit: RotationIntervalUnit!
+
+  """
+  Lista de cupos disponibles por tipo de vehículo. Ej: [{ vehicleType: "CAR", slots: 20 }, { vehicleType: "MOTORCYCLE", slots: 13 }]. Solo los tipos listados participarán en la rotación.
+  """
+  slotsByType: [ParkingSlotByTypeInput!]!
+
+  """Activar o desactivar la rotación. Por defecto: true"""
+  isActive: Boolean
+}
+
+"""Cupos de parqueadero disponibles para un tipo de vehículo"""
+input ParkingSlotByTypeInput {
+  """Tipo de vehículo (ej: "CAR", "MOTORCYCLE", "TRUCK", "VAN")"""
+  vehicleType: String!
+
+  """Cantidad de cupos disponibles para ese tipo"""
+  slots: Int!
+}
+
+"""
+Datos para registrar la entrada de un vehículo visitante al parqueadero
+"""
+input RegisterParkingEntryInput {
+  """Placa del vehículo visitante"""
+  plate: String!
+
+  """Tipo de vehículo"""
+  vehicleType: VehicleType!
+
+  """Marca del vehículo"""
+  brand: String
+
+  """Color del vehículo"""
+  color: String
+
+  """ID de la unidad que visita (opcional)"""
+  unitId: String
+
+  """ID del complejo"""
+  complexId: String!
+}
+
+"""Datos para registrar la salida y liquidar el cobro del parqueadero"""
+input RegisterParkingExitInput {
+  """ID del ParkingRecord con estado OPEN"""
+  id: String!
+
+  """Método de pago elegido"""
+  paymentMethod: ParkingPaymentMethod!
+}
+
+"""
+Datos para crear o actualizar la configuración de tarifas del parqueadero
+"""
+input SaveParkingConfigInput {
+  """Tipo de tarifa"""
+  rateType: ParkingRateType!
+
+  """Valor unitario de la tarifa"""
+  rateAmount: Float!
+
+  """Minutos de gracia sin cobro"""
+  gracePeriodMinutes: Int
+
+  """Tope máximo de cobro por día"""
+  maxDailyAmount: Float
+
+  """Moneda (ISO 4217). Default: COP"""
+  currency: String
+
+  """ID del complejo"""
+  complexId: String!
+}
+
 input RegisterPackageInput {
   unitId: String!
   complexId: String!
@@ -3004,6 +3747,7 @@ input RegisterPackageInput {
   description: String
   photoUrl: String
   maxStorageDays: Float
+  recipientName: String
   notes: String
 }
 
@@ -3014,21 +3758,99 @@ input ConfirmDeliveryInput {
   notes: String
 }
 
+input SendNotificationInput {
+  complexId: String!
+  title: String!
+  body: String!
+  type: NotificationType
+  priority: NotificationPriority
+  targetRoles: [String!]
+  targetUnitId: String
+  metadata: JSON
+}
+
+input SavePushSubscriptionInput {
+  complexId: String!
+  endpoint: String!
+  p256dh: String!
+  auth: String!
+}
+
+input SaveMobileTokenInput {
+  complexId: String!
+  deviceToken: String!
+  platform: PushPlatform!
+}
+
+"""Plataforma de destino para notificaciones push"""
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
+input UpsertComplexFinanceConfigInput {
+  complexId: String!
+  moraRate: Float
+  moraGraceDays: Int
+  autoApplyMora: Boolean
+  autoGenerateCharges: Boolean
+}
+
+input CreateChargeCategoryInput {
+  name: String!
+  description: String
+  color: String
+  complexId: String!
+}
+
+input UpdateChargeCategoryInput {
+  id: ID!
+  name: String
+  description: String
+  color: String
+  isActive: Boolean
+}
+
 input CreateFeeConfigInput {
   name: String!
   description: String
   amount: Float!
+  earlyPaymentAmount: Float
   frequency: FeeFrequency! = MONTHLY
   dueDayOfMonth: Int! = 5
   complexId: String!
   unitId: String
+  categoryId: String
   unitType: UnitType
+  chargeType: ChargeType! = MONTHLY
+  installments: Int
+}
+
+input UpdateFeeConfigInput {
+  id: String!
+  name: String
+  description: String
+  amount: Float
+  earlyPaymentAmount: Float
+  frequency: FeeFrequency
+  dueDayOfMonth: Int
+  isActive: Boolean
+  chargeType: ChargeType
+  installments: Int
 }
 
 input GenerateChargesInput {
   complexId: String!
   period: String!
-  feeConfigId: String
+}
+
+input CreateDirectChargesInput {
+  complexId: String!
+  unitIds: [String!]!
+  description: String!
+  amount: Float!
+  period: String!
 }
 
 input RegisterPaymentInput {
@@ -3039,6 +3861,37 @@ input RegisterPaymentInput {
   reference: String
   receiptUrl: String
   notes: String
+}
+
+input RegisterBulkPaymentInput {
+  unitId: String!
+  complexId: String!
+  amount: Float!
+  method: PaymentMethod!
+  paidAt: String!
+  reference: String
+  notes: String
+}
+
+input CreateWalletCreditInput {
+  unitId: String!
+  complexId: String!
+  amount: Float!
+  description: String!
+}
+
+input ApplyWalletToChargeInput {
+  unitId: String!
+  complexId: String!
+  chargeId: String!
+  amount: Float
+}
+
+input ApplyMoraInput {
+  complexId: String!
+  period: String!
+  rate: Float!
+  graceDays: Float!
 }
 
 """Datos para configurar o actualizar la tarifa de parqueadero"""

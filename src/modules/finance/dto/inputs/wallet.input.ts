@@ -1,6 +1,6 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsNumber, IsPositive, IsOptional, Matches,
+  IsString, IsNotEmpty, IsNumber, IsPositive, Matches,
 } from 'class-validator';
 
 @InputType()
@@ -45,15 +45,11 @@ export class ApplyWalletToChargeInput {
   @IsNotEmpty()
   chargeId: string;
 
-  /**
-   * Monto a aplicar desde el wallet. Si es null, aplica todo el saldo
-   * disponible del wallet hasta cubrir el balance del cargo.
-   */
-  @Field(() => Float, { nullable: true })
-  @IsOptional()
+
+  @Field(() => Float)
   @IsNumber()
   @IsPositive()
-  amount?: number;
+  amount: number;
 }
 
 @InputType()
