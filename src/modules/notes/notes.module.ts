@@ -7,11 +7,13 @@ import { NotesResolver }  from './resolvers/notes.resolver';
 import { NotesController } from './controllers/notes.controller';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
+import { AuditModule }              from '../audit/audit.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Note]),
-    ResidentialComplexModule, // provee ResidentialComplexService
+    ResidentialComplexModule,
+    AuditModule, // provee ResidentialComplexService
     // CloudinaryModule es @Global() — disponible automáticamente
   ],
   controllers: [NotesController],

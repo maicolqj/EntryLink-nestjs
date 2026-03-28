@@ -48,9 +48,13 @@ export class Note {
   @Column({ name: 'complex_id', type: 'uuid' })
   complexId: string;
 
-  @Field(() => String)
-  @Column({ name: 'created_by_user_id', type: 'uuid' })
-  createdByUserId: string;
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'created_by_user_id', type: 'uuid', nullable: true })
+  createdByUserId?: string;
+
+  @Field(() => String, { nullable: true, description: 'Rol del creador al momento de registrar la nota' })
+  @Column({ name: 'created_by_role', type: 'varchar', length: 50, nullable: true })
+  createdByRole: string | null;
 
   // ==================== AUDITORÍA ====================
 
