@@ -2,24 +2,24 @@ import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { AuthService } from './services/auth.service';
 import { LoginEmailInput } from './dto/inputs/login-email.input';
+import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
+import { RegisterSupervisorInput } from './dto/inputs/register-supervisor.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
-import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
-import { SetPasswordResponse } from './dto/responses/set-password.response';
-import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
-import { ResetPasswordInput } from './dto/inputs/reset-password.input';
 import { DeviceInfo } from './interfaces/jwt-payload.interface';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from './interfaces/jwt-payload.interface';
 import { Public } from '../shared/decorators/public.decorator';
-import { Auth } from '../shared/decorators/auth.decorator';
+import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
 import { ValidRoles } from '../roles/enums/valid-roles';
+import { Auth } from '../shared/decorators/auth.decorator';
+import { SetPasswordResponse } from './dto/responses/set-password.response';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // ── Login por email (SUPER_ADMIN, COMPLIANCE_OFFICER, COMPLEX_ROL) ──────
 
@@ -28,7 +28,7 @@ export class AuthResolver {
     name: 'loginWithEmail',
     description:
       'Inicia sesión con email y contraseña. ' +
-      'Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL',
+      'Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL',
   })
   async loginWithEmail(
     @Args('input') input: LoginEmailInput,
@@ -36,6 +36,41 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.loginWithEmail(input, deviceInfo);
+  }
+
+  // ── Login por email + código de sistema ──────────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'loginWithSystemCode',
+    description:
+      'Inicia sesión con email y código de sistema. ' +
+      'Disponible para: SUPERVISOR_ROL, SECURITY_ROL, RESIDENT_ROL',
+  })
+  async loginWithSystemCode(
+    @Args('input') input: LoginSystemCodeInput,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.loginWithSystemCode(input, deviceInfo);
+  }
+
+  // ── Auto-registro del supervisor ─────────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'registerSupervisor',
+    description:
+      'Auto-registro público para supervisores. ' +
+      'Crea una cuenta con SUPERVISOR_ROL sin acceso operacional hasta ser aprobado por un complejo. ' +
+      'Devuelve tokens JWT inmediatamente tras el registro.',
+  })
+  async registerSupervisor(
+    @Args('input') input: RegisterSupervisorInput,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.registerSupervisor(input, deviceInfo);
   }
 
   // ── OTP: Solicitar código (RESIDENT_ROL) ─────────────────────────────────
@@ -82,9 +117,9 @@ export class AuthResolver {
       'Solo accesible por SUPER_ADMIN.',
   })
   async generateQrLoginToken(
-    @Args('userId', { type: () => String }) userId: string,
+    @Args('complexId', { type: () => String }) complexId: string,
   ): Promise<QrLoginTokenResponse> {
-    return this.authService.generateQrLoginToken(userId);
+    return this.authService.generateQrLoginToken(complexId);
   }
 
   // ── QR Login: Canjear token ───────────────────────────────────────────────
@@ -149,34 +184,6 @@ export class AuthResolver {
   ): Promise<boolean> {
     const accessToken = context.req?.headers?.authorization?.replace('Bearer ', '') ?? '';
     return this.authService.logout(payload.sub, payload.sessionId, accessToken);
-  }
-
-  // ── Reset de contraseña por email ────────────────────────────────────────
-
-  @Public()
-  @Mutation(() => RequestPasswordResetResponse, {
-    name: 'requestPasswordReset',
-    description:
-      'Solicita un enlace de restablecimiento de contraseña por email. ' +
-      'Siempre devuelve respuesta genérica para no revelar si el email existe.',
-  })
-  async requestPasswordReset(
-    @Args('email', { type: () => String }) email: string,
-  ): Promise<RequestPasswordResetResponse> {
-    return this.authService.requestPasswordReset(email);
-  }
-
-  @Public()
-  @Mutation(() => SetPasswordResponse, {
-    name: 'resetPassword',
-    description:
-      'Restablece la contraseña usando el token recibido por email. ' +
-      'El token es de un solo uso y tiene una validez de 30 minutos.',
-  })
-  async resetPassword(
-    @Args('input') input: ResetPasswordInput,
-  ): Promise<SetPasswordResponse> {
-    return this.authService.resetPassword(input.token, input.newPassword);
   }
 
   // ── Helpers privados ─────────────────────────────────────────────────────
