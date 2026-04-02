@@ -236,6 +236,20 @@ export class ResidentialComplexService {
     }
 
     Object.assign(complex, restInput);
+
+    // Re-geocodificar si cambió algún campo de dirección y el admin no proveyó coords manuales
+    const addressChanged = input.address != null || input.city != null || input.state != null;
+    if (addressChanged && input.latitude == null && input.longitude == null) {
+      const coords = await this.geocodingService.geocodeAddress(
+        complex.address,
+        complex.city,
+        complex.state,
+        complex.country ?? 'Colombia',
+      );
+      complex.latitude  = coords.lat;
+      complex.longitude = coords.lng;
+    }
+
     const saved = await this.complexRepo.save(complex);
     this.logger.log(`Complejo actualizado: ${saved.id}`);
 
