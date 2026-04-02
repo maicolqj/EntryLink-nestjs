@@ -1,4 +1,5 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, IsNull, Repository } from 'typeorm';
 
@@ -11,11 +12,20 @@ import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import { ComplexErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import { ComplexModule } from '../enums/complex-module.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
+import { calculateHaversineDistance } from '../../shared/utils/gps.utils';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { User } from '../../users/entities/user.entity';
+import { UserStatus } from '../../users/enums/user.enums';
+import { Unit } from '../entities/unit.entity';
+import { UnitStatus } from '../enums/unit-status.enum';
+import { AuditService }    from '../../audit/services/audit.service';
+import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -32,7 +42,12 @@ export class ResidentialComplexService {
   constructor(
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
+
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+
     private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) { }
 
   // ================================================================
@@ -60,16 +75,36 @@ export class ResidentialComplexService {
     const plan = input.plan ?? ComplexPlan.FREE;
     const maxUnits = PLAN_UNIT_LIMITS[plan];
 
+    // Hashear password si fue enviado
+    const { password, ...restInput } = input;
+    const hashedPassword = password
+      ? await bcrypt.hash(password, Number(process.env.HASHSALT) || 10)
+      : undefined;
+
     const complex = this.complexRepo.create({
-      ...input,
+      ...restInput,
       plan,
       maxUnits,
       status: ComplexStatus.PENDING_SETUP,
       ownerId: currentUser.sub,
+      ...(hashedPassword && { password: hashedPassword, passwordSet: true }),
     });
 
     const saved = await this.complexRepo.save(complex);
     this.logger.log(`Complejo creado: ${saved.id} — "${saved.name}" por usuario ${currentUser.sub}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.ResidentialComplex,
+      entityId:        saved.id,
+      action:          AuditAction.CREATE,
+      newValue:        { id: saved.id, name: saved.name, plan: saved.plan, status: saved.status },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       saved.id,
+      description:     `Complejo residencial creado: "${saved.name}"`,
+    });
+
     return saved;
   }
 
@@ -88,6 +123,11 @@ export class ResidentialComplexService {
     const qb = this.complexRepo
       .createQueryBuilder('complex')
       .leftJoinAndSelect('complex.owner', 'owner')
+      .leftJoinAndSelect(
+        'complex.legalRepresentative',
+        'legalRepresentative',
+        'legalRepresentative.deleted_at IS NULL',
+      )
       .where('complex.deleted_at IS NULL');
 
     // Si NO es SUPER_ADMIN, solo ve sus propios complejos
@@ -168,10 +208,37 @@ export class ResidentialComplexService {
       complex.maxUnits = PLAN_UNIT_LIMITS[input.plan];
     }
 
-    Object.assign(complex, input);
-    const updated = await this.complexRepo.save(complex);
-    this.logger.log(`Complejo actualizado: ${updated.id}`);
-    return updated;
+    // Extraer legalRepresentativeId para manejarlo explícitamente:
+    // "" o null → limpia el campo; UUID → asigna; undefined → no modifica
+    const { legalRepresentativeId, ...restInput } = input;
+    if (legalRepresentativeId !== undefined) {
+      if (legalRepresentativeId) {
+        await this.assertValidLegalRepresentative(legalRepresentativeId);
+      }
+      complex.legalRepresentativeId = legalRepresentativeId || null;
+      // Limpiar el objeto eager en caché para que TypeORM use el FK escalar
+      // y no sobreescriba con el representante anterior cargado en memoria.
+      complex.legalRepresentative = undefined;
+    }
+
+    Object.assign(complex, restInput);
+    const saved = await this.complexRepo.save(complex);
+    this.logger.log(`Complejo actualizado: ${saved.id}`);
+
+    void this.auditService.log({
+      entityType:      AuditEntityType.ResidentialComplex,
+      entityId:        saved.id,
+      action:          AuditAction.UPDATE,
+      newValue:        { ...restInput, plan: input.plan, legalRepresentativeId },
+      performedById:   currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId:       saved.id,
+      description:     `Complejo actualizado: "${saved.name}"`,
+    });
+
+    // Recargar desde BD para que la relación eager devuelva el representante actualizado.
+    return this.complexRepo.findOne({ where: { id: saved.id, deletedAt: IsNull() } });
   }
 
   // ================================================================
@@ -184,8 +251,35 @@ export class ResidentialComplexService {
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(id, currentUser);
-    complex.status = status;
-    return this.complexRepo.save(complex);
+
+    const previousStatus = complex.status;
+
+    return this.dataSource.transaction(async (manager) => {
+      complex.status = status;
+      const saved = await manager.save(ResidentialComplex, complex);
+
+      // Al desactivar el complejo, marcar todas sus unidades como DISABLED.
+      // Al reactivar NO se restauran — cada unidad se gestiona de forma independiente.
+      if (status === ComplexStatus.INACTIVE) {
+        await manager.update(Unit, { complexId: id }, { status: UnitStatus.DISABLED });
+        this.logger.warn(`Complejo ${id} desactivado — unidades marcadas como DISABLED`);
+      }
+
+      void this.auditService.log({
+        entityType:      AuditEntityType.ResidentialComplex,
+        entityId:        id,
+        action:          AuditAction.UPDATE,
+        previousValue:   { status: previousStatus },
+        newValue:        { status },
+        performedById:   currentUser.sub,
+        performedByName: currentUser.email,
+        performedByRole: currentUser.roles?.[0] ?? '',
+        complexId:       id,
+        description:     `Estado del complejo cambiado: ${previousStatus} → ${status}`,
+      });
+
+      return saved;
+    });
   }
 
   // ================================================================
@@ -344,6 +438,114 @@ export class ResidentialComplexService {
     const complex = await this.complexRepo.findOneOrFail({ where: { id: complexId } });
     complex.enabledModules = modules;
     return this.complexRepo.save(complex);
+  }
+
+  async updateEnabledModules(complexId: string, modules: string[]): Promise<ResidentialComplex> {
+    const validModules = Object.values(ComplexModule) as string[];
+    const invalid = modules.filter(m => !validModules.includes(m));
+    if (invalid.length) {
+      throw new CustomError({
+        message: `Módulos inválidos: ${invalid.join(', ')}. Valores permitidos: ${validModules.join(', ')}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId, deletedAt: IsNull() },
+    });
+
+    if (!complex) {
+      throw new NotFoundException(`Complejo con ID "${complexId}" no encontrado`);
+    }
+
+    complex.enabledModules = modules;
+    const updated = await this.complexRepo.save(complex);
+    this.logger.log(`Módulos actualizados para complejo ${complexId}: [${modules.join(', ')}]`);
+    return updated;
+  }
+
+  /**
+   * Verifica que el usuario existe, está activo y no ha sido eliminado.
+   * Lanza error descriptivo si alguna condición no se cumple.
+   */
+  private async assertValidLegalRepresentative(userId: string): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'status', 'deletedAt'],
+    });
+
+    if (!user) {
+      throw new CustomError({
+        message: `El usuario con ID "${userId}" no existe en el sistema`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    if (user.deletedAt) {
+      throw new CustomError({
+        message: 'El usuario indicado como representante legal ha sido eliminado del sistema',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new CustomError({
+        message: `El usuario indicado como representante legal no está activo (estado actual: ${user.status})`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+  }
+
+  // ================================================================
+  // BUSCAR COMPLEJOS CERCANOS POR GPS
+  // ================================================================
+
+  /**
+   * Devuelve los complejos activos dentro de `radiusMeters` metros del punto dado.
+   * Estrategia: bounding box en SQL para reducir el dataset, luego Haversine exacto en memoria.
+   */
+  async findNearby(
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+  ): Promise<NearbyComplexResponse[]> {
+    // ~0.001° ≈ 111m en latitud; usamos factor 1.5 para que el bounding box sea holgado
+    const degreeMargin = (radiusMeters / 111_000) * 1.5;
+
+    const candidates = await this.complexRepo
+      .createQueryBuilder('c')
+      .select(['c.id', 'c.name', 'c.address', 'c.city', 'c.latitude', 'c.longitude', 'c.gpsRadius'])
+      .where('c.status = :status', { status: ComplexStatus.ACTIVE })
+      .andWhere('c.deleted_at IS NULL')
+      .andWhere('c.latitude IS NOT NULL')
+      .andWhere('c.longitude IS NOT NULL')
+      .andWhere('c.latitude BETWEEN :minLat AND :maxLat', {
+        minLat: lat - degreeMargin,
+        maxLat: lat + degreeMargin,
+      })
+      .andWhere('c.longitude BETWEEN :minLng AND :maxLng', {
+        minLng: lng - degreeMargin,
+        maxLng: lng + degreeMargin,
+      })
+      .getMany();
+
+    return candidates
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        address: c.address,
+        city: c.city,
+        gpsRadius: c.gpsRadius ?? null,
+        distanceMeters: Math.round(
+          calculateHaversineDistance(lat, lng, Number(c.latitude), Number(c.longitude)),
+        ),
+      }))
+      .filter(c => c.distanceMeters <= radiusMeters)
+      .sort((a, b) => a.distanceMeters - b.distanceMeters);
   }
 
   private generateSlug(name: string): string {
