@@ -26,6 +26,7 @@ import { UnitStatus } from '../enums/unit-status.enum';
 import { AuditService }    from '../../audit/services/audit.service';
 import { AuditAction }     from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { GeocodingService } from './geocoding.service';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -48,6 +49,7 @@ export class ResidentialComplexService {
 
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly geocodingService: GeocodingService,
   ) { }
 
   // ================================================================
@@ -89,6 +91,18 @@ export class ResidentialComplexService {
       ownerId: currentUser.sub,
       ...(hashedPassword && { password: hashedPassword, passwordSet: true }),
     });
+
+    // Geocodificar si el admin no proveyó coordenadas manualmente
+    if (input.latitude == null || input.longitude == null) {
+      const coords = await this.geocodingService.geocodeAddress(
+        complex.address,
+        complex.city,
+        complex.state,
+        complex.country ?? 'Colombia',
+      );
+      complex.latitude  = coords.lat;
+      complex.longitude = coords.lng;
+    }
 
     const saved = await this.complexRepo.save(complex);
     this.logger.log(`Complejo creado: ${saved.id} — "${saved.name}" por usuario ${currentUser.sub}`);
