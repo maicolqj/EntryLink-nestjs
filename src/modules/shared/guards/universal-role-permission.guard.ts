@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -34,7 +35,7 @@ export class UniversalRolePermissionGuard implements CanActivate {
 
     if (!user) {
       this.logger.error('User not found in request or connection context');
-      throw new UnauthorizedException('User not authenticated');
+      throw new ForbiddenException('No autenticado');
     }
 
     // 🔹 Super Admin bypass (sin cambios)

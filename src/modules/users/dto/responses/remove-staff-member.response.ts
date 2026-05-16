@@ -10,7 +10,7 @@ registerEnumType(RemoveStaffAction, {
   description: 'Resultado de la operación de eliminación de personal',
   valuesMap: {
     STAFF_ROLE_REMOVED: { description: 'Se quitó el rol de personal; el usuario continúa como residente' },
-    USER_DELETED:       { description: 'El usuario fue eliminado del sistema' },
+    USER_DELETED:       { description: 'El usuario fue dado de baja (soft delete); sus credenciales quedan disponibles para nuevos registros' },
   },
 });
 

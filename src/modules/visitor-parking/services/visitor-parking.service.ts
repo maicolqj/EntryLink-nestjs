@@ -2,48 +2,72 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, IsNull, Repository } from 'typeorm';
 
-import { ParkingRate } from '../entities/parking-rate.entity';
 import { VisitorVehicle } from '../entities/visitor-vehicle.entity';
-import { ParkingStatus } from '../enums/parking-status.enum';
+import { VisitorParkingConfig } from '../entities/visitor-parking-config.entity';
+import { VisitorParkingRate } from '../entities/visitor-parking-rate.entity';
+import { ParkingRecordStatus } from '../enums/parking-status.enum';
 
 import { SetParkingRateInput } from '../dto/inputs/set-parking-rate.input';
 import { RegisterVisitorVehicleInput } from '../dto/inputs/register-visitor-vehicle.input';
 import { FilterVisitorVehiclesInput } from '../dto/inputs/filter-visitor-vehicles.input';
+import { UpdateVisitorParkingConfigInput } from '../dto/inputs/update-visitor-parking-config.input';
 import { PaginatedVisitorVehiclesResponse } from '../dto/responses/paginated-visitor-vehicles.response';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode, ParkingErrorCode, ResidentErrorCode } from '../../shared/constans/error-codes.constants';
+
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { ResidentsService } from '../../residents/services/residents.service';
-import { Resident }        from '../../residents/entities/resident.entity';
-import { ResidentStatus }  from '../../residents/enums/resident-status.enum';
-import { AuditService }   from '../../audit/services/audit.service';
-import { AuditAction }    from '../../audit/enums/audit-action.enum';
+import { Resident } from '../../residents/entities/resident.entity';
+import { ResidentStatus } from '../../residents/enums/resident-status.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { NotificationsService } from '../../notifications/services/notifications.service';
-import { NotificationType }     from '../../notifications/enums/notification-type.enum';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { ParkingRecord } from '../../vehicles/entities/parking-record.entity';
+import { ParkingRateType } from '../enums/parking-rate-type.enum';
+import { ParkingPaymentMethod } from '../enums/parking-payment-method.enum';
+import { ResgiterExitVehicle } from '../dto/inputs/register-exit-vehicle.input';
+import { FeeCharge } from '../../finance/entities/fee-charge.entity';
+import { ChargeStatus } from '../../finance/enums/charge-status.enum';
 
 @Injectable()
 export class VisitorParkingService {
   private readonly logger = new Logger(VisitorParkingService.name);
 
   constructor(
-    @InjectRepository(ParkingRate)
-    private readonly rateRepo: Repository<ParkingRate>,
 
     @InjectRepository(VisitorVehicle)
     private readonly vehicleRepo: Repository<VisitorVehicle>,
 
+    @InjectRepository(VisitorParkingConfig)
+    private readonly configRepo: Repository<VisitorParkingConfig>,
+
+    @InjectRepository(VisitorParkingRate)
+    private readonly visitorRateRepo: Repository<VisitorParkingRate>,
+  
+  
+    @InjectRepository(VisitorParkingRate)
+    private readonly rateRepo: Repository<VisitorParkingRate>,
+
     @InjectRepository(Resident)
     private readonly residentRepo: Repository<Resident>,
 
+    @InjectRepository(ParkingRecord)
+    private readonly recordRepo: Repository<ParkingRecord>,
+
+    @InjectRepository(FeeCharge)
+    private readonly chargeRepo: Repository<FeeCharge>,
+
     private readonly complexService: ResidentialComplexService,
     private readonly residentsService: ResidentsService,
-    private readonly auditService:    AuditService,
+    private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+
   ) { }
 
   // ================================================================
@@ -57,36 +81,34 @@ export class VisitorParkingService {
   async setParkingRate(
     input: SetParkingRateInput,
     currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate> {
-
+  ): Promise<VisitorParkingRate> {
+    const { complexId, vehicleType, rateType } = input;
     this.logger.warn(`DATOS DE INGRESO ${JSON.stringify(input, null, 5)}`)
     await this.complexService.findById(input.complexId, currentUser);
 
     let rate = await this.rateRepo.findOne({
-      where: { complexId: input.complexId, vehicleType: input.vehicleType },
+      where: { complexId, vehicleType, type: rateType },
     });
 
     if (rate) {
-      // Actualizar tarifa existente
-      rate.ratePerMinute = input.ratePerMinute;
+      rate.type = input.rateType;
       rate.isActive = input.isActive ?? rate.isActive;
       rate.description = input.description ?? rate.description;
-      rate.updatedByUserId = currentUser.sub;
     } else {
       // Crear nueva tarifa
       rate = this.rateRepo.create({
         complexId: input.complexId,
         vehicleType: input.vehicleType,
-        ratePerMinute: input.ratePerMinute,
+        type: input.rateType,
         isActive: input.isActive ?? true,
         description: input.description,
-        createdByUserId: currentUser.sub,
+        createdByUser: currentUser,
       });
     }
 
     const saved = await this.rateRepo.save(rate);
     this.logger.log(
-      `Tarifa [${input.vehicleType}] → $${input.ratePerMinute}/m en complejo ${input.complexId}`,
+      `Tarifa [${input.vehicleType}] → $${input.rateType}/m en complejo ${input.complexId}`,
     );
     return saved;
   }
@@ -97,7 +119,7 @@ export class VisitorParkingService {
   async getParkingRates(
     complexId: string,
     currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate[]> {
+  ): Promise<VisitorParkingRate[]> {
     await this.complexService.findById(complexId, currentUser);
 
     return this.rateRepo.find({
@@ -107,13 +129,39 @@ export class VisitorParkingService {
     });
   }
 
+
+    // ================================================================
+  // OBTENER CONFIGURACIÓN
+  // ================================================================
+
+  async findConfig(complexId: string): Promise<VisitorParkingConfig | null> {
+    return this.configRepo.findOne({ where: { complexId } });
+  }
+
+
+    private async generateInvoiceNumber(complexId: string): Promise<string> {
+    const now   = new Date();
+    const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const prefix  = `PKG-${today}-`;
+
+    // Contar cuántos registros de HOY ya existen en este complejo
+    const count = await this.vehicleRepo
+      .createQueryBuilder('vv')
+      .where('vv.complex_id = :complexId', { complexId })
+      .andWhere('vv.invoice_number LIKE :prefix', { prefix: `${prefix}%` })
+      .getCount();
+
+    const sequence = String(count + 1).padStart(4, '0');
+    return `${prefix}${sequence}`;
+  }
+
   /**
    * Activa o desactiva una tarifa existente.
    */
   async toggleParkingRate(
     rateId: string,
     currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate> {
+  ): Promise<VisitorParkingRate> {
     const rate = await this.rateRepo.findOne({ where: { id: rateId } });
 
     if (!rate) {
@@ -127,7 +175,7 @@ export class VisitorParkingService {
     await this.complexService.findById(rate.complexId, currentUser);
 
     rate.isActive = !rate.isActive;
-    rate.updatedByUserId = currentUser.sub;
+    rate.updatedByUser.id = currentUser.sub;
 
     return this.rateRepo.save(rate);
   }
@@ -166,16 +214,19 @@ export class VisitorParkingService {
       });
     }
 
+    const invoiceNumber = await this.generateInvoiceNumber(input.complexId);
+
     const vehicle = this.vehicleRepo.create({
       plate: input.plate,
       vehicleType: input.vehicleType,
       driverName: input.driverName,
-      entryTime: new Date(),
-      status: ParkingStatus.INSIDE,
+      entryDate: new Date(),
+      status: ParkingRecordStatus.OPEN,
       hostResidentId: input.hostResidentId,
       complexId: input.complexId,
       notes: input.notes,
       registeredByUserId: currentUser.sub,
+      invoiceNumber,
     });
 
     const saved = await this.vehicleRepo.save(vehicle);
@@ -184,108 +235,131 @@ export class VisitorParkingService {
     );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.VisitorVehicle,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, plate: saved.plate, vehicleType: saved.vehicleType, status: saved.status, entryTime: saved.entryTime },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.VisitorVehicle,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: { id: saved.id, plate: saved.plate, vehicleType: saved.vehicleType, status: saved.status, entryTime: saved.entryDate },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Ingreso de vehículo visitante [${input.plate}] — residente anfitrión: ${input.hostResidentId}`,
+      complexId: input.complexId,
+      description: `Ingreso de vehículo visitante [${input.plate}] — residente anfitrión: ${input.hostResidentId}`,
     });
 
     return this.loadRelations(saved.id);
   }
 
-  /**
-   * Registra la salida de un vehículo visitante y calcula el costo
-   * del parqueo basado en el tiempo transcurrido y la tarifa vigente.
-   *
-   * Fórmula: ceil(minutos / 60) × tarifa_por_hora
-   * (se cobra por hora completa, redondeando hacia arriba)
-   */
+
   async registerExit(
-    visitorVehicleId: string,
+    input: ResgiterExitVehicle,
     currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-    const vehicle = await this.vehicleRepo.findOne({
+
+    const { paymentMethod, visitorVehicleId } = input;
+    // 1. Obtener registro y validar
+    const record = await this.vehicleRepo.findOne({
       where: { id: visitorVehicleId },
+      relations: ['hostResident', 'hostResident.unit'],
     });
 
-    if (!vehicle) {
+    if (!record || record.status !== ParkingRecordStatus.OPEN) {
       throw new CustomError({
-        message: `Registro de parqueadero con ID "${visitorVehicleId}" no encontrado`,
-        statusCode: HttpStatus.NOT_FOUND,
-        errorCode: ParkingErrorCode.PARKING_RECORD_NOT_FOUND,
+        message: record ? `Registro ya cerrado.` : `Registro no encontrado.`,
+        statusCode: record ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND,
       });
     }
 
-    if (vehicle.status !== ParkingStatus.INSIDE) {
-      throw new CustomError({
-        message: `El vehículo no está actualmente dentro del parqueadero. Estado: ${vehicle.status}`,
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: ParkingErrorCode.PARKING_VEHICLE_NOT_INSIDE,
-      });
-    }
-
-    await this.complexService.findById(vehicle.complexId, currentUser);
-
-
-    // Buscar tarifa activa para este tipo de vehículo en el complejo
-    const rate = await this.rateRepo.findOne({
+    // 2. Obtener la tarifa activa para este registro
+    // configId == complexId porque VisitorParkingConfig usa complexId como PK
+    const activeRate = await this.rateRepo.findOne({
       where: {
-        complexId: vehicle.complexId,
-        vehicleType: vehicle.vehicleType,
+        configId: record.complexId,
         isActive: true,
-      },
+      }
     });
 
-    const rateApplied = rate ? Number(rate.ratePerMinute) : 0;
-
-    const exitTime = new Date();
-    const diffInMilliseconds = exitTime.getTime() - vehicle.entryTime.getTime();
-    const exactMinutes = diffInMilliseconds / 60_000;
-
-    const minutesToCharge = Math.max(1, Math.round(exactMinutes));
-
-    const parkingCost = parseFloat((minutesToCharge * rateApplied).toFixed(2));
-
-    vehicle.exitTime = exitTime;
-    vehicle.minutesParked = minutesToCharge;
-    vehicle.rateApplied = rateApplied;
-    vehicle.parkingCost = parkingCost;
-    vehicle.status = ParkingStatus.EXITED;
-    vehicle.exitRegisteredByUserId = currentUser.sub;
-
-    const saved = await this.vehicleRepo.save(vehicle);
-
-    this.logger.log(
-      `Salida vehículo [${vehicle.plate}] — ${exactMinutes.toFixed(2)} min reales → ` +
-      `${minutesToCharge} min cobrados × $${rateApplied}/min = $${parkingCost}`,
-    );
-
-    void this.auditService.log({
-      entityType:      AuditEntityType.VisitorVehicle,
-      entityId:        saved.id,
-      action:          AuditAction.UPDATE,
-      previousValue:   { status: ParkingStatus.INSIDE },
-      newValue:        { status: ParkingStatus.EXITED, exitTime: saved.exitTime, minutesParked: saved.minutesParked, parkingCost: saved.parkingCost },
-      performedById:   currentUser.sub,
-      performedByName: currentUser.email,
-      performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Salida vehículo visitante [${vehicle.plate}] — ${minutesToCharge} min → $${parkingCost}`,
-    });
-
-    const withRelations = await this.loadRelations(saved.id);
-
-    // Notificar al residente principal si se generó un cargo (fire-and-forget)
-    if (parkingCost > 0) {
-      this.notifyResidentsOfCharge(withRelations).catch(() => null);
+    if (!activeRate) {
+      throw new CustomError({
+        message: 'No existe una tarifa activa configurada para este complejo.',
+        statusCode: HttpStatus.NOT_FOUND,
+      });
     }
 
-    return withRelations;
+    // 3. Cálculo de Tiempos
+    const exitDate = new Date();
+    const diffMs = exitDate.getTime() - record.entryDate.getTime();
+    const exactMinutes = diffMs / 60_000;
+    const durationMinutes = Math.ceil(exactMinutes); // Cobro por minuto iniciado
+
+    let total = 0;
+    // Usamos el periodo de gracia de la tarifa, o 0 si no tiene
+    const graceMinutes = activeRate.gracePeriodMinutes ?? 0;
+
+    // 4. Lógica de Cobro
+    if (exactMinutes > graceMinutes) {
+      const rateAmount = Number(activeRate.amount);
+
+      // Calcular según el tipo de tarifa
+      switch (activeRate.type) {
+        case ParkingRateType.PER_MINUTE:
+          total = durationMinutes * rateAmount;
+          break;
+        case ParkingRateType.PER_HOUR:
+          total = Math.ceil(durationMinutes / 60) * rateAmount;
+          break;
+        case ParkingRateType.DAILY:
+          total = Math.ceil(durationMinutes / 1440) * rateAmount;
+          break;
+        case ParkingRateType.FIXED:
+        case ParkingRateType.EVENT:
+        default:
+          total = rateAmount;
+      }
+
+      // APLICAR TOPE MÁXIMO DIARIO
+      if (activeRate.maxDailyAmount && total > Number(activeRate.maxDailyAmount)) {
+        this.logger.debug(`Aplicando tope máximo: ${total} -> ${activeRate.maxDailyAmount}`);
+        total = Number(activeRate.maxDailyAmount);
+      }
+    } else {
+      total = 0; // Dentro del tiempo de gracia
+    }
+
+    total = Number(total.toFixed(2));
+
+    // 5. Procesar Pago o Cargo a Unidad
+    let newStatus: ParkingRecordStatus = ParkingRecordStatus.PAID;
+
+    if (input.paymentMethod === ParkingPaymentMethod.CHARGE_TO_UNIT) {
+      if (!record.hostResident.unitId) throw new CustomError({ message: 'Registro sin unidad asignada.', statusCode: 400 });
+
+      const period = `${exitDate.getFullYear()}-${String(exitDate.getMonth() + 1).padStart(2, '0')}`;
+      await this.chargeRepo.save(
+        this.chargeRepo.create({
+          complexId: record.complexId,
+          unitId: record.hostResident.unitId,
+          period,
+          amount: total,
+          description: `Parqueadero: ${record.plate} (${durationMinutes} min)`,
+          status: ChargeStatus.PENDING,
+        }),
+      );
+      newStatus = ParkingRecordStatus.CHARGED_TO_UNIT;
+    }
+
+    // 6. Guardar y Auditar
+    record.exitDate = exitDate;
+    record.duration = durationMinutes;
+    record.parkingCost = total;
+    record.paymentMethod = input.paymentMethod;
+    record.status = newStatus;
+
+
+    const saved = await this.vehicleRepo.save(record);
+
+    this.logger.log(`Salida Exitosa: ${saved.plate} - Cobrado: $${total} (${durationMinutes} min)`);
+
+    return saved;
   }
 
   /**
@@ -309,7 +383,7 @@ export class VisitorParkingService {
       });
     }
 
-    if (vehicle.status !== ParkingStatus.INSIDE) {
+    if (vehicle.status !== ParkingRecordStatus.OPEN) {
       throw new CustomError({
         message: `Solo se pueden cancelar registros con estado INSIDE. Estado actual: ${vehicle.status}`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -319,26 +393,106 @@ export class VisitorParkingService {
 
     await this.complexService.findById(vehicle.complexId, currentUser);
 
-    vehicle.status = ParkingStatus.CANCELLED;
+    vehicle.status = ParkingRecordStatus.CANCELLED;
     vehicle.cancellationReason = cancellationReason;
     vehicle.cancelledByUserId = currentUser.sub;
 
     const saved = await this.vehicleRepo.save(vehicle);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.VisitorVehicle,
-      entityId:        visitorVehicleId,
-      action:          AuditAction.DELETE,
-      previousValue:   { status: ParkingStatus.INSIDE },
-      newValue:        { status: ParkingStatus.CANCELLED, cancellationReason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.VisitorVehicle,
+      entityId: visitorVehicleId,
+      action: AuditAction.DELETE,
+      previousValue: { status: ParkingRecordStatus.OPEN },
+      newValue: { status: ParkingRecordStatus.CANCELLED, cancellationReason },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Registro de parqueadero cancelado — placa: ${vehicle.plate} — razón: ${cancellationReason}`,
+      complexId: vehicle.complexId,
+      description: `Registro de parqueadero cancelado — placa: ${vehicle.plate} — razón: ${cancellationReason}`,
     });
 
     return saved;
+  }
+
+  // ================================================================
+  // CONFIGURACIÓN DEL PARQUEADERO VISITANTE
+  // ================================================================
+
+  /**
+   * Retorna la configuración del parqueadero visitante para un complejo.
+   * Devuelve null si aún no se ha creado ninguna configuración.
+   */
+  async getVisitorParkingConfig(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VisitorParkingConfig | null> {
+    await this.complexService.findById(complexId, currentUser);
+
+    return this.configRepo.findOne({
+      where: { complexId },
+      relations: ['rates'],
+      order: { rates: { createdAt: 'ASC' } } as any,
+    });
+  }
+
+  /**
+   * Crea o actualiza la configuración del parqueadero visitante.
+   * Si ya existe una configuración para el complejo, la actualiza (upsert).
+   * Las tarifas incluidas en el input se crean o actualizan según si tienen ID.
+   */
+  async updateVisitorParkingConfig(
+    input: UpdateVisitorParkingConfigInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<VisitorParkingConfig> {
+    await this.complexService.findById(input.complexId, currentUser);
+
+    let config = await this.configRepo.findOne({
+      where: { complexId: input.complexId },
+    });
+
+    if (!config) {
+      config = this.configRepo.create({ complexId: input.complexId });
+    }
+
+    if (input.maxCapacity !== undefined) config.maxCapacity = input.maxCapacity;
+    if (input.gracePeriodMinutes !== undefined) config.gracePeriodMinutes = input.gracePeriodMinutes;
+    if (input.receiptMessage !== undefined) config.receiptMessage = input.receiptMessage;
+    if (input.showLogoOnReceipt !== undefined) config.showLogoOnReceipt = input.showLogoOnReceipt;
+    if (input.activeRateId !== undefined) config.activeRateId = input.activeRateId;
+    if (input.currency !== undefined) config.currency = input.currency;
+
+    const saved = await this.configRepo.save(config);
+
+    if (input.rates?.length) {
+      for (const rateInput of input.rates) {
+        if (rateInput.id) {
+          await this.visitorRateRepo.update(
+            { id: rateInput.id, configId: saved.id },
+            {
+              name: rateInput.name,
+              type: rateInput.type,
+              amount: rateInput.amount,
+              currency: rateInput.currency,
+              description: rateInput.description,
+              isActive: rateInput.isActive,
+            },
+          );
+        } else {
+          await this.visitorRateRepo.save(
+            this.visitorRateRepo.create({ ...rateInput, configId: saved.id, complexId: input.complexId }),
+          );
+        }
+      }
+    }
+
+    this.logger.log(`Configuración de parqueadero visitante actualizada — complejo: ${input.complexId}`);
+
+    return this.configRepo.findOne({
+      where: { complexId: input.complexId },
+      relations: ['rates'],
+      order: { rates: { createdAt: 'ASC' } } as any,
+    });
   }
 
   // ================================================================
@@ -355,9 +509,9 @@ export class VisitorParkingService {
     await this.complexService.findById(complexId, currentUser);
 
     return this.vehicleRepo.find({
-      where: { complexId, status: ParkingStatus.INSIDE },
-      relations: ['hostResident', 'hostResident.user', 'registeredByUser'],
-      order: { entryTime: 'ASC' },
+      where: { complexId, status: ParkingRecordStatus.OPEN },
+      relations: ['hostResident', 'hostResident.user', 'hostResident.unit', 'hostResident.unit.building', 'registeredByUser'],
+      order: { entryDate: 'ASC' },
     });
   }
 
@@ -375,6 +529,8 @@ export class VisitorParkingService {
       .createQueryBuilder('vv')
       .leftJoinAndSelect('vv.hostResident', 'resident')
       .leftJoinAndSelect('resident.user', 'residentUser')
+      .leftJoinAndSelect('resident.unit', 'residentUnit')
+      .leftJoinAndSelect('residentUnit.building', 'residentBuilding')
       .leftJoinAndSelect('vv.registeredByUser', 'registeredBy')
       .leftJoinAndSelect('vv.exitRegisteredByUser', 'exitBy')
       .where('vv.complex_id = :complexId', { complexId: filters.complexId });
@@ -384,7 +540,7 @@ export class VisitorParkingService {
     }
 
     if (filters.vehicleType) {
-      qb.andWhere('vv.vehicle_type = :vehicleType', { vehicleType: filters.vehicleType });
+      qb.andWhere('vv.vehicleType = :vehicleType', { vehicleType: filters.vehicleType });
     }
 
     if (filters.plate) {
@@ -392,18 +548,18 @@ export class VisitorParkingService {
     }
 
     if (filters.hostResidentId) {
-      qb.andWhere('vv.host_resident_id = :hostResidentId', { hostResidentId: filters.hostResidentId });
+      qb.andWhere('vv.hostResident_id = :hostResidentId', { hostResidentId: filters.hostResidentId });
     }
 
     if (filters.dateFrom) {
-      qb.andWhere('vv.entry_time >= :dateFrom', { dateFrom: filters.dateFrom });
+      qb.andWhere('vv.entryDate >= :dateFrom', { dateFrom: filters.dateFrom });
     }
 
     if (filters.dateTo) {
-      qb.andWhere('vv.entry_time <= :dateTo', { dateTo: filters.dateTo });
+      qb.andWhere('vv.entryDate <= :dateTo', { dateTo: filters.dateTo });
     }
 
-    qb.orderBy('vv.entry_time', 'DESC');
+    qb.orderBy('vv.entryDate', 'DESC');
 
     const totalItems = await qb.getCount();
     const totalPages = Math.ceil(totalItems / pagination.limit);
@@ -457,6 +613,7 @@ export class VisitorParkingService {
         'hostResident',
         'hostResident.user',
         'hostResident.unit',
+        'hostResident.unit.building',
         'complex',
         'registeredByUser',
         'exitRegisteredByUser',
@@ -476,8 +633,8 @@ export class VisitorParkingService {
     const mainResidents = await this.residentRepo.find({
       where: {
         unitId,
-        complexId:      vehicle.complexId,
-        status:         ResidentStatus.ACTIVE,
+        complexId: vehicle.complexId,
+        status: ResidentStatus.ACTIVE,
         isMainResident: true,
       },
     });
@@ -487,28 +644,28 @@ export class VisitorParkingService {
 
     const cost = Number(vehicle.parkingCost ?? 0);
     const totalFormatted = new Intl.NumberFormat('es-CO', {
-      style:                 'currency',
-      currency:              'COP',
+      style: 'currency',
+      currency: 'COP',
       maximumFractionDigits: 0,
     }).format(cost);
 
     const unitNumber = vehicle.hostResident?.unit?.number ?? unitId;
 
     await this.notificationsService.notify({
-      complexId:  vehicle.complexId,
+      complexId: vehicle.complexId,
       userIds,
-      type:       NotificationType.PARKING_ASSIGNED,
-      priority:   NotificationPriority.HIGH,
-      title:      'Cargo de parqueadero a tu unidad',
-      body:       `Se generó un cargo de ${totalFormatted} por parqueadero visitante (${vehicle.plate}). Revisa tu estado de cuenta.`,
-      entityId:   vehicle.id,
+      type: NotificationType.PARKING_ASSIGNED,
+      priority: NotificationPriority.HIGH,
+      title: 'Cargo de parqueadero a tu unidad',
+      body: `Se generó un cargo de ${totalFormatted} por parqueadero visitante (${vehicle.plate}). Revisa tu estado de cuenta.`,
+      entityId: vehicle.id,
       entityType: 'visitor_vehicle',
       metadata: {
         visitorVehicleId: vehicle.id,
-        plate:            vehicle.plate,
-        total:            cost,
+        plate: vehicle.plate,
+        total: cost,
         unitNumber,
-        exitTime:         vehicle.exitTime?.toISOString(),
+        exitTime: vehicle.exitDate?.toISOString(),
       },
     });
   }

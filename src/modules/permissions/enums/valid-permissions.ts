@@ -211,6 +211,15 @@ export enum ValidPermissions {
   /** Configurar y ejecutar la rotación de parqueaderos del complejo. ➜ Nivel: [HIGH] */
   MANAGE_PARKING_ROTATION    = 'MANAGE_PARKING_ROTATION',
 
+  /** Configurar parámetros de rotación (slots, intervalo). ➜ Nivel: [HIGH] */
+  CONFIGURE_ROTATION         = 'CONFIGURE_ROTATION',
+
+  /** Ejecutar manualmente un ciclo de rotación. ➜ Nivel: [HIGH] */
+  EXECUTE_ROTATION           = 'EXECUTE_ROTATION',
+
+  /** Ver el estado actual de la rotación de parqueaderos. ➜ Nivel: [LOW] */
+  VIEW_ROTATION              = 'VIEW_ROTATION',
+
   // ═══════════════════════════════════════════════════════
   // FINANZAS
   // ═══════════════════════════════════════════════════════
@@ -245,6 +254,12 @@ export enum ValidPermissions {
   /** Ver reportes financieros del complejo. ➜ Nivel: [MEDIUM] */
   VIEW_FINANCIAL_REPORTS     = 'VIEW_FINANCIAL_REPORTS',
 
+  /** Ver listado de gastos operativos del complejo. ➜ Nivel: [LOW] */
+  VIEW_EXPENSES              = 'VIEW_EXPENSES',
+
+  /** Registrar y revertir gastos operativos del complejo. ➜ Nivel: [HIGH] */
+  MANAGE_EXPENSES            = 'MANAGE_EXPENSES',
+
   // ═══════════════════════════════════════════════════════
   // NOTAS / MINUTAS
   // ═══════════════════════════════════════════════════════
@@ -257,6 +272,42 @@ export enum ValidPermissions {
 
   /** Eliminar notas (solo SUPER_ADMIN). ➜ Nivel: [CRITICAL] */
   DELETE_NOTE                = 'DELETE_NOTE',
+
+  // ═══════════════════════════════════════════════════════
+  // LLAMADAS
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver historial de llamadas del complejo. ➜ Nivel: [LOW] */
+  VIEW_CALL_LOGS             = 'VIEW_CALL_LOGS',
+
+  /** Registrar una llamada realizada/recibida. ➜ Nivel: [LOW] */
+  LOG_CALL                   = 'LOG_CALL',
+
+  // ═══════════════════════════════════════════════════════
+  // MENSAJES ENVIADOS
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver historial de mensajes enviados del complejo. ➜ Nivel: [LOW] */
+  VIEW_SENT_MESSAGES         = 'VIEW_SENT_MESSAGES',
+
+  /** Enviar y registrar mensaje a residentes. ➜ Nivel: [MEDIUM] */
+  SEND_MESSAGE               = 'SEND_MESSAGE',
+
+  // ═══════════════════════════════════════════════════════
+  // NÚMEROS ESPECIALES
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver números especiales del complejo. ➜ Nivel: [LOW] */
+  VIEW_SPECIAL_NUMBERS       = 'VIEW_SPECIAL_NUMBERS',
+
+  /** Crear números especiales. ➜ Nivel: [MEDIUM] */
+  CREATE_SPECIAL_NUMBER      = 'CREATE_SPECIAL_NUMBER',
+
+  /** Editar números especiales. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_SPECIAL_NUMBERS] */
+  EDIT_SPECIAL_NUMBER        = 'EDIT_SPECIAL_NUMBER',
+
+  /** Eliminar números especiales. ➜ Nivel: [HIGH] | Requiere: [VIEW_SPECIAL_NUMBERS] */
+  DELETE_SPECIAL_NUMBER      = 'DELETE_SPECIAL_NUMBER',
 
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN                = 'SUPERADMIN',

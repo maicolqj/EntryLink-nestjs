@@ -2,7 +2,6 @@ import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { In, Repository } from 'typeorm';
-import { PubSub } from 'graphql-subscriptions';
 import * as admin from 'firebase-admin';
 import * as webpush from 'web-push';
 
@@ -11,6 +10,8 @@ import { PushSubscription }              from '../entities/push-subscription.ent
 import { NotificationBatch }             from '../entities/notification-batch.entity';
 import { NotificationType }              from '../enums/notification-type.enum';
 import { NotificationPriority }          from '../enums/notification-priority.enum';
+import { NotificationActionType }        from '../enums/notification-action-type.enum';
+import { NotificationActionResult }      from '../enums/notification-action-result.enum';
 import { PushPlatform }                  from '../enums/push-platform.enum';
 import { CreateNotificationPayload }     from '../dto/inputs/create-notification.input';
 import { FilterNotificationsInput }      from '../dto/inputs/filter-notifications.input';
@@ -22,6 +23,7 @@ import { UnreadCountResponse }           from '../dto/responses/unread-count.res
 import { PushSubscriptionResult }             from '../dto/responses/push-subscription-result.response';
 import { SendNotificationResult }             from '../dto/responses/send-notification.response';
 import { SentNotification, SentNotificationPaginatedResult } from '../dto/responses/sent-notifications.response';
+import { NotificationDetailResponse, NotificationUserInfo } from '../dto/responses/notification-detail.response';
 
 import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
 import { CustomError }      from '../../shared/utils/errors.utils';
@@ -34,27 +36,40 @@ import { Role }     from '../../roles/entities/role.entity';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
-
-/** Evento GraphQL Subscription para notificaciones en tiempo real */
-export const NOTIFICATION_ADDED = 'notificationAdded';
+import { SocketService }    from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent }      from '../../../core/infrastructure/socket/socket.events';
 
 /** Parámetros para el método notify() llamado desde otros módulos */
 export interface NotifyParams {
-  complexId:  string;
-  userIds:    string[];
-  type:       NotificationType;
-  priority:   NotificationPriority;
-  title:      string;
-  body:       string;
-  entityId?:  string;
-  entityType?: string;
-  metadata?:  Record<string, unknown>;
+  complexId:        string;
+  userIds:          string[];
+  type:             NotificationType;
+  priority:         NotificationPriority;
+  title:            string;
+  body:             string;
+  entityId?:        string;
+  entityType?:      string;
+  metadata?:        Record<string, unknown>;
+  /** ID del usuario que originó la notificación. */
+  createdByUserId?: string;
+  /** true si el destinatario debe tomar una acción (aprobar, rechazar, etc.). */
+  isActionable?:    boolean;
+  /** Tipo de acción esperada. */
+  actionType?:      NotificationActionType;
+  /** Etiqueta del botón de acción en el frontend. */
+  actionLabel?:     string;
+  /**
+   * Si true, se crea UN solo registro en BD con recipientUserId = null.
+   * El push delivery sigue siendo fan-out a todos los userIds.
+   */
+  isBroadcast?:     boolean;
+  /** Roles destinatarios del broadcast (para trazabilidad). */
+  targetRoles?:     string[];
 }
 
 @Injectable()
 export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly pubSub = new PubSub();
 
   /** Indica si firebase-admin fue inicializado correctamente */
   private fcmEnabled = false;
@@ -82,6 +97,7 @@ export class NotificationsService implements OnModuleInit {
 
     private readonly configService: ConfigService,
     private readonly residentsService: ResidentsService,
+    private readonly socketService: SocketService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +184,19 @@ export class NotificationsService implements OnModuleInit {
     return saved;
   }
 
+  private async dispatchPushOnly(userIds: string[], params: NotifyParams): Promise<void> {
+    if (userIds.length === 0) return;
+    const subscriptions = await this.pushSubRepo.find({
+      where: { userId: In(userIds), isActive: true },
+    });
+    const webSubs    = subscriptions.filter(s => s.platform === PushPlatform.WEB);
+    const mobileSubs = subscriptions.filter(s => s.platform !== PushPlatform.WEB);
+    await Promise.allSettled([
+      this.dispatchWebPush(webSubs, params),
+      this.dispatchFCM(mobileSubs, params),
+    ]);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // CREACIÓN (llamado desde otros módulos — API legacy)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -190,16 +219,22 @@ export class NotificationsService implements OnModuleInit {
       entityType:      payload.entityType,
       metadata:        payload.metadata,
       isRead:          false,
+      createdByUserId: payload.createdByUserId,
+      isActionable:    payload.isActionable ?? false,
+      actionType:      payload.actionType,
+      actionLabel:     payload.actionLabel,
     });
 
     const saved = await this.notifRepo.save(notification);
 
-    await this.pubSub.publish(NOTIFICATION_ADDED, {
-      notificationAdded: saved,
-    });
+    if (saved.recipientUserId) {
+      this.socketService.emitToUser(saved.recipientUserId, SocketEvent.NOTIFICATION_NEW, saved);
+    } else {
+      this.socketService.emitToComplex(saved.complexId, SocketEvent.NOTIFICATION_NEW, saved);
+    }
 
     this.logger.debug(
-      `Notificación [${saved.type}] creada para usuario ${saved.recipientUserId ?? 'broadcast'} en complejo ${saved.complexId}`,
+      `[Socket] Notificación emitida [${saved.type}] → usuario ${saved.recipientUserId ?? 'broadcast'} | complejo ${saved.complexId}`,
     );
 
     return saved;
@@ -219,19 +254,67 @@ export class NotificationsService implements OnModuleInit {
         priority:        payload.priority ?? NotificationPriority.NORMAL,
         recipientUserId: userId,
         isRead:          false,
+        isActionable:    payload.isActionable ?? false,
       }),
     );
 
     const saved = await this.notifRepo.save(notifications);
 
     for (const n of saved) {
-      await this.pubSub.publish(NOTIFICATION_ADDED, { notificationAdded: n });
+      this.socketService.emitToUser(n.recipientUserId, SocketEvent.NOTIFICATION_NEW, n);
+      this.logger.debug(
+        `[Socket] Notificación emitida [${n.type}] → usuario ${n.recipientUserId} | complejo ${n.complexId}`,
+      );
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // MUTACIONES GRAPHQL
   // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Elimina una notificación con control de acceso por rol */
+  async deleteNotification(
+    notificationId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    const notif = await this.notifRepo.findOne({ where: { id: notificationId } });
+    if (!notif) return true;
+
+    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isComplexAdmin = currentUser.roles.some(r =>
+      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    );
+
+    if (isSuperAdmin) {
+      // puede eliminar cualquier notificación
+    } else if (isComplexAdmin) {
+      if (notif.complexId !== currentUser.complexId) {
+        throw new CustomError({
+          message: 'No tienes permiso para eliminar esta notificación',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+    } else {
+      if (notif.isBroadcast) {
+        throw new CustomError({
+          message: 'Las notificaciones de difusión no pueden eliminarse individualmente',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+      if (notif.recipientUserId !== currentUser.sub) {
+        throw new CustomError({
+          message: 'No tienes permiso para eliminar esta notificación',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+    }
+
+    await this.notifRepo.delete(notificationId);
+    return true;
+  }
 
   /** Marca una notificación como leída */
   async markAsRead(
@@ -241,6 +324,9 @@ export class NotificationsService implements OnModuleInit {
     const notif = await this.findByIdOrFail(notificationId);
     this.assertRecipient(notif, currentUser);
 
+    // Los broadcasts son registros compartidos; el estado de lectura no aplica individualmente
+    if (notif.isBroadcast) return notif;
+
     if (notif.isRead) return notif;
 
     notif.isRead = true;
@@ -248,20 +334,28 @@ export class NotificationsService implements OnModuleInit {
     return this.notifRepo.save(notif);
   }
 
-  /** Marca todas las notificaciones no leídas del usuario como leídas */
+  /** Marca todas las notificaciones no leídas como leídas según el alcance del rol */
   async markAllAsRead(
     complexId: string,
     currentUser: JwtAccessPayload,
   ): Promise<number> {
-    const result = await this.notifRepo
+    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isComplexAdmin = currentUser.roles.some(r =>
+      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    );
+
+    const qb = this.notifRepo
       .createQueryBuilder()
       .update(Notification)
       .set({ isRead: true, readAt: new Date() })
-      .where('recipientUserId = :userId', { userId: currentUser.sub })
-      .andWhere('complexId = :complexId', { complexId })
-      .andWhere('isRead = false')
-      .execute();
+      .where('complexId = :complexId', { complexId })
+      .andWhere('isRead = false');
 
+    if (!isSuperAdmin && !isComplexAdmin) {
+      qb.andWhere('recipientUserId = :userId', { userId: currentUser.sub });
+    }
+
+    const result = await qb.execute();
     return result.affected ?? 0;
   }
 
@@ -289,15 +383,23 @@ export class NotificationsService implements OnModuleInit {
     // por eso senderId queda null para evitar violar la FK a users.
     const senderId = currentUser.entityType === 'user' ? currentUser.sub : null;
 
+    // Excluir al emisor de los destinatarios cuando es un usuario humano
+    const filteredUserIds = senderId
+      ? userIds.filter(id => id !== senderId)
+      : userIds;
+
     const [created] = await Promise.all([
       this.notify({
-        complexId: input.complexId,
-        userIds,
+        complexId:       input.complexId,
+        userIds:         filteredUserIds,
         type,
         priority,
-        title:    input.title,
-        body:     input.body,
-        metadata: input.metadata,
+        title:           input.title,
+        body:            input.body,
+        metadata:        input.metadata,
+        createdByUserId: senderId ?? undefined,
+        isBroadcast:     false,
+        targetRoles,
       }),
       this.batchRepo.save(
         this.batchRepo.create({
@@ -428,8 +530,11 @@ export class NotificationsService implements OnModuleInit {
 
     const qb = this.notifRepo
       .createQueryBuilder('n')
-      .where('n.recipientUserId = :userId', { userId: currentUser.sub })
-      .andWhere('n.complexId = :complexId', { complexId });
+      .where('n.complexId = :complexId', { complexId })
+      .andWhere(
+        '(n.recipientUserId = :userId OR n.isBroadcast = true)',
+        { userId: currentUser.sub },
+      );
 
     if (filters.type)     qb.andWhere('n.type = :type',         { type:     filters.type });
     if (filters.priority) qb.andWhere('n.priority = :priority', { priority: filters.priority });
@@ -493,18 +598,150 @@ export class NotificationsService implements OnModuleInit {
     };
   }
 
-  /** Número de notificaciones no leídas del usuario en el complejo */
+  /**
+   * Devuelve el detalle completo de una notificación, incluyendo
+   * información enriquecida del creador, destinatario y —si aplica—
+   * del usuario que ejecutó la acción.
+   *
+   * Acceso:
+   *  - El propio destinatario puede consultarla.
+   *  - Roles admin/staff pueden consultar cualquier notificación del complejo.
+   */
+  async findOneDetail(
+    notificationId: string,
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<NotificationDetailResponse> {
+    const notif = await this.notifRepo.findOne({
+      where: { id: notificationId, complexId },
+    });
+
+    if (!notif) {
+      throw new CustomError({
+        message: 'Notificación no encontrada',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    // Solo el destinatario puede verla; admins/staff pueden ver cualquiera del complejo
+    const isAdmin = currentUser.roles?.some(r =>
+      [
+        ValidRoles.SUPER_ADMIN_ROL,
+        ValidRoles.COMPLEX_ROL,
+        ValidRoles.SUPERVISOR_ROL,
+        ValidRoles.COMPILANCE_OFFICER_ROL,
+      ].includes(r as ValidRoles),
+    );
+
+    if (!isAdmin && notif.recipientUserId && notif.recipientUserId !== currentUser.sub) {
+      throw new CustomError({
+        message: 'No tienes acceso a esta notificación',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    // ── Recopilar IDs de usuarios relevantes (sin nulls ni duplicados) ─────────
+    // NOTA: recipientUserId puede ser complexId (no un usuario real) en notificaciones
+    // enviadas al panel admin. Solo cargamos IDs que existan en la tabla users.
+    const candidateIds = [...new Set(
+      [notif.createdByUserId, notif.actionTakenByUserId, notif.recipientUserId]
+        .filter((id): id is string => !!id),
+    )];
+
+    const userMap = new Map<string, NotificationUserInfo>();
+
+    if (candidateIds.length > 0) {
+      // getMany() con leftJoinAndSelect para que TypeORM resuelva el mapeo de
+      // columnas (last_name, number_phone, etc.) sin depender de aliases en raw SQL.
+      // No filtramos por deletedAt para mostrar datos históricos aunque el usuario
+      // haya sido eliminado posteriormente.
+      const users = await this.userRepo
+        .createQueryBuilder('u')
+        .leftJoinAndSelect('u.userRoles', 'ur')
+        .leftJoinAndSelect('ur.role', 'r')
+        .where('u.id IN (:...ids)', { ids: candidateIds })
+        .getMany();
+
+      for (const u of users) {
+        const roles = (u.userRoles ?? [])
+          .map(ur => ur.role?.name)
+          .filter((name): name is ValidRoles => name != null)
+          .map(name => name as string);
+
+        userMap.set(u.id, {
+          id:             u.id,
+          name:           u.name,
+          lastName:       u.lastName,
+          fullName:       `${u.name} ${u.lastName}`.trim(),
+          email:          u.email,
+          phoneNumber:    u.phoneNumber,
+          identity:       u.identity,
+          profilePicture: u.profilePicture,
+          roles,
+        }); 
+      }
+    }
+
+    const buildUserInfo = (userId?: string): NotificationUserInfo | undefined => {
+      if (!userId) return undefined;
+      return userMap.get(userId);
+    };
+
+    return {
+      id:                  notif.id,
+      type:                notif.type,
+      priority:            notif.priority,
+      title:               notif.title,
+      body:                notif.body,
+      metadata:            notif.metadata,
+      isBroadcast:         notif.isBroadcast,
+      targetRoles:         notif.targetRoles,
+      isRead:              notif.isRead,
+      readAt:              notif.readAt,
+      recipientUserId:     notif.recipientUserId,
+      recipientUser:       buildUserInfo(notif.recipientUserId),
+      complexId:           notif.complexId,
+      entityId:            notif.entityId,
+      entityType:          notif.entityType,
+      createdByUserId:     notif.createdByUserId,
+      createdByUser:       buildUserInfo(notif.createdByUserId),
+      isActionable:        notif.isActionable,
+      actionType:          notif.actionType,
+      actionLabel:         notif.actionLabel,
+      actionTakenAt:       notif.actionTakenAt,
+      actionTakenByUserId: notif.actionTakenByUserId,
+      actionTakenByUser:   buildUserInfo(notif.actionTakenByUserId),
+      actionResult:        notif.actionResult,
+      createdAt:           notif.createdAt,
+      updatedAt:           notif.updatedAt,
+    };
+  }
+
+  /** Número de notificaciones no leídas en el complejo según el alcance del rol */
   async getUnreadCount(
     complexId: string,
     currentUser: JwtAccessPayload,
   ): Promise<UnreadCountResponse> {
-    const count = await this.notifRepo.count({
-      where: {
-        recipientUserId: currentUser.sub,
-        complexId,
-        isRead: false,
-      },
-    });
+    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isComplexAdmin = currentUser.roles.some(r =>
+      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    );
+
+    const qb = this.notifRepo
+      .createQueryBuilder('n')
+      .where('n.complexId = :complexId', { complexId })
+      .andWhere('n.isRead = false');
+
+    if (!isSuperAdmin && !isComplexAdmin) {
+      qb.andWhere(
+        '(n.recipientUserId = :userId OR n.isBroadcast = true)',
+        { userId: currentUser.sub },
+      );
+    }
+
+    const count = await qb.getCount();
     return { count };
   }
 
@@ -565,28 +802,83 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<TriggerPanicAlertResult> {
     const isSecurity = currentUser.roles.includes(ValidRoles.SECURITY_ROL);
     const isResident = currentUser.roles.includes(ValidRoles.RESIDENT_ROL);
+    const isStaff    = !isSecurity && !isResident; // COMPLEX_ROL, ACCOUNTANT_ROL, SUPERVISOR_ROL, COMPILANCE_OFFICER_ROL
 
-    if (!isSecurity && !isResident) {
-      throw new CustomError({
-        message:    'Solo residentes o personal de seguridad pueden activar la alerta de pánico',
-        statusCode: HttpStatus.FORBIDDEN,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+    let triggerFullName: string | null = null;
+    if (currentUser.entityType === 'user') {
+      const triggeringUser = await this.userRepo.findOne({
+        where:  { id: currentUser.sub },
+        select: ['id', 'name', 'lastName'],
       });
+      if (triggeringUser) triggerFullName = `${triggeringUser.name} ${triggeringUser.lastName}`.trim();
     }
 
-    // ── Caso 3: guardia de seguridad ────────────────────────────────────────
-    if (isSecurity) {
-      const residentIds = await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]);
-      if (residentIds.length > 0) {
+    // ── Caso: staff del complejo (admin, supervisor, contador, compliance) ───
+    if (isStaff) {
+      const [residentIds, securityIds] = await Promise.all([
+        this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]),
+        this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
+      ]);
+
+      const triggeredByLabel = triggerFullName
+        ? `Administración – ${triggerFullName}`
+        : 'Administración del complejo';
+      const panicPayload = {
+        complexId,
+        type:            NotificationType.PANIC_ALERT,
+        priority:        NotificationPriority.URGENT,
+        title:           'Alerta de pánico — Personal del complejo',
+        body:            `Alerta de pánico activada por ${triggeredByLabel}.`,
+        isBroadcast:     true,
+        createdByUserId: currentUser.sub,
+        isActionable:    true,
+        actionType:      NotificationActionType.ACKNOWLEDGE,
+        actionLabel:     'Reconocer alerta',
+        metadata:        { triggeredByLabel },
+      };
+
+      const allIds = [...residentIds, ...securityIds].filter(id => id !== currentUser.sub);
+      if (allIds.length > 0) {
         await this.notify({
-          complexId,
-          userIds:  residentIds,
-          type:     NotificationType.PANIC_ALERT,
-          priority: NotificationPriority.URGENT,
-          title:    'Alerta de pánico — Seguridad',
-          body:     'Alerta de pánico activada por el personal de seguridad.',
+          ...panicPayload,
+          userIds:     allIds,
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
         });
       }
+
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
+      this.logger.warn(`PANIC ALERT (staff) — complejo ${complexId}, activado por ${currentUser.sub}`);
+      return { success: true };
+    }
+
+    // ── Caso: guardia de seguridad ──────────────────────────────────────────
+    if (isSecurity) {
+      const residentIds = await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]);
+
+      const triggeredByLabel = triggerFullName ? `Guardia – ${triggerFullName}` : 'Guardia';
+      const panicPayload = {
+        complexId,
+        type:            NotificationType.PANIC_ALERT,
+        priority:        NotificationPriority.URGENT,
+        title:           'Alerta de pánico — Seguridad',
+        body:            `Alerta de pánico activada por ${triggeredByLabel}.`,
+        isBroadcast:     true,
+        targetRoles:     [ValidRoles.RESIDENT_ROL],
+        createdByUserId: currentUser.sub,
+        isActionable:    true,
+        actionType:      NotificationActionType.ACKNOWLEDGE,
+        actionLabel:     'Reconocer alerta',
+        metadata:        { triggeredByLabel },
+      };
+
+      const allIds = [...residentIds.filter(id => id !== currentUser.sub), complexId];
+      await this.notify({
+        ...panicPayload,
+        userIds:     allIds,
+        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+      });
+
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
       this.logger.warn(`PANIC ALERT (security) — complejo ${complexId}, activado por ${currentUser.sub}`);
       return { success: true };
     }
@@ -610,96 +902,151 @@ export class NotificationsService implements OnModuleInit {
     const title       = `Alerta de pánico — Unidad ${unitNumber}`;
     const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
 
+    let triggeredByLabel: string;
+
     if (unit.buildingId) {
       // ── Caso 1: edificio/torre ──────────────────────────────────────────
-      const buildingName   = unit.building?.name ?? unit.buildingId;
-      const buildingBody   = `Alerta de pánico activada en la unidad ${unitNumber} del edificio ${buildingName}.`;
-      const securityBody   = `Alerta de pánico en unidad ${unitNumber}, edificio ${buildingName}. Requiere atención inmediata.`;
+      const buildingName = unit.building?.name ?? unit.buildingId;
+      triggeredByLabel   = `Residente – Unidad ${unitNumber}, ${buildingName}`;
+      const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
+      const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
 
       const buildingIds = (
         await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
       ).filter(id => id !== currentUser.sub);   // excluir al propio activador
 
-      if (buildingIds.length > 0) {
-        await this.notify({
-          complexId,
-          userIds:  buildingIds,
-          type:     NotificationType.PANIC_ALERT,
-          priority: NotificationPriority.URGENT,
-          title,
-          body:     buildingBody,
+      const residentPanicBase = {
+        complexId,
+        type:            NotificationType.PANIC_ALERT,
+        priority:        NotificationPriority.URGENT,
+        title,
+        isBroadcast:     true,
+        createdByUserId: currentUser.sub,
+        isActionable:    true,
+        actionType:      NotificationActionType.ACKNOWLEDGE,
+        actionLabel:     'Reconocer alerta',
+        metadata:        { triggeredByLabel },
+      };
+
+      const allIds = [...buildingIds, ...securityIds];
+      if (allIds.length > 0) {
+        await this.persistBulk({
+          ...residentPanicBase,
+          userIds:     allIds,
+          body:        buildingBody,
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
         });
       }
-      if (securityIds.length > 0) {
-        await this.notify({
-          complexId,
-          userIds:  securityIds,
-          type:     NotificationType.PANIC_ALERT,
-          priority: NotificationPriority.URGENT,
-          title,
-          body:     securityBody,
-        });
-      }
+      await Promise.allSettled([
+        this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
+        this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+      ]);
     } else {
       // ── Caso 2: casa individual ─────────────────────────────────────────
-      const complexBody  = `Alerta de pánico activada en la unidad ${unitNumber}.`;
-      const securityBody = `Alerta de pánico en unidad ${unitNumber}. Requiere atención inmediata.`;
+      triggeredByLabel   = `Residente – Unidad ${unitNumber}`;
+      const complexBody  = `Alerta de pánico activada. ${triggeredByLabel}.`;
+      const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
 
       const residentIds = (
         await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
       ).filter(id => id !== currentUser.sub);
 
-      if (residentIds.length > 0) {
-        await this.notify({
-          complexId,
-          userIds:  residentIds,
-          type:     NotificationType.PANIC_ALERT,
-          priority: NotificationPriority.URGENT,
-          title,
-          body:     complexBody,
+      const residentPanicBase = {
+        complexId,
+        type:            NotificationType.PANIC_ALERT,
+        priority:        NotificationPriority.URGENT,
+        title,
+        isBroadcast:     true,
+        createdByUserId: currentUser.sub,
+        isActionable:    true,
+        actionType:      NotificationActionType.ACKNOWLEDGE,
+        actionLabel:     'Reconocer alerta',
+        metadata:        { triggeredByLabel },
+      };
+
+      const allIds = [...residentIds, ...securityIds];
+      if (allIds.length > 0) {
+        await this.persistBulk({
+          ...residentPanicBase,
+          userIds:     allIds,
+          body:        complexBody,
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
         });
       }
-      if (securityIds.length > 0) {
-        await this.notify({
-          complexId,
-          userIds:  securityIds,
-          type:     NotificationType.PANIC_ALERT,
-          priority: NotificationPriority.URGENT,
-          title,
-          body:     securityBody,
-        });
-      }
+      await Promise.allSettled([
+        this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
+        this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+      ]);
     }
 
+    this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
     this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
     return { success: true };
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // PUBSUB — acceso desde el resolver
+  // ACK DE ALARMA DE PÁNICO
   // ─────────────────────────────────────────────────────────────────────────────
 
-  asyncIterator(userId: string, complexId: string) {
-    const iterator = this.pubSub.asyncIterableIterator<{ notificationAdded: Notification }>(
-      NOTIFICATION_ADDED,
-    );
-    return this.filterIterator(iterator, userId, complexId);
+  /**
+   * Retorna las alertas de pánico activas (sin ACK) del complejo.
+   * El frontend las consulta al reconectar para mostrar solo alarmas pendientes.
+   */
+  async activePanicAlerts(complexId: string): Promise<Notification[]> {
+    return this.notifRepo.find({
+      where: {
+        complexId,
+        type:          NotificationType.PANIC_ALERT,
+        actionTakenAt: undefined,
+      },
+      order: { createdAt: 'DESC' },
+    });
   }
 
-  private async *filterIterator(
-    iterator: AsyncIterable<{ notificationAdded: Notification }>,
-    userId: string,
-    complexId: string,
-  ): AsyncGenerator<{ notificationAdded: Notification }> {
-    for await (const event of iterator) {
-      const n = event.notificationAdded;
-      if (
-        n.complexId === complexId &&
-        (n.recipientUserId === userId || n.recipientUserId == null)
-      ) {
-        yield event;
-      }
+  /**
+   * Reconoce una alerta de pánico: persiste quién y cuándo atendió la alarma
+   * y emite un evento para que todos los clientes conectados cierren el modal.
+   */
+  async acknowledgePanicAlert(
+    notificationId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Notification> {
+    const notif = await this.findByIdOrFail(notificationId);
+
+    if (notif.type !== NotificationType.PANIC_ALERT) {
+      throw new CustomError({
+        message:    'Solo se pueden reconocer alertas de pánico',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode:  GeneralErrorCode.FORBIDDEN,
+      });
     }
+
+    if (currentUser.complexId && notif.complexId !== currentUser.complexId) {
+      throw new CustomError({
+        message:    'No tienes acceso a esta alerta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode:  GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    if (notif.actionTakenAt) {
+      // Ya fue reconocida — retornar el estado actual sin error
+      return notif;
+    }
+
+    notif.actionTakenAt       = new Date();
+    notif.actionTakenByUserId = currentUser.sub;
+    notif.actionResult        = NotificationActionResult.ACKNOWLEDGED;
+
+    const updated = await this.notifRepo.save(notif);
+
+    this.socketService.emitToComplex(notif.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
+
+    this.logger.log(
+      `PANIC ALERT reconocida — id ${notificationId}, complejo ${notif.complexId}, por ${currentUser.sub}`,
+    );
+
+    return updated;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -737,7 +1084,7 @@ export class NotificationsService implements OnModuleInit {
             ? 'high'
             : 'normal',
           notification: {
-            channelId: 'residash-default',
+            channelId: 'entrylink-default',
             priority:
               params.priority === NotificationPriority.URGENT ? 'max' :
               params.priority === NotificationPriority.HIGH   ? 'high' :
@@ -763,6 +1110,12 @@ export class NotificationsService implements OnModuleInit {
 
       try {
         const response = await admin.messaging().sendEachForMulticast(message);
+
+        const successCount = response.successCount;
+        const failureCount = response.failureCount;
+        this.logger.debug(
+          `[FCM] Lote enviado [${params.type}] → ${successCount} exitosos, ${failureCount} fallidos | complejo ${params.complexId}`,
+        );
 
         const invalidTokens: string[] = [];
         response.responses.forEach((resp, idx) => {
@@ -814,12 +1167,15 @@ export class NotificationsService implements OnModuleInit {
               title:    params.title,
               body:     params.body,
               priority: params.priority,
-              tag:      `residash-${params.type}`,
+              tag:      `entrylink-${params.type}`,
               data: {
                 url:      '/dashboard/notificaciones',
                 metadata: params.metadata,
               },
             }),
+          );
+          this.logger.debug(
+            `[WebPush] Notificación enviada [${params.type}] → suscripción ${sub.id} | usuario ${sub.userId}`,
           );
         } catch (err: any) {
           // 410 Gone = suscripción expirada
@@ -839,33 +1195,68 @@ export class NotificationsService implements OnModuleInit {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * Persiste un lote de notificaciones y publica en PubSub.
+   * Persiste notificaciones y emite via Socket.io.
+   * - isBroadcast = true → UN registro con recipientUserId = null
+   * - isBroadcast = false (default) → fan-out: un registro por destinatario
    */
   private async persistBulk(params: NotifyParams): Promise<Notification[]> {
-    const entities = params.userIds.map(userId =>
-      this.notifRepo.create({
+    let saved: Notification[];
+
+    if (params.isBroadcast) {
+      const entity = this.notifRepo.create({
         type:            params.type,
         priority:        params.priority,
         title:           params.title,
         body:            params.body,
         complexId:       params.complexId,
-        recipientUserId: userId,
+        recipientUserId: undefined,
+        isBroadcast:     true,
+        targetRoles:     params.targetRoles ?? [],
         entityId:        params.entityId,
         entityType:      params.entityType,
         metadata:        params.metadata,
         isRead:          false,
-      }),
-    );
-
-    const saved = await this.notifRepo.save(entities);
-
-    for (const n of saved) {
-      await this.pubSub.publish(NOTIFICATION_ADDED, { notificationAdded: n });
+        createdByUserId: params.createdByUserId,
+        isActionable:    params.isActionable ?? false,
+        actionType:      params.actionType,
+        actionLabel:     params.actionLabel,
+      });
+      saved = [await this.notifRepo.save(entity)];
+      this.socketService.emitToComplex(params.complexId, SocketEvent.NOTIFICATION_NEW, saved[0]);
+      this.logger.debug(
+        `[Socket] broadcast [${params.type}] → ${params.userIds.length} destinatarios push | complejo ${params.complexId}`,
+      );
+    } else {
+      const entities = params.userIds.map(userId =>
+        this.notifRepo.create({
+          type:            params.type,
+          priority:        params.priority,
+          title:           params.title,
+          body:            params.body,
+          complexId:       params.complexId,
+          recipientUserId: userId,
+          isBroadcast:     false,
+          entityId:        params.entityId,
+          entityType:      params.entityType,
+          metadata:        params.metadata,
+          isRead:          false,
+          createdByUserId: params.createdByUserId,
+          isActionable:    params.isActionable ?? false,
+          actionType:      params.actionType,
+          actionLabel:     params.actionLabel,
+        }),
+      );
+      saved = await this.notifRepo.save(entities);
+      for (const n of saved) {
+        this.socketService.emitToUser(n.recipientUserId, SocketEvent.NOTIFICATION_NEW, n);
+        this.logger.debug(
+          `[Socket] Notificación emitida [${n.type}] → usuario ${n.recipientUserId} | complejo ${n.complexId}`,
+        );
+      }
+      this.logger.debug(
+        `[notify] ${saved.length} notificaciones creadas [${params.type}] en complejo ${params.complexId}`,
+      );
     }
-
-    this.logger.debug(
-      `[notify] ${saved.length} notificaciones creadas [${params.type}] en complejo ${params.complexId}`,
-    );
 
     return saved;
   }
@@ -922,6 +1313,35 @@ export class NotificationsService implements OnModuleInit {
   }
 
   private assertRecipient(notif: Notification, currentUser: JwtAccessPayload): void {
+    const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    if (isSuperAdmin) return;
+
+    const isComplexAdmin = currentUser.roles.some(r =>
+      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    );
+
+    if (isComplexAdmin) {
+      if (notif.complexId !== currentUser.complexId) {
+        throw new CustomError({
+          message: 'No tienes acceso a esta notificación',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+      return;
+    }
+
+    if (notif.isBroadcast) {
+      if (currentUser.complexId && notif.complexId !== currentUser.complexId) {
+        throw new CustomError({
+          message: 'No tienes acceso a esta notificación',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+      return;
+    }
+
     if (notif.recipientUserId && notif.recipientUserId !== currentUser.sub) {
       throw new CustomError({
         message: 'No tienes acceso a esta notificación',

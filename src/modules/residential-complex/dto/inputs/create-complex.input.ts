@@ -1,11 +1,14 @@
-import { InputType, Field, Int } from '@nestjs/graphql';
+import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
-  IsString, IsEnum, IsOptional, IsEmail, IsUrl,
-  MaxLength, MinLength, IsInt, Min, Max, IsPhoneNumber,
+  IsString, IsEnum, IsOptional, IsEmail, IsUUID,
+  MaxLength, MinLength, IsPhoneNumber, Matches,
+  ValidateNested, IsNumber, Min, Max,
 } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 import { ComplexType }   from '../../enums/complex-type.enum';
 import { ComplexPlan }   from '../../enums/complex-plan.enum';
+import { CountryCode } from '../../../users/dto/inputs/create-admin-user.input';
+import { Type } from 'class-transformer';
 
 @InputType()
 export class CreateComplexInput {
@@ -59,16 +62,33 @@ export class CreateComplexInput {
   @IsEnum(ComplexPlan)
   plan?: ComplexPlan;
 
-  @Field(() => String, { nullable: true })
+
+  @Field(() => CountryCode, { nullable: true })
   @IsOptional()
-  @IsPhoneNumber()
-  phone?: string;
+  @ValidateNested()
+  @Type(() => CountryCode)
+  countryCode?: CountryCode;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
+  // @IsPhoneNumber()
+  phoneNumber?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional() 
   @IsEmail()
   @MaxLength(100)
   email?: string;
+  
+  @Field(() => String, { nullable: true, description: 'Contraseña de acceso al portal del complejo' })
+  @IsOptional()
+  @IsString()
+  @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
+  @MaxLength(128)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.*_\-])/, {
+    message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
+  })
+  password?: string;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
@@ -82,11 +102,10 @@ export class CreateComplexInput {
   @MaxLength(30)
   nit?: string;
 
-  @Field(() => String, { nullable: true })
+  @Field(() => String, { nullable: true, description: 'ID (UUID) del representante legal' })
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  legalRepresentative?: string;
+  @IsUUID()
+  legalRepresentativeId?: string;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
@@ -101,4 +120,25 @@ export class CreateComplexInput {
   @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
   settings?: Record<string, any>;
+
+  @Field(() => Float, { nullable: true, description: 'Latitud GPS del complejo para validación de presencia de supervisores' })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @Field(() => Float, { nullable: true, description: 'Longitud GPS del complejo para validación de presencia de supervisores' })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
+  @Field(() => Int, { nullable: true, description: 'Radio en metros para validar presencia GPS (por defecto 200 m)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(50)
+  @Max(5000)
+  gpsRadius?: number;
 }

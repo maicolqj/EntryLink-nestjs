@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { AuditLog }                   from '../entities/audit-log.entity';
 import { PaginatedAuditLogsResponse } from '../dto/responses/paginated-audit-logs.response';
 import { RevertAuditResponse }        from '../dto/responses/revert-audit.response';
+import { AuditLogDetailResponse }     from '../dto/responses/audit-log-detail.response';
 import { FilterAuditLogsInput }       from '../dto/inputs/filter-audit-logs.input';
 import { AuditService }               from '../services/audit.service';
 
@@ -45,9 +46,9 @@ export class AuditResolver {
     );
   }
 
-  @Query(() => AuditLog, {
+  @Query(() => AuditLogDetailResponse, {
     name: 'auditLog',
-    description: 'Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX).',
+    description: 'Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX) con labels enriquecidos.',
   })
   @Auth({
     roles: [
@@ -59,8 +60,10 @@ export class AuditResolver {
   })
   auditLog(
     @Args('referenceNumber') referenceNumber: string,
-  ): Promise<AuditLog> {
-    return this.auditService.findByReference(referenceNumber);
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<AuditLogDetailResponse> {
+    const isSuperAdmin = payload.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+    return this.auditService.findByReference(referenceNumber, isSuperAdmin ? undefined : payload.complexId);
   }
 
   // ── Mutaciones ───────────────────────────────────────────────────

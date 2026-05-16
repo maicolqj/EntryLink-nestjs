@@ -10,18 +10,19 @@ import {
   BeforeInsert,
   BeforeUpdate,
 } from 'typeorm';
-import { ObjectType, Field, Float } from '@nestjs/graphql';
+import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
-import { ParkingStatus }     from '../enums/parking-status.enum';
-import { VehicleType }       from '../../vehicles/enums/vehicle-type.enum';
-import { Resident }          from '../../residents/entities/resident.entity';
+import { VehicleType } from '../../vehicles/enums/vehicle-type.enum';
+import { Resident } from '../../residents/entities/resident.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { User }               from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
+import { ParkingPaymentMethod } from '../enums/parking-payment-method.enum';
+import { ParkingRecordStatus } from '../enums/parking-status.enum';
 
 @ObjectType({ description: 'Registro de vehículo visitante en el parqueadero' })
 @Entity({ name: 'visitor_vehicles' })
 @Index(['complexId', 'status'])
-@Index(['complexId', 'entryTime'])
+@Index(['complexId', 'entryDate'])
 @Index(['hostResidentId', 'status'])
 export class VisitorVehicle {
 
@@ -31,6 +32,10 @@ export class VisitorVehicle {
 
   // ==================== IDENTIFICACIÓN ====================
 
+  @Field(() => String, { description: 'Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)' })
+  @Column({ name: 'invoice_number', type: 'varchar', length: 30, unique: true })
+  invoiceNumber: string;
+
   @Field(() => String, { description: 'Placa del vehículo (normalizada: mayúsculas, sin espacios)' })
   @Column({ type: 'varchar', length: 20 })
   plate: string;
@@ -39,37 +44,50 @@ export class VisitorVehicle {
   @Column({ type: 'enum', enum: VehicleType })
   vehicleType: VehicleType;
 
+  @Field(() => String, { description: 'Marca del vehículo', nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  brand?: string;
+
+  @Field(() => String, { description: 'Color del vehículo', nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  color?: string;
+
   @Field(() => String, { description: 'Nombre del conductor', nullable: true })
   @Column({ name: 'driver_name', type: 'varchar', length: 200, nullable: true })
   driverName?: string;
 
   // ==================== TIEMPOS Y COSTO ====================
 
-  @Field(() => Date, { description: 'Hora de ingreso al parqueadero' })
-  @Column({ name: 'entry_time', type: 'timestamptz' })
-  entryTime: Date;
+  @Field(() => Date, { description: 'Fecha/hora de entrada (asignada por el servidor)' })
+  @CreateDateColumn({ name: 'entry_date', type: 'timestamptz' })
+  entryDate: Date;
 
-  @Field(() => Date, { description: 'Hora de salida del parqueadero', nullable: true })
-  @Column({ name: 'exit_time', type: 'timestamptz', nullable: true })
-  exitTime?: Date;
+  @Field(() => Date, { description: 'Alias de entryDate' })
+  get createdAt(): Date {
+    return this.entryDate;
+  }
+
+  @Field(() => Date, { description: 'Fecha/hora de salida', nullable: true })
+  @Column({ name: 'exit_date', type: 'timestamptz', nullable: true })
+  exitDate?: Date;
+
+  @Field(() => Int, { description: 'Duración en minutos (calculada en la salida)', nullable: true })
+  @Column({ type: 'int', nullable: true })
+  duration?: number;
 
   @Field(() => Float, { description: 'Costo total generado al momento de la salida', nullable: true })
   @Column({ name: 'parking_cost', type: 'decimal', precision: 10, scale: 2, nullable: true })
   parkingCost?: number;
 
-  @Field(() => Float, { description: 'Tarifa por hora aplicada al momento de la salida', nullable: true })
-  @Column({ name: 'rate_applied', type: 'decimal', precision: 10, scale: 2, nullable: true })
-  rateApplied?: number;
-
-  @Field(() => Number, { description: 'Minutos totales en el parqueadero', nullable: true })
-  @Column({ name: 'minutes_parked', type: 'int', nullable: true })
-  minutesParked?: number;
+  @Field(() => ParkingPaymentMethod, { description: 'Método de pago (disponible tras el cierre)', nullable: true })
+  @Column({ name: 'payment_method', type: 'enum', enum: ParkingPaymentMethod, nullable: true })
+  paymentMethod?: ParkingPaymentMethod;
 
   // ==================== ESTADO ====================
 
-  @Field(() => ParkingStatus, { description: 'Estado actual del registro' })
-  @Column({ type: 'enum', enum: ParkingStatus, default: ParkingStatus.INSIDE })
-  status: ParkingStatus;
+  @Field(() => ParkingRecordStatus, { description: 'Estado actual del registro' })
+  @Column({ type: 'enum', enum: ParkingRecordStatus, default: ParkingRecordStatus.OPEN })
+  status: ParkingRecordStatus;
 
   @Field(() => String, { description: 'Motivo de cancelación', nullable: true })
   @Column({ name: 'cancellation_reason', type: 'text', nullable: true })
@@ -103,9 +121,6 @@ export class VisitorVehicle {
   @Column({ name: 'cancelled_by_user_id', type: 'uuid', nullable: true })
   cancelledByUserId?: string;
 
-  @Field(() => Date)
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
 
   @Field(() => Date)
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
@@ -138,11 +153,9 @@ export class VisitorVehicle {
   @BeforeInsert()
   @BeforeUpdate()
   normalizeFields() {
-    if (this.plate) {
-      this.plate = this.plate.trim().toUpperCase().replace(/[\s\-]/g, '');
-    }
-    if (this.driverName) {
-      this.driverName = this.driverName.trim().toUpperCase();
-    }
+    if (this.plate) this.plate = this.plate.trim().toUpperCase().replace(/[\s\-]/g, '');
+    if (this.driverName) this.driverName = this.driverName.trim().toUpperCase();
+    if (this.brand) this.brand = this.brand.trim().toUpperCase();
+    if (this.color) this.color = this.color.trim().toUpperCase();
   }
 }

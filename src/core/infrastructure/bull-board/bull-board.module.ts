@@ -5,12 +5,14 @@ import { ExpressAdapter } from '@bull-board/express';
 import { BullModule } from '@nestjs/bullmq';
 import { OTP_QUEUE_NAME } from '../../../modules/auth/queues/otp.queue.constants';
 import { MAIL_QUEUE_NAME } from '../../../mail/constants/mail.constants';
+import { bullBoardAuthMiddleware } from './bull-board-auth.middleware';
 
 @Module({
   imports: [
     BullBoardModule.forRoot({
       route: '/admin/bull-board',
       adapter: ExpressAdapter,
+      middleware: bullBoardAuthMiddleware,
     }),
 
     BullModule.registerQueue(

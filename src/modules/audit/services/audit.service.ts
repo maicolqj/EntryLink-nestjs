@@ -8,6 +8,7 @@ import { AuditEntityType }            from '../enums/audit-entity-type.enum';
 import { FilterAuditLogsInput }       from '../dto/inputs/filter-audit-logs.input';
 import { PaginatedAuditLogsResponse } from '../dto/responses/paginated-audit-logs.response';
 import { RevertAuditResponse }        from '../dto/responses/revert-audit.response';
+import { AuditLogDetailResponse }     from '../dto/responses/audit-log-detail.response';
 
 import { ValidRoles }        from '../../roles/enums/valid-roles';
 import { CustomError }       from '../../shared/utils/errors.utils';
@@ -41,7 +42,19 @@ export class AuditService {
   // REGISTRAR ACCIÓN (fire-and-forget — nunca rompe el flujo principal)
   // ================================================================
 
+  /**
+   * Roles cuyas acciones se auditan.
+   * SUPER_ADMIN incluido para registrar reversiones.
+   */
+  private static readonly AUDITED_ROLES = new Set<string>([
+    ValidRoles.SUPERVISOR_ROL,
+    ValidRoles.SECURITY_ROL,
+    ValidRoles.SUPER_ADMIN_ROL,
+  ]);
+
   async log(params: LogParams): Promise<void> {
+    if (!AuditService.AUDITED_ROLES.has(params.performedByRole)) return;
+
     try {
       const referenceNumber = await this.generateReferenceNumber();
 
@@ -118,8 +131,6 @@ export class AuditService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    this.logger.warn(`RESPUESTA DE LA  BUSQUEDA POR COMPLEJO ${items}, ${total}, ${limit}, ${offset}`)
-
     return { items, total, limit, offset };
   }
 
@@ -180,8 +191,10 @@ export class AuditService {
       }
     } else {
       // Revertir un UPDATE / DELETE / SUSPEND / etc. = restaurar previousValue
+      // Solo se restauran campos seguros (allowlist) — nunca password, tokens ni roles
+      const safeValue = AuditService.sanitizeRevertValue(auditLog.entityType, auditLog.previousValue);
       await entityManager.save(metadata.target as any, {
-        ...auditLog.previousValue,
+        ...safeValue,
         id: auditLog.entityId,
       });
     }
@@ -213,24 +226,136 @@ export class AuditService {
   }
 
   // ================================================================
-  // OBTENER UN REGISTRO POR REFERENCIA
+  // OBTENER UN REGISTRO POR REFERENCIA (enriquecido)
   // ================================================================
 
-  async findByReference(referenceNumber: string): Promise<AuditLog> {
-    const log = await this.auditRepo.findOne({ where: { referenceNumber } });
-    if (!log) {
+  async findByReference(referenceNumber: string, callerComplexId?: string): Promise<AuditLogDetailResponse> {
+    const auditLog = await this.auditRepo.findOne({ where: { referenceNumber } });
+    if (!auditLog) {
       throw new CustomError({
         message: `Registro de auditoría '${referenceNumber}' no encontrado.`,
         statusCode: HttpStatus.NOT_FOUND,
         errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
-    return log;
+
+    if (callerComplexId && auditLog.complexId !== callerComplexId) {
+      throw new CustomError({
+        message: `Registro de auditoría '${referenceNumber}' no encontrado.`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    const [entityLabel, revertedByName] = await Promise.all([
+      this.resolveEntityLabel(auditLog.entityType, auditLog.entityId),
+      auditLog.revertedById ? this.resolveUserName(auditLog.revertedById) : Promise.resolve(undefined),
+    ]);
+
+    return { auditLog, entityLabel, revertedByName };
+  }
+
+  // ================================================================
+  // HELPERS PRIVADOS DE RESOLUCIÓN
+  // ================================================================
+
+  private async resolveEntityLabel(entityType: AuditEntityType, entityId: string): Promise<string | undefined> {
+    try {
+      const metadata = this.dataSource.entityMetadatas.find(m => m.name === entityType);
+      if (!metadata) return undefined;
+
+      const entity = await this.dataSource.manager.findOne(metadata.target as any, {
+        where: { id: entityId },
+        withDeleted: true,
+      }) as any;
+
+      if (!entity) return `[eliminado: ${entityId}]`;
+
+      switch (entityType) {
+        case AuditEntityType.User:
+          return [entity.name, entity.email].filter(Boolean).join(' - ');
+        case AuditEntityType.Resident:
+          return `${entity.type ?? ''} - unidad: ${entity.unitId ?? entityId}`.trim();
+        case AuditEntityType.Vehicle:
+          return [entity.plate, entity.brand, entity.type].filter(Boolean).join(' ');
+        case AuditEntityType.ResidentialComplex:
+          return entity.name ?? entityId;
+        case AuditEntityType.Building:
+          return entity.name ?? entityId;
+        case AuditEntityType.Unit:
+          return `Unidad ${entity.number ?? ''}, Piso ${entity.floor ?? ''}`.trim();
+        case AuditEntityType.Visitor:
+          return [entity.name, entity.lastName].filter(Boolean).join(' ');
+        case AuditEntityType.VisitorVehicle:
+          return entity.plate ?? entityId;
+        case AuditEntityType.Visit:
+          return `${entity.type ?? ''} - ${entity.status ?? ''}`.trim();
+        case AuditEntityType.SupervisorVisit:
+          return `Supervisión - ${entity.status ?? ''}`.trim();
+        case AuditEntityType.SupervisorAccessRequest:
+          return `Solicitud acceso - ${entity.status ?? ''}`.trim();
+        case AuditEntityType.FeeCharge:
+          return `${entity.period ?? ''} - $${entity.amount ?? ''}`.trim();
+        case AuditEntityType.FeeConfig:
+          return `${entity.name ?? ''} - $${entity.amount ?? ''}`.trim();
+        case AuditEntityType.Payment:
+          return `$${entity.amount ?? ''} (${entity.method ?? ''})`.trim();
+        case AuditEntityType.Note:
+          return entity.title ?? entityId;
+        case AuditEntityType.ParkingRecord:
+          return `Parking - ${entity.status ?? ''}`.trim();
+        case AuditEntityType.ParkingConfig:
+          return `Config parking - complejo: ${entity.complexId ?? entityId}`;
+        default:
+          return entityId;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async resolveUserName(userId: string): Promise<string | undefined> {
+    try {
+      const metadata = this.dataSource.entityMetadatas.find(m => m.name === 'User');
+      if (!metadata) return undefined;
+
+      const user = await this.dataSource.manager.findOne(metadata.target as any, {
+        where: { id: userId },
+        withDeleted: true,
+      }) as any;
+
+      return user ? ([user.name, user.email].filter(Boolean).join(' - ')) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   // ================================================================
   // GENERACIÓN DE NÚMERO DE REFERENCIA
   // ================================================================
+
+  // ================================================================
+  // SANITIZACIÓN DE VALORES PARA REVERT
+  // ================================================================
+
+  private static readonly REVERT_BLOCKED_FIELDS = new Set([
+    'password', 'tokenVersion', 'refreshToken', 'resetPasswordToken',
+    'resetPasswordExpires', 'accountLockedUntil', 'qrLoginToken', 'qrLoginPin',
+    'userRoles', 'roles',
+  ]);
+
+  private static sanitizeRevertValue(
+    entityType: AuditEntityType,
+    value: Record<string, any>,
+  ): Record<string, any> {
+    const result: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (!AuditService.REVERT_BLOCKED_FIELDS.has(key)) {
+        result[key] = val;
+      }
+    }
+    return result;
+  }
 
   private async generateReferenceNumber(): Promise<string> {
     const now   = new Date();

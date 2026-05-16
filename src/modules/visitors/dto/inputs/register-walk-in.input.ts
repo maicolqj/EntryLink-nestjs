@@ -1,6 +1,7 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { VisitType } from '../../enums/visit-type.enum';
+import GraphQLJSON from 'graphql-type-json';
 
 /**
  * Input para que el guardia registre una visita sin cita (WALK_IN, DELIVERY, SERVICE_PROVIDER).
@@ -36,6 +37,10 @@ export class RegisterWalkInInput {
   @IsOptional()
   @IsString()
   visitorPhotoUrl?: string;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  @IsOptional()
+  metadata?: Record<string, any>;
 
   // ---- Datos de la visita ----
 

@@ -1,4 +1,4 @@
-import { assertGpsWithinComplex, calculateHaversineDistance } from './gps.utils';
+import { assertGpsWithinComplex, calculateHaversineDistance, GpsComplexReference } from './gps.utils';
 import { CustomError } from './errors.utils';
 
 describe('calculateHaversineDistance', () => {
@@ -27,7 +27,7 @@ describe('assertGpsWithinComplex', () => {
   });
 
   it('no lanza error cuando el complejo no tiene coordenadas', () => {
-    const noGps = { id: 'c2', latitude: null, longitude: null, gpsRadius: 200 };
-    expect(() => assertGpsWithinComplex(noGps as any, 0, 0)).not.toThrow();
+    const noGps: GpsComplexReference = { id: 'c2', latitude: null, longitude: null, gpsRadius: 200 };
+    expect(() => assertGpsWithinComplex(noGps, 0, 0)).not.toThrow();
   });
 });
