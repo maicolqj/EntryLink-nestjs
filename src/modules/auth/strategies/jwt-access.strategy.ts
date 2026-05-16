@@ -6,6 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAccessPayload } from '../interfaces/jwt-payload.interface';
 import { User } from '../../users/entities/user.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
 import { TokenService } from '../services/token.service';
 import { SessionService } from '../services/session.service';
 
@@ -18,6 +20,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(ResidentialComplex) private readonly complexRepo: Repository<ResidentialComplex>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -35,16 +38,38 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     let version = await this.tokenService.getUserTokenVersion(payload.sub);
 
     if (version === null) {
-      const user = await this.userRepo.findOne({
-        where: { id: payload.sub },
-        select: ['id', 'tokenVersion', 'status', 'deletedAt'],
-      });
+      if (payload.entityType === 'complex') {
+        const complex = await this.complexRepo.findOne({
+          where: { id: payload.sub },
+          select: ['id', 'tokenVersion', 'status', 'deletedAt'],
+        });
 
-      if (!user || user.deletedAt) {
-        throw new UnauthorizedException('Usuario no encontrado');
+        if (!complex || complex.deletedAt) {
+          throw new UnauthorizedException('Complejo no encontrado');
+        }
+
+        if (complex.status === ComplexStatus.INACTIVE) {
+          throw new UnauthorizedException('El complejo residencial está inactivo');
+        }
+
+        if (complex.status === ComplexStatus.SUSPENDED) {
+          throw new UnauthorizedException('El complejo residencial está suspendido');
+        }
+
+        version = complex.tokenVersion ?? 0;
+      } else {
+        const user = await this.userRepo.findOne({
+          where: { id: payload.sub },
+          select: ['id', 'tokenVersion', 'status', 'deletedAt'],
+        });
+
+        if (!user || user.deletedAt) {
+          throw new UnauthorizedException('Usuario no encontrado');
+        }
+
+        version = user.tokenVersion ?? 0;
       }
 
-      version = user.tokenVersion ?? 0;
       await this.tokenService.setUserTokenVersion(payload.sub, version);
     }
 

@@ -5,6 +5,7 @@ import {
   MAIL_QUEUE_NAME,
   MAIL_JOBS,
   SendPasswordResetJobPayload,
+  SendEmailVerificationJobPayload,
 } from './constants/mail.constants';
 
 @Injectable()
@@ -24,5 +25,16 @@ export class MailService {
     });
 
     this.logger.log(`Password reset email job enqueued for userId: ${payload.userId}`);
+  }
+
+  async queueEmailVerificationEmail(payload: SendEmailVerificationJobPayload): Promise<void> {
+    await this.mailQueue.add(MAIL_JOBS.SEND_EMAIL_VERIFICATION, payload, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2_000 },
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 50 },
+    });
+
+    this.logger.log(`Email verification job enqueued for userId: ${payload.userId}`);
   }
 }

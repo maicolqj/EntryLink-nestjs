@@ -12,10 +12,10 @@ import {
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
 import { VehicleType }           from '../enums/vehicle-type.enum';
-import { ParkingRecordStatus }   from '../enums/parking-record-status.enum';
-import { ParkingPaymentMethod }  from '../enums/parking-payment-method.enum';
+import { ParkingPaymentMethod }  from '../../visitor-parking/enums/parking-payment-method.enum';
 import { ResidentialComplex }    from '../../residential-complex/entities/residential-complex.entity';
 import { Unit }                  from '../../residential-complex/entities/unit.entity';
+import { ParkingRecordStatus } from '../../visitor-parking/enums/parking-status.enum';
 
 @ObjectType({ description: 'Registro de entrada/salida de vehículo visitante en el parqueadero' })
 @Entity('parking_records')

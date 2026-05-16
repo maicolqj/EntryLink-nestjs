@@ -6,6 +6,7 @@ import {
   MAIL_QUEUE_NAME,
   MAIL_JOBS,
   SendPasswordResetJobPayload,
+  SendEmailVerificationJobPayload,
 } from './constants/mail.constants';
 
 /**
@@ -27,6 +28,9 @@ export class MailProcessor extends WorkerHost {
       case MAIL_JOBS.SEND_PASSWORD_RESET:
         await this.handlePasswordReset(job as Job<SendPasswordResetJobPayload>);
         break;
+      case MAIL_JOBS.SEND_EMAIL_VERIFICATION:
+        await this.handleEmailVerification(job as Job<SendEmailVerificationJobPayload>);
+        break;
       default:
         this.logger.warn(`Job desconocido en cola mail: ${job.name}`);
     }
@@ -39,7 +43,7 @@ export class MailProcessor extends WorkerHost {
 
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Restablece tu contraseña — Residash',
+      subject: 'Restablece tu contraseña — entrylink',
       template: 'password-reset',
       context: {
         name,
@@ -50,5 +54,25 @@ export class MailProcessor extends WorkerHost {
     });
 
     this.logger.log(`Email de reset enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`);
+  }
+
+  private async handleEmailVerification(job: Job<SendEmailVerificationJobPayload>): Promise<void> {
+    const { email, name, verificationUrl, expiresInMinutes, userId } = job.data;
+
+    this.logger.log(`Procesando envío de email de verificación — userId: ${userId}`);
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'Verifica tu correo electrónico — entrylink',
+      template: 'email-verification',
+      context: {
+        name,
+        verificationUrl,
+        expiresInMinutes,
+        year: new Date().getFullYear(),
+      },
+    });
+
+    this.logger.log(`Email de verificación enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`);
   }
 }

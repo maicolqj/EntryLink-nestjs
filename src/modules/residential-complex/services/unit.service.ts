@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
 import { Unit }                 from '../entities/unit.entity';
 import { CreateUnitInput }      from '../dto/inputs/create-unit.input';
@@ -23,6 +25,7 @@ export class UnitService {
     private readonly unitRepo: Repository<Unit>,
     private readonly complexService: ResidentialComplexService,
     private readonly buildingService: BuildingService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ================================================================
@@ -74,6 +77,7 @@ export class UnitService {
 
     const unit  = this.unitRepo.create({ ...input, complexId: input.complexId, status: UnitStatus.AVAILABLE });
     const saved = await this.unitRepo.save(unit);
+    await this.cacheService.deleteByPrefix(BK.unit.prefix(input.complexId));
     this.logger.log(`Unidad creada: ${saved.id} — N°${saved.number} en complejo ${input.complexId}`);
     return saved;
   }
@@ -92,6 +96,10 @@ export class UnitService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
+    const cacheKey = BK.unit.list(complexId, page, limit, buildingId, status);
+    const cached = await this.cacheService.get<PaginatedUnitsResponse>({ key: cacheKey });
+    if (cached) return cached;
+
     const skip = (page - 1) * limit;
 
     const qb = this.unitRepo
@@ -102,7 +110,7 @@ export class UnitService {
 
     if (buildingId) qb.andWhere('unit.building_id = :buildingId', { buildingId });
     if (status)     qb.andWhere('unit.status = :status',          { status });
- 
+
     qb.orderBy('unit.floor', 'ASC')
       .addOrderBy('unit.number', 'ASC')
       .skip(skip)
@@ -111,7 +119,7 @@ export class UnitService {
     const [items, totalItems] = await qb.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
 
-    return {
+    const result: PaginatedUnitsResponse = {
       items,
       pagination: {
         currentPage:    page,
@@ -122,6 +130,9 @@ export class UnitService {
         hasPreviousPage: page > 1,
       },
     };
+
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.unit.TTL } });
+    return result;
   }
 
   // ================================================================
@@ -133,10 +144,25 @@ export class UnitService {
    * Uso interno: FinanceService para generar cargos en bulk.
    */
   async findAllByComplexInternal(complexId: string): Promise<Unit[]> {
-    return this.unitRepo.find({
+    const cacheKey = BK.unit.all(complexId);
+    const cached = await this.cacheService.get<Unit[]>({ key: cacheKey });
+    if (cached) return cached;
+
+    const units = await this.unitRepo.find({
       where: { complexId, deletedAt: null as any },
       order: { number: 'ASC' },
     });
+
+    await this.cacheService.set({ key: cacheKey, data: units, options: { ttl: BK.unit.TTL } });
+    return units;
+  }
+
+  async findComplexIdByUnitInternal(unitId: string): Promise<string | null> {
+    const unit = await this.unitRepo.findOne({
+      select: ['complexId'],
+      where: { id: unitId, deletedAt: IsNull() },
+    });
+    return unit?.complexId ?? null;
   }
 
   // ================================================================
@@ -184,7 +210,9 @@ export class UnitService {
     }
 
     Object.assign(unit, input);
-    return this.unitRepo.save(unit);
+    const saved = await this.unitRepo.save(unit);
+    await this.cacheService.deleteByPrefix(BK.unit.prefix(saved.complexId));
+    return saved;
   }
 
   // ================================================================
@@ -206,7 +234,9 @@ export class UnitService {
     }
 
     unit.deletedAt = new Date();
+    unit.status = UnitStatus.DISABLED;
     await this.unitRepo.save(unit);
+    await this.cacheService.deleteByPrefix(BK.unit.prefix(unit.complexId));
     this.logger.warn(`Unidad eliminada (soft): ${id}`);
 
     return { success: true, message: `Unidad N°${unit.number} eliminada correctamente` };
@@ -220,5 +250,7 @@ export class UnitService {
     await this.unitRepo.update(id, {
       status: occupied ? UnitStatus.OCCUPIED : UnitStatus.AVAILABLE,
     });
+    const complexId = await this.findComplexIdByUnitInternal(id);
+    if (complexId) await this.cacheService.deleteByPrefix(BK.unit.prefix(complexId));
   }
 }

@@ -6,6 +6,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 
 import { AuthResolver } from './auth.resolver';
+import { SupervisorsController } from './controllers/supervisors.controller';
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
@@ -30,6 +31,7 @@ import { UserRole } from '../users/entities/user_has_roles.entity';
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 
 @Module({
+  controllers: [SupervisorsController],
   imports: [
     ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),

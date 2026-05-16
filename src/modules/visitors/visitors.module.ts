@@ -7,8 +7,9 @@ import { Visit }    from './entities/visit.entity';
 import { VisitorsService }  from './services/visitors.service';
 import { VisitsService }    from './services/visits.service';
 
-import { VisitorsResolver } from './resolvers/visitors.resolver';
-import { VisitsResolver }   from './resolvers/visits.resolver';
+import { VisitorsResolver }    from './resolvers/visitors.resolver';
+import { VisitsResolver }      from './resolvers/visits.resolver';
+import { VisitorsController }  from './controllers/visitors.controller';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule }          from '../residents/residents.module';
@@ -21,6 +22,7 @@ import { AuditModule }              from '../audit/audit.module';
     ResidentsModule,          // provee ResidentsService
     AuditModule,
   ],
+  controllers: [VisitorsController],
   providers: [
     VisitorsService,
     VisitsService,

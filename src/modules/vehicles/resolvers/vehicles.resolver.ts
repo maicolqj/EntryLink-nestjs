@@ -7,7 +7,6 @@ import { UpdateVehicleInput }        from '../dto/inputs/update-vehicle.input';
 import { FilterVehiclesInput }       from '../dto/inputs/filter-vehicles.input';
 import { ApproveVehicleInput }       from '../dto/inputs/approve-vehicle.input';
 import { PaginatedVehiclesResponse } from '../dto/responses/paginated-vehicles.response';
-import { PlateCheckResponse }        from '../dto/responses/plate-check.response';
 import { ConfigureRotationInput }    from '../dto/inputs/configure-rotation.input';
 import { ParkingRotationConfig }     from '../entities/parking-rotation-config.entity';
 import { RotationStatusResponse }    from '../dto/responses/rotation-status.response';
@@ -18,6 +17,7 @@ import { CurrentUser }      from '../../shared/decorators/current-user.decorator
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
+import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
 
 @Resolver(() => Vehicle)
 export class VehiclesResolver {
@@ -273,7 +273,7 @@ export class VehiclesResolver {
       ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
       ValidRoles.SUPERVISOR_ROL,  ValidRoles.ACCOUNTANT_ROL,
     ],
-    permissions: [ValidPermissions.VIEW_ROTATION],
+    permissions: [ValidPermissions.VIEW_ROTATION], 
   })
   rotationStatus(
     @Args('complexId') complexId: string,

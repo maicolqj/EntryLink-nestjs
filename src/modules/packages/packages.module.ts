@@ -17,7 +17,7 @@ import { NotificationsModule }      from '../notifications/notifications.module'
     ResidentialComplexModule, // ResidentialComplexService + UnitService
     ResidentsModule,          // ResidentsService (para notificar al residente de la unidad)
     NotificationsModule,      // NotificationsService (para crear notificaciones)
-    // CloudinaryModule es @Global() — disponible automáticamente
+    // R2Module es @Global() — disponible automáticamente
   ],
   controllers: [PackagesController],
   providers: [
