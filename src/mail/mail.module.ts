@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
@@ -8,6 +8,7 @@ import { MAIL_QUEUE_NAME } from './constants/mail.constants';
 import { MailService } from './mail.service';
 import { MailProcessor } from './mail.processor';
 
+@Global()
 @Module({
   imports: [
     BullModule.registerQueue({ name: MAIL_QUEUE_NAME }),
@@ -28,7 +29,7 @@ import { MailProcessor } from './mail.processor';
             : undefined,
         },
         defaults: {
-          from: `"${config.get<string>('MAIL_FROM_NAME', 'Residash')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@residash.app')}>`,
+          from: `"${config.get<string>('MAIL_FROM_NAME', 'entrylink')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@entrylink.app')}>`,
         },
         template: {
           dir: join(__dirname, 'templates'),

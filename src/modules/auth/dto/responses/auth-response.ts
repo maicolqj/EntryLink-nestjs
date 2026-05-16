@@ -15,6 +15,14 @@ export class AuthResponse {
   sessionId: string;
 }
 
+@ObjectType({ description: 'Respuesta de autenticación exitosa con tokens JWT' })
+export class RegisterVerifySupResponse {
+  @Field(() => Boolean, { description: 'Correo Verificado' })
+  succes: boolean;
+}
+
+
+
 @ObjectType({ description: 'Respuesta al solicitar OTP' })
 export class OtpRequestResponse {
   @Field(() => Boolean)
