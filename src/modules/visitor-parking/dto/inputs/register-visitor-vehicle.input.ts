@@ -6,6 +6,8 @@ import { VehicleType } from '../../../vehicles/enums/vehicle-type.enum';
 @InputType({ description: 'Datos para registrar el ingreso de un vehículo visitante' })
 export class RegisterVisitorVehicleInput {
 
+  
+
   @Field(() => String, { description: 'ID del complejo residencial' })
   @IsUUID()
   complexId: string;
@@ -31,3 +33,4 @@ export class RegisterVisitorVehicleInput {
   @IsOptional()
   notes?: string;
 }
+ 

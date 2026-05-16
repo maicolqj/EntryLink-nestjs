@@ -1,24 +1,73 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { ParkingRate }    from '../entities/parking-rate.entity';
-import { VisitorVehicle } from '../entities/visitor-vehicle.entity';
+import { VisitorVehicle }       from '../entities/visitor-vehicle.entity';
+import { VisitorParkingConfig } from '../entities/visitor-parking-config.entity';
 import { VisitorParkingService } from '../services/visitor-parking.service';
 
-import { SetParkingRateInput }         from '../dto/inputs/set-parking-rate.input';
-import { RegisterVisitorVehicleInput } from '../dto/inputs/register-visitor-vehicle.input';
-import { FilterVisitorVehiclesInput }  from '../dto/inputs/filter-visitor-vehicles.input';
-import { PaginatedVisitorVehiclesResponse } from '../dto/responses/paginated-visitor-vehicles.response';
-import { PaginationInput }             from '../../shared/dto/inputs/pagination.input';
+import { SetParkingRateInput }                 from '../dto/inputs/set-parking-rate.input';
+import { RegisterVisitorVehicleInput }         from '../dto/inputs/register-visitor-vehicle.input';
+import { FilterVisitorVehiclesInput }          from '../dto/inputs/filter-visitor-vehicles.input';
+import { UpdateVisitorParkingConfigInput }     from '../dto/inputs/update-visitor-parking-config.input';
+import { PaginatedVisitorVehiclesResponse }    from '../dto/responses/paginated-visitor-vehicles.response';
+import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
 import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { VisitorParkingRate } from '../entities/visitor-parking-rate.entity';
+import { ResgiterExitVehicle } from '../dto/inputs/register-exit-vehicle.input';
+import { ParkingRateType } from '../enums/parking-rate-type.enum';
 
 @Resolver()
 export class VisitorParkingResolver {
 
   constructor(private readonly parkingService: VisitorParkingService) {}
+
+  // ================================================================
+  // QUERIES — Configuración parqueadero visitante
+  // ================================================================
+
+  /**
+   * Retorna la configuración del parqueadero visitante para un complejo.
+   * Devuelve null si aún no existe configuración.
+   */
+  @Query(() => VisitorParkingConfig, { name: 'visitorParkingConfig', nullable: true })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.COMPLEX_ROL,
+      // ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+    ],
+  })
+  getVisitorParkingConfig(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<VisitorParkingConfig | null> {
+    return this.parkingService.getVisitorParkingConfig(complexId, currentUser);
+  }
+
+  // ================================================================
+  // MUTATIONS — Configuración parqueadero visitante
+  // ================================================================
+
+  /**
+   * Crea o actualiza la configuración del parqueadero visitante (upsert).
+   * Las tarifas incluidas se crean o actualizan según si traen ID.
+   */
+  @Mutation(() => VisitorParkingConfig, { name: 'updateVisitorParkingConfig' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+  })
+  updateVisitorParkingConfig(
+    @Args('input') input: UpdateVisitorParkingConfigInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<VisitorParkingConfig> {
+    return this.parkingService.updateVisitorParkingConfig(input, currentUser);
+  }
 
   // ================================================================
   // MUTATIONS — Tarifas
@@ -29,18 +78,19 @@ export class VisitorParkingResolver {
    * Si ya existe una tarifa para ese tipo en el complejo, la actualiza.
    * Roles: Administrador del complejo, Contador, Super Admin.
    */
-  @Mutation(() => ParkingRate, { name: 'setParkingRate' })
+  @Mutation(() => VisitorParkingConfig, { name: 'setParkingRate' })
   @Auth({
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
   })
   setParkingRate(
     @Args('input') input: SetParkingRateInput,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate> {
+    @CurrentUser() currentUser: JwtAccessPayload, 
+  ): Promise<VisitorParkingRate> {
     return this.parkingService.setParkingRate(input, currentUser);
   }
 
@@ -48,14 +98,14 @@ export class VisitorParkingResolver {
    * Activa o desactiva una tarifa existente sin eliminarla.
    * Roles: Administrador del complejo, Super Admin.
    */
-  @Mutation(() => ParkingRate, { name: 'toggleParkingRate' })
+  @Mutation(() => VisitorParkingConfig, { name: 'toggleParkingRate' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
   })
   toggleParkingRate(
     @Args('rateId') rateId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate> {
+  ): Promise<VisitorParkingRate> {
     return this.parkingService.toggleParkingRate(rateId, currentUser);
   }
 
@@ -100,10 +150,10 @@ export class VisitorParkingResolver {
     ],
   })
   registerExit(
-    @Args('visitorVehicleId') visitorVehicleId: string,
+    @Args('input') input: ResgiterExitVehicle,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-    return this.parkingService.registerExit(visitorVehicleId, currentUser);
+    return this.parkingService.registerExit(input, currentUser);
   }
 
   /**
@@ -117,7 +167,7 @@ export class VisitorParkingResolver {
   })
   cancelEntry(
     @Args('visitorVehicleId') visitorVehicleId: string,
-    @Args('cancellationReason') cancellationReason: string,
+    @Args('cancellationReason') cancellationReason: string, 
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
     return this.parkingService.cancelEntry(visitorVehicleId, cancellationReason, currentUser);
@@ -130,7 +180,7 @@ export class VisitorParkingResolver {
   /**
    * Lista todas las tarifas de parqueadero configuradas en el complejo.
    */
-  @Query(() => [ParkingRate], { name: 'parkingRates' })
+  @Query(() => [VisitorParkingRate], { name: 'parkingRates' })
   @Auth({
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
@@ -142,7 +192,7 @@ export class VisitorParkingResolver {
   getParkingRates(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<ParkingRate[]> {
+  ): Promise<VisitorParkingRate[]> {
     return this.parkingService.getParkingRates(complexId, currentUser);
   }
 
@@ -179,7 +229,7 @@ export class VisitorParkingResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.SUPERVISOR_ROL,
     ],
   })
