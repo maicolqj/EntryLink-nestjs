@@ -12,7 +12,6 @@ import { FilterVehiclesInput }   from '../dto/inputs/filter-vehicles.input';
 import { ApproveVehicleInput }   from '../dto/inputs/approve-vehicle.input';
 import { ConfigureRotationInput } from '../dto/inputs/configure-rotation.input';
 import { PaginatedVehiclesResponse } from '../dto/responses/paginated-vehicles.response';
-import { PlateCheckResponse }    from '../dto/responses/plate-check.response';
 import { RotationStatusResponse, RotationTypeStatus } from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
 
@@ -27,6 +26,10 @@ import { AuditAction }               from '../../audit/enums/audit-action.enum';
 import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
 import { UnitService }               from '../../residential-complex/services/unit.service';
 import { ResidentsService }          from '../../residents/services/residents.service';
+import { FinanceService }            from '../../finance/services/finance.service';
+import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
+import { CacheService }              from '../../../core/infrastructure/cache/cache.service';
+import { BK, filterKey }             from '../../../core/infrastructure/cache/business-cache.constants';
 
 // Tipos de vehículo que NO ocupan cupo de parqueadero vehicular
 const NON_PARKING_TYPES = new Set([VehicleType.BICYCLE, VehicleType.ELECTRIC_SCOOTER]);
@@ -47,6 +50,8 @@ export class VehiclesService {
     private readonly unitService:      UnitService,
     private readonly residentsService: ResidentsService,
     private readonly auditService:     AuditService,
+    private readonly financeService:   FinanceService,
+    private readonly cacheService:     CacheService,
   ) {}
 
   // ================================================================
@@ -110,6 +115,9 @@ export class VehiclesService {
       `Vehículo registrado: ${saved.id} — placa ${plate} — unidad ${input.unitId}`,
     );
 
+    await this.financeService.triggerVehicleCharges(saved.unitId, saved.complexId);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(input.complexId));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        saved.id,
@@ -152,6 +160,9 @@ export class VehiclesService {
     const saved = await this.vehicleRepo.save(vehicle);
     this.logger.log(`Vehículo aprobado: ${vehicle.id} — placa ${vehicle.plate}`);
 
+    await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        vehicle.id,
@@ -193,6 +204,7 @@ export class VehiclesService {
 
     this.logger.warn(`Vehículo rechazado: ${vehicle.id} — razón: ${reason}`);
     const saved = await this.vehicleRepo.save(vehicle);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
@@ -233,6 +245,7 @@ export class VehiclesService {
     vehicle.rejectionReason = reason;
     this.logger.warn(`Vehículo suspendido: ${vehicle.id} — ${vehicle.plate}`);
     const savedSuspend = await this.vehicleRepo.save(vehicle);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
@@ -267,6 +280,9 @@ export class VehiclesService {
     vehicle.status          = VehicleStatus.ACTIVE;
     vehicle.rejectionReason = null;
     const savedReactivate = await this.vehicleRepo.save(vehicle);
+
+    await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
@@ -305,6 +321,7 @@ export class VehiclesService {
     vehicle.status    = VehicleStatus.REMOVED;
     vehicle.deletedAt = new Date();
     await this.vehicleRepo.save(vehicle);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
     this.logger.log(`Vehículo retirado: ${vehicleId} — placa ${vehicle.plate}`);
 
@@ -347,7 +364,9 @@ export class VehiclesService {
     }
 
     Object.assign(vehicle, input);
-    return this.vehicleRepo.save(vehicle);
+    const savedVehicle = await this.vehicleRepo.save(vehicle);
+    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    return savedVehicle;
   }
 
   // ================================================================
@@ -356,6 +375,10 @@ export class VehiclesService {
 
   async checkPlate(plate: string, complexId: string): Promise<PlateCheckResponse> {
     const normalizedPlate = plate.toUpperCase().replace(/[\s\-]/g, '');
+
+    const cacheKey = BK.vehicle.plate(complexId, normalizedPlate);
+    const cached = await this.cacheService.get<PlateCheckResponse>({ key: cacheKey });
+    if (cached) return cached;
 
     const vehicle = await this.vehicleRepo.findOne({
       where: {
@@ -368,11 +391,13 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      return {
+      const notFound: PlateCheckResponse = {
         isRegistered: false,
         isAuthorized: false,
         message: `La placa "${normalizedPlate}" NO está registrada en este complejo`,
       };
+      await this.cacheService.set({ key: cacheKey, data: notFound, options: { ttl: BK.vehicle.TTL_PLATE } });
+      return notFound;
     }
 
     const isAuthorized = vehicle.status === VehicleStatus.ACTIVE;
@@ -385,12 +410,14 @@ export class VehiclesService {
       [VehicleStatus.REMOVED]:          `❌ Vehículo RETIRADO del complejo.`,
     };
 
-    return {
+    const result: PlateCheckResponse = {
       isRegistered: true,
       isAuthorized,
       message:      messages[vehicle.status],
       vehicle,
     };
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.vehicle.TTL_PLATE } });
+    return result;
   }
 
   // ================================================================
@@ -406,6 +433,10 @@ export class VehiclesService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
+    const cacheKey = BK.vehicle.list(complexId, page, limit, filterKey(filters ?? {}));
+    const cached = await this.cacheService.get<PaginatedVehiclesResponse>({ key: cacheKey });
+    if (cached) return cached;
+
     const skip = (page - 1) * limit;
 
     const qb = this.vehicleRepo
@@ -434,7 +465,7 @@ export class VehiclesService {
     const [items, totalItems] = await qb.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
 
-    return {
+    const result: PaginatedVehiclesResponse = {
       items,
       pagination: {
         currentPage:    page,
@@ -445,6 +476,8 @@ export class VehiclesService {
         hasPreviousPage: page > 1,
       },
     };
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.vehicle.TTL_LIST } });
+    return result;
   }
 
   // ================================================================
@@ -505,6 +538,13 @@ export class VehiclesService {
       );
     }
 
+    return vehicle;
+  }
+
+  async updatePhotoUrl(vehicleId: string, url: string, currentUser: JwtAccessPayload): Promise<Vehicle> {
+    const vehicle = await this.findById(vehicleId, currentUser);
+    await this.vehicleRepo.update(vehicleId, { photoUrl: url });
+    vehicle.photoUrl = url;
     return vehicle;
   }
 
@@ -696,6 +736,7 @@ export class VehiclesService {
     // Guardar todos los vehículos modificados en una sola operación
     if (vehiclesToSave.length > 0) {
       await this.vehicleRepo.save(vehiclesToSave);
+      await this.cacheService.deleteByPrefix(BK.vehicle.prefix(complexId));
     }
 
     config.lastExecutedAt  = now;
