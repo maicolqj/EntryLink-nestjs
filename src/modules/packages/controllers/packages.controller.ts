@@ -15,8 +15,9 @@ import { Request } from 'express';
 
 import { PackagesService }           from '../services/packages.service';
 import { RegisterPackageInput }      from '../dto/inputs/register-package.input';
+import { RegisterPackageBodyDto }    from '../dto/inputs/register-package-body.dto';
 import { PackageType }               from '../enums/package-type.enum';
-import { CloudinaryService }         from '../../../core/infrastructure/cloudinary/cloudinary.service';
+import { R2StorageService }          from '../../../core/infrastructure/r2/r2.service';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { JwtRestGuard }              from '../../shared/guards/jwt-rest.guard';
 import { JwtAccessPayload }          from '../../shared/interfaces/jwt-payload.interface';
@@ -34,14 +35,14 @@ export class PackagesController {
 
   constructor(
     private readonly packagesService:   PackagesService,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly storageService:    R2StorageService,
     private readonly complexService:    ResidentialComplexService,
   ) {}
 
   /**
    * POST /api/v1/packages
    *
-   * Registra un paquete y sube la foto a Cloudinary en la misma operación.
+   * Registra un paquete y sube la foto a R2 en la misma operación.
    *
    * Body (multipart/form-data):
    *   - unitId        : UUID de la unidad (requerido)
@@ -55,7 +56,7 @@ export class PackagesController {
    *   - notes         : notas adicionales (opcional)
    *   - photo         : archivo de imagen (opcional) — jpeg/png/webp/heic, máx 10 MB
    *
-   * Ruta Cloudinary: entryLink/{complexSlug}/packages/{packageId}
+   * Ruta R2: entryLink/{complexSlug}/packages/{packageId}
    */
   @Post()
   @UseInterceptors(
@@ -78,7 +79,7 @@ export class PackagesController {
   )
   async registerPackage(
     @UploadedFile() photo: Express.Multer.File,
-    @Body() body: Record<string, string>,
+    @Body() body: RegisterPackageBodyDto,
     @Req() req: Request,
   ) {
     const currentUser = req.user as JwtAccessPayload;
@@ -101,11 +102,11 @@ export class PackagesController {
       unitId:         body.unitId,
       complexId:      body.complexId,
       senderName:     body.senderName,
-      type:           (body.type as PackageType) ?? PackageType.PARCEL,
+      type:           body.type ?? PackageType.PARCEL,
       trackingCode:   body.trackingCode   || undefined,
       description:    body.description    || undefined,
       recipientName:  body.recipientName  || undefined,
-      maxStorageDays: body.maxStorageDays ? parseInt(body.maxStorageDays, 10) : undefined,
+      maxStorageDays: body.maxStorageDays,
       notes:          body.notes          || undefined,
     };
 
@@ -115,27 +116,27 @@ export class PackagesController {
     // 2. Subir foto si fue enviada
     if (!photo) return pkg;
 
-    // Cloudinary path: entryLink/{complexSlug}/packages/{packageId}
+    // R2 path: entryLink/{complexSlug}/packages/{packageId}
     const complex = await this.complexService.findById(pkg.complexId, currentUser);
     const folder  = `entryLink/${complex.slug}/packages/${pkg.id}`;
 
-    let cloudinaryPublicId: string | undefined;
+    let storagePublicId: string | undefined;
     try {
-      const result = await this.cloudinaryService.uploadBuffer(
+      const result = await this.storageService.uploadBuffer(
         photo.buffer,
         folder,
         photo.originalname,
       );
-      cloudinaryPublicId = result.publicId;
+      storagePublicId = result.publicId;
 
       // 3. Actualizar photoUrl en BD
       return await this.packagesService.updatePhotoUrl(pkg.id, result.url);
 
-    } catch (err) {
+    } catch (err: any) {
       // Si la actualización en BD falló pero ya subimos la imagen → rollback
-      if (cloudinaryPublicId) {
-        this.logger.warn(`Rollback Cloudinary: eliminando imagen huérfana ${cloudinaryPublicId}`);
-        await this.cloudinaryService.deleteByPublicId(cloudinaryPublicId).catch(() => undefined);
+      if (storagePublicId) {
+        this.logger.warn(`Rollback R2: eliminando imagen huérfana ${storagePublicId}`);
+        await this.storageService.deleteByPublicId(storagePublicId).catch(() => undefined);
       }
       this.logger.error(`Error subiendo foto del paquete ${pkg.id}: ${err?.message}`);
       // Retornamos el paquete sin foto antes de propagar el error
