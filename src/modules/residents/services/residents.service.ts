@@ -14,6 +14,7 @@ import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
 import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
 import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
+import { ResidentStatsResponse } from '../dto/responses/resident-stats.response';
 
 import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
@@ -31,6 +32,8 @@ import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { AuditService }    from '../../audit/services/audit.service';
 import { AuditAction }     from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { CacheService }    from '../../../core/infrastructure/cache/cache.service';
+import { BK, filterKey }   from '../../../core/infrastructure/cache/business-cache.constants';
 
 @Injectable()
 export class ResidentsService {
@@ -50,6 +53,7 @@ export class ResidentsService {
     private readonly unitService: UnitService,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly cacheService: CacheService,
   ) { }
 
   // ================================================================
@@ -219,6 +223,7 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(input.complexId));
 
       this.logger.log(
         `Residente creado y activado: ${savedResident.id} — usuario ${resolvedUserId} en unidad ${input.unitId}`,
@@ -294,6 +299,7 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
       this.logger.log(
         `Residente aprobado: ${resident.id} por Compliance Officer ${currentUser.sub}`,
       );
@@ -348,6 +354,7 @@ export class ResidentsService {
     resident.approvedByUserId = currentUser.sub;
 
     const saved = await this.residentRepo.save(resident);
+    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
     this.logger.warn(`Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`);
 
     void this.auditService.log({
@@ -417,6 +424,7 @@ export class ResidentsService {
       }
 
       await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
       this.logger.log(`Residente ${resident.id} registrado como MOVED_OUT`);
 
       void this.auditService.log({
@@ -483,6 +491,7 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
       this.logger.log(`Baja del residente ${resident.id} revertida → ACTIVE`);
 
       return this.residentRepo.findOne({
@@ -524,6 +533,7 @@ export class ResidentsService {
     resident.status = ResidentStatus.SUSPENDED;
     resident.notes = reason;
     const savedSuspend = await this.residentRepo.save(resident);
+    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Resident,
@@ -557,6 +567,7 @@ export class ResidentsService {
 
     resident.status = ResidentStatus.ACTIVE;
     const savedReactivate = await this.residentRepo.save(resident);
+    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Resident,
@@ -601,7 +612,9 @@ export class ResidentsService {
     }
 
     Object.assign(resident, input);
-    return this.residentRepo.save(resident);
+    const savedUpdate = await this.residentRepo.save(resident);
+    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+    return savedUpdate;
   }
 
   // ================================================================
@@ -614,10 +627,13 @@ export class ResidentsService {
     filters: FilterResidentsInput,
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedResidentsResponse> {
-    // Verificar acceso al complejo
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
+    const cacheKey = BK.resident.list(complexId, page, limit, filterKey(filters ?? {}));
+    const cached = await this.cacheService.get<PaginatedResidentsResponse>({ key: cacheKey });
+    if (cached) return cached;
+
     const skip = (page - 1) * limit;
 
     const qb = this.residentRepo
@@ -629,10 +645,13 @@ export class ResidentsService {
       .where('r.complex_id = :complexId', { complexId })
       // .andWhere('r.createdAt IS NULL');
 
-    if (filters?.status) qb.andWhere('r.status = :status', { status: filters.status });
-    if (filters?.type) qb.andWhere('r.type = :type', { type: filters.type });
-    if (filters?.unitId) qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
-    if (filters?.buildingId) qb.andWhere('unit.building_id = :bid', { bid: filters.buildingId });
+    if (filters?.status)       qb.andWhere('r.status = :status', { status: filters.status });
+    if (filters?.type)         qb.andWhere('r.type = :type', { type: filters.type });
+    if (filters?.unitId)       qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
+    if (filters?.buildingId)   qb.andWhere('unit.building_id = :bid', { bid: filters.buildingId });
+    if (filters?.unitType)     qb.andWhere('unit.type = :unitType', { unitType: filters.unitType });
+    if (filters?.unitNumber)   qb.andWhere('UPPER(unit.number) = UPPER(:unitNumber)', { unitNumber: filters.unitNumber.trim() });
+    if (filters?.buildingName) qb.andWhere('UPPER(building.name) = UPPER(:buildingName)', { buildingName: filters.buildingName.trim() });
 
     if (filters?.search) {
       qb.andWhere(
@@ -649,7 +668,7 @@ export class ResidentsService {
     const [items, totalItems] = await qb.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
 
-    return {
+    const result: PaginatedResidentsResponse = {
       items,
       pagination: {
         currentPage: page,
@@ -660,6 +679,9 @@ export class ResidentsService {
         hasPreviousPage: page > 1,
       },
     };
+
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.resident.TTL } });
+    return result;
   }
 
   // ================================================================
@@ -753,6 +775,7 @@ export class ResidentsService {
 
     resident.deletedAt = new Date();
     await this.residentRepo.save(resident);
+    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
     this.logger.warn(`Residente eliminado (soft): ${id}`);
 
     return {
@@ -777,6 +800,59 @@ export class ResidentsService {
       relations: ['user', 'approvedByUser'],
       order: { createdAt: 'DESC' },
     });
+  }
+
+  // ================================================================
+  // ESTADÍSTICAS DEL COMPLEJO
+  // ================================================================
+
+  async getStats(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<ResidentStatsResponse> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const cacheKey = BK.resident.stats(complexId);
+    const cached = await this.cacheService.get<ResidentStatsResponse>({ key: cacheKey });
+    if (cached) return cached;
+
+    const raw = await this.residentRepo
+      .createQueryBuilder('r')
+      .select('COUNT(*)', 'total')
+      .addSelect(`COUNT(CASE WHEN r.status = 'ACTIVE' THEN 1 END)`, 'active')
+      .addSelect(`COUNT(CASE WHEN r.status = 'PENDING_APPROVAL' THEN 1 END)`, 'pendingApproval')
+      .addSelect(`COUNT(CASE WHEN r.status = 'SUSPENDED' THEN 1 END)`, 'suspended')
+      .addSelect(`COUNT(CASE WHEN r.status = 'MOVED_OUT' THEN 1 END)`, 'movedOut')
+      .addSelect(`COUNT(CASE WHEN r.status = 'REJECTED' THEN 1 END)`, 'rejected')
+      .addSelect(`COUNT(CASE WHEN r.is_main_resident = true AND r.status = 'ACTIVE' THEN 1 END)`, 'mainResidents')
+      .addSelect(`COUNT(CASE WHEN r.type = 'OWNER' AND r.status = 'ACTIVE' THEN 1 END)`, 'owners')
+      .addSelect(`COUNT(CASE WHEN r.type = 'TENANT' AND r.status = 'ACTIVE' THEN 1 END)`, 'tenants')
+      .addSelect(`COUNT(CASE WHEN r.type = 'FAMILY_MEMBER' AND r.status = 'ACTIVE' THEN 1 END)`, 'familyMembers')
+      .addSelect(`COUNT(CASE WHEN r.type = 'CARETAKER' AND r.status = 'ACTIVE' THEN 1 END)`, 'caretakers')
+      .where('r.complex_id = :complexId', { complexId })
+      .andWhere('r.deleted_at IS NULL')
+      .getRawOne<Record<string, string>>();
+
+    const n = (key: string) => parseInt(raw[key] ?? '0', 10);
+
+    const stats: ResidentStatsResponse = {
+      total:          n('total'),
+      active:         n('active'),
+      pendingApproval: n('pendingApproval'),
+      suspended:      n('suspended'),
+      movedOut:       n('movedOut'),
+      rejected:       n('rejected'),
+      mainResidents:  n('mainResidents'),
+      byType: {
+        owners:        n('owners'),
+        tenants:       n('tenants'),
+        familyMembers: n('familyMembers'),
+        caretakers:    n('caretakers'),
+      },
+    };
+
+    await this.cacheService.set({ key: cacheKey, data: stats, options: { ttl: BK.resident.TTL } });
+    return stats;
   }
 
   // ================================================================

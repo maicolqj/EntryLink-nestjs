@@ -38,7 +38,7 @@ export class Note {
   @Column({ type: 'text' })
   content: string;
 
-  @Field(() => [String], { description: 'URLs de imágenes adjuntas (Cloudinary)', nullable: true })
+  @Field(() => [String], { description: 'URLs de imágenes adjuntas (R2)', nullable: true })
   @Column({ name: 'image_urls', type: 'text', array: true, nullable: true, default: [] })
   imageUrls: string[];
 
@@ -55,6 +55,10 @@ export class Note {
   @Field(() => String, { nullable: true, description: 'Rol del creador al momento de registrar la nota' })
   @Column({ name: 'created_by_role', type: 'varchar', length: 50, nullable: true })
   createdByRole: string | null;
+
+  @Field(() => String, { nullable: true, description: 'ID de la visita activa del supervisor bajo la cual se creó esta nota' })
+  @Column({ name: 'supervisor_visit_id', type: 'uuid', nullable: true })
+  supervisorVisitId?: string;
 
   // ==================== AUDITORÍA ====================
 
