@@ -256,7 +256,7 @@ export class ExcelImportService {
   }
 
   private generateDefaultEmail(phone: string): string {
-    return `resident.${phone}@residash.local`;
+    return `resident.${phone}@entrylink.local`;
   }
 
   private cellString(cell: ExcelJS.Cell): string {
