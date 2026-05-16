@@ -36,7 +36,7 @@ geocodeAddress(address, city, state, country): Promise<{ lat: number; lng: numbe
 **Comportamiento:**
 - Construye query: `"address, city, state, country"`
 - Llama a: `https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=1&countrycodes=co`
-- Header obligatorio: `User-Agent: Residash/1.0` (requerido por ToS de Nominatim)
+- Header obligatorio: `User-Agent: entrylink/1.0` (requerido por ToS de Nominatim)
 - Timeout: 5 segundos
 - Si el array de respuesta está vacío → lanza `CustomError` con `GEOCODING_ADDRESS_NOT_FOUND` (HTTP 422)
 - Si Nominatim no responde en 5s → lanza `CustomError` con `GEOCODING_SERVICE_UNAVAILABLE` (HTTP 503)
@@ -53,7 +53,7 @@ GEOCODING_SERVICE_UNAVAILABLE = 'GEOCODING_SERVICE_UNAVAILABLE'
 
 ### Módulo: `ResidentialComplexModule`
 
-Agregar `HttpModule.register({ timeout: 5000, headers: { 'User-Agent': 'Residash/1.0' } })` a `imports`.  
+Agregar `HttpModule.register({ timeout: 5000, headers: { 'User-Agent': 'entrylink/1.0' } })` a `imports`.  
 Agregar `GeocodingService` a `providers` (no exportar — uso interno únicamente).
 
 ---
