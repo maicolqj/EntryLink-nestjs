@@ -7,10 +7,13 @@ import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
 import { FeeFrequency }       from '../enums/fee-frequency.enum';
 import { ChargeType }         from '../enums/charge-type.enum';
+import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
+import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
 import { ChargeCategory }     from './charge-category.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Unit }               from '../../residential-complex/entities/unit.entity';
 import { UnitType }           from '../../residential-complex/enums/unit-type.enum';
+import { FeeConfigTargetRules } from '../dto/inputs/fee-config-target-rules.input';
 
 /**
  * Configuración de cuota para un complejo.
@@ -102,6 +105,35 @@ export class FeeConfig {
   @Field()
   @Column({ default: true })
   isActive: boolean;
+
+  /** ADVANCE: vence en el mismo período. ARREARS: vence en el período siguiente. */
+  @Field(() => FeeConfigBillingMode)
+  @Column({ type: 'enum', enum: FeeConfigBillingMode, default: FeeConfigBillingMode.ADVANCE })
+  billingMode: FeeConfigBillingMode;
+
+  /** Si true, este config NO se aplica en generateCharges; debe aplicarse manualmente por unidad. */
+  @Field()
+  @Column({ default: false })
+  isOptional: boolean;
+
+  /**
+   * Reglas de targeting para configs opcionales.
+   * Si isOptional=true y targetRules está definido, generateCharges aplica la config
+   * solo a las unidades que cumplan estas reglas.
+   * Si isOptional=true y targetRules es null, la config se omite completamente.
+   */
+  @Field(() => FeeConfigTargetRules, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  targetRules: FeeConfigTargetRules | null;
+
+  /**
+   * Disparo automático de cargo cuando un vehículo pasa a ACTIVE.
+   * VEHICLE → se crea un cargo para la unidad del vehículo aprobado.
+   * null → sin disparo automático (solo generateCharges o manual).
+   */
+  @Field(() => FeeConfigTriggerType, { nullable: true })
+  @Column({ type: 'enum', enum: FeeConfigTriggerType, nullable: true })
+  triggerType: FeeConfigTriggerType | null;
 
   // ─── Multi-tenant ─────────────────────────────────────────────
 

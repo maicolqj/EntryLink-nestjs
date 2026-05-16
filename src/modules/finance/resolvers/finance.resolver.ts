@@ -39,6 +39,11 @@ import {
 } from '../dto/responses/financial-status.response';
 import { PaginationInput }                             from '../../shared/dto/inputs/pagination.input';
 
+import { ComplexExpense }                                from '../entities/complex-expense.entity';
+import { RegisterExpenseInput }                          from '../dto/inputs/register-expense.input';
+import { FilterExpensesInput }                           from '../dto/inputs/filter-expenses.input';
+import { PaginatedExpensesResponse }                     from '../dto/responses/paginated-expenses.response';
+
 import { Auth }             from '../../shared/decorators/auth.decorator';
 import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
@@ -471,5 +476,51 @@ export class FinanceResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitFinancialStatusPaginated> {
     return this.financeService.getUnitsFinancialStatus(complexId, status, pagination, currentUser);
+  }
+
+  // ================================================================
+  // GASTOS OPERATIVOS DEL COMPLEJO
+  // ================================================================
+
+  @Mutation(() => ComplexExpense, { name: 'registerExpense' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    permissions: [ValidPermissions.MANAGE_EXPENSES],
+  })
+  registerExpense(
+    @Args('input') input: RegisterExpenseInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ComplexExpense> {
+    return this.financeService.registerExpense(input, currentUser);
+  }
+
+  @Mutation(() => ComplexExpense, { name: 'reverseExpense' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    permissions: [ValidPermissions.MANAGE_EXPENSES],
+  })
+  reverseExpense(
+    @Args('expenseId') expenseId: string,
+    @Args('reason')    reason: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ComplexExpense> {
+    return this.financeService.reverseExpense(expenseId, reason, currentUser);
+  }
+
+  @Query(() => PaginatedExpensesResponse, { name: 'complexExpenses' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+    permissions: [ValidPermissions.VIEW_EXPENSES],
+  })
+  getComplexExpenses(
+    @Args('complexId')                      complexId: string,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters',    { nullable: true }) filters: FilterExpensesInput = {},
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedExpensesResponse> {
+    return this.financeService.getComplexExpenses(complexId, pagination, filters, currentUser);
   }
 }
