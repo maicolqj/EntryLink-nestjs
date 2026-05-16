@@ -33,7 +33,7 @@ export class GeocodingService {
             limit: 1,
             countrycodes: 'co',
           },
-          headers: { 'User-Agent': 'Residash/1.0' },
+          headers: { 'User-Agent': 'entrylink/1.0' },
         }),
       );
 
