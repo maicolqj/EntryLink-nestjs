@@ -1,7 +1,7 @@
-import { Resolver, Query, Mutation, Subscription, Args, Int } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
 import { Notification }                   from '../entities/notification.entity';
-import { NotificationsService }           from '../services/notifications.service';
+import { NotificationsService } from '../services/notifications.service';
 import { FilterNotificationsInput }       from '../dto/inputs/filter-notifications.input';
 import { SavePushSubscriptionInput }      from '../dto/inputs/save-push-subscription.input';
 import { SaveMobileTokenInput }           from '../dto/inputs/save-mobile-token.input';
@@ -12,9 +12,11 @@ import { PushSubscriptionResult }              from '../dto/responses/push-subsc
 import { SendNotificationResult }              from '../dto/responses/send-notification.response';
 import { SentNotificationPaginatedResult }     from '../dto/responses/sent-notifications.response';
 import { TriggerPanicAlertResult }             from '../dto/responses/trigger-panic-alert.response';
+import { NotificationDetailResponse }          from '../dto/responses/notification-detail.response';
 import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
+import { Public }           from '../../shared/decorators/public.decorator';
 import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
@@ -85,16 +87,57 @@ export class NotificationsResolver {
   }
 
   /**
-   * Activa una alerta de pánico. Disponible para RESIDENT_ROL y SECURITY_ROL.
-   * El routing de destinatarios se determina automáticamente según el rol y la unidad del activador.
+   * Activa una alerta de pánico. Disponible para cualquier rol con acceso al panel.
+   * El routing de destinatarios se determina automáticamente según el rol del activador.
    */
   @Mutation(() => TriggerPanicAlertResult, { name: 'triggerPanicAlert' })
-  @Auth({ roles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL] })
+  @Auth({ roles: [
+    ValidRoles.RESIDENT_ROL,
+    ValidRoles.SECURITY_ROL,
+    ValidRoles.COMPLEX_ROL,
+    ValidRoles.ACCOUNTANT_ROL,
+    ValidRoles.SUPERVISOR_ROL,
+    ValidRoles.COMPILANCE_OFFICER_ROL,
+  ] })
   triggerPanicAlert(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<TriggerPanicAlertResult> {
     return this.notificationsService.triggerPanicAlert(complexId, currentUser);
+  }
+
+  /**
+   * Reconoce una alerta de pánico (botón "OK").
+   * Persiste quién y cuándo atendió la alarma y emite un evento para que
+   * todos los clientes conectados al complejo cierren el modal.
+   */
+  @Mutation(() => Notification, { name: 'acknowledgePanicAlert' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+    ],
+  })
+  acknowledgePanicAlert(
+    @Args('notificationId') notificationId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Notification> {
+    return this.notificationsService.acknowledgePanicAlert(notificationId, currentUser);
+  }
+
+  /**
+   * Elimina (soft-delete) una notificación de la lista del usuario autenticado.
+   * Solo puede eliminar notificaciones donde es el destinatario directo.
+   */
+  @Mutation(() => Boolean, { name: 'deleteNotification' })
+  @Auth()
+  deleteNotification(
+    @Args('notificationId') notificationId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    return this.notificationsService.deleteNotification(notificationId, currentUser);
   }
 
   /**
@@ -149,6 +192,24 @@ export class NotificationsResolver {
   }
 
   /**
+   * Devuelve el detalle completo de una notificación: contenido, metadatos,
+   * información del creador (nombre, cargo/rol), datos del destinatario,
+   * y — si la notificación es accionable — el tipo de acción, etiqueta,
+   * resultado y quién la ejecutó.
+   *
+   * Acceso: el propio destinatario o roles admin/staff del complejo.
+   */
+  @Query(() => NotificationDetailResponse, { name: 'notificationDetail' })
+  @Auth()
+  notificationDetail(
+    @Args('notificationId') notificationId: string,
+    @Args('complexId')      complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<NotificationDetailResponse> {
+    return this.notificationsService.findOneDetail(notificationId, complexId, currentUser);
+  }
+
+  /**
    * Número de notificaciones no leídas del usuario en el complejo.
    * Ideal para el badge del ícono de campana en la app.
    */
@@ -161,7 +222,7 @@ export class NotificationsResolver {
     return this.notificationsService.getUnreadCount(complexId, currentUser);
   }
 
-  /**
+  /** 
    * Historial paginado de envíos masivos realizados por el usuario autenticado.
    * Solo disponible para administradores del complejo y supervisores.
    */
@@ -185,28 +246,30 @@ export class NotificationsResolver {
    * Retorna la clave pública VAPID para configurar el Service Worker del dashboard.
    * No requiere autenticación.
    */
+  @Public()
   @Query(() => String, { name: 'vapidPublicKey' })
   vapidPublicKey(): string {
     return this.notificationsService.getVapidPublicKey();
   }
 
-  // ================================================================
-  // SUBSCRIPTIONS — Tiempo real via graphql-ws
-  // ================================================================
-
   /**
-   * Suscripción en tiempo real.
-   * El cliente recibe notificaciones nuevas sin necesidad de polling.
+   * Retorna las alertas de pánico activas (sin ACK) del complejo.
+   * El frontend llama a este query al reconectar/montar para mostrar solo
+   * alarmas pendientes y evitar el bucle de re-aparición.
    */
-  @Subscription(() => Notification, {
-    name: 'notificationAdded',
-    filter: () => true,
-    resolve: (payload: { notificationAdded: Notification }) => payload.notificationAdded,
+  @Query(() => [Notification], { name: 'activePanicAlerts' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+    ],
   })
-  notificationAdded(
+  activePanicAlerts(
     @Args('complexId') complexId: string,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ) {
-    return this.notificationsService.asyncIterator(currentUser.sub, complexId);
+  ): Promise<Notification[]> {
+    return this.notificationsService.activePanicAlerts(complexId);
   }
+
 }
