@@ -90,6 +90,29 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Elimina todas las claves cuyo nombre comience con `rawPrefix`.
+   * Usa SCAN para no bloquear Redis en producción (a diferencia de KEYS).
+   * Útil para invalidar todos los resultados paginados/filtrados de un scope.
+   *
+   * @example deleteByPrefix('bld:complexId123:') → borra todas las páginas de torres
+   */
+  async deleteByPrefix(rawPrefix: string): Promise<void> {
+    try {
+      let cursor = '0';
+      const pattern = `${rawPrefix}*`;
+      do {
+        const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await this.client.del(...keys);
+        }
+      } while (cursor !== '0');
+    } catch (error: any) {
+      this.logger.warn(`Cache DEL_PREFIX error [${rawPrefix}]: ${error.message}`);
+    }
+  }
+
   // ── Helper ───────────────────────────────────────────────────────────────
 
   private buildKey(cacheKey: CacheKey): string {

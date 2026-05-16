@@ -11,14 +11,16 @@ import { PersistedQueriesMiddleware } from './modules/shared/middleware/persiste
 import { GraphQLFormattedError } from 'graphql';
 import { join } from 'node:path';
 import depthLimit from 'graphql-depth-limit';
+import GraphQLJSON from 'graphql-type-json';
 
-import databaseConfig    from './core/config/database.config';
-import redisConfig       from './core/config/redis.config';
-import cloudinaryConfig  from './core/config/cloudinary.config';
+import databaseConfig from './core/config/database.config';
+import redisConfig    from './core/config/redis.config';
+import r2Config       from './core/config/r2.config';
+import { envValidationSchema } from './core/config/env-validation';
 
-import { CacheModule }      from './core/infrastructure/cache/cache.module';
+import { CacheModule }  from './core/infrastructure/cache/cache.module';
 import { BullConfigModule } from './core/config/bull-config';
-import { CloudinaryModule } from './core/infrastructure/cloudinary/cloudinary.module';
+import { R2Module }     from './core/infrastructure/r2/r2.module';
 
 import { PermissionsModule }        from './modules/permissions/permissions.module';
 import { SharedModule }             from './modules/shared/shared.module';
@@ -34,19 +36,27 @@ import { PackagesModule }           from './modules/packages/packages.module';
 import { NotificationsModule }      from './modules/notifications/notifications.module';
 import { FinanceModule }            from './modules/finance/finance.module';
 import { VisitorParkingModule }    from './modules/visitor-parking/visitor-parking.module';
-import { NotesModule }            from './modules/notes/notes.module';
-import { AuditModule }           from './modules/audit/audit.module';
+import { NotesModule }              from './modules/notes/notes.module';
+import { MessagesModule }           from './modules/messages/messages.module';
+import { CallLogsModule }           from './modules/call-logs/call-logs.module';
+import { AuditModule }             from './modules/audit/audit.module';
+import { SupervisorVisitsModule }  from './modules/supervisor-visits/supervisor-visits.module';
 import { MailModule }             from './mail/mail.module';
 import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-board.module';
+import { HealthModule }           from './modules/health/health.module';
+import { SocketModule }           from './core/infrastructure/socket/socket.module';
+import { SpecialNumbersModule }   from './modules/special-numbers/special-numbers.module';
 
 @Module({
   imports: [
     // ── Configuración global ─────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [redisConfig, databaseConfig, cloudinaryConfig],
+      load: [redisConfig, databaseConfig, r2Config],
       envFilePath: ['.env'],
       expandVariables: true,
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: false },
     }),
 
     // ── Base de datos ─────────────────────────────────────────────────────
@@ -65,31 +75,27 @@ import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-bo
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const isProd = config.get<string>('NODE_ENV') === 'production';
-        return {
-          autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-          installSubscriptionHandlers: true,
-          subscriptions: { 'graphql-ws': true },
 
-          // ── Seguridad en producción ──────────────────────────────────────
-          // Introspección y playground desactivados en prod para no exponer el schema
+        return {
+          autoSchemaFile: isProd
+            ? join(process.cwd(), 'schema.gql')
+            : join(process.cwd(), 'src/schema.gql'),
+          buildSchemaOptions: {
+            scalarsMap: [{ type: () => GraphQLJSON, scalar: GraphQLJSON }],
+          },
+
           introspection: !isProd,
           playground:    !isProd,
           graphiql:      !isProd,
 
-          // ── Depth Limiting ───────────────────────────────────────────────
-          // Protege contra queries anidadas maliciosas (p.ej. { users { roles { users { roles ... } } } })
           validationRules: [depthLimit(7)],
 
-          context: ({ req, connection }) => {
-            if (req) return { req };
-            if (connection) return { user: connection.context?.user };
-            return {};
-          },
+          context: ({ req, res }: any) => ({ req, res }),
           formatError: (formattedError: GraphQLFormattedError, error: any) => ({
             message: formattedError.message,
             code: error?.extensions?.code || 'INTERNAL_SERVER_ERROR',
             statusCode: error?.extensions?.statusCode || 500,
-            detail: error?.extensions?.details || '',
+            detail: isProd ? '' : (error?.extensions?.details || ''),
             timestamp: new Date().toISOString(),
             path: formattedError.path,
           }),
@@ -119,7 +125,8 @@ import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-bo
     // ── Infraestructura ───────────────────────────────────────────────────
     CacheModule,          // Global — disponible en todos los módulos
     BullConfigModule,     // Configura BullMQ con Redis
-    CloudinaryModule,     // Global — subida de imágenes
+    R2Module,             // Global — almacenamiento de archivos en Cloudflare R2
+    SocketModule,         // Global — Socket.io con Redis Adapter
 
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
@@ -137,7 +144,14 @@ import { BullBoardAppModule }     from './core/infrastructure/bull-board/bull-bo
     FinanceModule,
     VisitorParkingModule,
     NotesModule,
+    MessagesModule,
+    CallLogsModule,
     AuditModule,
+    SupervisorVisitsModule,
+    SpecialNumbersModule,
+    MailModule,
+    BullBoardAppModule,
+    HealthModule,
   ],
   providers: [
     // Aplica rate limiting globalmente a todos los endpoints REST y GraphQL
