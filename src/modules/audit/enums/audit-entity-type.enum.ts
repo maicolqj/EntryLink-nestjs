@@ -18,6 +18,11 @@ export enum AuditEntityType {
   VisitorVehicle     = 'VisitorVehicle',
   Visit              = 'Visit',
   Visitor            = 'Visitor',
+  SupervisorVisit          = 'SupervisorVisit',
+  SupervisorAccessRequest  = 'SupervisorAccessRequest',
+  SentMessage              = 'SentMessage',
+  CallLog                  = 'CallLog',
+  SpecialNumber            = 'SpecialNumber',
 }
 
 registerEnumType(AuditEntityType, {

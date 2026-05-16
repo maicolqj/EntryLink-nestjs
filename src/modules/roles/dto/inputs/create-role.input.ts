@@ -1,5 +1,5 @@
 import { InputType, Int, Field } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, MinLength, MaxLength, Matches, IsArray, IsOptional, IsBoolean, IsInt } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, MaxLength, Matches,IsArray, IsOptional, IsBoolean, IsInt } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 import { ValidRoles } from '../../enums/valid-roles';
 
@@ -15,18 +15,18 @@ export class CreateRoleInput {
   })
   @Field(() => ValidRoles, { description: 'name of the permisison', nullable: false })
   name: ValidRoles
-
+  
   @IsString()
   @IsNotEmpty()
   @MinLength(5)
   @MaxLength(50)
-  @Matches(/^[A-ZÁÉÍÓÚ ]+$/, {
+  @Matches(/^[A-ZÁÉÍÓÚ ]+$/, { 
     message: 'El nombre frontal debe contener solo mayúsculas',
   })
   @Field(() => String, { description: 'name of the permisison visiblen to end user', nullable: false })
   frontName: string
-
-  @IsString()
+  
+  @IsString() 
   @IsNotEmpty()
   @MinLength(3)
   @MaxLength(15)

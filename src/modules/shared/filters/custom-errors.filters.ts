@@ -1,22 +1,33 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { GqlExceptionFilter } from "@nestjs/graphql";
 import { CustomError } from "../utils/errors.utils";
 import { GraphQLError } from "graphql";
 
 @Catch()
 export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFilter {
+    private readonly logger = new Logger(UniversalExceptionFilter.name);
+
     catch(exception: unknown, host: ArgumentsHost) {
         const type = host.getType();
 
 
         // determinar si es REST o GraphQL
         if (type === 'http') {
+            const ctx = host.switchToHttp();
+            const request = ctx.getRequest();
+
+            if (request.url?.includes('/admin/bull-board')) {
+                return;
+            }
+
             return this.handleHttpException(exception, host);
-        } else if (type.toString() === 'graphql') {
-            return this.handleGraphQLException(exception, host)
+        } else if (type.toString() === 'graphql' || type.toString() === 'ws') {
+            return this.handleGraphQLException(exception, host);
         }
 
         return this.handleHttpException(exception, host);
+
+
     }
 
     private handleHttpException(exception: unknown, host: ArgumentsHost) {
@@ -44,12 +55,13 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
                     ? exceptionResponse
                     : (exceptionResponse as any).message || exception.message;
             } else if (exception instanceof Error) {
-                message = exception.message;
-                details = exception.stack || null;
+                // VULN-13 fix: log interno completo, cliente solo ve mensaje genérico
+                this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+                message = 'Internal server error';
+                details = null;
 
             }
 
-            // Asegurarse de que status sea siempre un número válido
             status = Number.isInteger(status) ? status : HttpStatus.INTERNAL_SERVER_ERROR;
 
             const errorResponse = {
@@ -62,14 +74,14 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
                 method: request.method
             };
 
-            // Log del error para debugging
-            console.error('HTTP Exception caught:', errorResponse);
+            // VULN-13 fix: usar Logger de NestJS en lugar de console.error
+            this.logger.error(`HTTP ${status} — ${request.method} ${request.url}`, JSON.stringify({ message, errorCode }));
 
             response.status(status).json(errorResponse);
 
 
         } catch (error) {
-            console.error('Error in HTTP exception filter:', error);
+            this.logger.error('Error in HTTP exception filter', error instanceof Error ? error.stack : String(error));
             response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
                 statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
                 message: 'Internal server error occurred while processing the original error',
@@ -105,17 +117,13 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
                     ? exceptionResponse
                     : (exceptionResponse as any).message || exception.message;
             } else if (exception instanceof Error) {
-                message = exception.message;
+                // VULN-04 fix: no exponer exception.message al cliente GraphQL
+                this.logger.error(`Unhandled GraphQL error: ${exception.message}`, exception.stack);
+                message = 'Internal server error';
             }
 
-            // Log del error para debugging
-            console.error('GraphQL Exception caught:', {
-                message,
-                errorCode,
-                statusCode,
-                details,
-                timestamp: new Date().toISOString(),
-            });
+            // VULN-13 fix: usar Logger de NestJS en lugar de console.error
+            this.logger.error(`GraphQL error`, JSON.stringify({ message, errorCode, statusCode }));
 
             // Lanzar GraphQLError con la información formateada
             throw new GraphQLError(message, {
@@ -127,13 +135,11 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
                 },
             });
         } catch (error) {
-            // Si el error ya es un GraphQLError, re-lanzarlo
             if (error instanceof GraphQLError) {
                 throw error;
             }
 
-            // Para cualquier otro error, crear un GraphQLError genérico
-            console.error('Error in GraphQL exception filter:', error);
+            this.logger.error('Error in GraphQL exception filter', error instanceof Error ? error.stack : String(error));
             throw new GraphQLError('Internal server error occurred while processing the original error', {
                 extensions: {
                     code: 'INTERNAL_SERVER_ERROR',
