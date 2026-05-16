@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Restablece tu contraseña</title>
+  <title>Verifica tu correo — entrylink</title>
   <style>
     body { margin: 0; padding: 0; background-color: #f4f6f9; font-family: Arial, sans-serif; }
     .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
@@ -25,14 +25,15 @@
     </div>
     <div class="body">
       <p>Hola, <strong>{{name}}</strong>.</p>
-      <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta. Si fuiste tú, haz clic en el botón de abajo:</p>
+      <p>Gracias por registrarte como supervisor en entrylink. Para activar tu cuenta y comenzar a usarla, confirma tu correo electrónico haciendo clic en el botón de abajo:</p>
       <div class="btn-wrap">
-        <a href="{{resetUrl}}" class="btn">Restablecer contraseña</a>
+        <a href="{{verificationUrl}}" class="btn">Verificar mi correo</a>
       </div>
-      <p class="note">Este enlace es válido por <strong>{{expiresInMinutes}} minutos</strong> y solo puede usarse una vez.</p>
-      <p class="note">Si no solicitaste restablecer tu contraseña, ignora este mensaje. Tu cuenta permanece segura.</p>
+      <p class="note">Este enlace es válido por <strong>{{expiresInMinutes}} horas </strong> y solo puede usarse una vez.</p>
+      <p class="note">Una vez verificado, podrás iniciar sesión y solicitar acceso a los complejos residenciales que supervisas.</p>
+      <p class="note">Si no creaste esta cuenta, puedes ignorar este mensaje de forma segura.</p>
       <p class="note">Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:</p>
-      <div class="url-fallback">{{resetUrl}}</div>
+      <div class="url-fallback">{{verificationUrl}}</div>
     </div>
     <div class="footer">
       &copy; {{year}} entrylink &mdash; Gestión de complejos residenciales<br />
