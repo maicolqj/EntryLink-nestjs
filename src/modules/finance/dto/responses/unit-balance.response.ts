@@ -52,4 +52,12 @@ export class ComplexFinancialSummaryResponse {
 
   @Field(() => Int)
   unitsFullyPaid: number;
+
+  /** Suma de gastos operativos del complejo registrados en el período */
+  @Field(() => Float)
+  totalExpenses: number;
+
+  /** Flujo neto = totalCollected - totalExpenses */
+  @Field(() => Float)
+  netCashFlow: number;
 }

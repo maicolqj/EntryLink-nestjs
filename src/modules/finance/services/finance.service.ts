@@ -8,19 +8,26 @@ import { FeeConfig } from '../entities/fee-config.entity';
 import { FeeCharge } from '../entities/fee-charge.entity';
 import { Payment } from '../entities/payment.entity';
 import { WalletEntry } from '../entities/wallet-entry.entity';
+import { ComplexExpense } from '../entities/complex-expense.entity';
 import { UpsertComplexFinanceConfigInput } from '../dto/inputs/upsert-complex-finance-config.input';
 import { ChargeStatus } from '../enums/charge-status.enum';
 import { ChargeType } from '../enums/charge-type.enum';
 import { FeeFrequency } from '../enums/fee-frequency.enum';
+import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
+import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
 import { CreateChargeCategoryInput } from '../dto/inputs/create-charge-category.input';
 import { UpdateChargeCategoryInput } from '../dto/inputs/update-charge-category.input';
 import { CreateFeeConfigInput } from '../dto/inputs/create-fee-config.input';
 import { UpdateFeeConfigInput } from '../dto/inputs/update-fee-config.input';
+import { FeeConfigTargetRules } from '../dto/inputs/fee-config-target-rules.input';
 import { GenerateChargesInput } from '../dto/inputs/generate-charges.input';
 import { RegisterPaymentInput } from '../dto/inputs/register-payment.input';
 import { FilterChargesInput } from '../dto/inputs/filter-charges.input';
 import { CreateDirectChargesInput } from '../dto/inputs/create-direct-charges.input';
 import { CreateDirectChargesResponse } from '../dto/responses/create-direct-charges.response';
+import { RegisterExpenseInput } from '../dto/inputs/register-expense.input';
+import { FilterExpensesInput } from '../dto/inputs/filter-expenses.input';
+import { PaginatedExpensesResponse, ExpenseCategoryBreakdown } from '../dto/responses/paginated-expenses.response';
 import { RegisterBulkPaymentInput } from '../dto/inputs/register-bulk-payment.input';
 import { RegisterBulkPaymentResponse } from '../dto/responses/register-bulk-payment.response';
 import { PaginatedChargesResponse } from '../dto/responses/paginated-charges.response';
@@ -49,6 +56,7 @@ import {
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode, ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import { ExpenseCategory } from '../enums/expense-category.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
@@ -63,6 +71,10 @@ import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 import { AuditService } from '../../audit/services/audit.service';
 import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
 @Injectable()
 export class FinanceService {
@@ -83,12 +95,16 @@ export class FinanceService {
     private readonly walletEntryRepo: Repository<WalletEntry>,
     @InjectRepository(Vehicle)
     private readonly vehicleRepo: Repository<Vehicle>,
+    @InjectRepository(ComplexExpense)
+    private readonly expenseRepo: Repository<ComplexExpense>,
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
     private readonly notificationsService: NotificationsService,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly socketService: SocketService,
+    private readonly cacheService: CacheService,
   ) { }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +116,17 @@ export class FinanceService {
     currentUser: JwtAccessPayload,
   ): Promise<ChargeCategory[]> {
     await this.complexService.findById(complexId, currentUser);
-    return this.categoryRepo.find({
+
+    const cacheKey = BK.finance.categories(complexId);
+    const cached = await this.cacheService.get<ChargeCategory[]>({ key: cacheKey });
+    if (cached) return cached;
+
+    const categories = await this.categoryRepo.find({
       where: { complexId },
       order: { createdAt: 'ASC' },
     });
+    await this.cacheService.set({ key: cacheKey, data: categories, options: { ttl: BK.finance.TTL_CATS } });
+    return categories;
   }
 
   async createCategory(
@@ -112,7 +135,9 @@ export class FinanceService {
   ): Promise<ChargeCategory> {
     await this.complexService.findById(input.complexId, currentUser);
     const category = this.categoryRepo.create({ ...input, isActive: true });
-    return this.categoryRepo.save(category);
+    const saved = await this.categoryRepo.save(category);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(input.complexId));
+    return saved;
   }
 
   async updateCategory(
@@ -123,13 +148,16 @@ export class FinanceService {
     await this.complexService.findById(category.complexId, currentUser);
     const { id, ...fields } = input;
     Object.assign(category, fields);
-    return this.categoryRepo.save(category);
+    const saved = await this.categoryRepo.save(category);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(category.complexId));
+    return saved;
   }
 
   async deleteCategory(id: string, currentUser: JwtAccessPayload): Promise<boolean> {
     const category = await this.findCategoryOrFail(id);
     await this.complexService.findById(category.complexId, currentUser);
     await this.categoryRepo.remove(category);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(category.complexId));
     return true;
   }
 
@@ -147,18 +175,25 @@ export class FinanceService {
     currentUser: JwtAccessPayload,
   ): Promise<ComplexFinanceConfig> {
     await this.complexService.findById(complexId, currentUser);
+
+    const cacheKey = BK.finance.config(complexId);
+    const cached = await this.cacheService.get<ComplexFinanceConfig>({ key: cacheKey });
+    if (cached) return cached;
+
     const existing = await this.financeConfigRepo.findOne({ where: { complexId } });
-    if (existing) return existing;
+    if (existing) {
+      await this.cacheService.set({ key: cacheKey, data: existing, options: { ttl: BK.finance.TTL_CONFIG } });
+      return existing;
+    }
 
     // Devolver defaults sin guardar
-    const defaults = this.financeConfigRepo.create({
+    return this.financeConfigRepo.create({
       complexId,
       moraRate: 2.0,
       moraGraceDays: 5,
       autoApplyMora: false,
       autoGenerateCharges: false,
     });
-    return defaults;
   }
 
   async upsertComplexFinanceConfig(
@@ -184,7 +219,9 @@ export class FinanceService {
     if (input.autoApplyMora !== undefined) config.autoApplyMora = input.autoApplyMora;
     if (input.autoGenerateCharges !== undefined) config.autoGenerateCharges = input.autoGenerateCharges;
 
-    return this.financeConfigRepo.save(config);
+    const saved = await this.financeConfigRepo.save(config);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(input.complexId));
+    return saved;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -226,7 +263,28 @@ export class FinanceService {
         continue;
       }
 
-      const targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
+      let targetUnits: Unit[];
+
+      if (config.isOptional) {
+        if (config.triggerType === FeeConfigTriggerType.VEHICLE) {
+          const vehicleRows = await this.vehicleRepo
+            .createQueryBuilder('v')
+            .select('DISTINCT v.unitId', 'unitId')
+            .where('v.complexId = :complexId', { complexId })
+            .andWhere("v.status = 'ACTIVE'")
+            .andWhere('v.deleted_at IS NULL')
+            .getRawMany();
+          const vehicleUnitIds = new Set(vehicleRows.map((r: any) => r.unitId));
+          targetUnits = allUnits.filter(u => vehicleUnitIds.has(u.id));
+        } else if (config.targetRules) {
+          targetUnits = this.applyTargetRules(allUnits, config.targetRules);
+        } else {
+          continue;
+        }
+      } else {
+        targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
+      }
+
       let configGenerated = 0;
 
       for (const unit of targetUnits) {
@@ -242,7 +300,7 @@ export class FinanceService {
           if (existing) { totalSkipped++; continue; }
         }
 
-        const dueDate = this.buildDueDate(period, config.dueDayOfMonth);
+        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
 
         // Descuento de pronto pago: usar earlyPaymentAmount si la unidad está al día
         let chargeAmount: number = Number(config.amount);
@@ -288,7 +346,54 @@ export class FinanceService {
       }
     }
 
+    if (totalGenerated > 0) {
+      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, { period, created: totalGenerated });
+    }
+
     return { generated: totalGenerated, skipped: totalSkipped, period };
+  }
+
+  /**
+   * Crea cargos inmediatos para configs con triggerType=VEHICLE cuando un vehículo pasa a ACTIVE.
+   * Idempotente: omite si ya existe cargo para la misma config+unidad+período.
+   */
+  async triggerVehicleCharges(unitId: string, complexId: string): Promise<void> {
+    const vehicleConfigs = await this.feeConfigRepo.find({
+      where: {
+        complexId,
+        isActive: true,
+        isOptional: true,
+        triggerType: FeeConfigTriggerType.VEHICLE,
+        deletedAt: null as any,
+      },
+    });
+
+    if (!vehicleConfigs.length) return;
+
+    const today = new Date();
+    const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    for (const config of vehicleConfigs) {
+      const existing = await this.chargeRepo.findOne({
+        where: { feeConfigId: config.id, unitId, period },
+      });
+      if (existing) continue;
+
+      const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
+      await this.chargeRepo.save(
+        this.chargeRepo.create({
+          complexId,
+          unitId,
+          feeConfigId: config.id,
+          period,
+          dueDate,
+          amount: Number(config.amount),
+          paidAmount: 0,
+          description: `${config.name} — ${period}`,
+          status: ChargeStatus.PENDING,
+        }),
+      );
+    }
   }
 
   /**
@@ -390,10 +495,12 @@ export class FinanceService {
       installmentsPaid: 0,
       categoryId: input.categoryId ?? null,
       isActive: true,
+      isOptional: input.isOptional ?? false,
       createdByUserId: currentUser.sub,
     });
 
     const savedConfig = await this.feeConfigRepo.save(config);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(input.complexId));
 
     void this.auditService.log({
       entityType: AuditEntityType.FeeConfig,
@@ -420,7 +527,9 @@ export class FinanceService {
     const { id, ...fields } = input;
     Object.assign(config, fields);
 
-    return this.feeConfigRepo.save(config);
+    const saved = await this.feeConfigRepo.save(config);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(config.complexId));
+    return saved;
   }
 
   async deleteFeeConfig(
@@ -433,6 +542,7 @@ export class FinanceService {
     config.deletedAt = new Date();
     config.isActive = false;
     await this.feeConfigRepo.save(config);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(config.complexId));
 
     return true;
   }
@@ -444,7 +554,9 @@ export class FinanceService {
     const config = await this.findFeeConfigOrFail(configId);
     await this.complexService.findById(config.complexId, currentUser);
     config.isActive = !config.isActive;
-    return this.feeConfigRepo.save(config);
+    const saved = await this.feeConfigRepo.save(config);
+    await this.cacheService.deleteByPrefix(BK.finance.prefix(config.complexId));
+    return saved;
   }
 
   async findFeeConfigsByComplex(
@@ -452,10 +564,17 @@ export class FinanceService {
     currentUser: JwtAccessPayload,
   ): Promise<FeeConfig[]> {
     await this.complexService.findById(complexId, currentUser);
-    return this.feeConfigRepo.find({
+
+    const cacheKey = BK.finance.feeConfigs(complexId);
+    const cached = await this.cacheService.get<FeeConfig[]>({ key: cacheKey });
+    if (cached) return cached;
+
+    const configs = await this.feeConfigRepo.find({
       where: { complexId, deletedAt: null as any },
       order: { createdAt: 'DESC' },
     });
+    await this.cacheService.set({ key: cacheKey, data: configs, options: { ttl: BK.finance.TTL_FEES } });
+    return configs;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -510,7 +629,27 @@ export class FinanceService {
         continue;
       }
 
-      const targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
+      let targetUnits: Unit[];
+
+      if (config.isOptional) {
+        if (config.triggerType === FeeConfigTriggerType.VEHICLE) {
+          const vehicleRows = await this.vehicleRepo
+            .createQueryBuilder('v')
+            .select('DISTINCT v.unitId', 'unitId')
+            .where('v.complexId = :complexId', { complexId })
+            .andWhere("v.status = 'ACTIVE'")
+            .andWhere('v.deleted_at IS NULL')
+            .getRawMany();
+          const vehicleUnitIds = new Set(vehicleRows.map((r: any) => r.unitId));
+          targetUnits = allUnits.filter(u => vehicleUnitIds.has(u.id));
+        } else if (config.targetRules) {
+          targetUnits = this.applyTargetRules(allUnits, config.targetRules);
+        } else {
+          continue;
+        }
+      } else {
+        targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
+      }
 
       let configGenerated = 0;
 
@@ -533,7 +672,7 @@ export class FinanceService {
           }
         }
 
-        const dueDate = this.buildDueDate(period, config.dueDayOfMonth);
+        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
 
         // Descuento de pronto pago: usar earlyPaymentAmount si la unidad está al día
         let chargeAmount: number = Number(config.amount);
@@ -671,6 +810,14 @@ export class FinanceService {
     this.logger.log(`createDirectCharges: ${created} creados, ${skipped} omitidos.`);
 
     if (created > 0) {
+      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, {
+        complexId,
+        period,
+        description,
+        amount,
+        created,
+      });
+
       void this.auditService.log({
         entityType: AuditEntityType.FeeCharge,
         entityId: complexId,
@@ -845,6 +992,14 @@ export class FinanceService {
         this.logger.warn(`Error al notificar pago ${savedPayment.id}: ${err?.message}`),
       );
 
+      this.socketService.emitToComplex(charge.complexId, SocketEvent.FINANCE_PAYMENT_REGISTERED, {
+        paymentId: savedPayment.id,
+        chargeId: charge.id,
+        unitId: charge.unitId,
+        amount: input.amount,
+        chargeStatus: charge.status,
+      });
+
       return savedPayment;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -942,6 +1097,12 @@ export class FinanceService {
       }
 
       await queryRunner.commitTransaction();
+
+      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_PAYMENT_REGISTERED, {
+        unitId,
+        totalAmount: amount,
+        chargesSettled: paid,
+      });
 
       void this.auditService.log({
         entityType: AuditEntityType.Payment,
@@ -1394,21 +1555,59 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
     this.assertValidPeriod(period);
 
-    const charges = await this.chargeRepo.find({
-      where: { complexId, period, deletedAt: null as any },
-    });
+    // totalCharged: todos los cargos del período (periódicos + directos), excluye WAIVED y CANCELLED
+    const chargedRow = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('COALESCE(SUM(c.amount), 0)', 'total')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.period = :period', { period })
+      .andWhere('c.status NOT IN (:...excluded)', {
+        excluded: [ChargeStatus.WAIVED, ChargeStatus.CANCELLED],
+      })
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const totalCharged = Number(chargedRow?.total ?? 0);
 
-    const activeCharges = charges.filter(c => c.status !== ChargeStatus.CANCELLED && c.status !== ChargeStatus.WAIVED);
-    const totalCharged = activeCharges.reduce((s, c) => s + Number(c.amount), 0);
-    const totalCollected = activeCharges.reduce((s, c) => s + Number(c.paidAmount), 0);
-    const totalOutstanding = totalCharged - totalCollected;
+    // totalCollected: pagos sobre TODOS los cargos del período, no revertidos
+    const collectedRow = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select('COALESCE(SUM(p.amount), 0)', 'total')
+      .innerJoin('p.charge', 'c')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.period = :period', { period })
+      .andWhere('p.isReversed = false')
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const totalCollected = Number(collectedRow?.total ?? 0);
 
-    const paidUnits = new Set(activeCharges.filter(c => c.status === ChargeStatus.PAID).map(c => c.unitId));
-    const debtUnits = new Set(
-      activeCharges
-        .filter(c => [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID].includes(c.status))
-        .map(c => c.unitId),
-    );
+    // totalOutstanding: deuda acumulada de TODOS los períodos (sin filtro de period)
+    const outstandingRow = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('COALESCE(SUM(c.amount - c.paidAmount), 0)', 'total')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.amount - c.paidAmount > 0')
+      .andWhere('c.status IN (:...debtStatuses)', {
+        debtStatuses: [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID],
+      })
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const totalOutstanding = Number(outstandingRow?.total ?? 0);
+
+    // unitsWithDebt / unitsFullyPaid: misma lógica que getUnitsFinancialStatus
+    const allUnitStatuses = await this.getAllUnitStatusItems(complexId);
+    const unitsWithDebt = allUnitStatuses.filter(u => u.status === 'OVERDUE' || u.status === 'IN_DEBT').length;
+    const unitsFullyPaid = allUnitStatuses.filter(u => u.status === 'UP_TO_DATE' || u.status === 'CREDIT').length;
+
+    // totalExpenses: gastos operativos del período, no revertidos
+    const expensesRow = await this.expenseRepo
+      .createQueryBuilder('e')
+      .select('COALESCE(SUM(e.amount), 0)', 'total')
+      .where('e.complexId = :complexId', { complexId })
+      .andWhere('e.period = :period', { period })
+      .andWhere('e.isReversed = false')
+      .andWhere('e.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const totalExpenses = Number(expensesRow?.total ?? 0);
 
     return {
       complexId,
@@ -1417,8 +1616,10 @@ export class FinanceService {
       totalCollected: Math.round(totalCollected * 100) / 100,
       totalOutstanding: Math.round(totalOutstanding * 100) / 100,
       collectionRate: totalCharged > 0 ? Math.round((totalCollected / totalCharged) * 10000) / 100 : 0,
-      unitsWithDebt: debtUnits.size,
-      unitsFullyPaid: paidUnits.size,
+      unitsWithDebt,
+      unitsFullyPaid,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      netCashFlow: Math.round((totalCollected - totalExpenses) * 100) / 100,
     };
   }
 
@@ -1665,22 +1866,7 @@ export class FinanceService {
   // ESTADO FINANCIERO DE UNIDADES
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async getUnitsFinancialStatus(
-    complexId: string,
-    status: string | undefined,
-    pagination: PaginationInput,
-    currentUser: JwtAccessPayload,
-  ): Promise<UnitFinancialStatusPaginated> {
-    await this.complexService.findById(complexId, currentUser);
-
-    const { page, limit } = pagination;
-    const statusOrder: Record<string, number> = { OVERDUE: 0, IN_DEBT: 1, UP_TO_DATE: 2, CREDIT: 3 };
-
-    /**
-     * Query única con LEFT JOINs desde `units`:
-     *  - Garantiza que unidades sin cargos aparecen con totales en 0 → UP_TO_DATE
-     *  - Excluye unidades DISABLED / MAINTENANCE
-     */
+  private async getAllUnitStatusItems(complexId: string) {
     const allRows = await this.dataSource.getRepository(Unit)
       .createQueryBuilder('u')
       .select('u.id', 'unitId')
@@ -1691,7 +1877,6 @@ export class FinanceService {
       .addSelect('COALESCE(ch.pending_count, 0)', 'pendingCount')
       .addSelect('COALESCE(wl.wallet_balance, 0)', 'walletBalance')
       .leftJoin('u.building', 'b')
-      // Subquery: agrega cargos pendientes/vencidos por unidad
       .leftJoin(
         qb => qb
           .select('c.unitId', 'unit_id')
@@ -1714,7 +1899,6 @@ export class FinanceService {
         'ch',
         'ch.unit_id = u.id',
       )
-      // Subquery: saldo de billetera por unidad
       .leftJoin(
         qb => qb
           .select('we.unitId', 'unit_id')
@@ -1736,30 +1920,43 @@ export class FinanceService {
       .orderBy('u.number', 'ASC')
       .getRawMany();
 
-    // Derivar status financiero
-    let items = allRows.map((row: any) => {
+    return allRows.map((row: any) => {
       const totalDebt = Math.round(Number(row.totalDebt) * 100) / 100;
       const overdueCount = Number(row.overdueCount);
       const pendingCount = Number(row.pendingCount);
       const walletBalance = Math.round(Number(row.walletBalance) * 100) / 100;
 
-      let derivedStatus: string;
-      if (overdueCount > 0) derivedStatus = 'OVERDUE';
-      else if (totalDebt > 0) derivedStatus = 'IN_DEBT';
-      else if (walletBalance > 0) derivedStatus = 'CREDIT';
-      else derivedStatus = 'UP_TO_DATE';
+      let status: string;
+      if (overdueCount > 0) status = 'OVERDUE';
+      else if (totalDebt > 0) status = 'IN_DEBT';
+      else if (walletBalance > 0) status = 'CREDIT';
+      else status = 'UP_TO_DATE';
 
       return {
         unitId: row.unitId,
         unitNumber: row.unitNumber,
         building: row.building ?? undefined,
-        status: derivedStatus,
+        status,
         totalDebt,
         walletBalance,
         overdueCount,
         pendingCount,
       };
     });
+  }
+
+  async getUnitsFinancialStatus(
+    complexId: string,
+    status: string | undefined,
+    pagination: PaginationInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<UnitFinancialStatusPaginated> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const { page, limit } = pagination;
+    const statusOrder: Record<string, number> = { OVERDUE: 0, IN_DEBT: 1, UP_TO_DATE: 2, CREDIT: 3 };
+
+    let items = await this.getAllUnitStatusItems(complexId);
 
     if (status) items = items.filter(item => item.status === status);
     items.sort((a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4));
@@ -1774,6 +1971,166 @@ export class FinanceService {
         currentPage: page, itemsPerPage: limit, totalItems, totalPages,
         hasNextPage: page < totalPages, hasPreviousPage: page > 1,
       },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GASTOS OPERATIVOS DEL COMPLEJO
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Registra un gasto operativo del complejo (compras, reparaciones, servicios, etc.).
+   * El gasto queda asociado a un período contable YYYY-MM y descuenta del flujo de caja.
+   */
+  async registerExpense(
+    input: RegisterExpenseInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<ComplexExpense> {
+    await this.complexService.findById(input.complexId, currentUser);
+    this.assertValidPeriod(input.period);
+
+    const expense = await this.expenseRepo.save(
+      this.expenseRepo.create({
+        complexId: input.complexId,
+        amount: input.amount,
+        description: input.description,
+        category: input.category,
+        period: input.period,
+        expenseDate: new Date(input.expenseDate),
+        receiptUrl: input.receiptUrl ?? null,
+        notes: input.notes ?? null,
+        isReversed: false,
+        registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+      }),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.FeeCharge,
+      entityId: expense.id,
+      action: AuditAction.CREATE,
+      newValue: { id: expense.id, amount: expense.amount, category: expense.category, period: expense.period, complexId: input.complexId },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: input.complexId,
+      description: `Gasto registrado: "${expense.description}" $${expense.amount} — categoría: ${expense.category} — período: ${expense.period}`,
+    });
+
+    return expense;
+  }
+
+  /**
+   * Revierte un gasto registrado. El monto ya no se descuenta del flujo de caja.
+   */
+  async reverseExpense(
+    expenseId: string,
+    reason: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<ComplexExpense> {
+    const expense = await this.findExpenseOrFail(expenseId);
+    await this.complexService.findById(expense.complexId, currentUser);
+
+    if (expense.isReversed) {
+      throw new CustomError({
+        message: 'El gasto ya fue revertido',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: FinanceErrorCode.EXPENSE_ALREADY_REVERSED,
+      });
+    }
+
+    expense.isReversed = true;
+    expense.reversalReason = reason;
+    expense.reversedByUserId = currentUser.sub;
+    expense.reversedAt = new Date();
+
+    const saved = await this.expenseRepo.save(expense);
+
+    void this.auditService.log({
+      entityType: AuditEntityType.FeeCharge,
+      entityId: expenseId,
+      action: AuditAction.UPDATE,
+      previousValue: { isReversed: false },
+      newValue: { isReversed: true, reason, reversedAt: expense.reversedAt },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: expense.complexId,
+      description: `Gasto revertido: "${expense.description}" $${expense.amount} — razón: ${reason}`,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Retorna la lista paginada de gastos del complejo con desglose por categoría.
+   */
+  async getComplexExpenses(
+    complexId: string,
+    pagination: PaginationInput,
+    filters: FilterExpensesInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<PaginatedExpensesResponse> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const { page, limit } = pagination;
+
+    const qb = this.expenseRepo
+      .createQueryBuilder('e')
+      .where('e.complexId = :complexId', { complexId })
+      .andWhere('e.deletedAt IS NULL');
+
+    if (!filters.includeReversed) {
+      qb.andWhere('e.isReversed = false');
+    }
+
+    if (filters.category) {
+      qb.andWhere('e.category = :category', { category: filters.category });
+    }
+
+    if (filters.period) {
+      qb.andWhere('e.period = :period', { period: filters.period });
+    } else {
+      if (filters.startDate) {
+        qb.andWhere('e.expenseDate >= :startDate', { startDate: filters.startDate });
+      }
+      if (filters.endDate) {
+        qb.andWhere('e.expenseDate <= :endDate', { endDate: filters.endDate });
+      }
+    }
+
+    qb.orderBy('e.expenseDate', 'DESC').addOrderBy('e.createdAt', 'DESC');
+
+    const totalItems = await qb.getCount();
+    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const totalPages = Math.ceil(totalItems / limit);
+
+    const activeItems = items.filter(e => !e.isReversed);
+    const totalAmount = activeItems.reduce((s, e) => s + Number(e.amount), 0);
+
+    const categoryMap = new Map<ExpenseCategory, { total: number; count: number }>();
+    for (const e of activeItems) {
+      const entry = categoryMap.get(e.category) ?? { total: 0, count: 0 };
+      entry.total += Number(e.amount);
+      entry.count += 1;
+      categoryMap.set(e.category, entry);
+    }
+
+    const byCategory: ExpenseCategoryBreakdown[] = Array.from(categoryMap.entries())
+      .map(([category, { total, count }]) => ({
+        category,
+        total: Math.round(total * 100) / 100,
+        count,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      items,
+      pagination: {
+        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
+        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+      },
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      byCategory,
     };
   }
 
@@ -1827,6 +2184,18 @@ export class FinanceService {
       });
     }
     return payment;
+  }
+
+  private async findExpenseOrFail(id: string): Promise<ComplexExpense> {
+    const expense = await this.expenseRepo.findOne({ where: { id, deletedAt: null as any } });
+    if (!expense) {
+      throw new CustomError({
+        message: 'Gasto no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: FinanceErrorCode.EXPENSE_NOT_FOUND,
+      });
+    }
+    return expense;
   }
 
   /**
@@ -1903,11 +2272,34 @@ export class FinanceService {
     return allUnits.filter(u => u.type === config.unitType);
   }
 
+  private applyTargetRules(units: Unit[], rules: FeeConfigTargetRules): Unit[] {
+    return units.filter(unit => {
+      if (rules.excludeFloor1 && unit.floor === 1) return false;
+      if (rules.floorMin != null && unit.floor < rules.floorMin) return false;
+      if (rules.floorMax != null && unit.floor > rules.floorMax) return false;
+      if (rules.buildingIds?.length && !rules.buildingIds.includes(unit.buildingId)) return false;
+      if (rules.unitTypes?.length && !rules.unitTypes.includes(unit.type)) return false;
+      return true;
+    });
+  }
+
   /** Calcula la fecha de vencimiento a partir del período YYYY-MM y el día de vencimiento. */
-  private buildDueDate(period: string, day: number): Date {
+  private buildDueDate(
+    period: string,
+    day: number,
+    billingMode: FeeConfigBillingMode = FeeConfigBillingMode.ADVANCE,
+  ): Date {
     const [year, month] = period.split('-').map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    return new Date(year, month - 1, Math.min(day, lastDay));
+    let dueYear = year;
+    let dueMonth = month;
+
+    if (billingMode === FeeConfigBillingMode.ARREARS) {
+      if (dueMonth === 12) { dueMonth = 1; dueYear += 1; }
+      else { dueMonth += 1; }
+    }
+
+    const lastDay = new Date(dueYear, dueMonth, 0).getDate();
+    return new Date(dueYear, dueMonth - 1, Math.min(day, lastDay));
   }
 
   private assertValidPeriod(period: string): void {
@@ -2032,10 +2424,10 @@ export class FinanceService {
     await this.notificationsService.notify({
       complexId,
       userIds,
-      type:     NotificationType.DIRECT_CHARGE,
+      type: NotificationType.DIRECT_CHARGE,
       priority: NotificationPriority.HIGH,
-      title:    'Nuevo cargo aplicado a tu unidad',
-      body:     `Se ha aplicado un cargo de $${amount.toLocaleString('es-CO')} por concepto: "${description}" para el período ${period}.`,
+      title: 'Nuevo cargo aplicado a tu unidad',
+      body: `Se ha aplicado un cargo de $${amount.toLocaleString('es-CO')} por concepto: "${description}" para el período ${period}.`,
       metadata: { amount, description, period, unitId, complexId },
     });
   }
