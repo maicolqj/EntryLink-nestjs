@@ -20,6 +20,7 @@ import { User } from '../../users/entities/user.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { NotificationActionType } from '../../notifications/enums/notification-action-type.enum';
 
 @Injectable()
 export class SupervisorAccessRequestService {
@@ -122,16 +123,22 @@ export class SupervisorAccessRequestService {
       : currentUser.email;
 
     // 7. Notificar al admin del complejo
+    // IMPORTANTE: COMPLEX_ROL tiene sub = complex.id en el JWT (no ownerId),
+    // por eso el recipientUserId debe ser complexId para que filterIterator lo entregue.
     void this.notificationsService.notify({
       complexId,
-      userIds:    [complex.ownerId],
-      type:       NotificationType.SYSTEM_ANNOUNCEMENT,
-      priority:   NotificationPriority.HIGH,
-      title:      'Nueva solicitud de acceso',
-      body:       `${supervisorName} solicita acceso al complejo`,
-      entityId:   saved.id,
-      entityType: 'SupervisorAccessRequest',
-      metadata:   {
+      userIds:          [complexId],
+      type:             NotificationType.SYSTEM_ANNOUNCEMENT,
+      priority:         NotificationPriority.HIGH,
+      title:            'Nueva solicitud de acceso',
+      body:             `${supervisorName} solicita acceso al complejo`,
+      entityId:         saved.id,
+      entityType:       'SupervisorAccessRequest',
+      createdByUserId:  supervisorId,
+      isActionable:     true,
+      actionType:       NotificationActionType.ACCESS_REQUEST,
+      actionLabel:      'Autorizar acceso',
+      metadata:         {
         requestId:      saved.id,
         supervisorId,
         supervisorName,
@@ -173,33 +180,40 @@ export class SupervisorAccessRequestService {
       );
     }
 
+    // Cargar complejo antes del update para obtener ownerId
+    const complex = await this.complexRepo.findOne({
+      where: { id: request.complexId },
+      select: ['id', 'name', 'ownerId'],
+    });
+
+    // Para COMPLEX_ROL, sub = complex.id (no es un user ID).
+    // Usar ownerId del complejo como resolvedById en ese caso.
+    const resolvedById = currentUser.roles?.includes(ValidRoles.COMPLEX_ROL)
+      ? complex?.ownerId ?? null
+      : currentUser.sub;
+
     await this.requestRepo.update(requestId, {
       status:       AccessRequestStatus.APPROVED,
-      resolvedById: currentUser.sub,
+      resolvedById,
       resolvedAt:   new Date(),
     });
 
     this.logger.log(
-      `Solicitud aprobada: requestId=${requestId} | por=${currentUser.sub} | supervisor=${request.supervisorId} | complejo=${request.complexId}`,
+      `Solicitud aprobada: requestId=${requestId} | por=${resolvedById} | supervisor=${request.supervisorId} | complejo=${request.complexId}`,
     );
 
-    // Cargar nombre del complejo para la notificación
-    const complex = await this.complexRepo.findOne({
-      where: { id: request.complexId },
-      select: ['id', 'name'],
-    });
-    const complexName = complex?.name ?? 'el complejo';
-
     void this.notificationsService.notify({
-      complexId:  request.complexId,
-      userIds:    [request.supervisorId],
-      type:       NotificationType.SYSTEM_ANNOUNCEMENT,
-      priority:   NotificationPriority.HIGH,
-      title:      'Acceso aprobado',
-      body:       `Tu solicitud de acceso a ${complexName} fue aprobada. Ya puedes hacer check-in`,
-      entityId:   requestId,
-      entityType: 'SupervisorAccessRequest',
-      metadata:   { requestId, complexId: request.complexId, status: 'APPROVED' },
+      complexId:       request.complexId,
+      userIds:         [request.supervisorId],
+      type:            NotificationType.ACCESS_REQUEST_APPROVED,
+      priority:        NotificationPriority.HIGH,
+      title:           'Tu solicitud de acceso fue aprobada',
+      body:            'El administrador del complejo ha aprobado tu solicitud de acceso.',
+      entityId:        requestId,
+      entityType:      'ACCESS_REQUEST',
+      createdByUserId: resolvedById,
+      isActionable:    false,
+      metadata:        { requestId, resolvedAt: new Date().toISOString() },
     });
 
     return this.loadRequestRelations(requestId);
@@ -216,33 +230,46 @@ export class SupervisorAccessRequestService {
     const { requestId, reason } = input;
     const request = await this.findPendingRequestWithAccess(requestId, currentUser);
 
+    const complex = await this.complexRepo.findOne({
+      where: { id: request.complexId },
+      select: ['id', 'name', 'ownerId'],
+    });
+
+    const resolvedById = currentUser.roles?.includes(ValidRoles.COMPLEX_ROL)
+      ? complex?.ownerId ?? null
+      : currentUser.sub;
+
     await this.requestRepo.update(requestId, {
       status:          AccessRequestStatus.REJECTED,
       rejectionReason: reason,
-      resolvedById:    currentUser.sub,
+      resolvedById,
       resolvedAt:      new Date(),
     });
 
     this.logger.log(
-      `Solicitud rechazada: requestId=${requestId} | por=${currentUser.sub} | complejo=${request.complexId}`,
+      `Solicitud rechazada: requestId=${requestId} | por=${resolvedById} | complejo=${request.complexId}`,
     );
 
-    const complex = await this.complexRepo.findOne({
-      where: { id: request.complexId },
-      select: ['id', 'name'],
-    });
-    const complexName = complex?.name ?? 'el complejo';
+    const rejectedBody = reason
+      ? `El administrador ha rechazado tu solicitud. Motivo: ${reason}`
+      : 'El administrador del complejo ha rechazado tu solicitud de acceso.';
 
     void this.notificationsService.notify({
-      complexId:  request.complexId,
-      userIds:    [request.supervisorId],
-      type:       NotificationType.SYSTEM_ANNOUNCEMENT,
-      priority:   NotificationPriority.NORMAL,
-      title:      'Solicitud rechazada',
-      body:       `Tu solicitud de acceso a ${complexName} fue rechazada. Motivo: ${reason ?? 'Sin motivo'}`,
-      entityId:   requestId,
-      entityType: 'SupervisorAccessRequest',
-      metadata:   { requestId, complexId: request.complexId, status: 'REJECTED', reason },
+      complexId:       request.complexId,
+      userIds:         [request.supervisorId],
+      type:            NotificationType.ACCESS_REQUEST_REJECTED,
+      priority:        NotificationPriority.HIGH,
+      title:           'Tu solicitud de acceso fue rechazada',
+      body:            rejectedBody,
+      entityId:        requestId,
+      entityType:      'ACCESS_REQUEST',
+      createdByUserId: resolvedById,
+      isActionable:    false,
+      metadata:        {
+        requestId,
+        resolvedAt: new Date().toISOString(),
+        ...(reason ? { rejectionReason: reason } : {}),
+      },
     });
 
     return this.loadRequestRelations(requestId);
