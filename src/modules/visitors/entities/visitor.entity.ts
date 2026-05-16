@@ -14,9 +14,10 @@ import {
 import { ObjectType, Field } from '@nestjs/graphql';
 
 import { VisitorIdentityType } from '../enums/visitor-identity-type.enum';
-import { ResidentialComplex }  from '../../residential-complex/entities/residential-complex.entity';
-import { User }                from '../../users/entities/user.entity';
-import { Visit }               from './visit.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { User } from '../../users/entities/user.entity';
+import { Visit } from './visit.entity';
+import GraphQLJSON from 'graphql-type-json';
 
 /**
  * Visitor representa a la PERSONA que visita.
@@ -59,6 +60,12 @@ export class Visitor {
   @Field(() => String, { description: 'URL de la foto capturada en portería', nullable: true })
   @Column({ name: 'photo_url', type: 'text', nullable: true })
   photoUrl?: string;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  metadata?: Record<string, any>;
+
+
 
   // ==================== CONTROL DE ACCESO ====================
 
@@ -126,7 +133,7 @@ export class Visitor {
   @BeforeInsert()
   @BeforeUpdate()
   normalizeFields() {
-    this.name     = this.name?.trim().toUpperCase();
+    this.name = this.name?.trim().toUpperCase();
     this.lastName = this.lastName?.trim().toUpperCase();
     this.identity = this.identity?.trim().toUpperCase();
     if (this.phone) this.phone = this.phone.replace(/\s+/g, '');

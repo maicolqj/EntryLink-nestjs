@@ -73,4 +73,8 @@ export class RefreshToken {
   @Field({ nullable: true })
   @Column({ type: 'varchar', length: 64, nullable: true })
   replacedByTokenId?: string;
+
+  @Field()
+  @Column({ type: 'boolean', default: false })
+  rememberMe: boolean;
 }

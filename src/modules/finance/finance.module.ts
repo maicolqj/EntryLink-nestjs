@@ -7,6 +7,7 @@ import { FeeConfig }            from './entities/fee-config.entity';
 import { FeeCharge }            from './entities/fee-charge.entity';
 import { Payment }              from './entities/payment.entity';
 import { WalletEntry }          from './entities/wallet-entry.entity';
+import { ComplexExpense }       from './entities/complex-expense.entity';
 
 import { Vehicle }              from '../vehicles/entities/vehicle.entity';
 
@@ -31,6 +32,7 @@ import { AuditModule }              from '../audit/audit.module';
       Payment,
       WalletEntry,
       Vehicle,
+      ComplexExpense,
     ]),
     ResidentialComplexModule, // ResidentialComplexService + UnitService
     ResidentsModule,          // ResidentsService.findActiveByUnitInternal

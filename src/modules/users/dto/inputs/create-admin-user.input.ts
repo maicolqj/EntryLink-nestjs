@@ -1,4 +1,4 @@
-import { InputType, Field } from '@nestjs/graphql';
+import { InputType, Field, ObjectType } from '@nestjs/graphql';
 import {
   IsEmail,
   IsEnum,
@@ -8,8 +8,10 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { ValidRoles } from '../../../roles/enums/valid-roles';
+import { Type } from 'class-transformer';
 
 /** Roles que se pueden crear con este DTO */
 const ALLOWED_ROLES = [
@@ -18,6 +20,25 @@ const ALLOWED_ROLES = [
   ValidRoles.ACCOUNTANT_ROL,
   ValidRoles.SUPERVISOR_ROL,
 ];
+
+@InputType({ description: 'Código de país para el número de teléfono' })
+export class CountryCode {
+  @Field()
+  @IsString()
+  code: string;
+
+  @Field()
+  @IsString()
+  name: string;
+
+  @Field()
+  @IsString()
+  dialCode: string;
+
+  @Field()
+  @IsString()
+  flag: string;
+}
 
 @InputType({ description: 'Datos para crear un usuario administrativo (no residente)' })
 export class CreateAdminUserInput {
@@ -47,6 +68,12 @@ export class CreateAdminUserInput {
     message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
   password: string;
+
+  @Field(() => CountryCode, { nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CountryCode)
+  countryCode?: CountryCode;
 
   @Field(() => String)
   @IsString()

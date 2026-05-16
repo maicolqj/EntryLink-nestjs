@@ -22,6 +22,7 @@ interface CreateNoteData {
   content: string;
   imageUrls: string[];
   createdByRole: string | null;
+  supervisorVisitId?: string;
 }
 
 @Injectable()
@@ -37,25 +38,28 @@ export class NotesService {
 
   // ================================================================
   // CREAR NOTA
-  // Las imágenes ya fueron subidas a Cloudinary por el controller.
-  // Si el save falla, el controller se encarga del rollback en Cloudinary.
+  // Las imágenes ya fueron subidas a R2 por el controller.
+  // Si el save falla, el controller se encarga del rollback en R2.
   // ================================================================
 
   async createNote(
     data: CreateNoteData,
     currentUser: JwtAccessPayload,
   ): Promise<Note> {
-    if (!this.isSuperAdmin(currentUser)) {
+    const isSupervisor = currentUser.roles?.includes(ValidRoles.SUPERVISOR_ROL) ?? false;
+
+    if (!this.isSuperAdmin(currentUser) && !isSupervisor) {
       await this.complexService.assertComplexAccess(data.complexId, currentUser);
     }
 
     const note = this.noteRepo.create({
-      title:           data.title.trim(),
-      content:         data.content.trim(),
-      imageUrls:       data.imageUrls,
-      complexId:       data.complexId,
-      createdByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
-      createdByRole:   data.createdByRole,
+      title:             data.title.trim(),
+      content:           data.content.trim(),
+      imageUrls:         data.imageUrls,
+      complexId:         data.complexId,
+      createdByUserId:   currentUser.entityType === 'user' ? currentUser.sub : null,
+      createdByRole:     data.createdByRole,
+      supervisorVisitId: data.supervisorVisitId,
     });
 
     const saved = await this.noteRepo.save(note);
@@ -101,13 +105,21 @@ export class NotesService {
       .where('n.complexId = :complexId', { complexId })
       .andWhere('n.deletedAt IS NULL');
 
-    // SECURITY y SUPERVISOR: solo sus propias notas
-    if (this.isLimitedToOwnNotes(currentUser)) {
-      qb.andWhere('n.created_by_user_id = :userId', { userId: currentUser.sub });
+    // Visibilidad por rol: restringe qué created_by_role puede ver cada usuario
+    if (!this.isSuperAdmin(currentUser)) {
+      const visibleRoles = this.isComplexAdmin(currentUser)
+        ? [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL]
+        : [ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL];
+      qb.andWhere('n.created_by_role IN (:...visibleRoles)', { visibleRoles });
     }
 
-    // Filtros opcionales (solo para SUPER_ADMIN y COMPLEX_ROL)
-    if (filters?.createdByUserId && !this.isLimitedToOwnNotes(currentUser)) {
+    // Filtro opcional por uno o varios roles (dentro de los roles visibles)
+    if (filters?.createdByRoles?.length) {
+      qb.andWhere('n.created_by_role IN (:...filterRoles)', { filterRoles: filters.createdByRoles });
+    }
+
+    // createdByUserId: solo SUPER_ADMIN y COMPLEX_ROL pueden filtrar por usuario
+    if (filters?.createdByUserId && !this.isSecurityOrSupervisor(currentUser)) {
       qb.andWhere('n.created_by_user_id = :filterUserId', {
         filterUserId: filters.createdByUserId,
       });
@@ -159,7 +171,11 @@ export class NotesService {
 
     await this.complexService.assertComplexAccess(note.complexId, currentUser);
 
-    if (this.isLimitedToOwnNotes(currentUser) && note.createdByUserId !== currentUser.sub) {
+    const visibleRoles = this.isComplexAdmin(currentUser)
+      ? [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL]
+      : [ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL];
+
+    if (note.createdByRole && !visibleRoles.includes(note.createdByRole as ValidRoles)) {
       throw new CustomError({
         message: 'No tienes permiso para ver esta nota',
         statusCode: HttpStatus.FORBIDDEN,
@@ -224,7 +240,7 @@ export class NotesService {
     return user.roles?.includes(ValidRoles.COMPLEX_ROL) ?? false;
   }
 
-  private isLimitedToOwnNotes(user: JwtAccessPayload): boolean {
+  private isSecurityOrSupervisor(user: JwtAccessPayload): boolean {
     return (
       (user.roles?.includes(ValidRoles.SECURITY_ROL) ||
         user.roles?.includes(ValidRoles.SUPERVISOR_ROL)) ?? false

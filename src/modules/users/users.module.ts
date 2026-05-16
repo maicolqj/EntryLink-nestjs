@@ -15,11 +15,14 @@ import { EXCEL_IMPORT_QUEUE } from './queues/excel-import.constants';
 
 import { User } from './entities/user.entity';
 import { UserRole } from './entities/user_has_roles.entity';
+import { UserComplexAssignment } from './entities/user-complex-assignment.entity';
 import { Role } from '../roles/entities/role.entity';
 import { Permission } from '../permissions/entities/permission.entity';
 import { Unit } from '../residential-complex/entities/unit.entity';
+import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
 import { Resident } from '../residents/entities/resident.entity';
 import { RolesService } from '../roles/roles.service';
+import { AuditModule }  from '../audit/audit.module';
 
 // Crear directorio temporal si no existe
 const tmpDir = join(process.cwd(), 'tmp', 'excel-imports');
@@ -27,9 +30,10 @@ try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserRole, Role, Permission, Unit, Resident]),
+    TypeOrmModule.forFeature([User, UserRole, UserComplexAssignment, Role, Permission, Unit, Resident, ResidentialComplex]),
     BullModule.registerQueue({ name: EXCEL_IMPORT_QUEUE }),
     MulterModule.register({ dest: tmpDir }),
+    AuditModule,
   ],
   controllers: [UsersController],
   providers: [

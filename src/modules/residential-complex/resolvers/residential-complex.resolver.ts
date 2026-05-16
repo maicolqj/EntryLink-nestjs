@@ -1,4 +1,5 @@
 import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import { ComplexModule } from '../enums/complex-module.enum';
 
 import { ResidentialComplex } from '../entities/residential-complex.entity';
 import { User } from '../../users/entities/user.entity';
@@ -98,9 +99,14 @@ export class ResidentialComplexResolver {
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   updateComplexModules(
     @Args('complexId') complexId: string,
-    @Args('modules', { type: () => [String] }) modules: string[],
+    @Args('modules', { type: () => [ComplexModule] }) modules: ComplexModule[],
   ): Promise<ResidentialComplex> {
     return this.complexService.updateEnabledModules(complexId, modules);
+  }
+
+  @Query(() => [ComplexModule], { name: 'availableModules', description: 'Retorna todos los módulos disponibles en el sistema' })
+  availableModules(): ComplexModule[] {
+    return Object.values(ComplexModule);
   }
 
   // ================================================================
@@ -149,8 +155,8 @@ export class ResidentialComplexResolver {
    */
   @Query(() => ResidentialComplex, { name: 'complex' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL, ValidRoles.SUPERVISOR_ROL],
-    // permissions: [ValidPermissions.VIEW_RESIDENCES],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    permissions: [ValidPermissions.VIEW_RESIDENCES],
   })
   findOne(
     @Args('id') id: string,

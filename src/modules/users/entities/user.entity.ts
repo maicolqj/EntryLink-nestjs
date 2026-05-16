@@ -11,12 +11,14 @@ import {
     Check,
 } from 'typeorm';
 import { ObjectType, Field, Float } from '@nestjs/graphql';
-import { IsPhoneNumber, IsEnum} from 'class-validator';
+import { IsPhoneNumber, IsEnum } from 'class-validator';
 import { Role } from '../../roles/entities/role.entity';
 import { Gender, UserStatus } from '../enums/user.enums';
 import { Permission } from '../../permissions/entities/permission.entity';
 import { UserRole } from './user_has_roles.entity';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { hash, compare } from 'bcrypt'
+import { VisitorParkingRate } from '../../visitor-parking/entities/visitor-parking-rate.entity';
 
 @ObjectType({
     description: 'CountryCode'
@@ -88,14 +90,10 @@ export class User {
     @Column({ name: 'coverPicture', type: 'text', nullable: true })
     @Field(() => String, { description: 'Profile picture of port URL', nullable: true })
     coverPicture?: string;
-
+ 
     @Column({ name: 'password', type: 'text', select: false })
     @Field(() => String, { description: 'Password', nullable: true })
     password: string;
-
-    @Field(() => String, { description: 'token version', nullable: true })
-    @Column({ type: 'int', default: 0 })
-    tokenVersion: number;
 
     // ================== VERIFICACIONES ==================
 
@@ -145,7 +143,37 @@ export class User {
     @Column({ name: 'timezone', type: 'varchar', length: 50, default: 'America/Bogota' })
     @Field(() => String, { description: 'Preferred time zone' })
     timezone: string;
- 
+
+      // ================== LOGIN POR QR ==================
+
+    /** Token de un solo uso para login por código QR. Oculto por defecto en queries. */
+    @Column({ name: 'qr_login_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+    qrLoginToken?: string;
+
+    @Column({ name: 'qr_login_token_exp', type: 'timestamptz', nullable: true, select: false })
+    qrLoginTokenExp?: Date;
+
+    @Column({ name: 'qr_login_token_used', type: 'boolean', default: false })
+    qrLoginTokenUsed: boolean;
+
+     // ================== RESET DE CONTRASEÑA ==================
+
+    /**
+     * Indica si el usuario ya estableció su contraseña al menos una vez.
+     * false  → solo accedió por QR sin haber llamado a setInitialPassword.
+     * true   → contraseña activa: puede usar requestPasswordReset por email.
+     */
+    @Column({ name: 'password_set', type: 'boolean', default: false })
+    @Field(() => Boolean, { description: 'Indica si el usuario tiene contraseña establecida' })
+    passwordSet: boolean;
+
+    /** Token UUID de un solo uso para restablecimiento de contraseña por email. */
+    @Column({ name: 'password_reset_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+    passwordResetToken?: string;
+
+    @Column({ name: 'password_reset_token_exp', type: 'timestamptz', nullable: true, select: false })
+    passwordResetTokenExp?: Date;
+    
     // ================== NOTIFICACIONES ==================
 
     @Column({ name: 'notification_token', type: 'text', nullable: true })
@@ -161,10 +189,6 @@ export class User {
     acceptTermsAdnConditions: boolean;
 
     // ================== SEGURIDAD ==================
-
-    @Column({ name: 'last_password_change', type: 'timestamptz', nullable: true })
-    @Field(() => Date, { description: 'Date of last password change', nullable: true })
-    lastPasswordChange?: Date;
 
     @Column({ name: 'failedLoginAttempts', type: 'smallint', default: 0 })
     @Field(() => Date, { description: 'Date until which the account is blocked due to failed attempts', nullable: true })
@@ -197,6 +221,10 @@ export class User {
     @Field(() => String, { description: 'Reason for account deletion', nullable: true })
     deletionReason?: string;
 
+    @Column({ name: 'suspension_reason', type: 'text', nullable: true })
+    @Field(() => String, { description: 'Reason for account suspension', nullable: true })
+    suspensionReason?: string;
+
     // ================== AUTENTICACIÓN POR ROL ==================
 
     /**
@@ -216,35 +244,16 @@ export class User {
     @Field(() => String, { description: 'ID del complejo residencial asociado', nullable: true })
     complexId?: string;
 
-    // ================== LOGIN POR QR ==================
+    @Column({ name: 'company_card_url', type: 'varchar', length: 500, nullable: true })
+    companyCardUrl?: string;
 
-    /** Token de un solo uso para login por código QR. Oculto por defecto en queries. */
-    @Column({ name: 'qr_login_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
-    qrLoginToken?: string;
+    @Column({ name: 'last_password_change', type: 'timestamptz', nullable: true })
+    @Field(() => Date, { description: 'Date of last password change', nullable: true })
+    lastPasswordChange?: Date;
 
-    @Column({ name: 'qr_login_token_exp', type: 'timestamptz', nullable: true, select: false })
-    qrLoginTokenExp?: Date;
-
-    @Column({ name: 'qr_login_token_used', type: 'boolean', default: false })
-    qrLoginTokenUsed: boolean;
-
-    // ================== RESET DE CONTRASEÑA ==================
-
-    /**
-     * Indica si el usuario ya estableció su contraseña al menos una vez.
-     * false  → solo accedió por QR sin haber llamado a setInitialPassword.
-     * true   → contraseña activa: puede usar requestPasswordReset por email.
-     */
-    @Column({ name: 'password_set', type: 'boolean', default: false })
-    @Field(() => Boolean, { description: 'Indica si el usuario tiene contraseña establecida' })
-    passwordSet: boolean;
-
-    /** Token UUID de un solo uso para restablecimiento de contraseña por email. */
-    @Column({ name: 'password_reset_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
-    passwordResetToken?: string;
-
-    @Column({ name: 'password_reset_token_exp', type: 'timestamptz', nullable: true, select: false })
-    passwordResetTokenExp?: Date;
+    @Field(() => String, { description: 'token version', nullable: true })
+    @Column({ type: 'int', default: 0 })
+    tokenVersion: number;
 
     //**************************************************************************************************************************
     //**************************************************************************************************************************
@@ -260,6 +269,14 @@ export class User {
     @OneToMany(() => Permission, (permission) => permission.updatedByUser)
     @Field(() => [Permission], { nullable: true, description: 'Permissions last updated by this user' })
     updatedPermissions?: Permission[];
+ 
+    @OneToMany(() => VisitorParkingRate, (visitorParking) => visitorParking.createdByUser)
+    @Field(() => [VisitorParkingRate], { nullable: true, description: 'Visitor last created by this user' })
+    createVisitorParking?: VisitorParkingRate[];
+
+    @OneToMany(() => VisitorParkingRate, (visitorParking) => visitorParking.updatedByUser)
+    @Field(() => [VisitorParkingRate], { nullable: true, description: 'Visitor last updated by this user' })
+    updateVisitorParking?: VisitorParkingRate[];
 
     @OneToMany(() => Role, (role) => role.createdByUser, { cascade: false })
     @Field(() => [Role], { nullable: true })
@@ -273,6 +290,13 @@ export class User {
     @OneToMany(() => UserRole, userRole => userRole.user)
     userRoles: UserRole[];
 
+    @Field(() => [ValidRoles], { description: 'Roles activos del usuario', nullable: true })
+    get roles(): ValidRoles[] {
+        return (this.userRoles ?? [])
+            .filter(ur => ur.role)
+            .map(ur => ur.role.name as ValidRoles)
+            .filter(name => Object.values(ValidRoles).includes(name));
+    }
 
     //**************************************************************************************************************************
     //**************************************************************************************************************************

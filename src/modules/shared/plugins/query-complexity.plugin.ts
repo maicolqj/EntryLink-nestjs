@@ -24,7 +24,7 @@ export class QueryComplexityPlugin {
 
   constructor() {
     this.maxComplexity = parseInt(
-      process.env.MAX_QUERY_COMPLEXITY ?? '100',
+      process.env.MAX_QUERY_COMPLEXITY ?? '300',
       10,
     );
   }

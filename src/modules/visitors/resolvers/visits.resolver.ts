@@ -30,7 +30,7 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'registerWalkIn' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
     permissions: [ValidPermissions.REGISTER_VISITOR_ENTRY],
   })
   registerWalkIn(
@@ -76,7 +76,7 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'registerVisitorExit' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL ],
     permissions: [ValidPermissions.REGISTER_VISITOR_EXIT],
   })
   registerExit(
@@ -249,3 +249,4 @@ export class VisitsResolver {
     return this.visitsService.findById(id, currentUser);
   }
 }
+ 

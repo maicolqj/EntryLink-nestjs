@@ -1,6 +1,8 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
 
 import { Building }                   from '../entities/building.entity';
+import { Unit }                       from '../entities/unit.entity';
+import { UnitStatus }                 from '../enums/unit-status.enum';
 import { BuildingService }            from '../services/building.service';
 import { CreateBuildingInput }        from '../dto/inputs/create-building.input';
 import { UpdateBuildingInput }        from '../dto/inputs/update-building.input';
@@ -27,7 +29,7 @@ export class BuildingResolver {
     @Args('input') input: CreateBuildingInput,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Building> {
-    return this.buildingService.create({ ...input, complexId: currentUser.complexId }, currentUser);
+    return this.buildingService.create(input, currentUser);
   }
 
   @Mutation(() => Building, { name: 'updateBuilding' })
@@ -56,6 +58,22 @@ export class BuildingResolver {
   ): Promise<boolean> {
     const result = await this.buildingService.remove(id, currentUser);
     return result.success;
+  }
+
+  // ================================================================
+  // RESOLVE FIELDS
+  // ================================================================
+
+  /**
+   * Filtra las unidades del edificio para exponer solo las operativas.
+   * Excluye unidades con soft-delete (deletedAt) o con status DISABLED.
+   * Aplica a todas las queries que devuelven Building.
+   */
+  @ResolveField('units', () => [Unit])
+  filterUnits(@Parent() building: Building): Unit[] {
+    return (building.units ?? []).filter(
+      u => !u.deletedAt && u.status !== UnitStatus.DISABLED,
+    );
   }
 
   // ================================================================

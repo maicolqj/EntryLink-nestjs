@@ -6,6 +6,7 @@ import { SupervisorAccessRequest } from './entities/supervisor-access-request.en
 import { SupervisorVisitService } from './services/supervisor-visit.service';
 import { SupervisorAccessRequestService } from './services/supervisor-access-request.service';
 import { SupervisorVisitResolver } from './resolvers/supervisor-visit.resolver';
+import { RevokeInactiveAssignmentsCron } from './cron/revoke-inactive-assignments.cron';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
 import { UserComplexAssignment } from '../users/entities/user-complex-assignment.entity';
 import { User } from '../users/entities/user.entity';
@@ -26,6 +27,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     SupervisorVisitService,
     SupervisorAccessRequestService,
     SupervisorVisitResolver,
+    RevokeInactiveAssignmentsCron,
   ],
   exports: [SupervisorVisitService, SupervisorAccessRequestService],
 })
