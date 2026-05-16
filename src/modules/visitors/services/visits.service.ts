@@ -17,12 +17,15 @@ import { CustomError }             from '../../shared/utils/errors.utils';
 import { AccessErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload }        from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { UnitService }              from '../../residential-complex/services/unit.service';
 import { VisitorsService }         from './visitors.service';
 import { ResidentsService }        from '../../residents/services/residents.service';
 import { ResidentStatus }          from '../../residents/enums/resident-status.enum';
 import { AuditService }            from '../../audit/services/audit.service';
 import { AuditAction }             from '../../audit/enums/audit-action.enum';
 import { AuditEntityType }         from '../../audit/enums/audit-entity-type.enum';
+import { SocketService }           from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent }             from '../../../core/infrastructure/socket/socket.events';
 
 // Duración por defecto del QR: 48 horas
 const QR_DEFAULT_TTL_HOURS = 48;
@@ -36,8 +39,10 @@ export class VisitsService {
     private readonly visitRepo: Repository<Visit>,
     private readonly visitorsService: VisitorsService,
     private readonly complexService:  ResidentialComplexService,
+    private readonly unitService:     UnitService,
     private readonly residentsService: ResidentsService,
     private readonly auditService:    AuditService,
+    private readonly socketService:   SocketService,
   ) {}
 
   // ================================================================
@@ -52,7 +57,10 @@ export class VisitsService {
     // 1. Verificar que el complejo existe
     await this.complexService.findById(input.complexId, currentUser);
 
-    // 2. Obtener o crear visitante
+    // 2. Verificar que la unidad existe
+    await this.unitService.findById(input.unitId, currentUser);
+
+    // 3. Obtener o crear visitante
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
       name:      input.visitorName,
       lastName:  input.visitorLastName,
@@ -61,10 +69,10 @@ export class VisitsService {
       photoUrl:  input.visitorPhotoUrl,
     });
 
-    // 3. Verificar lista negra ANTES de crear la visita
+    // 4. Verificar lista negra ANTES de crear la visita
     await this.visitorsService.assertNotBlacklisted(visitor);
 
-    // 4. Verificar que el residente anfitrión existe y está ACTIVO
+    // 5. Verificar que el residente anfitrión existe y está ACTIVO
     const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
@@ -74,18 +82,19 @@ export class VisitsService {
       });
     }
 
-    // 5. Crear visita en PENDING_APPROVAL
+    // 6. Crear visita en PENDING_APPROVAL
     const visit = this.visitRepo.create({
       visitorId:          visitor.id,
       hostResidentId:     input.hostResidentId,
       unitId:             input.unitId,
       complexId:          input.complexId,
       type:               input.type ?? VisitType.WALK_IN,
-      status:             VisitStatus.PENDING_APPROVAL,
+      status:             VisitStatus.INSIDE,
       purpose:            input.purpose,
       vehiclePlate:       input.vehiclePlate?.toUpperCase().trim(),
       notes:              input.notes,
-      registeredByUserId: currentUser.sub,
+      metadata:           input.metadata,
+      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.visitRepo.save(visit);
@@ -120,7 +129,10 @@ export class VisitsService {
     // 1. Verificar complejo
     await this.complexService.findById(input.complexId, currentUser);
 
-    // 2. Verificar que el residente existe y está activo
+    // 2. Verificar que la unidad existe
+    await this.unitService.findById(input.unitId, currentUser);
+
+    // 3. Verificar que el residente existe y está activo
     const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
@@ -130,7 +142,7 @@ export class VisitsService {
       });
     }
 
-    // 3. Obtener o crear visitante
+    // 4. Obtener o crear visitante
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
       name:     input.visitorName,
       lastName: input.visitorLastName,
@@ -138,16 +150,16 @@ export class VisitsService {
       phone:    input.visitorPhone,
     });
 
-    // 4. Verificar lista negra
+    // 5. Verificar lista negra
     await this.visitorsService.assertNotBlacklisted(visitor);
 
-    // 5. Calcular expiración del QR
+    // 6. Calcular expiración del QR
     const expectedAt = new Date(input.expectedArrivalAt);
     const qrExpiresAt = input.expectedArrivalUntil
       ? new Date(input.expectedArrivalUntil)
       : new Date(expectedAt.getTime() + QR_DEFAULT_TTL_HOURS * 60 * 60 * 1000);
 
-    // 6. Crear visita pre-aprobada con QR
+    // 7. Crear visita pre-aprobada con QR
     const visit = this.visitRepo.create({
       visitorId:             visitor.id,
       hostResidentId:        input.hostResidentId,
@@ -164,7 +176,7 @@ export class VisitsService {
       qrUsed:                false,
       qrExpiresAt,
       approvedByResidentAt:  new Date(),
-      registeredByUserId:    currentUser.sub,
+      registeredByUserId:    currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.visitRepo.save(visit);
@@ -222,7 +234,7 @@ export class VisitsService {
       description:     `Visita aprobada por residente`,
     });
 
-    // TODO: Notificar al guardia en tiempo real
+    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_APPROVED, { visitId, unitId: visit.unitId });
     return this.loadRelations(saved.id);
   }
 
@@ -264,8 +276,9 @@ export class VisitsService {
       description:     `Visita denegada — razón: ${reason}`,
     });
 
-    // TODO: Notificar al guardia en tiempo real
-    return this.visitRepo.save(visit);
+    const denied = await this.visitRepo.save(visit);
+    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_DENIED, { visitId, reason });
+    return denied;
   }
 
   // ================================================================
@@ -304,7 +317,9 @@ export class VisitsService {
       description:     `Entrada de visitante registrada en unidad ${visit.unitId}`,
     });
 
-    return this.visitRepo.save(visit);
+    const entered = await this.visitRepo.save(visit);
+    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_ENTRY, { visitId, unitId: visit.unitId, entryTime: visit.entryTime });
+    return entered;
   }
 
   // ================================================================
@@ -376,6 +391,13 @@ export class VisitsService {
       description:     `Acceso por QR: ${visit.visitor?.fullName} → unidad ${visit.unitId}`,
     });
 
+    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_ENTRY, {
+      visitId: visit.id,
+      unitId: visit.unitId,
+      entryTime: visit.entryTime,
+      qrAccess: true,
+    });
+
     return {
       isValid:  true,
       message:  `Acceso autorizado. Bienvenido ${visit.visitor?.fullName}`,
@@ -405,7 +427,7 @@ export class VisitsService {
 
     visit.status                  = VisitStatus.COMPLETED;
     visit.exitTime                = new Date();
-    visit.exitRegisteredByUserId  = currentUser.sub;
+    visit.exitRegisteredByUserId  = currentUser.entityType === 'user' ? currentUser.sub : undefined;
     if (notes) visit.notes        = notes;
 
     this.logger.log(`Salida registrada: ${visitId} a las ${visit.exitTime.toISOString()}`);
@@ -423,7 +445,9 @@ export class VisitsService {
       description:     `Salida de visitante registrada desde unidad ${visit.unitId}`,
     });
 
-    return this.visitRepo.save(visit);
+    const exited = await this.visitRepo.save(visit);
+    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_EXIT, { visitId, unitId: visit.unitId, exitTime: visit.exitTime });
+    return exited;
   }
 
   // ================================================================
@@ -494,13 +518,13 @@ export class VisitsService {
     if (filters?.type)           qb.andWhere('v.type = :type',               { type: filters.type });
     if (filters?.unitId)         qb.andWhere('v.unit_id = :unitId',          { unitId: filters.unitId });
     if (filters?.hostResidentId) qb.andWhere('v.host_resident_id = :rid',    { rid: filters.hostResidentId });
-    if (filters?.dateFrom)       qb.andWhere('v.created_at >= :from',        { from: filters.dateFrom });
-    if (filters?.dateTo)         qb.andWhere('v.created_at <= :to',          { to: filters.dateTo });
+    if (filters?.dateFrom)       qb.andWhere('v.createdAt >= :from',        { from: filters.dateFrom });
+    if (filters?.dateTo)         qb.andWhere('v.createdAt <= :to',          { to: filters.dateTo });
 
-    qb.orderBy('v.created_at', 'DESC').skip(skip).take(limit);
+    qb.orderBy('v.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalPages = Math.ceil(totalItems / limit); 
 
     return {
       items,

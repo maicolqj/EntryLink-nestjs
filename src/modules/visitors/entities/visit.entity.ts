@@ -9,6 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { ObjectType, Field } from '@nestjs/graphql';
+import GraphQLJSON from 'graphql-type-json';
 
 import { VisitType }   from '../enums/visit-type.enum';
 import { VisitStatus } from '../enums/visit-status.enum';
@@ -111,6 +112,10 @@ export class Visit {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Field(() => GraphQLJSON, { description: 'Datos adicionales del visitante (sexo, grupo sanguíneo, etc.)', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  metadata?: Record<string, any>;
+
   // ==================== FKs (MULTI-TENANT) ====================
 
   @Field(() => String)
@@ -129,9 +134,9 @@ export class Visit {
   @Column({ name: 'host_resident_id', type: 'uuid' })
   hostResidentId: string;
 
-  @Field(() => String, { description: 'ID del guardia que registró la visita' })
-  @Column({ name: 'registered_by_user_id', type: 'uuid' })
-  registeredByUserId: string;
+  @Field(() => String, { description: 'ID del guardia que registró la visita', nullable: true })
+  @Column({ name: 'registered_by_user_id', type: 'uuid', nullable: true })
+  registeredByUserId?: string;
 
   @Field(() => String, { description: 'ID del guardia que registró la salida', nullable: true })
   @Column({ name: 'exit_registered_by_user_id', type: 'uuid', nullable: true })

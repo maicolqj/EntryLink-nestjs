@@ -1,8 +1,8 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsUUID, IsOptional } from 'class-validator';
 
-import { ParkingStatus } from '../../enums/parking-status.enum';
 import { VehicleType }   from '../../../vehicles/enums/vehicle-type.enum';
+import { ParkingRecordStatus } from '../../enums/parking-status.enum';
 
 @InputType({ description: 'Filtros para listar vehículos visitantes' })
 export class FilterVisitorVehiclesInput {
@@ -11,9 +11,9 @@ export class FilterVisitorVehiclesInput {
   @IsUUID()
   complexId: string;
 
-  @Field(() => ParkingStatus, { description: 'Filtrar por estado del registro', nullable: true })
+  @Field(() => ParkingRecordStatus, { description: 'Filtrar por estado del registro', nullable: true })
   @IsOptional()
-  status?: ParkingStatus;
+  status?: ParkingRecordStatus;
 
   @Field(() => VehicleType, { description: 'Filtrar por tipo de vehículo', nullable: true })
   @IsOptional()

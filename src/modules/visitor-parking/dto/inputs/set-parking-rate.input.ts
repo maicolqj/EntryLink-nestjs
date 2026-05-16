@@ -2,6 +2,7 @@ import { InputType, Field, Float } from '@nestjs/graphql';
 import { IsUUID, Min, IsOptional, IsBoolean, MaxLength, IsEnum } from 'class-validator';
 
 import { VehicleType } from '../../../vehicles/enums/vehicle-type.enum';
+import { ParkingRateType } from '../../enums/parking-rate-type.enum';
 
 @InputType({ description: 'Datos para configurar o actualizar la tarifa de parqueadero' })
 export class SetParkingRateInput {
@@ -14,9 +15,9 @@ export class SetParkingRateInput {
   @IsEnum(VehicleType)
   vehicleType: VehicleType;
 
-  @Field(() => Float, { description: 'Tarifa cobrada por minuto de parqueo (en moneda local)' })
+  @Field(() => ParkingRateType, { description: 'Tarifa cobrada por minuto de parqueo (en moneda local)' })
   @Min(0)
-  ratePerMinute: number;
+  rateType: ParkingRateType;
 
   @Field(() => Boolean, { description: 'Si la tarifa está activa', nullable: true, defaultValue: true })
   @IsOptional()
@@ -27,4 +28,6 @@ export class SetParkingRateInput {
   @IsOptional()
   @MaxLength(200)
   description?: string;
+
+  
 }
