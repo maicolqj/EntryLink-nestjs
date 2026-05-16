@@ -1,4 +1,11 @@
-import { HttpStatus, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpStatus,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, IsNull, Repository } from 'typeorm';
@@ -11,6 +18,7 @@ import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
+import { ComplexType } from '../enums/complex-type.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { ComplexErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
 import { ComplexModule } from '../enums/complex-module.enum';
@@ -27,6 +35,12 @@ import { AuditService }    from '../../audit/services/audit.service';
 import { AuditAction }     from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { GeocodingService } from './geocoding.service';
+import { SupervisorVisit }   from '../../supervisor-visits/entities/supervisor-visit.entity';
+import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-visit-status.enum';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -47,9 +61,14 @@ export class ResidentialComplexService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
+    @InjectRepository(SupervisorVisit)
+    private readonly supervisorVisitRepo: Repository<SupervisorVisit>,
+
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly geocodingService: GeocodingService,
+    private readonly storageService: R2StorageService,
+    private readonly cacheService: CacheService,
   ) { }
 
   // ================================================================
@@ -190,10 +209,21 @@ export class ResidentialComplexService {
     id: string,
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
-    const complex = await this.complexRepo.findOne({
-      where: { id, deletedAt: IsNull() },
-      relations: ['owner', 'buildings', 'buildings.units'],
-    });
+    const cacheKey = BK.complex.one(id);
+    const cached = await this.cacheService.get<ResidentialComplex>({ key: cacheKey });
+
+    let complex: ResidentialComplex;
+    if (cached) {
+      complex = cached;
+    } else {
+      complex = await this.complexRepo.findOne({
+        where: { id, deletedAt: IsNull() },
+        relations: ['owner', 'buildings', 'buildings.units'],
+      });
+      if (complex) {
+        await this.cacheService.set({ key: cacheKey, data: complex, options: { ttl: BK.complex.TTL } });
+      }
+    }
 
     if (!complex) {
       throw new CustomError({
@@ -203,7 +233,7 @@ export class ResidentialComplexService {
       });
     }
 
-    this.assertAccess(complex, currentUser);
+    await this.assertAccess(complex, currentUser);
     return complex;
   }
 
@@ -251,6 +281,7 @@ export class ResidentialComplexService {
     }
 
     const saved = await this.complexRepo.save(complex);
+    await this.cacheService.delete({ key: BK.complex.one(saved.id) });
     this.logger.log(`Complejo actualizado: ${saved.id}`);
 
     void this.auditService.log({
@@ -276,7 +307,7 @@ export class ResidentialComplexService {
   async changeStatus(
     id: string,
     status: ComplexStatus,
-    currentUser: JwtAccessPayload,
+    currentUser: JwtAccessPayload,  
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(id, currentUser);
 
@@ -292,6 +323,8 @@ export class ResidentialComplexService {
         await manager.update(Unit, { complexId: id }, { status: UnitStatus.DISABLED });
         this.logger.warn(`Complejo ${id} desactivado — unidades marcadas como DISABLED`);
       }
+
+      await this.cacheService.delete({ key: BK.complex.one(id) });
 
       void this.auditService.log({
         entityType:      AuditEntityType.ResidentialComplex,
@@ -322,6 +355,7 @@ export class ResidentialComplexService {
 
     complex.deletedAt = new Date();
     await this.complexRepo.save(complex);
+    await this.cacheService.delete({ key: BK.complex.one(id) });
     this.logger.warn(`Complejo eliminado (soft): ${id} por usuario ${currentUser.sub}`);
 
     return { success: true, message: `Complejo "${complex.name}" eliminado correctamente` };
@@ -365,16 +399,14 @@ export class ResidentialComplexService {
   /**
    * Verifica que el usuario autenticado tenga acceso al complejo.
    * SUPER_ADMIN siempre tiene acceso. Los demás solo al suyo.
+   * SUPERVISOR_ROL requiere visita activa en el complejo específico.
    */
-  assertAccess(complex: ResidentialComplex, user: JwtAccessPayload): void {
-    // SUPER_ADMIN tiene acceso irrestricto a cualquier complejo
+  async assertAccess(complex: ResidentialComplex, user: JwtAccessPayload): Promise<void> {
     if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
 
-    // COMPLEX_ROL: debe ser el owner del complejo
-    if (
-      user.roles.includes(ValidRoles.COMPLEX_ROL) &&
-      complex.ownerId === user.sub
-    ) {
+    // COMPLEX_ROL: owner directo O complejo asignado en el perfil
+    if (user.roles.includes(ValidRoles.COMPLEX_ROL)) {
+      if (complex.ownerId === user.sub || user.complexId === complex.id) return;
       throw new CustomError({
         message: 'No tienes permiso para acceder a este complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -382,11 +414,14 @@ export class ResidentialComplexService {
       });
     }
 
-    // SECURITY / SUPERVISOR / otros: deben pertenecer al complejo via complexId en JWT
-    if (
-      !user.roles.includes(ValidRoles.COMPLEX_ROL) &&
-      user.complexId !== complex.id
-    ) {
+    // SUPERVISOR_ROL: requiere visita activa en este complejo específico
+    if (user.roles.includes(ValidRoles.SUPERVISOR_ROL)) {
+      await this.assertSupervisorActiveVisit(user.sub, complex.id);
+      return;
+    }
+
+    // SECURITY y otros: deben pertenecer al complejo via complexId en JWT
+    if (user.complexId !== complex.id) {
       throw new CustomError({
         message: 'No tienes permiso para acceder a este complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -422,6 +457,12 @@ export class ResidentialComplexService {
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
+    }
+
+    // SUPERVISOR_ROL: requiere visita activa en este complejo específico
+    if (user.roles.includes(ValidRoles.SUPERVISOR_ROL)) {
+      await this.assertSupervisorActiveVisit(user.sub, complexId);
+      return;
     }
 
     if (user.complexId !== complexId) {
@@ -462,23 +503,7 @@ export class ResidentialComplexService {
   // ACTUALIZAR MÓDULOS HABILITADOS
   // ================================================================
 
-  async updateModules(complexId: string, modules: string[]): Promise<ResidentialComplex> {
-    const complex = await this.complexRepo.findOneOrFail({ where: { id: complexId } });
-    complex.enabledModules = modules;
-    return this.complexRepo.save(complex);
-  }
-
-  async updateEnabledModules(complexId: string, modules: string[]): Promise<ResidentialComplex> {
-    const validModules = Object.values(ComplexModule) as string[];
-    const invalid = modules.filter(m => !validModules.includes(m));
-    if (invalid.length) {
-      throw new CustomError({
-        message: `Módulos inválidos: ${invalid.join(', ')}. Valores permitidos: ${validModules.join(', ')}`,
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: GeneralErrorCode.BAD_REQUEST,
-      });
-    }
-
+  async updateEnabledModules(complexId: string, modules: ComplexModule[]): Promise<ResidentialComplex> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId, deletedAt: IsNull() },
     });
@@ -500,7 +525,7 @@ export class ResidentialComplexService {
   private async assertValidLegalRepresentative(userId: string): Promise<void> {
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      select: ['id', 'status', 'deletedAt'],
+      select: ['id', 'status', 'deletedAt'], 
     });
 
     if (!user) {
@@ -574,6 +599,122 @@ export class ResidentialComplexService {
       }))
       .filter(c => c.distanceMeters <= radiusMeters)
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
+  }
+
+  private async assertSupervisorActiveVisit(supervisorId: string, complexId: string): Promise<void> {
+    const visit = await this.supervisorVisitRepo.findOne({
+      where: { supervisorId, complexId, status: SupervisorVisitStatus.ACTIVE },
+    });
+
+    if (!visit) {
+      throw new CustomError({
+        message: 'No tienes una visita activa en este complejo. Debes hacer check-in primero',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+  }
+
+  // ================================================================
+  // REGISTRO PÚBLICO (PENDING_REVIEW)
+  // ================================================================
+
+  async registerComplex(
+    dto: RegisterComplexDto,
+    rutFile: Express.Multer.File,
+    legalRepDocument: Express.Multer.File,
+  ): Promise<{
+    id: string;
+    name: string;
+    type: ComplexType;
+    status: ComplexStatus;
+    email: string;
+    createdAt: Date;
+  }> {
+    const slug = this.generateSlug(dto.name);
+
+    const [existingSlug, existingEmail] = await Promise.all([
+      this.complexRepo.findOne({ where: { slug } }),
+      this.complexRepo.findOne({ where: { email: dto.email } }),
+    ]);
+
+    if (existingSlug) {
+      throw new ConflictException(`Ya existe un complejo con un nombre similar a "${dto.name}"`);
+    }
+    if (existingEmail) {
+      throw new ConflictException(`El email "${dto.email}" ya está registrado`);
+    }
+
+    const folder = this.storageService.buildFolder('documents', slug);
+
+    let rutPublicId: string | undefined;
+    let legalRepPublicId: string | undefined;
+    let rutFileUrl: string;
+    let legalRepDocumentUrl: string;
+
+    try {
+      const rutResult = await this.storageService.uploadBuffer(
+        rutFile.buffer,
+        folder,
+        rutFile.originalname,
+        'raw',
+      );
+      rutPublicId = rutResult.publicId;
+      rutFileUrl = rutResult.url;
+
+      try {
+        const legalResult = await this.storageService.uploadBuffer(
+          legalRepDocument.buffer,
+          folder,
+          legalRepDocument.originalname,
+          'raw',
+        );
+        legalRepPublicId = legalResult.publicId;
+        legalRepDocumentUrl = legalResult.url;
+      } catch (err) {
+        await this.storageService.deleteByPublicId(rutPublicId, 'raw').catch(() => {});
+        throw err;
+      }
+    } catch (err: any) {
+      this.logger.error(`Error subiendo documentos a R2: ${err.message}`);
+      throw new InternalServerErrorException('Error al procesar los documentos. Intenta de nuevo.');
+    }
+
+    const isTower = dto.type === ComplexType.APARTMENT_COMPLEX || dto.type === ComplexType.MIXED_COMPLEX;
+
+    try {
+      const complex = this.complexRepo.create({
+        name: dto.name,
+        type: dto.type,
+        totalUnits: dto.totalUnits,
+        numberOfTowers: isTower ? dto.numberOfTowers : undefined,
+        legalRepresentativeName: dto.legalRepresentativeName,
+        email: dto.email,
+        phoneNumber: dto.phone,
+        rutFileUrl,
+        legalRepDocumentUrl,
+        status: ComplexStatus.PENDING_REVIEW,
+      });
+
+      const saved = await this.complexRepo.save(complex);
+      this.logger.log(`Complejo registrado (PENDING_REVIEW): ${saved.id} — "${saved.name}"`);
+
+      return {
+        id: saved.id,
+        name: saved.name,
+        type: saved.type,
+        status: saved.status,
+        email: saved.email,
+        createdAt: saved.createdAt,
+      };
+    } catch (err: any) {
+      await Promise.allSettled([
+        this.storageService.deleteByPublicId(rutPublicId, 'raw'),
+        this.storageService.deleteByPublicId(legalRepPublicId, 'raw'),
+      ]);
+      this.logger.error(`Error guardando complejo en BD: ${err.message}`);
+      throw new InternalServerErrorException('Error al registrar el complejo. Intenta de nuevo.');
+    }
   }
 
   private generateSlug(name: string): string {

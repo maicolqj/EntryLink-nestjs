@@ -1,6 +1,9 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import { UnitStatus } from '../enums/unit-status.enum';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
 import { Building }               from '../entities/building.entity';
 import { CreateBuildingInput }    from '../dto/inputs/create-building.input';
@@ -20,6 +23,7 @@ export class BuildingService {
     @InjectRepository(Building)
     private readonly buildingRepo: Repository<Building>,
     private readonly complexService: ResidentialComplexService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ================================================================
@@ -27,14 +31,14 @@ export class BuildingService {
   // ================================================================
 
   async create(
-    input: CreateBuildingInput & { complexId: string },
+    input: CreateBuildingInput,
     currentUser: JwtAccessPayload,
   ): Promise<Building> {
     if (!input.complexId) {
       throw new CustomError({
-        message: 'No hay un complejo asociado a la sesión del usuario',
-        statusCode: HttpStatus.FORBIDDEN,
-        errorCode: GeneralErrorCode.FORBIDDEN,
+        message: 'Debe especificar el ID del complejo (complexId) en el que desea crear la torre',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
@@ -60,6 +64,7 @@ export class BuildingService {
 
     const building = this.buildingRepo.create(input);
     const saved    = await this.buildingRepo.save(building);
+    await this.cacheService.deleteByPrefix(BK.building.prefix(input.complexId));
     this.logger.log(`Torre creada: ${saved.id} — "${saved.name}" en complejo ${input.complexId}`);
     return saved;
   }
@@ -73,23 +78,33 @@ export class BuildingService {
     pagination: PaginationInput,
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedBuildingsResponse> {
-    // Verificar acceso al complejo
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
+    const cacheKey = BK.building.list(complexId, page, limit);
+    const cached = await this.cacheService.get<PaginatedBuildingsResponse>({ key: cacheKey });
+    if (cached) return cached;
+
     const skip = (page - 1) * limit;
 
-    const [items, totalItems] = await this.buildingRepo.findAndCount({
-      where:  { complexId, deletedAt: IsNull() },
-      order:  { name: 'ASC' },
-      skip,
-      take:   limit,
-      relations: ['units'],
-    });
+    const [items, totalItems] = await this.buildingRepo
+      .createQueryBuilder('building')
+      .leftJoinAndSelect(
+        'building.units',
+        'unit',
+        'unit.deleted_at IS NULL AND unit.status != :disabled',
+        { disabled: UnitStatus.DISABLED },
+      )
+      .where('building.complexId = :complexId', { complexId })
+      .andWhere('building.deleted_at IS NULL')
+      .orderBy('building.name', 'ASC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
 
     const totalPages = Math.ceil(totalItems / limit);
 
-    return {
+    const result: PaginatedBuildingsResponse = {
       items,
       pagination: {
         currentPage:    page,
@@ -100,6 +115,9 @@ export class BuildingService {
         hasPreviousPage: page > 1,
       },
     };
+
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.building.TTL } });
+    return result;
   }
 
   // ================================================================
@@ -158,7 +176,9 @@ export class BuildingService {
     }
 
     Object.assign(building, input);
-    return this.buildingRepo.save(building);
+    const saved = await this.buildingRepo.save(building);
+    await this.cacheService.deleteByPrefix(BK.building.prefix(saved.complexId));
+    return saved;
   }
 
   // ================================================================
@@ -171,7 +191,9 @@ export class BuildingService {
   ): Promise<Building> {
     const building  = await this.findById(id, currentUser);
     building.status = !building.status;
-    return this.buildingRepo.save(building);
+    const saved = await this.buildingRepo.save(building);
+    await this.cacheService.deleteByPrefix(BK.building.prefix(saved.complexId));
+    return saved;
   }
 
   // ================================================================
@@ -186,6 +208,7 @@ export class BuildingService {
 
     building.deletedAt = new Date();
     await this.buildingRepo.save(building);
+    await this.cacheService.deleteByPrefix(BK.building.prefix(building.complexId));
     this.logger.warn(`Torre eliminada (soft): ${id}`);
 
     return { success: true, message: `Torre "${building.name}" eliminada correctamente` };
