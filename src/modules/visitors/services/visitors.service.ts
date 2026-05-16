@@ -206,4 +206,11 @@ export class VisitorsService {
 
     return visitor;
   }
+
+  async updatePhotoUrl(visitorId: string, url: string): Promise<Visitor> {
+    const visitor = await this.findById(visitorId);
+    await this.visitorRepo.update(visitorId, { photoUrl: url });
+    visitor.photoUrl = url;
+    return visitor;
+  }
 }
