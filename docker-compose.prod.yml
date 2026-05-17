@@ -64,6 +64,7 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_NAME: ${DB_NAME}
       PASSDB_POSTGRES: ${PASSDB_POSTGRES}
+      DB_SSL: ${DB_SSL:-false}
       # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -119,27 +120,9 @@ services:
       retries: 3
       start_period: 45s
 
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    container_name: entrylink-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      app:
-        condition: service_healthy
-    networks:
-      - app-network
-
 volumes:
   postgres_data:
   redis_data:
-  nginx_logs:
 
 networks:
   app-network:
