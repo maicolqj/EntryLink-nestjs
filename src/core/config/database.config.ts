@@ -16,9 +16,9 @@ export default registerAs('database', () => ({
   migrations: [__dirname + '/../migrations/*{.ts,.js}'], // 🔄 Archivos de migración de BD
   autoLoadEntities: true,
   synchronize: false,
-  // VULN-03 fix: SSL habilitado en producción para cifrar tráfico con la BD
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: true }
+  // SSL solo cuando DB_SSL=true (p.ej. RDS/Cloud SQL externos). En Docker interno no aplica.
+  ssl: process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
     : false,
 
   // 🚀 CONFIGURACIÓN AVANZADA PARA PostgreSQL 17

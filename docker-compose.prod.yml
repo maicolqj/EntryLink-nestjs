@@ -64,6 +64,7 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_NAME: ${DB_NAME}
       PASSDB_POSTGRES: ${PASSDB_POSTGRES}
+      DB_SSL: ${DB_SSL:-false}
       # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
