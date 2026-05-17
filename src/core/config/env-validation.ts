@@ -49,7 +49,7 @@ export const envValidationSchema = Joi.object({
   MAIL_PORT:     prodRequired(Joi.number().integer()),
   MAIL_USER:     prodRequired(Joi.string()),
   MAIL_PASSWORD: prodRequired(Joi.string()),
-  MAIL_FROM:     prodRequired(Joi.string().email()),
+  MAIL_FROM:     prodRequired(Joi.string()),
 
   // ── Web Push / VAPID (solo requerido en producción) ───────────────────────
   VAPID_PUBLIC_KEY:  prodRequired(Joi.string()),

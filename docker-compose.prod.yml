@@ -17,7 +17,7 @@ services:
       '-c', 'checkpoint_completion_target=0.9',
       '-c', 'wal_buffers=16MB',
       '-c', 'random_page_cost=1.1',
-      '-c', 'work_mem=4MB',
+      '-c', 'work_mem=4MB'
     ]
     container_name: entrylink-postgres
     volumes:
@@ -58,29 +58,50 @@ services:
       NODE_ENV: production
       TZ: America/Bogota
       PORT: 3001
+      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME}
       DB_NAME: ${DB_NAME}
       PASSDB_POSTGRES: ${PASSDB_POSTGRES}
+      # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_QUEUE_DB: ${REDIS_QUEUE_DB:-1}
+      REDIS_SOCKET_DB: ${REDIS_SOCKET_DB:-6}
+      REDIS_PREFIX: ${REDIS_PREFIX:-app:}
+      # JWT & Auth
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER}
+      FINGERPRINT_SECRET: ${FINGERPRINT_SECRET}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      # CORS
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      # Mail
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT}
       MAIL_USER: ${MAIL_USER}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
+      # Web Push / VAPID
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      # Cloudflare R2
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      # Bull Board
       BULL_BOARD_USER: ${BULL_BOARD_USER}
       BULL_BOARD_PASS: ${BULL_BOARD_PASS}
+      # BullMQ (opcionales)
+      BULL_REMOVE_ON_COMPLETE: ${BULL_REMOVE_ON_COMPLETE:-10}
+      BULL_REMOVE_ON_FAIL: ${BULL_REMOVE_ON_FAIL:-5}
+      BULL_ATTEMPTS: ${BULL_ATTEMPTS:-3}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,6 +111,13 @@ services:
       - app-network
     expose:
       - "3001"
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
 
   nginx:
     image: nginx:alpine
@@ -103,7 +131,8 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     networks:
       - app-network
 

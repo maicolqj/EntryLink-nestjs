@@ -18,18 +18,18 @@ import { MailProcessor } from './mail.processor';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         transport: {
-          host: config.get<string>('SMTP_HOST', 'localhost'),
-          port: config.get<number>('SMTP_PORT', 1025),
+          host: config.get<string>('MAIL_HOST', 'localhost'),
+          port: config.get<number>('MAIL_PORT', 1025),
           secure: config.get<string>('MAILER_SECURE') === 'true',
-          auth: config.get<string>('SMTP_USER')
+          auth: config.get<string>('MAIL_USER')
             ? {
-                user: config.get<string>('SMTP_USER'),
-                pass: config.get<string>('SMTP_PASS'),
+                user: config.get<string>('MAIL_USER'),
+                pass: config.get<string>('MAIL_PASSWORD'),
               }
             : undefined,
         },
         defaults: {
-          from: `"${config.get<string>('MAIL_FROM_NAME', 'entrylink')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@entrylink.app')}>`,
+          from: `"${config.get<string>('MAIL_FROM', 'entrylink')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@entrylink.app')}>`,
         },
         template: {
           dir: join(__dirname, 'templates'),
