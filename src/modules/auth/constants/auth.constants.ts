@@ -34,6 +34,8 @@ export const AUTH_CONSTANTS = {
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
+    EMAIL_VERIFICATION_TOKEN: 'ev-tok',
+    PASSWORD_RESET_TOKEN: 'pr-tok',
   },
 
   // ── Cache TTL (segundos) ─────────────────────────────────────────────────

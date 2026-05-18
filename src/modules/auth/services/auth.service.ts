@@ -50,9 +50,10 @@ export class AuthService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
-
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     private readonly otpService: OtpService,
@@ -364,6 +365,175 @@ export class AuthService {
     } catch {
       return false;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Registro de supervisor + verificación de email
+  // ═══════════════════════════════════════════════════════════════
+
+  async registerSupervisor(input: RegisterSupervisorInput): Promise<RegisterSupervisorResponse> {
+    const { fullName, email, password, phone, documentNumber } = input;
+
+    const existing = await this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (existing) {
+      return { success: false, message: 'Si el correo no está registrado, recibirás un enlace de verificación', supervisorId: null };
+    }
+
+    const supervisorRole = await this.roleRepo.findOne({ where: { name: ValidRoles.SUPERVISOR_ROL } });
+    if (!supervisorRole) throw new BadRequestException('Rol de supervisor no configurado');
+
+    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const nameParts = fullName.trim().split(/\s+/);
+    const name = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || nameParts[0];
+
+    const user = await this.dataSource.transaction(async (em) => {
+      const newUser = em.create(User, {
+        name,
+        lastName,
+        email: email.toLowerCase().trim(),
+        password: hashedPassword,
+        passwordSet: true,
+        phoneNumber: phone,
+        identity: documentNumber,
+        status: UserStatus.PENDING_VERIFICATION,
+        emailVerified: false,
+        phoneVerified: false,
+        identityVerified: false,
+      });
+      const savedUser = await em.save(User, newUser);
+
+      const userRole = em.create(UserRole, {
+        user: savedUser,
+        role: supervisorRole,
+        isPrimary: true,
+      });
+      await em.save(UserRole, userRole);
+
+      return savedUser;
+    });
+
+    const token = uuidv4();
+    const ttl = AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES * 60;
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
+      data: { userId: user.id },
+      options: { ttl },
+    });
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', '');
+    const verificationUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
+
+    await this.mailService.queueEmailVerificationEmail({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      verificationUrl,
+      expiresInMinutes: AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES,
+    });
+
+    this.logger.log(`Supervisor registrado: userId=${user.id}`);
+    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
+  }
+
+  async verifySupervisorEmail(token: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+    const cached = await this.cacheService.get<{ userId: string }>({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
+    });
+
+    if (!cached?.userId) throw new UnauthorizedException('Token de verificación inválido o expirado');
+
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .where('user.id = :id', { id: cached.userId })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (user.status !== UserStatus.PENDING_VERIFICATION) throw new BadRequestException('La cuenta ya fue verificada');
+
+    await this.userRepo.update(user.id, { emailVerified: true, status: UserStatus.ACTIVE });
+    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token } });
+
+    user.emailVerified = true;
+    user.status = UserStatus.ACTIVE;
+
+    this.logger.log(`Email verificado — userId=${user.id}`);
+    return this.createUserSession(user, deviceInfo, false);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Reset de contraseña por email
+  // ═══════════════════════════════════════════════════════════════
+
+  async requestPasswordReset(email: string): Promise<RequestPasswordResetResponse> {
+    const genericResponse = { success: true, message: 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña' };
+
+    const rlKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_RATE_LIMIT, key: email.toLowerCase() };
+    const rl = await this.cacheService.get<{ count: number }>({ key: rlKey });
+    if ((rl?.count ?? 0) >= AUTH_CONSTANTS.PASSWORD_RESET_RATE_LIMIT_MAX) return genericResponse;
+
+    await this.cacheService.set({
+      key: rlKey,
+      data: { count: (rl?.count ?? 0) + 1 },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.PASSWORD_RESET_RATE_LIMIT },
+    });
+
+    const user = await this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (!user) return genericResponse;
+
+    const token = uuidv4();
+    const ttl = AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES * 60;
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: token },
+      data: { userId: user.id },
+      options: { ttl },
+    });
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', '');
+    const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
+
+    await this.mailService.queuePasswordResetEmail({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      resetUrl,
+      expiresInMinutes: AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES,
+    });
+
+    this.logger.log(`Password reset solicitado — userId=${user.id}`);
+    return genericResponse;
+  }
+
+  async resetPassword(input: ResetPasswordInput): Promise<SetPasswordResponse> {
+    const cached = await this.cacheService.get<{ userId: string }>({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: input.token },
+    });
+
+    if (!cached?.userId) throw new BadRequestException('Token inválido o expirado');
+
+    const user = await this.userRepo.findOne({ where: { id: cached.userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    const hashedPassword = await bcrypt.hash(input.newPassword, saltRounds);
+
+    await this.userRepo.update(user.id, {
+      password: hashedPassword,
+      lastPasswordChange: new Date(),
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+
+    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: input.token } });
+    await this.tokenService.clearUserTokenVersionCache(user.id);
+
+    this.logger.log(`Password restablecido — userId=${user.id}`);
+    return { success: true };
   }
 
   // ═══════════════════════════════════════════════════════════════

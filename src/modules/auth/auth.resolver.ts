@@ -8,6 +8,10 @@ import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
+import { RegisterSupervisorInput } from './dto/inputs/register-supervisor.input';
+import { RegisterSupervisorResponse } from './dto/responses/register-supervisor.response';
+import { ResetPasswordInput } from './dto/inputs/reset-password.input';
+import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
 import { DeviceInfo } from './interfaces/jwt-payload.interface';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
@@ -56,6 +60,56 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.loginWithIdentity(input, deviceInfo);
+  }
+
+  // ── Auto-registro del supervisor ────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => RegisterSupervisorResponse, {
+    name: 'registerSupervisor',
+    description: 'Auto-registro público para supervisores. La cuenta queda en PENDING_VERIFICATION hasta verificar el correo.',
+  })
+  async registerSupervisor(
+    @Args('input') input: RegisterSupervisorInput,
+  ): Promise<RegisterSupervisorResponse> {
+    return this.authService.registerSupervisor(input);
+  }
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'verifySupervisorEmail',
+    description: 'Verifica el correo del supervisor con el token enviado por email. Activa la cuenta y devuelve tokens JWT.',
+  })
+  async verifySupervisorEmail(
+    @Args('token', { type: () => String }) token: string,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.verifySupervisorEmail(token, deviceInfo);
+  }
+
+  // ── Reset de contraseña por email ────────────────────────────────────────
+
+  @Public()
+  @Mutation(() => RequestPasswordResetResponse, {
+    name: 'requestPasswordReset',
+    description: 'Solicita restablecimiento de contraseña por email. Respuesta genérica para no revelar si el email existe.',
+  })
+  async requestPasswordReset(
+    @Args('email', { type: () => String }) email: string,
+  ): Promise<RequestPasswordResetResponse> {
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Public()
+  @Mutation(() => SetPasswordResponse, {
+    name: 'resetPassword',
+    description: 'Establece nueva contraseña usando el token recibido por email. Token de un solo uso, válido 1 hora.',
+  })
+  async resetPassword(
+    @Args('input') input: ResetPasswordInput,
+  ): Promise<SetPasswordResponse> {
+    return this.authService.resetPassword(input);
   }
 
   // ── OTP: Solicitar código (RESIDENT_ROL) ─────────────────────────────────
