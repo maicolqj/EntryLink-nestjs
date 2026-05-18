@@ -20,6 +20,7 @@ export interface UserSeedData {
     bio: string,
     rating: number,
     preferredLanguage: string
+    systemCode?: string
     acceptsMarketing: boolean
     acceptTermsAdnConditions: boolean,
     userRoles: UserRole[]

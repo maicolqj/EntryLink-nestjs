@@ -7,9 +7,7 @@ import { LoginEmailInput } from './dto/inputs/login-email.input';
 import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
-import { RegisterSupervisorInput } from './dto/inputs/register-supervisor.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
-import { RegisterSupervisorResponse } from './dto/responses/register-supervisor.response';
 import { DeviceInfo } from './interfaces/jwt-payload.interface';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
@@ -19,9 +17,6 @@ import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { Auth } from '../shared/decorators/auth.decorator';
 import { SetPasswordResponse } from './dto/responses/set-password.response';
-
-import { ResetPasswordInput } from './dto/inputs/reset-password.input';
-import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
 
 @Resolver()
 export class AuthResolver {
@@ -61,39 +56,6 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.loginWithIdentity(input, deviceInfo);
-  }
-
-  // ── Auto-registro del supervisor ─────────────────────────────────────────────
-
-  @Public()
-  @Mutation(() => RegisterSupervisorResponse, {
-    name: 'registerSupervisor',
-    description:
-      'Auto-registro público para supervisores. ' +
-      'La cuenta queda en estado PENDING_VERIFICATION hasta que el supervisor ' +
-      'confirme su correo electrónico con el enlace enviado. ' +
-      'No se emiten tokens JWT hasta la verificación.',
-  })
-  async registerSupervisor(
-    @Args('input') input: RegisterSupervisorInput,
-  ): Promise<RegisterSupervisorResponse> {
-    return this.authService.registerSupervisor(input);
-  }
-
-  @Public()
-  @Mutation(() => AuthResponse, {
-    name: 'verifySupervisorEmail',
-    description:
-      'Verifica el correo electrónico del supervisor usando el token enviado por email. ' +
-      'Activa la cuenta (ACTIVE) y devuelve los tokens JWT. ' +
-      'Tras esto el supervisor puede solicitar acceso a un complejo.',
-  })
-  async verifySupervisorEmail(
-    @Args('token', { type: () => String }) token: string,
-    @Context() context: any,
-  ): Promise<AuthResponse> {
-    const deviceInfo = this.extractDeviceInfo(context);
-    return this.authService.verifySupervisorEmail(token, deviceInfo);
   }
 
   // ── OTP: Solicitar código (RESIDENT_ROL) ─────────────────────────────────
@@ -161,34 +123,6 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.redeemQrToken(token, pin, deviceInfo);
-  }
-
-  // ── Reset de contraseña por email ────────────────────────────────────────
-
-  @Public()
-  @Mutation(() => RequestPasswordResetResponse, {
-    name: 'requestPasswordReset',
-    description:
-      'Solicita el restablecimiento de contraseña por email. ' +
-      'Siempre responde igual para no revelar si el email está registrado.',
-  })
-  async requestPasswordReset(
-    @Args('email', { type: () => String }) email: string,
-  ): Promise<RequestPasswordResetResponse> {
-    return this.authService.requestPasswordReset(email);
-  }
-
-  @Public()
-  @Mutation(() => SetPasswordResponse, {
-    name: 'resetPassword',
-    description:
-      'Establece una nueva contraseña usando el token recibido por email. ' +
-      'El token es de un solo uso y tiene validez de 1 hora.',
-  })
-  async resetPassword(
-    @Args('input') input: ResetPasswordInput,
-  ): Promise<SetPasswordResponse> {
-    return this.authService.resetPassword(input);
   }
 
   // ── Establecer contraseña inicial ────────────────────────────────────────

@@ -440,52 +440,6 @@ export class AuthService {
   }
 
 
-  /**
-   * Valida email+password contra residential_complexes y crea sesión con entityType='complex'.
-   * Usado exclusivamente por COMPLEX_ROL.
-   */
-  private async loginComplex(
-    input: LoginEmailInput,
-    deviceInfo: DeviceInfo,
-  ): Promise<AuthResponse> {
-    const { email, password, rememberMe } = input;
-
-    // Cargar el complejo con su owner (para roles y permisos en el JWT)
-    const complex = await this.complexRepo
-      .createQueryBuilder('complex')
-      .addSelect('complex.password')
-      .leftJoinAndSelect('complex.owner', 'owner')
-      .leftJoinAndSelect('owner.userRoles', 'userRoles')
-      .leftJoinAndSelect('userRoles.role', 'role')
-      .leftJoinAndSelect('role.permissions', 'permissions')
-      .where('LOWER(complex.email) = LOWER(:email)', { email: email.trim() })
-      .andWhere('complex.deleted_at IS NULL')
-      .getOne();
-
-    if (!complex || !complex.password || !complex.passwordSet) {
-      await this.registerFailedAttempt(email, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-
-    const passwordValid = await bcrypt.compare(password, complex.password);
-    if (!passwordValid) {
-      await this.registerFailedAttempt(email, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-
-    this.assertComplexAccountActive(complex);
-
-    if (!complex.owner) {
-      throw new UnauthorizedException('No se encontró el propietario del complejo');
-    }
-
-    this.assertUserAccountActive(complex.owner);
-    await this.clearFailedAttempts(email);
-
-    this.logger.log(`Login exitoso (complex email+pwd): complexId=${complex.id} owner=${complex.ownerId}`);
-    return this.createComplexSession(complex, deviceInfo, rememberMe ?? false);
-  }
-
   // ═══════════════════════════════════════════════════════════════
   // Creación de sesiones
   // ═══════════════════════════════════════════════════════════════
