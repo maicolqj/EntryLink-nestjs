@@ -47,7 +47,6 @@ services:
       retries: 3
 
   app:
-    image: entrylink-backend:latest
     build:
       context: .
       dockerfile: Dockerfile
