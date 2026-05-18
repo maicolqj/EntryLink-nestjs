@@ -79,6 +79,7 @@ export class UsersService {
     private readonly auditService: AuditService,
   ) { }
 
+
   // ── Consultas ────────────────────────────────────────────────────────────
 
   async findAll(filter: UsersFilterInput = {}): Promise<UsersListResponse> {
@@ -86,6 +87,7 @@ export class UsersService {
 
     const where: Record<string, any> = {};
     if (complexId) where.complexId = complexId;
+
     if (status) where.status = status;
 
     const [items, total] = await this.userRepo.findAndCount({
@@ -228,6 +230,7 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
+
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.CREATE,
@@ -327,6 +330,7 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
+
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.CREATE,
@@ -380,24 +384,26 @@ export class UsersService {
 
       const user = await this.dataSource.transaction(async (manager) => {
         const newUser = manager.create(User, {
-          name: input.name,
-          lastName: input.lastName,
-          email: normalizedEmail,
-          password: input.password,
-          phoneNumber: input.phoneNumber,
-          identity: input.identityNumber,
-          complexId: input.complexId,
-          status: UserStatus.ACTIVE,
-          phoneVerified: false,
-          emailVerified: false,
-          identityVerified: false,
+          name:                     input.name,
+          lastName:                 input.lastName,
+          email:                    normalizedEmail,
+          password:                 input.password,
+          phoneNumber:              input.phoneNumber,
+          identity:                 input.identityNumber,
+          complexId:                input.complexId,
+          status:                   UserStatus.ACTIVE,
+          phoneVerified:            false,
+          emailVerified:            false,
+          identityVerified:         false,
           acceptTermsAdnConditions: false,
-          acceptsMarketing: false,
+          acceptsMarketing:         false,
+
         });
         const saved = await manager.save(User, newUser);
 
         await manager.save(
           manager.create(UserRole, {
+
             user: { id: saved.id },
             role: { id: role.id },
             isPrimary: true,
@@ -414,6 +420,7 @@ export class UsersService {
         );
 
         return saved;
+
       });
 
       this.logger.log(`Personal creado: ${user.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
@@ -459,11 +466,13 @@ export class UsersService {
       const updates: Partial<User> = { complexId: input.complexId };
       const needsRestore = existingUser.status === UserStatus.INACTIVE || existingUser.status === UserStatus.DELETED;
       if (needsRestore) {
+
         updates.status = UserStatus.ACTIVE;
         updates.deletedAt = null as any;
       }
       if (input.phoneNumber && !existingUser.phoneNumber) updates.phoneNumber = input.phoneNumber;
       if (input.identityNumber && !existingUser.identity) updates.identity = input.identityNumber;
+
 
       await this.dataSource.transaction(async (manager) => {
         await manager.update(User, existingUser.id, updates);
@@ -477,6 +486,7 @@ export class UsersService {
 
         await manager.save(
           manager.create(UserComplexAssignment, {
+
             userId: existingUser.id,
             complexId: input.complexId,
             role: input.role,
@@ -488,6 +498,7 @@ export class UsersService {
       const reintegratedUser = { ...existingUser, ...updates };
       this.logger.log(`Personal reintegrado: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
       void this.auditService.log({
+
         entityType: AuditEntityType.User,
         entityId: existingUser.id,
         action: AuditAction.ACTIVATE,
@@ -514,6 +525,7 @@ export class UsersService {
     // ── SUPERVISOR_ROL / ACCOUNTANT_ROL: pueden estar en N complejos ─────
     const existingActiveAssignment = await this.assignmentRepo.findOne({
       where: {
+
         userId: existingUser.id,
         complexId: input.complexId,
         role: input.role,
@@ -535,16 +547,17 @@ export class UsersService {
 
       await manager.save(
         manager.create(UserComplexAssignment, {
-          userId: existingUser.id,
-          complexId: input.complexId,
-          role: input.role,
-          status: AssignmentStatus.ACTIVE,
+        userId: existingUser.id,
+        complexId: input.complexId,
+        role: input.role,
+        status: AssignmentStatus.ACTIVE,
         }),
       );
     });
 
     this.logger.log(`Personal asignado a nuevo complejo: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
     void this.auditService.log({
+
       entityType: AuditEntityType.User,
       entityId: existingUser.id,
       action: AuditAction.UPDATE,
@@ -705,6 +718,7 @@ export class UsersService {
       `Personal removido: usuario ${input.userId} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
     );
     void this.auditService.log({
+
       entityType: AuditEntityType.User,
       entityId: input.userId,
       action: AuditAction.UPDATE,
@@ -754,6 +768,7 @@ export class UsersService {
 
     if (input.name !== undefined) user.name = input.name;
     if (input.lastName !== undefined) user.lastName = input.lastName;
+
     if (input.phoneNumber !== undefined) user.phoneNumber = input.phoneNumber;
 
     if (input.role !== undefined) {

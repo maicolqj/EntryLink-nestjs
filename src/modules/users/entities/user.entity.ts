@@ -244,6 +244,7 @@ export class User {
     @Field(() => String, { description: 'ID del complejo residencial asociado', nullable: true })
     complexId?: string;
 
+
     @Column({ name: 'company_card_url', type: 'varchar', length: 500, nullable: true })
     companyCardUrl?: string;
 

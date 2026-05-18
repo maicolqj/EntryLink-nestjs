@@ -48,7 +48,8 @@ export class SeedService {
     
     try {
       await this.runPermissionsSeed();
-    //   await this.runRolesSeed();
+      await this.runRolesSeed();
+      await this.runUsersSeed();
     //   await this.runCategoriesSeed();
       
       console.log('🎉 Todos los seeds ejecutados exitosamente!\n');

@@ -34,7 +34,7 @@ export const runUserSeed = async (dataSource: DataSource) => {
                 user: savedUser,    // Pasamos el objeto usuario recién guardado
                 role: adminRole,    // Pasamos el objeto rol que buscamos al inicio
                 isPrimary: true,
-                assignedAt: new Date()
+                assignedAt: new Date(),
             });
 
             await userRoleRepository.save(newUserRole);
