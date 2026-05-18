@@ -27,6 +27,9 @@ RUN apk add --no-cache dumb-init
 # Usuario non-root
 RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
 
+# Directorio temporal para uploads de Multer (Excel imports)
+RUN mkdir -p /app/tmp/excel-imports && chown -R nestjs:nodejs /app/tmp
+
 ENV NODE_ENV=production
 ENV TZ=America/Bogota
 
