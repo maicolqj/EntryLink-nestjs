@@ -39,6 +39,8 @@ COPY --from=builder   --chown=nestjs:nodejs /app/dist              ./dist
 COPY --from=builder   --chown=nestjs:nodejs /app/query-manifest.json ./
 COPY --chown=nestjs:nodejs package.json ./
 
+RUN chown nestjs:nodejs /app
+
 USER nestjs
 
 EXPOSE 3001

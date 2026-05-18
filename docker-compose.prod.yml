@@ -36,6 +36,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+      - coolify
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
       interval: 10s
@@ -50,10 +51,11 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - app-network
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     container_name: entrylink-redis
+    networks:
+      - app-network
+      - coolify
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
@@ -135,4 +137,6 @@ volumes:
 
 networks:
   app-network:
+    external: true
+  coolify:
     external: true
