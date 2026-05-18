@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import * as https from 'https';
 import * as path from 'path';
 
@@ -77,7 +78,7 @@ export class R2StorageService implements OnModuleInit {
     _resourceType: 'image' | 'raw' | 'auto' = 'image',
   ): Promise<StorageUploadResult> {
     const ext = originalName ? path.extname(originalName).toLowerCase() : '';
-    const key = `${folder}/${uuidv4()}${ext}`;
+    const key = `${folder}/${randomUUID()}${ext}`;
     const format = ext.replace('.', '');
     const contentType = EXT_TO_CONTENT_TYPE[format] ?? 'application/octet-stream';
 
