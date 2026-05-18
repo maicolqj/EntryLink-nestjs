@@ -9,6 +9,7 @@ import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
 import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
 import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
+import { ResidentStatsResponse } from '../dto/responses/resident-stats.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -32,7 +33,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'createResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    // permissions: [ValidPermissions.CREATE_RESIDENTS],
+    permissions: [ValidPermissions.CREATE_RESIDENTS],
   })
   create(
     @Args('input') input: CreateResidentInput,
@@ -47,7 +48,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'updateResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    // permissions: [ValidPermissions.EDIT_RESIDENTS],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   update(
     @Args('input') input: UpdateResidentInput,
@@ -62,7 +63,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'suspendResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    // permissions: [ValidPermissions.BLOCK_RESIDENTS],
+    permissions: [ValidPermissions.BLOCK_RESIDENTS],
   })
   suspend(
     @Args('residentId') residentId: string,
@@ -78,7 +79,7 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'reactivateResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    // permissions: [ValidPermissions.EDIT_RESIDENTS],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   reactivate(
     @Args('residentId') residentId: string,
@@ -94,13 +95,28 @@ export class ResidentsResolver {
   @Mutation(() => Resident, { name: 'moveOutResident' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
-    // permissions: [ValidPermissions.EDIT_RESIDENTS],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
   })
   moveOut(
     @Args('input') input: MoveOutResidentInput,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Resident> {
     return this.residentsService.moveOut(input, currentUser);
+  }
+
+  /**
+   * Deshace la baja de un residente (MOVED_OUT → ACTIVE).
+   * Reactiva el residente y marca la unidad como OCCUPIED.
+   */
+  @Mutation(() => Resident, { name: 'undoMoveOutResident' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+  })
+  undoMoveOut(
+    @Args('residentId') residentId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident> {
+    return this.residentsService.undoMoveOut(residentId, currentUser);
   }
 
   /**
@@ -159,6 +175,25 @@ export class ResidentsResolver {
   // ================================================================
 
   /**
+   * Estadísticas de residentes del complejo.
+   */
+  @Query(() => ResidentStatsResponse, { name: 'residentStats' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
+  getStats(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ResidentStatsResponse> {
+    return this.residentsService.getStats(complexId, currentUser);
+  }
+
+  /**
    * Lista los residentes de un complejo con filtros y paginación.
    */
   @Query(() => PaginatedResidentsResponse, { name: 'residents' })
@@ -170,7 +205,7 @@ export class ResidentsResolver {
       ValidRoles.ACCOUNTANT_ROL,
       ValidRoles.SECURITY_ROL,
     ],
-    // permissions: [ValidPermissions.VIEW_RESIDENTS],
+    permissions: [ValidPermissions.VIEW_RESIDENTS],
   })
   findByComplex(
     @Args('complexId') complexId: string,

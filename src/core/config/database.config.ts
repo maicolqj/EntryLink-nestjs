@@ -1,29 +1,25 @@
 // src/config/database.config.ts
 import { registerAs } from '@nestjs/config';
 
-// 📝 EXPLICACIÓN: Este archivo configura la conexión a PostgreSQL
-// ✅ registerAs() permite agrupar configuraciones bajo un namespace ('database')
-console.log(`🔗 Conectando a PostgreSQL en ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}...`);
 export default registerAs('database', () => ({
 
-  localhost: process.env.DB_HOST || 'localhost', // 🏠 Por defecto localhost, útil para Docker
-
-  // 🐘 CONFIGURACIÓN BÁSICA DE PostgreSQL
-  type: 'postgres' as const,              // Tipo de base de datos
-  host: process.env.DB_HOST || 'localhost', // 🏠 Donde está la BD (localhost cuando Docker expone el puerto)
-  port: parseInt(process.env.DB_PORT, 10) || 5432, // 🔌 Puerto de conexión (5432 es el puerto por defecto de PostgreSQL)
-  username: process.env.DB_USERNAME || 'postgres', // 👤 Usuario de la BD
-  password: process.env.PASSDB_POSTGRES, // 🔐 Contraseña (viene del .env)
-  database: process.env.DB_NAME || 'OOOO',   // 🗃️ Nombre de la base de datos
+  type: 'postgres' as const,
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT, 10) || 5432,
+  username: process.env.DB_USERNAME || 'postgres',
+  password: process.env.PASSDB_POSTGRES,
+  // VULN-17 fix: falla explícitamente si DB_NAME no está definido
+  database: process.env.DB_NAME ?? (() => { throw new Error('DB_NAME env var is required'); })(),
 
   // 📁 CONFIGURACIÓN DE ENTIDADES Y MIGRACIONES
   entities: [__dirname + '/../**/*.entity{.ts,.js}'], // 📄 Busca todas las entidades en el proyecto
   migrations: [__dirname + '/../migrations/*{.ts,.js}'], // 🔄 Archivos de migración de BD
   autoLoadEntities: true,
-  // ⚙️ CONFIGURACIÓN DE DESARROLLO
-  synchronize: process.env.NODE_ENV !== 'production', // 🔄 Auto-sincroniza entidades (SOLO en desarrollo)
-  // logging: process.env.NODE_ENV === 'development',    // 📝 Muestra consultas SQL en desarrollo
-  ssl: false, // 🔒 SSL deshabilitado para desarrollo local
+  synchronize: false,
+  // SSL solo cuando DB_SSL=true (p.ej. RDS/Cloud SQL externos). En Docker interno no aplica.
+  ssl: process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : false,
 
   // 🚀 CONFIGURACIÓN AVANZADA PARA PostgreSQL 17
   extra: {
@@ -31,6 +27,21 @@ export default registerAs('database', () => ({
     idleTimeoutMillis: 30000,   // ⏱️ Cierra conexiones inactivas después de 30 segundos
     connectionTimeoutMillis: 2000, // ⏱️ Timeout de 2 segundos para nuevas conexiones
   },
+
+  // Query cache con Redis — opt-in por query: find({ cache: true }) o find({ cache: { id: 'key', milliseconds: 60000 } })
+  // Solo activo en producción; en dev TypeORM siempre va a la BD para ver cambios en tiempo real
+  cache: process.env.NODE_ENV === 'production' ? {
+    type: 'ioredis' as const,
+    options: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+      password: process.env.REDIS_PASSWORD || undefined,
+      db: 7,
+      keyPrefix: 'typeorm:cache:',
+    },
+    duration: 60_000,
+    ignoreErrors: true,
+  } : false,
 
 }));
 

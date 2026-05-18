@@ -1,6 +1,7 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { VisitorIdentityType } from '../../enums/visitor-identity-type.enum';
+import GraphQLJSON from 'graphql-type-json';
 
 @InputType()
 export class CreateVisitorInput {
@@ -33,6 +34,10 @@ export class CreateVisitorInput {
   @IsString()
   @MaxLength(20)
   phone?: string;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  @IsOptional()
+  metadata?: Record<string, any>;
 
   @Field(() => String, { description: 'URL de la foto capturada en portería', nullable: true })
   @IsOptional()

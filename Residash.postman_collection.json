@@ -1,9 +1,9 @@
 {
   "info": {
-    "name": "Residash SaaS API",
-    "description": "Colección completa de la plataforma de gestión de complejos residenciales Residash.\n\n**Instrucciones de uso:**\n1. Importa también el Environment `Residash.postman_environment.json`\n2. Ejecuta `loginWithEmail` o `verifyOtp` → el token se guarda automáticamente en la variable `accessToken`\n3. Todas las demás peticiones usan ese token automáticamente\n\n**GraphQL URL:** `{{graphqlUrl}}`\n**REST URL:** `{{baseUrl}}`",
+    "name": "entrylink SaaS API",
+    "description": "Colección completa de la plataforma de gestión de complejos residenciales entrylink.\n\n**Instrucciones de uso:**\n1. Importa también el Environment `entrylink.postman_environment.json`\n2. Ejecuta `loginWithEmail` o `verifyOtp` → el token se guarda automáticamente en la variable `accessToken`\n3. Todas las demás peticiones usan ese token automáticamente\n\n**GraphQL URL:** `{{graphqlUrl}}`\n**REST URL:** `{{baseUrl}}`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_postman_id": "residash-saas-api-v1"
+    "_postman_id": "entrylink-saas-api-v1"
   },
   "variable": [
     { "key": "baseUrl",    "value": "http://localhost:3001/api/v1", "type": "string" },
@@ -48,7 +48,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "graphql", "graphql": {
               "query": "mutation LoginWithEmail($input: LoginEmailInput!) {\n  loginWithEmail(input: $input) {\n    accessToken\n    refreshToken\n    expiresIn\n    sessionId\n  }\n}",
-              "variables": "{\n  \"input\": {\n    \"email\": \"superadmin@residash.co\",\n    \"password\": \"Admin@123!\",\n    \"rememberMe\": false\n  }\n}"
+              "variables": "{\n  \"input\": {\n    \"email\": \"superadmin@entrylink.co\",\n    \"password\": \"Admin@123!\",\n    \"rememberMe\": false\n  }\n}"
             }},
             "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
           }
@@ -164,7 +164,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "graphql", "graphql": {
               "query": "mutation CreateAdminUser($input: CreateAdminUserInput!) {\n  createAdminUser(input: $input) {\n    id\n    name\n    lastName\n    email\n    status\n    createdAt\n  }\n}",
-              "variables": "{\n  \"input\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Mendoza\",\n    \"email\": \"carlos.mendoza@residash.co\",\n    \"password\": \"Admin@123!\",\n    \"phoneNumber\": \"3109876543\",\n    \"role\": \"COMPILANCE_OFFICER_ROL\",\n    \"identity\": \"1098765432\"\n  }\n}"
+              "variables": "{\n  \"input\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Mendoza\",\n    \"email\": \"carlos.mendoza@entrylink.co\",\n    \"password\": \"Admin@123!\",\n    \"phoneNumber\": \"3109876543\",\n    \"role\": \"COMPILANCE_OFFICER_ROL\",\n    \"identity\": \"1098765432\"\n  }\n}"
             }},
             "url": { "raw": "{{graphqlUrl}}", "host": ["{{graphqlUrl}}"] }
           }

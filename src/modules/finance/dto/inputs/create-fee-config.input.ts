@@ -1,11 +1,16 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, Min, Max, IsPositive, MaxLength,
+  IsNumber, Min, Max, IsPositive, MaxLength, IsInt, IsBoolean, ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 import { FeeFrequency } from '../../enums/fee-frequency.enum';
-import { UnitType }     from '../../../residential-complex/enums/unit-type.enum';
+import { ChargeType } from '../../enums/charge-type.enum';
+import { FeeConfigBillingMode } from '../../enums/fee-config-billing-mode.enum';
+import { FeeConfigTriggerType } from '../../enums/fee-config-trigger-type.enum';
+import { UnitType } from '../../../residential-complex/enums/unit-type.enum';
+import { FeeConfigTargetRulesInput } from './fee-config-target-rules.input';
 
 @InputType()
 export class CreateFeeConfigInput {
@@ -26,6 +31,12 @@ export class CreateFeeConfigInput {
   @IsNumber()
   @IsPositive()
   amount: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  earlyPaymentAmount?: number;
 
   @Field(() => FeeFrequency, { defaultValue: FeeFrequency.MONTHLY })
   @IsEnum(FeeFrequency)
@@ -48,9 +59,52 @@ export class CreateFeeConfigInput {
   @IsString()
   unitId?: string;
 
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
   /** Si se especifica, aplica a todas las unidades de este tipo */
   @Field(() => UnitType, { nullable: true })
   @IsOptional()
   @IsEnum(UnitType)
   unitType?: UnitType;
+
+  /** Tipo de recurrencia (MONTHLY por defecto) */
+  @Field(() => ChargeType, { defaultValue: ChargeType.MONTHLY })
+  @IsOptional()
+  @IsEnum(ChargeType)
+  chargeType?: ChargeType;
+
+  /**
+   * Solo aplica cuando chargeType = LIMITED.
+   * Número total de cuotas a generar.
+   */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  installments?: number;
+
+  @Field(() => FeeConfigBillingMode, { defaultValue: FeeConfigBillingMode.ADVANCE })
+  @IsOptional()
+  @IsEnum(FeeConfigBillingMode)
+  billingMode?: FeeConfigBillingMode;
+
+  /** Si true, este config se omite en generateCharges y debe aplicarse manualmente. */
+  @Field(() => Boolean, { nullable: true, defaultValue: false })
+  @IsOptional()
+  @IsBoolean()
+  isOptional?: boolean;
+
+  @Field(() => FeeConfigTargetRulesInput, { nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FeeConfigTargetRulesInput)
+  targetRules?: FeeConfigTargetRulesInput | null;
+
+  @Field(() => FeeConfigTriggerType, { nullable: true })
+  @IsOptional()
+  @IsEnum(FeeConfigTriggerType)
+  triggerType?: FeeConfigTriggerType | null;
 }

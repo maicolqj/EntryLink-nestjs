@@ -33,7 +33,7 @@ export class OtpProcessor extends WorkerHost {
     // TODO: Integrar con proveedor SMS en producción.
     // Ejemplo con Twilio:
     //   await this.twilioClient.messages.create({
-    //     body: `Tu código de verificación Residash es: ${code}. Válido por ${expiresInMinutes} minutos.`,
+    //     body: `Tu código de verificación entrylink es: ${code}. Válido por ${expiresInMinutes} minutos.`,
     //     from: process.env.TWILIO_PHONE,
     //     to: `+57${phoneNumber}`,
     //   });

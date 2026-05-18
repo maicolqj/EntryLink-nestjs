@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, Matches, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, Matches } from 'class-validator';
 
 @InputType()
 export class GenerateChargesInput {
@@ -11,7 +11,8 @@ export class GenerateChargesInput {
 
   /**
    * Período de facturación en formato YYYY-MM (ej. "2025-03").
-   * Se generarán cargos para todas las configuraciones activas del complejo.
+   * Genera cargos para TODAS las FeeConfigs activas del complejo que correspondan
+   * a este período según su frecuencia.
    */
   @Field()
   @IsString()
@@ -19,13 +20,4 @@ export class GenerateChargesInput {
     message: 'El período debe tener el formato YYYY-MM (ej. 2025-03)',
   })
   period: string;
-
-  /**
-   * Si se especifica, solo genera cargos para esa configuración.
-   * Útil para cuotas extraordinarias.
-   */
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
-  feeConfigId?: string;
 }

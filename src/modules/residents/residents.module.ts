@@ -5,6 +5,7 @@ import { Resident }               from './entities/resident.entity';
 import { ResidentsService }       from './services/residents.service';
 import { ResidentsResolver }      from './resolvers/residents.resolver';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
+import { AuditModule }              from '../audit/audit.module';
 
 import { User }     from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
@@ -16,6 +17,7 @@ import { Role }     from '../roles/entities/role.entity';
     // Importamos el módulo de complejos para acceder a
     // ResidentialComplexService y UnitService (ya exportados)
     ResidentialComplexModule,
+    AuditModule,
   ],
   providers: [
     ResidentsService,

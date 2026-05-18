@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 import { ValidRoles } from '../../../roles/enums/valid-roles';
 
 /** Roles que pueden autenticarse con email + código de sistema */
@@ -12,12 +12,14 @@ export const SYSTEM_CODE_ROLES = [
 @InputType({ description: 'Credenciales para inicio de sesión con email y código de sistema' })
 export class LoginSystemCodeInput {
   @Field(() => String, { description: 'Correo electrónico del usuario' })
-  @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })
+  @IsString({ message: 'El número de identificación es requerido' })
   @IsNotEmpty()
-  email: string;
+  identity: string;
 
-  @Field(() => String, { description: 'Código de sistema asignado al usuario' })
+  @Field(() => String, { description: 'Contraseña' })
   @IsString()
-  @IsNotEmpty({ message: 'El código de sistema es obligatorio' })
-  systemCode: string;
+  @IsNotEmpty({ message: 'La contraseña es obligatoria' })
+  @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
+  @MaxLength(128, { message: 'La contraseña no puede superar 128 caracteres' })
+  password: string;
 }

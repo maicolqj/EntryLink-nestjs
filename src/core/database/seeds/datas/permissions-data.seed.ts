@@ -52,4 +52,16 @@ export const PERMISSIONS_TO_SEED = [
   { id: '1b2a3d4f-5e6a-4b7c-8d9e-0f1a2b3c4d5e', name: ValidPermissions.VIEW_NOTIFICATIONS, label: 'Ver Notificaciones', group: 'SYSTEM', isSystem: true, status: true, description: 'Leer mensajes', level: 'LOW', dependsOn: [] },
   { id: 'd9c8b7a6-f5e4-4d3c-2b1a-0f9e8d7c6b5a', name: ValidPermissions.SEND_NOTIFICATIONS, label: 'Enviar Notificaciones', group: 'SYSTEM', isSystem: true, status: true, description: 'Alertas masivas', level: 'HIGH', dependsOn: [ValidPermissions.VIEW_NOTIFICATIONS] },
   { id: 'f0e1d2c3-b4a5-4e6f-7d8c-9b0a1a2b3c4d', name: ValidPermissions.SUPERADMIN, label: 'SuperAdmin', group: 'SYSTEM', isSystem: true, status: true, description: 'Control absoluto', level: 'CRITICAL', dependsOn: [] },
+
+  // FINANZAS — GASTOS OPERATIVOS
+  { id: 'a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d', name: ValidPermissions.VIEW_EXPENSES, label: 'Ver Gastos', group: 'FINANCES', isSystem: false, status: true, description: 'Ver listado de gastos operativos del complejo', level: 'LOW', dependsOn: [] },
+  { id: 'b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e', name: ValidPermissions.MANAGE_EXPENSES, label: 'Gestionar Gastos', group: 'FINANCES', isSystem: false, status: true, description: 'Registrar y revertir gastos operativos', level: 'HIGH', dependsOn: [ValidPermissions.VIEW_EXPENSES] },
+
+  // MESSAGES
+  { id: 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f', name: ValidPermissions.VIEW_SENT_MESSAGES, label: 'Ver Mensajes Enviados', group: 'MESSAGES', isSystem: false, status: true, description: 'Historial de mensajes enviados a residentes', level: 'LOW', dependsOn: [] },
+  { id: 'd2e3f4a5-b6c7-4d8e-9f0a-1b2c3d4e5f6a', name: ValidPermissions.SEND_MESSAGE, label: 'Enviar Mensaje', group: 'MESSAGES', isSystem: false, status: true, description: 'Enviar SMS o WhatsApp a residentes del complejo', level: 'MEDIUM', dependsOn: [ValidPermissions.VIEW_SENT_MESSAGES] },
+
+  // CALL LOGS
+  { id: 'e3f4a5b6-c7d8-4e9f-0a1b-2c3d4e5f6a7b', name: ValidPermissions.VIEW_CALL_LOGS, label: 'Ver Historial de Llamadas', group: 'CALL_LOGS', isSystem: false, status: true, description: 'Ver registro de llamadas del complejo', level: 'LOW', dependsOn: [] },
+  { id: 'f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c', name: ValidPermissions.LOG_CALL, label: 'Registrar Llamada', group: 'CALL_LOGS', isSystem: false, status: true, description: 'Registrar llamada realizada o recibida', level: 'LOW', dependsOn: [] },
 ];

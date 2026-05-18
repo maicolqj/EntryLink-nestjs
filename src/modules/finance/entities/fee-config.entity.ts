@@ -1,14 +1,19 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  ManyToOne, Index,
+  ManyToOne, JoinColumn, Index,
 } from 'typeorm';
-import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
 import { FeeFrequency }       from '../enums/fee-frequency.enum';
+import { ChargeType }         from '../enums/charge-type.enum';
+import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
+import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
+import { ChargeCategory }     from './charge-category.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Unit }               from '../../residential-complex/entities/unit.entity';
 import { UnitType }           from '../../residential-complex/enums/unit-type.enum';
+import { FeeConfigTargetRules } from '../dto/inputs/fee-config-target-rules.input';
 
 /**
  * Configuración de cuota para un complejo.
@@ -43,6 +48,15 @@ export class FeeConfig {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
+  /**
+   * Monto con descuento de pronto pago (opcional).
+   * Si se define y la unidad está al día, el cargo se genera con este monto.
+   * El cron diario revierte al monto normal si no se pagó antes del vencimiento.
+   */
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  earlyPaymentAmount?: number | null;
+
   @Field(() => FeeFrequency)
   @Column({ type: 'enum', enum: FeeFrequency, default: FeeFrequency.MONTHLY })
   frequency: FeeFrequency;
@@ -51,6 +65,28 @@ export class FeeConfig {
   @Field()
   @Column({ default: 5 })
   dueDayOfMonth: number;
+
+  // ─── Tipo de cargo ────────────────────────────────────────────
+
+  @Field(() => ChargeType)
+  @Column({ type: 'enum', enum: ChargeType, default: ChargeType.MONTHLY })
+  chargeType: ChargeType;
+
+  /**
+   * Solo aplica cuando chargeType = 'LIMITED'.
+   * Número total de cuotas a generar (ej: 12 meses).
+   */
+  @Field(() => Int, { nullable: true })
+  @Column({ type: 'int', nullable: true })
+  installments?: number | null;
+
+  /**
+   * Contador interno: cuántas cuotas ya se generaron para este config.
+   * Cuando installmentsPaid >= installments, el config se desactiva automáticamente.
+   */
+  @Field(() => Int)
+  @Column({ type: 'int', default: 0 })
+  installmentsPaid: number;
 
   // ─── Alcance ──────────────────────────────────────────────────
 
@@ -70,6 +106,35 @@ export class FeeConfig {
   @Column({ default: true })
   isActive: boolean;
 
+  /** ADVANCE: vence en el mismo período. ARREARS: vence en el período siguiente. */
+  @Field(() => FeeConfigBillingMode)
+  @Column({ type: 'enum', enum: FeeConfigBillingMode, default: FeeConfigBillingMode.ADVANCE })
+  billingMode: FeeConfigBillingMode;
+
+  /** Si true, este config NO se aplica en generateCharges; debe aplicarse manualmente por unidad. */
+  @Field()
+  @Column({ default: false })
+  isOptional: boolean;
+
+  /**
+   * Reglas de targeting para configs opcionales.
+   * Si isOptional=true y targetRules está definido, generateCharges aplica la config
+   * solo a las unidades que cumplan estas reglas.
+   * Si isOptional=true y targetRules es null, la config se omite completamente.
+   */
+  @Field(() => FeeConfigTargetRules, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  targetRules: FeeConfigTargetRules | null;
+
+  /**
+   * Disparo automático de cargo cuando un vehículo pasa a ACTIVE.
+   * VEHICLE → se crea un cargo para la unidad del vehículo aprobado.
+   * null → sin disparo automático (solo generateCharges o manual).
+   */
+  @Field(() => FeeConfigTriggerType, { nullable: true })
+  @Column({ type: 'enum', enum: FeeConfigTriggerType, nullable: true })
+  triggerType: FeeConfigTriggerType | null;
+
   // ─── Multi-tenant ─────────────────────────────────────────────
 
   @Field()
@@ -80,6 +145,12 @@ export class FeeConfig {
   @Column()
   createdByUserId: string;
 
+  // ─── Categoría ───────────────────────────────────────────────
+
+  @Field(() => String, { nullable: true })
+  @Column({ type: 'uuid', nullable: true })
+  categoryId?: string;
+
   // ─── Relaciones ───────────────────────────────────────────────
 
   @Field(() => ResidentialComplex)
@@ -89,6 +160,11 @@ export class FeeConfig {
   @Field(() => Unit, { nullable: true })
   @ManyToOne(() => Unit, { eager: false, nullable: true })
   unit?: Unit;
+
+  @Field(() => ChargeCategory, { nullable: true })
+  @ManyToOne(() => ChargeCategory, { nullable: true, onDelete: 'SET NULL', eager: false })
+  @JoinColumn({ name: 'categoryId' })
+  category?: ChargeCategory;
 
   // ─── Auditoría ────────────────────────────────────────────────
 

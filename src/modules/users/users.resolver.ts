@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { UseGuards, Logger } from '@nestjs/common';
 
 import { UsersService } from './users.service';
@@ -7,6 +7,7 @@ import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
 import { UserInfoCompleteResponse } from './dto/responses/user-info-complete.response';
+import { MeResponse } from './dto/responses/me.response';
 import { UsersFilterInput } from './dto/inputs/users-filter.input';
 import { UsersListResponse } from './dto/responses/users-list.response';
 import { CreateAdminUserInput } from './dto/inputs/create-admin-user.input';
@@ -14,6 +15,7 @@ import { CreateResidentUserInput } from './dto/inputs/create-resident-user.input
 import { CreateStaffMemberInput } from './dto/inputs/create-staff-member.input';
 import { RemoveStaffMemberInput } from './dto/inputs/remove-staff-member.input';
 import { RemoveStaffMemberResponse } from './dto/responses/remove-staff-member.response';
+import { CreateStaffMemberResponse } from './dto/responses/create-staff-member.response';
 
 import { Auth } from '../shared/decorators/auth.decorator';
 import { CurrentUser, CurrentUserId } from '../shared/decorators/current-user.decorator';
@@ -34,24 +36,32 @@ export class UsersResolver {
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
   findAll(
-    @CurrentUser() user: User,
+    @CurrentUser() payload: JwtAccessPayload,
     @Args('input', { nullable: true }) filter?: UsersFilterInput,
   ): Promise<UsersListResponse> {
-    return this.usersService.findAll(filter);
+    const effectiveFilter: UsersFilterInput = {
+      ...filter,
+      complexId: filter?.complexId ?? payload.complexId,
+    };
+    return this.usersService.findAll(effectiveFilter);
   }
 
   @Query(() => UserInfoCompleteResponse, { name: 'user', nullable: true })
-  findOne(@Args('id', { type: () => String }) id: string): Promise<UserInfoCompleteResponse> {
-    return this.usersService.findOne(id);
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
+  findOne(
+    @Args('id', { type: () => String }) id: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<UserInfoCompleteResponse> {
+    return this.usersService.findOne(id, payload);
   }
 
-  @Query(() => UserInfoCompleteResponse, {
+  @Query(() => MeResponse, {
     name: 'me',
-    description: 'Perfil completo del usuario autenticado',
+    description: 'Perfil completo del usuario autenticado (usuario o complejo residencial)',
   })
   @Auth()
-  async me(@CurrentUserId() userId: string): Promise<UserInfoCompleteResponse> {
-    return this.usersService.getMyProfile(userId);
+  async me(@CurrentUser() payload: JwtAccessPayload) {
+    return this.usersService.getMyProfile(payload);
   }
 
   // ── Mutaciones de creación ─────────────────────────────────────────────
@@ -67,7 +77,7 @@ export class UsersResolver {
     @Args('input') input: CreateAdminUserInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
-    return this.usersService.createAdminUser(input, payload.sub);
+    return this.usersService.createAdminUser(input, payload.sub, payload);
   }
 
   @Mutation(() => User, {
@@ -81,10 +91,10 @@ export class UsersResolver {
     @Args('input') input: CreateResidentUserInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
-    return this.usersService.createResidentUser(input, payload.sub);
+    return this.usersService.createResidentUser(input, payload.sub, payload);
   }
 
-  @Mutation(() => User, {
+  @Mutation(() => CreateStaffMemberResponse, {
     name: 'createStaffMember',
     description:
       'Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). ' +
@@ -94,8 +104,8 @@ export class UsersResolver {
   async createStaffMember(
     @Args('input') input: CreateStaffMemberInput,
     @CurrentUser() payload: JwtAccessPayload,
-  ): Promise<User> {
-    return this.usersService.createStaffMember(input, payload.sub);
+  ): Promise<CreateStaffMemberResponse> {
+    return this.usersService.createStaffMember(input, payload.sub, payload);
   }
 
   @Mutation(() => RemoveStaffMemberResponse, {
@@ -111,7 +121,7 @@ export class UsersResolver {
     @Args('input') input: RemoveStaffMemberInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<RemoveStaffMemberResponse> {
-    return this.usersService.removeStaffMember(input, payload.sub);
+    return this.usersService.removeStaffMember(input, payload.sub, payload);
   }
 
   // ── Cambio de contraseña ─────────────────────────────────────────────────
@@ -131,12 +141,48 @@ export class UsersResolver {
   // ── Otras mutaciones ──────────────────────────────────────────────────────
 
   @Mutation(() => User)
-  updateUser(@Args('updateUserInput') updateUserInput: UpdateUserInput) {
-    return this.usersService.update(updateUserInput.id, updateUserInput);
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
+  updateUser(
+    @Args('updateUserInput') input: UpdateUserInput,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.updateUser(input, payload.complexId, payload);
   }
 
-  @Mutation(() => User)
-  removeUser(@Args('id', { type: () => Int }) id: number) {
-    return this.usersService.remove(id);
+  @Mutation(() => User, { description: 'Suspende la cuenta de un usuario' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
+  suspendUser(
+    @Args('userId') userId: string,
+    @Args('reason') reason: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.suspendUser(userId, reason, payload.complexId, payload);
+  }
+
+  @Mutation(() => User, { description: 'Reactiva un usuario suspendido' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
+  reactivateUser(
+    @Args('userId') userId: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.reactivateUser(userId, payload.complexId, payload);
+  }
+
+  @Mutation(() => User, { description: 'Elimina (soft delete) un usuario del sistema' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  deleteUser(
+    @Args('userId') userId: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.deleteUser(userId, payload);
+  }
+
+  @Mutation(() => User, { description: 'Restaura un usuario previamente eliminado (soft delete), dejándolo activo' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  restoreUser(
+    @Args('userId') userId: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.restoreUser(userId, payload);
   }
 }

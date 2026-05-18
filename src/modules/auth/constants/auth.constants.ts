@@ -33,6 +33,7 @@ export const AUTH_CONSTANTS = {
     OTP_RATE_LIMIT: 'otp-rl',
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
+    PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
   },
 
   // ── Cache TTL (segundos) ─────────────────────────────────────────────────
@@ -43,5 +44,13 @@ export const AUTH_CONSTANTS = {
     FAILED_ATTEMPTS: 900,      // 15 min
     OTP_ATTEMPTS: 1_800,       // 30 min
     OTP_RATE_LIMIT: 600,       // 10 min
+    PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
   },
+
+  // ── Reset de contraseña ──────────────────────────────────────────────────
+  PASSWORD_RESET_EXPIRY_MINUTES: 60,   // validez del token: 1 hora
+  PASSWORD_RESET_RATE_LIMIT_MAX: 3,    // máx. solicitudes por email por hora
+
+  // ── Verificación de email (registro de supervisor) ───────────────────────
+  EMAIL_VERIFICATION_EXPIRY_MINUTES: 24,  // 24 horas
 } as const;

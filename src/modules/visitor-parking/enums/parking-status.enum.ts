@@ -1,17 +1,19 @@
 import { registerEnumType } from '@nestjs/graphql';
 
-export enum ParkingStatus {
-  INSIDE    = 'INSIDE',
-  EXITED    = 'EXITED',
-  CANCELLED = 'CANCELLED',
+export enum ParkingRecordStatus {
+  OPEN            = 'OPEN',
+  PAID            = 'PAID',
+  CHARGED_TO_UNIT = 'CHARGED_TO_UNIT',
+  CANCELLED       = 'CANCELLED',
 }
 
-registerEnumType(ParkingStatus, {
-  name: 'ParkingStatus',
-  description: 'Estado del vehículo visitante en el parqueadero',
+registerEnumType(ParkingRecordStatus, {
+  name: 'ParkingRecordStatus',
+  description: 'Estado del registro de parqueadero visitante',
   valuesMap: {
-    INSIDE:    { description: 'Vehículo actualmente en el parqueadero' },
-    EXITED:    { description: 'Vehículo que ya salió (cobro generado)' },
-    CANCELLED: { description: 'Registro cancelado manualmente' },
+    OPEN:            { description: 'Vehículo dentro del parqueadero, sin liquidar' },
+    PAID:            { description: 'Cobro liquidado (efectivo o transferencia)' },
+    CHARGED_TO_UNIT: { description: 'Cobro cargado a la cuenta de la unidad visitada' },
+    CANCELLED:       { description: 'Registro anulado' },
   },
 });

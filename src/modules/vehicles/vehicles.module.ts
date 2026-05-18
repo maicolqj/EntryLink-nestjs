@@ -3,27 +3,39 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Vehicle }               from './entities/vehicle.entity';
 import { ParkingRotationConfig } from './entities/parking-rotation-config.entity';
+import { ParkingRecord }         from './entities/parking-record.entity';
 
-import { VehiclesService }  from './services/vehicles.service';
-import { VehiclesResolver } from './resolvers/vehicles.resolver';
+import { VehiclesService }    from './services/vehicles.service';
+import { VehiclesResolver }   from './resolvers/vehicles.resolver';
+import { VehiclesController } from './controllers/vehicles.controller';
+
+
+import { FeeCharge } from '../finance/entities/fee-charge.entity';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule }          from '../residents/residents.module';
+import { AuditModule }              from '../audit/audit.module';
+import { FinanceModule }            from '../finance/finance.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vehicle, ParkingRotationConfig]),
-    ResidentialComplexModule, // ResidentialComplexService + UnitService
-    ResidentsModule,          // ResidentsService
+    TypeOrmModule.forFeature([
+      Vehicle,
+      ParkingRotationConfig,
+
+      ParkingRecord,
+      FeeCharge,     // necesario para crear cargos en CHARGE_TO_UNIT
+    ]),
+    ResidentialComplexModule,
+    ResidentsModule,
+    AuditModule,
+    FinanceModule,
   ],
+  controllers: [VehiclesController],
   providers: [
     VehiclesService,
     VehiclesResolver,
   ],
-  exports: [
-    // Exportado para que el módulo de seguridad/logs pueda
-    // registrar accesos vehiculares y hacer consultas de placa
-    VehiclesService,
-  ],
+  exports: [VehiclesService],
 })
 export class VehiclesModule {}
