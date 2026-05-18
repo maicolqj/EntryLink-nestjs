@@ -19,6 +19,10 @@ import { ResidentsService }          from '../../residents/services/residents.se
 import { NotificationsService }      from '../../notifications/services/notifications.service';
 import { NotificationType }          from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
+import { SocketService }             from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent }               from '../../../core/infrastructure/socket/socket.events';
+import { CacheService }              from '../../../core/infrastructure/cache/cache.service';
+import { BK, filterKey }             from '../../../core/infrastructure/cache/business-cache.constants';
 
 @Injectable()
 export class PackagesService {
@@ -31,6 +35,8 @@ export class PackagesService {
     private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
     private readonly notificationsService: NotificationsService,
+    private readonly socketService: SocketService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -63,12 +69,19 @@ export class PackagesService {
     const pkg = this.packageRepo.create({
       ...input,
       status: PackageStatus.RECEIVED,
-      registeredByUserId: currentUser.sub,
+      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(saved.complexId));
 
-    // Notificar en tiempo real a todos los residentes activos de la unidad
+    this.socketService.emitToComplex(saved.complexId, SocketEvent.PACKAGE_REGISTERED, {
+      packageId: saved.id,
+      unitId: saved.unitId,
+      senderName: saved.senderName,
+      trackingCode: saved.trackingCode,
+    });
+
     this.notifyResidents(saved).catch(err =>
       this.logger.warn(`Error al notificar paquete ${saved.id}: ${err?.message}`),
     );
@@ -115,7 +128,13 @@ export class PackagesService {
     pkg.status     = PackageStatus.NOTIFIED;
     pkg.notifiedAt = new Date();
 
-    return this.packageRepo.save(pkg);
+    const notified = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(notified.complexId));
+    this.socketService.emitToComplex(notified.complexId, SocketEvent.PACKAGE_READY, {
+      packageId: notified.id,
+      unitId: notified.unitId,
+    });
+    return notified;
   }
 
   /**
@@ -141,12 +160,19 @@ export class PackagesService {
 
     pkg.status              = PackageStatus.DELIVERED;
     pkg.deliveredAt         = new Date();
-    pkg.deliveredByUserId   = currentUser.sub;
+    pkg.deliveredByUserId   = currentUser.entityType === 'user' ? currentUser.sub : undefined;
     if (receivedByName)     pkg.receivedByName     = receivedByName;
     if (receivedByIdentity) pkg.receivedByIdentity = receivedByIdentity;
     if (notes)              pkg.notes              = notes;
 
-    return this.packageRepo.save(pkg);
+    const delivered = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(delivered.complexId));
+    this.socketService.emitToComplex(delivered.complexId, SocketEvent.PACKAGE_DELIVERED, {
+      packageId: delivered.id,
+      unitId: delivered.unitId,
+      deliveredAt: delivered.deliveredAt,
+    });
+    return delivered;
   }
 
   /**
@@ -173,7 +199,9 @@ export class PackagesService {
     pkg.returnedAt   = new Date();
     pkg.returnReason = reason;
 
-    return this.packageRepo.save(pkg);
+    const returned = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(returned.complexId));
+    return returned;
   }
 
   /**
@@ -199,7 +227,9 @@ export class PackagesService {
     pkg.returnReason = reason; // reutilizamos el campo para el motivo
     pkg.returnedAt   = new Date();
 
-    return this.packageRepo.save(pkg);
+    const lost = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(lost.complexId));
+    return lost;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -219,6 +249,10 @@ export class PackagesService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
+    const cacheKey = BK.pkg.list(complexId, page, limit, filterKey(filters ?? {}));
+    const cached = await this.cacheService.get<PaginatedPackagesResponse>({ key: cacheKey });
+    if (cached) return cached;
+
     const qb = this.packageRepo
       .createQueryBuilder('pkg')
       .where('pkg.complexId = :complexId', { complexId })
@@ -231,7 +265,9 @@ export class PackagesService {
     if (filters.receivedFrom) qb.andWhere('pkg.receivedAt >= :from', { from: new Date(filters.receivedFrom) });
     if (filters.receivedUntil) qb.andWhere('pkg.receivedAt <= :until', { until: new Date(filters.receivedUntil) });
 
-    qb.orderBy('pkg.receivedAt', 'DESC');
+    qb.leftJoinAndSelect('pkg.unit',    'unit')
+      .leftJoinAndSelect('pkg.complex', 'complex')
+      .orderBy('pkg.receivedAt', 'DESC');
 
     const totalItems = await qb.getCount();
     const items = await qb
@@ -241,7 +277,7 @@ export class PackagesService {
 
     const totalPages = Math.ceil(totalItems / limit);
 
-    return {
+    const result: PaginatedPackagesResponse = {
       items,
       pagination: {
         currentPage:    page,
@@ -252,6 +288,8 @@ export class PackagesService {
         hasPreviousPage: page > 1,
       },
     };
+    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.pkg.TTL } });
+    return result;
   }
 
   /**
@@ -265,14 +303,22 @@ export class PackagesService {
   ): Promise<Package[]> {
     await this.complexService.findById(complexId, currentUser);
 
-    return this.packageRepo.find({
+    const cacheKey = BK.pkg.pending(complexId, unitId);
+    const cached = await this.cacheService.get<Package[]>({ key: cacheKey });
+    if (cached) return cached;
+
+    const pending = await this.packageRepo.find({
       where: [
         { unitId, complexId, status: PackageStatus.RECEIVED },
         { unitId, complexId, status: PackageStatus.NOTIFIED },
         { unitId, complexId, status: PackageStatus.READY_FOR_PICKUP },
       ],
+      relations: ['unit', 'complex'],
       order: { receivedAt: 'ASC' },
     });
+
+    await this.cacheService.set({ key: cacheKey, data: pending, options: { ttl: BK.pkg.TTL } });
+    return pending;
   }
 
   /**
@@ -287,6 +333,14 @@ export class PackagesService {
     return pkg;
   }
 
+  /**
+   * Actualiza la URL de la foto del paquete (llamado desde el controller REST tras subir a R2).
+   */
+  async updatePhotoUrl(packageId: string, photoUrl: string): Promise<Package> {
+    await this.packageRepo.update(packageId, { photoUrl });
+    return this.findByIdOrFail(packageId);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // HELPERS PRIVADOS
   // ─────────────────────────────────────────────────────────────────────────────
@@ -294,6 +348,7 @@ export class PackagesService {
   private async findByIdOrFail(packageId: string): Promise<Package> {
     const pkg = await this.packageRepo.findOne({
       where: { id: packageId, deletedAt: null as any },
+      relations: ['unit', 'complex'],
     });
     if (!pkg) {
       throw new CustomError({

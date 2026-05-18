@@ -12,7 +12,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   getRequest(context: ExecutionContext) {
     const ctx = GqlExecutionContext.create(context);
-    return ctx.getContext().req;
+    const gqlCtx = ctx.getContext();
+    // Para subscriptions WebSocket (graphql-ws) req no existe;
+    // devolvemos un objeto sintético con el user ya autenticado en onConnect.
+    return gqlCtx.req ?? { user: gqlCtx.user };
   }
 
   canActivate(context: ExecutionContext) {

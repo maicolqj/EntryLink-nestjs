@@ -25,6 +25,9 @@ export enum NotificationType {
   RESIDENT_REJECTED      = 'RESIDENT_REJECTED',      // Solicitud de residencia rechazada
   RESIDENT_PENDING       = 'RESIDENT_PENDING',       // Nueva solicitud de residencia (admin)
 
+  // ── Parqueadero visitante ──────────────────────────────────────
+  PARKING_ASSIGNED       = 'PARKING_ASSIGNED',       // Cargo de parqueadero visitante generado a la unidad
+
   // ── Vehículos ─────────────────────────────────────────────────
   VEHICLE_APPROVED       = 'VEHICLE_APPROVED',       // Vehículo aprobado
   VEHICLE_REJECTED       = 'VEHICLE_REJECTED',       // Vehículo rechazado
@@ -35,11 +38,22 @@ export enum NotificationType {
   PAYMENT_DUE            = 'PAYMENT_DUE',            // Cuota próxima a vencer
   PAYMENT_OVERDUE        = 'PAYMENT_OVERDUE',        // Cuota vencida
   PAYMENT_RECEIVED       = 'PAYMENT_RECEIVED',       // Pago registrado
+  PAYMENT_CONFIRMED      = 'PAYMENT_CONFIRMED',      // Pago confirmado (automático tras registrar pago)
+  CHARGE_ADDED           = 'CHARGE_ADDED',           // Nuevo cargo generado en bulk
+  DIRECT_CHARGE          = 'DIRECT_CHARGE',          // Cargo directo aplicado manualmente a una unidad
+
+  // ── Seguridad / Emergencias ────────────────────────────────────
+  PANIC_ALERT            = 'PANIC_ALERT',            // Alerta de pánico activada por residente o guardia
 
   // ── Sistema / Complejo ─────────────────────────────────────────
   SYSTEM_ANNOUNCEMENT    = 'SYSTEM_ANNOUNCEMENT',    // Comunicado general del complejo
   COMPLEX_ALERT          = 'COMPLEX_ALERT',          // Alerta de emergencia / corte de servicios
   AMENITY_REMINDER       = 'AMENITY_REMINDER',       // Recordatorio de reserva de zona común
+
+  // ── Supervisores / Solicitudes de acceso ───────────────────────
+  ACCESS_REQUEST_APPROVED    = 'ACCESS_REQUEST_APPROVED',    // Solicitud de acceso aprobada por el admin
+  ACCESS_REQUEST_REJECTED    = 'ACCESS_REQUEST_REJECTED',    // Solicitud de acceso rechazada por el admin
+  ACCESS_REVOKED_INACTIVITY  = 'ACCESS_REVOKED_INACTIVITY',  // Acceso revocado por 30 días sin check-in
 }
 
 registerEnumType(NotificationType, {

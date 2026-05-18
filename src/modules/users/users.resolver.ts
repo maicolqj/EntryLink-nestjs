@@ -47,8 +47,12 @@ export class UsersResolver {
   }
 
   @Query(() => UserInfoCompleteResponse, { name: 'user', nullable: true })
-  findOne(@Args('id', { type: () => String }) id: string): Promise<UserInfoCompleteResponse> {
-    return this.usersService.findOne(id);
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
+  findOne(
+    @Args('id', { type: () => String }) id: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<UserInfoCompleteResponse> {
+    return this.usersService.findOne(id, payload);
   }
 
   @Query(() => MeResponse, {

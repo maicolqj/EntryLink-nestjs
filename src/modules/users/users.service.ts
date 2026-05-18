@@ -33,8 +33,8 @@ import { CustomError } from '../shared/utils/errors.utils';
 import { GeneralErrorCode, UserErrorCode } from '../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../auth/interfaces/jwt-payload.interface';
 import { GraphQLError } from 'graphql/error';
-import { AuditService }    from '../audit/services/audit.service';
-import { AuditAction }     from '../audit/enums/audit-action.enum';
+import { AuditService } from '../audit/services/audit.service';
+import { AuditAction } from '../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
 
 /** Roles que inician sesión con email + contraseña */
@@ -77,7 +77,8 @@ export class UsersService {
     private readonly dataSource: DataSource,
     private readonly excelImportProducer: ExcelImportProducer,
     private readonly auditService: AuditService,
-  ) {}
+  ) { }
+
 
   // ── Consultas ────────────────────────────────────────────────────────────
 
@@ -86,7 +87,8 @@ export class UsersService {
 
     const where: Record<string, any> = {};
     if (complexId) where.complexId = complexId;
-    if (status)    where.status    = status;
+
+    if (status) where.status = status;
 
     const [items, total] = await this.userRepo.findAndCount({
       where,
@@ -111,7 +113,7 @@ export class UsersService {
     if (payload.entityType === 'complex') {
       const complex = await this.complexRepo.findOne({
         where: { id: payload.sub },
-        relations: ['owner'],
+        relations: ['owner', 'owner.userRoles', 'owner.userRoles.role'],
       });
 
       if (!complex || complex.deletedAt) {
@@ -141,15 +143,21 @@ export class UsersService {
     return user;
   }
 
-  async findOne(id: string): Promise<UserInfoCompleteResponse | null> {
+  async findOne(id: string, caller?: JwtAccessPayload): Promise<UserInfoCompleteResponse | null> {
     try {
-      const user = await this.userRepo
+      const qb = this.userRepo
         .createQueryBuilder('user')
         .leftJoinAndSelect('user.userRoles', 'userRoles')
         .leftJoinAndSelect('userRoles.role', 'role')
         .leftJoinAndSelect('role.permissions', 'permissions')
-        .where('user.id = :id', { id })
-        .getOne();
+        .where('user.id = :id', { id });
+
+      const isSuperAdmin = caller?.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+      if (!isSuperAdmin && caller?.complexId) {
+        qb.andWhere('user.complexId = :complexId', { complexId: caller.complexId });
+      }
+
+      const user = await qb.getOne();
 
       if (!user) {
         throw new CustomError({
@@ -222,15 +230,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        user.id,
-        action:          AuditAction.CREATE,
-        newValue:        { id: user.id, email: user.email, role: input.role, complexId: input.complexId },
-        performedById:   currentUser.sub,
+
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.CREATE,
+        newValue: { id: user.id, email: user.email, role: input.role, complexId: input.complexId },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       input.complexId,
-        description:     `Usuario administrativo creado: ${user.email} — rol: ${input.role}`,
+        complexId: input.complexId,
+        description: `Usuario administrativo creado: ${user.email} — rol: ${input.role}`,
       });
     }
 
@@ -268,7 +277,7 @@ export class UsersService {
     const residentRole = await this.findRoleOrFail(ValidRoles.RESIDENT_ROL);
     const systemCode = this.generateSystemCode();
     const email = input.email?.trim().toLowerCase()
-      ?? `resident.${input.phoneNumber}@residash.local`;
+      ?? `resident.${input.phoneNumber}@entrylink.local`;
 
     const user = await this.dataSource.transaction(async (manager) => {
       const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
@@ -321,15 +330,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        user.id,
-        action:          AuditAction.CREATE,
-        newValue:        { id: user.id, phoneNumber: input.phoneNumber, unitId: input.unitId, complexId: input.complexId },
-        performedById:   currentUser.sub,
+
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.CREATE,
+        newValue: { id: user.id, phoneNumber: input.phoneNumber, unitId: input.unitId, complexId: input.complexId },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       input.complexId,
-        description:     `Residente registrado: ${user.name} ${user.lastName} — unidad: ${input.unitId}`,
+        complexId: input.complexId,
+        description: `Residente registrado: ${user.name} ${user.lastName} — unidad: ${input.unitId}`,
       });
     }
 
@@ -364,7 +374,7 @@ export class UsersService {
 
     // ── PASO 1: buscar usuario por email ─────────────────────────────────
     const existingUser = await this.userRepo.findOne({
-      where: { email: input.identityNumber },
+      where: { email: normalizedEmail },
       relations: ['userRoles', 'userRoles.role'],
     });
 
@@ -387,43 +397,54 @@ export class UsersService {
           identityVerified:         false,
           acceptTermsAdnConditions: false,
           acceptsMarketing:         false,
+
         });
         const saved = await manager.save(User, newUser);
 
         await manager.save(
           manager.create(UserRole, {
-            user:      { id: saved.id },
-            role:      { id: role.id },
+
+            user: { id: saved.id },
+            role: { id: role.id },
             isPrimary: true,
           }),
         );
 
         await manager.save(
           manager.create(UserComplexAssignment, {
-            userId:    saved.id,
+            userId: saved.id,
             complexId: input.complexId,
-            role:      input.role,
-            status:    AssignmentStatus.ACTIVE,
+            role: input.role,
+            status: AssignmentStatus.ACTIVE,
           }),
         );
 
         return saved;
+
       });
 
       this.logger.log(`Personal creado: ${user.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        user.id,
-        action:          AuditAction.CREATE,
-        newValue:        { id: user.id, email: normalizedEmail, role: input.role, complexId: input.complexId },
-        performedById:   currentUser?.sub ?? adminUserId,
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.CREATE,
+        newValue: { id: user.id, email: normalizedEmail, role: input.role, complexId: input.complexId },
+        performedById: currentUser?.sub ?? adminUserId,
         performedByName: currentUser?.email,
         performedByRole: currentUser?.roles?.[0] ?? '',
-        complexId:       input.complexId,
-        description:     `Personal creado: ${normalizedEmail} — rol: ${input.role}`,
+        complexId: input.complexId,
+        description: `Personal creado: ${normalizedEmail} — rol: ${input.role}`,
       });
 
-      return { id: user.id, name: user.name, lastName: user.lastName, email: user.email, phoneNumber: user.phoneNumber, complexId: user.complexId, status: user.status, action: StaffMemberAction.CREATED };
+      return {
+        id: user.id,
+        name: user.name,
+        lastName: user.lastName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        identity: user.identity,
+        complexId: user.complexId, status: user.status, action: StaffMemberAction.CREATED
+      };
     }
 
     // ── PASO 3: usuario EXISTENTE — rama según rol ────────────────────────
@@ -445,11 +466,13 @@ export class UsersService {
       const updates: Partial<User> = { complexId: input.complexId };
       const needsRestore = existingUser.status === UserStatus.INACTIVE || existingUser.status === UserStatus.DELETED;
       if (needsRestore) {
-        updates.status    = UserStatus.ACTIVE;
+
+        updates.status = UserStatus.ACTIVE;
         updates.deletedAt = null as any;
       }
       if (input.phoneNumber && !existingUser.phoneNumber) updates.phoneNumber = input.phoneNumber;
-      if (input.identityNumber && !existingUser.identity) updates.identity    = input.identityNumber;
+      if (input.identityNumber && !existingUser.identity) updates.identity = input.identityNumber;
+
 
       await this.dataSource.transaction(async (manager) => {
         await manager.update(User, existingUser.id, updates);
@@ -463,10 +486,11 @@ export class UsersService {
 
         await manager.save(
           manager.create(UserComplexAssignment, {
-            userId:    existingUser.id,
+
+            userId: existingUser.id,
             complexId: input.complexId,
-            role:      input.role,
-            status:    AssignmentStatus.ACTIVE,
+            role: input.role,
+            status: AssignmentStatus.ACTIVE,
           }),
         );
       });
@@ -474,27 +498,38 @@ export class UsersService {
       const reintegratedUser = { ...existingUser, ...updates };
       this.logger.log(`Personal reintegrado: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        existingUser.id,
-        action:          AuditAction.ACTIVATE,
-        newValue:        { complexId: input.complexId, role: input.role, action: StaffMemberAction.REINTEGRATED },
-        performedById:   currentUser?.sub ?? adminUserId,
+
+        entityType: AuditEntityType.User,
+        entityId: existingUser.id,
+        action: AuditAction.ACTIVATE,
+        newValue: { complexId: input.complexId, role: input.role, action: StaffMemberAction.REINTEGRATED },
+        performedById: currentUser?.sub ?? adminUserId,
         performedByName: currentUser?.email,
         performedByRole: currentUser?.roles?.[0] ?? '',
-        complexId:       input.complexId,
-        description:     `Personal reintegrado: ${existingUser.email} — rol: ${input.role}`,
+        complexId: input.complexId,
+        description: `Personal reintegrado: ${existingUser.email} — rol: ${input.role}`,
       });
 
-      return { id: existingUser.id, name: reintegratedUser.name, lastName: reintegratedUser.lastName, email: existingUser.email, phoneNumber: reintegratedUser.phoneNumber ?? existingUser.phoneNumber, complexId: input.complexId, status: reintegratedUser.status ?? existingUser.status, action: StaffMemberAction.REINTEGRATED };
+      return {
+        id: existingUser.id,
+        name: reintegratedUser.name,
+        lastName: reintegratedUser.lastName,
+        email: existingUser.email,
+        phoneNumber: reintegratedUser.phoneNumber ?? existingUser.phoneNumber,
+        identity: reintegratedUser.identity,
+        complexId: input.complexId,
+        status: reintegratedUser.status ?? existingUser.status, action: StaffMemberAction.REINTEGRATED
+      };
     }
 
     // ── SUPERVISOR_ROL / ACCOUNTANT_ROL: pueden estar en N complejos ─────
     const existingActiveAssignment = await this.assignmentRepo.findOne({
       where: {
-        userId:    existingUser.id,
+
+        userId: existingUser.id,
         complexId: input.complexId,
-        role:      input.role,
-        status:    AssignmentStatus.ACTIVE,
+        role: input.role,
+        status: AssignmentStatus.ACTIVE,
       },
     });
 
@@ -512,28 +547,39 @@ export class UsersService {
 
       await manager.save(
         manager.create(UserComplexAssignment, {
-          userId:    existingUser.id,
-          complexId: input.complexId,
-          role:      input.role,
-          status:    AssignmentStatus.ACTIVE,
+        userId: existingUser.id,
+        complexId: input.complexId,
+        role: input.role,
+        status: AssignmentStatus.ACTIVE,
         }),
       );
     });
 
     this.logger.log(`Personal asignado a nuevo complejo: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
     void this.auditService.log({
-      entityType:      AuditEntityType.User,
-      entityId:        existingUser.id,
-      action:          AuditAction.UPDATE,
-      newValue:        { complexId: input.complexId, role: input.role, action: StaffMemberAction.ADDED_TO_COMPLEX },
-      performedById:   currentUser?.sub ?? adminUserId,
+
+      entityType: AuditEntityType.User,
+      entityId: existingUser.id,
+      action: AuditAction.UPDATE,
+      newValue: { complexId: input.complexId, role: input.role, action: StaffMemberAction.ADDED_TO_COMPLEX },
+      performedById: currentUser?.sub ?? adminUserId,
       performedByName: currentUser?.email,
       performedByRole: currentUser?.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Personal asignado a complejo adicional: ${existingUser.email} — rol: ${input.role}`,
+      complexId: input.complexId,
+      description: `Personal asignado a complejo adicional: ${existingUser.email} — rol: ${input.role}`,
     });
 
-    return { id: existingUser.id, name: existingUser.name, lastName: existingUser.lastName, email: existingUser.email, phoneNumber: existingUser.phoneNumber, complexId: existingUser.complexId, status: existingUser.status, action: StaffMemberAction.ADDED_TO_COMPLEX };
+    return {
+      id: existingUser.id,
+      name: existingUser.name,
+      lastName: existingUser.lastName,
+      email: existingUser.email,
+      phoneNumber: existingUser.phoneNumber,
+      identity: existingUser.identity,
+      complexId: existingUser.complexId,
+      status: existingUser.status,
+      action: StaffMemberAction.ADDED_TO_COMPLEX
+    };
   }
 
   // ── Eliminación de personal del complejo ─────────────────────────────────
@@ -578,10 +624,10 @@ export class UsersService {
     // 2. Buscar la asignación activa específica (userId + complexId + role)
     const assignment = await this.assignmentRepo.findOne({
       where: {
-        userId:    input.userId,
+        userId: input.userId,
         complexId: input.complexId,
-        role:      input.role,
-        status:    AssignmentStatus.ACTIVE,
+        role: input.role,
+        status: AssignmentStatus.ACTIVE,
       },
     });
 
@@ -607,9 +653,9 @@ export class UsersService {
     const otherActiveAssignmentsForRole = await this.assignmentRepo.count({
       where: {
         userId: input.userId,
-        role:   input.role,
+        role: input.role,
         status: AssignmentStatus.ACTIVE,
-        id:     Not(assignment.id),
+        id: Not(assignment.id),
       },
     });
 
@@ -618,7 +664,7 @@ export class UsersService {
       where: {
         userId: input.userId,
         status: AssignmentStatus.ACTIVE,
-        id:     Not(assignment.id),
+        id: Not(assignment.id),
       },
     });
 
@@ -632,7 +678,7 @@ export class UsersService {
     await this.dataSource.transaction(async (manager) => {
       // a. Marcar asignación como REMOVED
       await manager.update(UserComplexAssignment, assignment.id, {
-        status:    AssignmentStatus.REMOVED,
+        status: AssignmentStatus.REMOVED,
         removedAt: new Date(),
       });
 
@@ -672,16 +718,17 @@ export class UsersService {
       `Personal removido: usuario ${input.userId} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
     );
     void this.auditService.log({
-      entityType:      AuditEntityType.User,
-      entityId:        input.userId,
-      action:          AuditAction.UPDATE,
-      previousValue:   { role: input.role, complexId: input.complexId, status: AssignmentStatus.ACTIVE },
-      newValue:        { role: input.role, complexId: input.complexId, status: AssignmentStatus.REMOVED, action },
-      performedById:   currentUser?.sub ?? adminUserId,
+
+      entityType: AuditEntityType.User,
+      entityId: input.userId,
+      action: AuditAction.UPDATE,
+      previousValue: { role: input.role, complexId: input.complexId, status: AssignmentStatus.ACTIVE },
+      newValue: { role: input.role, complexId: input.complexId, status: AssignmentStatus.REMOVED, action },
+      performedById: currentUser?.sub ?? adminUserId,
       performedByName: currentUser?.email,
       performedByRole: currentUser?.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Rol ${input.role} revocado del usuario ${input.userId} en complejo ${input.complexId}`,
+      complexId: input.complexId,
+      description: `Rol ${input.role} revocado del usuario ${input.userId} en complejo ${input.complexId}`,
     });
 
     return { success: true, action, message };
@@ -719,8 +766,9 @@ export class UsersService {
       });
     }
 
-    if (input.name !== undefined)        user.name        = input.name;
-    if (input.lastName !== undefined)    user.lastName    = input.lastName;
+    if (input.name !== undefined) user.name = input.name;
+    if (input.lastName !== undefined) user.lastName = input.lastName;
+
     if (input.phoneNumber !== undefined) user.phoneNumber = input.phoneNumber;
 
     if (input.role !== undefined) {
@@ -749,15 +797,15 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        user.id,
-        action:          AuditAction.UPDATE,
-        newValue:        { name: input.name, lastName: input.lastName, phoneNumber: input.phoneNumber, role: input.role },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.UPDATE,
+        newValue: { name: input.name, lastName: input.lastName, phoneNumber: input.phoneNumber, role: input.role },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       user.complexId,
-        description:     `Usuario actualizado: ${user.email}`,
+        complexId: user.complexId,
+        description: `Usuario actualizado: ${user.email}`,
       });
     }
 
@@ -800,16 +848,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        userId,
-        action:          AuditAction.SUSPEND,
-        previousValue:   { status: UserStatus.ACTIVE },
-        newValue:        { status: UserStatus.SUSPENDED, reason },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.User,
+        entityId: userId,
+        action: AuditAction.SUSPEND,
+        previousValue: { status: UserStatus.ACTIVE },
+        newValue: { status: UserStatus.SUSPENDED, reason },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       user.complexId,
-        description:     `Usuario suspendido: ${user.email} — motivo: ${reason}`,
+        complexId: user.complexId,
+        description: `Usuario suspendido: ${user.email} — motivo: ${reason}`,
       });
     }
 
@@ -850,16 +898,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        userId,
-        action:          AuditAction.ACTIVATE,
-        previousValue:   { status: UserStatus.SUSPENDED },
-        newValue:        { status: UserStatus.ACTIVE },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.User,
+        entityId: userId,
+        action: AuditAction.ACTIVATE,
+        previousValue: { status: UserStatus.SUSPENDED },
+        newValue: { status: UserStatus.ACTIVE },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       user.complexId,
-        description:     `Usuario reactivado: ${user.email}`,
+        complexId: user.complexId,
+        description: `Usuario reactivado: ${user.email}`,
       });
     }
 
@@ -893,16 +941,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        userId,
-        action:          AuditAction.RESTORE,
-        previousValue:   { status: UserStatus.DELETED },
-        newValue:        { status: UserStatus.ACTIVE },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.User,
+        entityId: userId,
+        action: AuditAction.RESTORE,
+        previousValue: { status: UserStatus.DELETED },
+        newValue: { status: UserStatus.ACTIVE },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       user.complexId,
-        description:     `Usuario restaurado: ${user.email}`,
+        complexId: user.complexId,
+        description: `Usuario restaurado: ${user.email}`,
       });
     }
 
@@ -950,16 +998,16 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-        entityType:      AuditEntityType.User,
-        entityId:        userId,
-        action:          AuditAction.DELETE,
-        previousValue:   { status: user.status },
-        newValue:        { status: UserStatus.DELETED, deletedAt: updated.deletedAt },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.User,
+        entityId: userId,
+        action: AuditAction.DELETE,
+        previousValue: { status: user.status },
+        newValue: { status: UserStatus.DELETED, deletedAt: updated.deletedAt },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       user.complexId,
-        description:     `Usuario eliminado (soft-delete): ${user.email}`,
+        complexId: user.complexId,
+        description: `Usuario eliminado (soft-delete): ${user.email}`,
       });
     }
 
@@ -1089,6 +1137,22 @@ export class UsersService {
         `El número de celular '${phoneNumber}' ya está registrado en el sistema`,
       );
     }
+  }
+
+  async updateProfilePicture(userId: string, url: string): Promise<User> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    await this.userRepo.update(userId, { profilePicture: url });
+    user.profilePicture = url;
+    return user;
   }
 
   private async findRoleOrFail(roleName: ValidRoles): Promise<Role> {

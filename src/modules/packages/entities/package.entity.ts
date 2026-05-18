@@ -89,6 +89,13 @@ export class Package {
   @Column({ nullable: true })
   maxStorageDays?: number;
 
+  // ─── Destinatario ─────────────────────────────────────────────────
+
+  /** Nombre de la persona dentro de la unidad que debe recibir el paquete */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  recipientName?: string;
+
   // ─── Firma de entrega ─────────────────────────────────────────────
 
   /** Nombre de quien retiró el paquete (puede diferir del titular de la unidad) */
@@ -124,10 +131,10 @@ export class Package {
 
   // ─── FK auditoria ─────────────────────────────────────────────────
 
-  /** Usuario (portero/guarda) que registró la recepción */
-  @Field()
-  @Column()
-  registeredByUserId: string;
+  /** Usuario (portero/guarda) que registró la recepción. Null cuando lo registra COMPLEX_ROL directamente. */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  registeredByUserId?: string;
 
   /** Usuario que confirmó la entrega */
   @Field(() => String, { nullable: true })

@@ -16,13 +16,12 @@ import { ValidRoles } from '../../../roles/enums/valid-roles';
 /** Roles que el administrador del complejo puede crear */
 export const STAFF_ROLES = [
   ValidRoles.SECURITY_ROL,
-  ValidRoles.SUPERVISOR_ROL,
   ValidRoles.ACCOUNTANT_ROL,
 ] as const;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-@InputType({ description: 'Datos para crear un miembro del personal del complejo (guardia, supervisor, contador)' })
+@InputType({ description: 'Datos para crear un miembro del personal del complejo (guardia o contador)' })
 export class CreateStaffMemberInput {
   @Field(() => String)
   @IsString()
@@ -42,6 +41,12 @@ export class CreateStaffMemberInput {
   @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
   phoneNumber: string;
 
+
+  @Field(() => String)
+  @IsString()
+  @IsNotEmpty()
+  identity: string;
+
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
@@ -53,15 +58,15 @@ export class CreateStaffMemberInput {
   @IsNotEmpty()
   email: string;
 
-  @Field(() => String)
+  @Field(() => String, {nullable: true})
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MinLength(8)
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
     message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
-  password: string;
+  password?: string;
 
   @Field(() => String, { description: 'ID del complejo al que se asigna el personal' })
   @IsUUID('4')
@@ -69,7 +74,7 @@ export class CreateStaffMemberInput {
   complexId: string;
 
   @Field(() => ValidRoles, {
-    description: 'Rol a asignar: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL',
+    description: 'Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL',
   })
   @IsEnum(ValidRoles)
   @IsNotEmpty()

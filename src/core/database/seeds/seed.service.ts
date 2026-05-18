@@ -1,9 +1,10 @@
 
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { seedPermissions } from './permissions.seed';
-import { seedRoles } from './roles.seed';
-import { runUserSeed } from './users.seed';
+import { seedPermissions }     from './permissions.seed';
+import { seedRoles }           from './roles.seed';
+import { runUserSeed }         from './users.seed';
+import { seedSpecialNumbers }  from './special-numbers.seed';
 // import { seedRoles } from './seed-roles';
 // import seedSystemCategories from './seed-categories';
 
@@ -17,7 +18,7 @@ export class SeedService {
    */
   async runPermissionsSeed(): Promise<void> {
     console.log('\n🌱 Ejecutando seed de permisos...');
-    await seedPermissions(this.dataSource);
+    await seedPermissions(this.dataSource); 
     console.log('✅ Seed de permisos completado\n');
   }
 
@@ -56,6 +57,15 @@ export class SeedService {
       console.error('❌ Error ejecutando seeds:', error);
       throw error;
     }
+  }
+
+  /**
+   * Ejecutar seed de números especiales globales (creados por SUPER_ADMIN)
+   */
+  async runSpecialNumbersSeed(): Promise<void> {
+    console.log('\n🌱 Ejecutando seed de números especiales globales...');
+    await seedSpecialNumbers(this.dataSource);
+    console.log('✅ Seed de números especiales completado\n');
   }
 
   /**

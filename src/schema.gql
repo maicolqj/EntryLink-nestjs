@@ -106,6 +106,9 @@ enum ValidPermissions {
   REMOVE_VEHICLE
   CHECK_PLATE
   MANAGE_PARKING_ROTATION
+  CONFIGURE_ROTATION
+  EXECUTE_ROTATION
+  VIEW_ROTATION
   VIEW_FEE_CONFIGS
   MANAGE_FEE_CONFIGS
   VIEW_CHARGES
@@ -116,10 +119,415 @@ enum ValidPermissions {
   REVERSE_PAYMENT
   VIEW_ACCOUNT_BALANCE
   VIEW_FINANCIAL_REPORTS
+  VIEW_EXPENSES
+  MANAGE_EXPENSES
   VIEW_NOTES
   CREATE_NOTE
   DELETE_NOTE
+  VIEW_CALL_LOGS
+  LOG_CALL
+  VIEW_SENT_MESSAGES
+  SEND_MESSAGE
+  VIEW_SPECIAL_NUMBERS
+  CREATE_SPECIAL_NUMBER
+  EDIT_SPECIAL_NUMBER
+  DELETE_SPECIAL_NUMBER
   SUPERADMIN
+}
+
+"""Unidad habitable dentro de un edificio o complejo"""
+type Unit {
+  id: String!
+
+  """
+  Número o identificador de la unidad. Ej: "101", "B-202"
+  """
+  number: String!
+
+  """Piso en el que se ubica la unidad"""
+  floor: Int!
+
+  """Tipo de unidad"""
+  type: UnitType!
+
+  """Estado de disponibilidad"""
+  status: UnitStatus!
+
+  """Área en metros cuadrados"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero asignados"""
+  parkingSpots: Int!
+
+  """Cuartos útiles o bodegas asignadas"""
+  storageRooms: Int!
+
+  """Descripción u observaciones adicionales"""
+  description: String
+
+  """ID del complejo al que pertenece"""
+  complexId: String!
+
+  """ID de la torre/edificio (null si complejo sin torres)"""
+  buildingId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+
+  """Torre o edificio contenedor"""
+  building: Building
+}
+
+"""Tipo de unidad dentro del complejo"""
+enum UnitType {
+  APARTMENT
+  HOUSE
+  OFFICE
+  STUDIO
+  PENTHOUSE
+  COMMERCIAL
+  WAREHOUSE
+  VEHICLE_UNIT
+}
+
+"""Estado de disponibilidad de la unidad"""
+enum UnitStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  DISABLED
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+"""Torre o edificio dentro de un complejo"""
+type Building {
+  id: String!
+
+  """
+  Nombre de la torre/edificio. Ej: "Torre A"
+  """
+  name: String!
+
+  """Descripción opcional"""
+  description: String
+
+  """Número total de pisos"""
+  floors: Int!
+
+  """Estado activo/inactivo"""
+  status: Boolean!
+
+  """ID del complejo al que pertenece"""
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Complejo al que pertenece"""
+  complex: ResidentialComplex
+  units: [Unit!]!
+}
+
+"""Complejo residencial del sistema"""
+type ResidentialComplex {
+  id: String!
+
+  """Nombre del complejo"""
+  name: String!
+
+  """Slug único derivado del nombre"""
+  slug: String!
+
+  """Descripción del complejo"""
+  description: String
+
+  """Dirección principal del complejo"""
+  address: String
+
+  """Ciudad"""
+  city: String
+
+  """Departamento o estado"""
+  state: String
+
+  """País"""
+  country: String!
+
+  """Código postal"""
+  zipCode: String
+
+  """Latitud GPS del complejo para validación de presencia"""
+  latitude: Float
+
+  """Longitud GPS del complejo para validación de presencia"""
+  longitude: Float
+
+  """Radio en metros para validar presencia GPS (por defecto 200 m)"""
+  gpsRadius: Int
+
+  """Tipo de complejo residencial"""
+  type: ComplexType!
+
+  """Plan de suscripción activo"""
+  plan: ComplexPlan!
+
+  """Estado operativo del complejo"""
+  status: ComplexStatus!
+
+  """token version"""
+  tokenVersion: String
+
+  """Máximo de unidades permitidas por el plan"""
+  maxUnits: Int!
+
+  """CountryCode"""
+  countryCode: Country!
+
+  """Teléfono de administración"""
+  phoneNumber: String
+
+  """Email administrativo"""
+  email: String
+
+  """Password"""
+  password: String
+
+  """Sitio web"""
+  website: String
+
+  """NIT o identificación fiscal"""
+  nit: String
+
+  """ID del usuario representante legal"""
+  legalRepresentativeId: String
+
+  """Date until which the account is blocked due to failed attempts"""
+  failedLoginAttempts: DateTime
+
+  """Date until which the account is blocked due to failed attempts"""
+  accountLockedUntil: DateTime
+
+  """Total de unidades declaradas al registrar"""
+  totalUnits: Int
+
+  """Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)"""
+  numberOfTowers: Int
+
+  """Nombre del representante legal"""
+  legalRepresentativeName: String
+
+  """URL del RUT del complejo (R2)"""
+  rutFileUrl: String
+
+  """URL del documento del representante legal (R2)"""
+  legalRepDocumentUrl: String
+
+  """URL del logo del complejo"""
+  logoUrl: String
+
+  """URL de imagen de portada"""
+  coverUrl: String
+
+  """Date of last password change"""
+  lastPasswordChange: DateTime
+
+  """Indica si el usuario tiene contraseña establecida"""
+  passwordSet: Boolean!
+
+  """Configuración avanzada del complejo"""
+  settings: JSON
+
+  """
+  Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.
+  """
+  enabledModules: [String!]
+
+  """ID del propietario/administrador principal"""
+  ownerId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+
+  """Propietario/administrador principal"""
+  owner: User
+  legalRepresentative: User
+
+  """Torres o edificios del complejo"""
+  buildings: [Building!]
+
+  """Rol fijo del complejo residencial"""
+  roles: [ValidRoles!]!
+}
+
+"""Tipo de complejo residencial"""
+enum ComplexType {
+  """Conjunto cerrado de apartamentos"""
+  APARTMENT_COMPLEX
+
+  """Urbanización de casas"""
+  HOUSES_COMMUNITY
+
+  """Uso mixto residencial apartamentos y casas"""
+  MIXED_COMPLEX
+}
+
+"""Plan de suscripción del complejo residencial"""
+enum ComplexPlan {
+  """Gratuito, hasta 10 unidades"""
+  FREE
+
+  """Básico, hasta 50 unidades"""
+  BASIC
+
+  """Pro, hasta 200 unidades"""
+  PRO
+
+  """Enterprise, ilimitado"""
+  ENTERPRISE
+}
+
+"""Estado operativo del complejo residencial"""
+enum ComplexStatus {
+  PENDING_REVIEW
+  PENDING_SETUP
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+"""Roles de la paltaforma"""
+enum ValidRoles {
+  SUPER_ADMIN_ROL
+  COMPILANCE_OFFICER_ROL
+  COMPLEX_ROL
+  ACCOUNTANT_ROL
+  SUPERVISOR_ROL
+  RESIDENT_ROL
+  SECURITY_ROL
+}
+
+"""Configuración del parqueadero para vehículos visitantes"""
+type VisitorParkingConfig {
+  id: String!
+
+  """ID del complejo residencial"""
+  complexId: String!
+
+  """Capacidad máxima de vehículos visitantes simultáneos"""
+  maxCapacity: Int
+
+  """Minutos de gracia antes de empezar a cobrar"""
+  gracePeriodMinutes: Int
+
+  """Mensaje que aparece en el recibo de parqueadero"""
+  receiptMessage: String
+
+  """Mostrar logo del complejo en el recibo"""
+  showLogoOnReceipt: Boolean!
+
+  """ID de la tarifa activa por defecto"""
+  activeRateId: String
+
+  """Moneda principal del parqueadero (ej. COP, USD)"""
+  currency: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Tarifas configuradas para el parqueadero"""
+  rates: [VisitorParkingRate!]!
+
+  """Complejo residencial asociado a esta configuración"""
+  complex: ResidentialComplex
+}
+
+"""Tarifa de parqueadero para vehículos visitantes"""
+type VisitorParkingRate {
+  id: String!
+
+  """Nombre descriptivo de la tarifa"""
+  name: String!
+
+  """ID del complejo (para filtrado multi-tenant)"""
+  complexId: String
+
+  """Tipo de tarifa aplicada"""
+  type: ParkingRateType!
+
+  """Tipo de vehículo"""
+  vehicleType: VehicleType!
+
+  """Monto de la tarifa"""
+  amount: Float!
+
+  """Tope máximo de cobro por día"""
+  maxDailyAmount: Float
+
+  """Minutos de gracia sin cobro"""
+  gracePeriodMinutes: Int
+
+  """Moneda de la tarifa (ej. COP, USD)"""
+  currency: String!
+  description: String
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  createdByUser: User!
+  updatedByUser: User!
+}
+
+"""Tipo de tarifa aplicada en el parqueadero"""
+enum ParkingRateType {
+  """Cobro por minuto"""
+  PER_MINUTE
+
+  """Cobro por hora (se redondea al alza)"""
+  PER_HOUR
+
+  """Cobro por día (se redondea al alza)"""
+  DAILY
+
+  """Tarifa fija independiente del tiempo"""
+  FIXED
+
+  """Tarifa especial de evento"""
+  EVENT
+}
+
+"""Tipo de vehículo registrado"""
+enum VehicleType {
+  """Automóvil / carro"""
+  CAR
+
+  """Motocicleta"""
+  MOTORCYCLE
+
+  """Camioneta o camión"""
+  TRUCK
+
+  """Van o furgoneta"""
+  VAN
+
+  """Bicicleta (no ocupa parqueadero vehicular)"""
+  BICYCLE
+
+  """Patineta eléctrica"""
+  ELECTRIC_SCOOTER
+
+  """Otro tipo de vehículo"""
+  OTHER
 }
 
 """CountryCode"""
@@ -162,9 +570,6 @@ type User {
   """Password"""
   password: String
 
-  """token version"""
-  tokenVersion: String
-
   """Phone verification status"""
   phoneVerified: Boolean!
 
@@ -192,6 +597,9 @@ type User {
   """Preferred time zone"""
   timezone: String!
 
+  """Indica si el usuario tiene contraseña establecida"""
+  passwordSet: Boolean!
+
   """Token for push notifications"""
   notificationToken: String
 
@@ -200,9 +608,6 @@ type User {
 
   """Indicates whether the user agrees accept terms and conditions."""
   acceptTermsAdnConditions: Boolean!
-
-  """Date of last password change"""
-  lastPasswordChange: DateTime
 
   """Date until which the account is blocked due to failed attempts"""
   failedLoginAttempts: DateTime
@@ -225,22 +630,40 @@ type User {
   """Reason for account deletion"""
   deletionReason: String
 
+  """Reason for account suspension"""
+  suspensionReason: String
+
   """Código de sistema asignado (solo residentes)"""
   systemCode: String
 
   """ID del complejo residencial asociado"""
   complexId: String
 
+  """Date of last password change"""
+  lastPasswordChange: DateTime
+
+  """token version"""
+  tokenVersion: String
+
   """Permissions created by this user"""
   createdPermissions: [Permission!]
 
   """Permissions last updated by this user"""
   updatedPermissions: [Permission!]
+
+  """Visitor last created by this user"""
+  createVisitorParking: [VisitorParkingRate!]
+
+  """Visitor last updated by this user"""
+  updateVisitorParking: [VisitorParkingRate!]
   createdRoles: [Role!]
   updatedRoles: [Role!]
 
   """Detalles completos de la relación usuario-rol"""
   userRoles: [UserRole!]
+
+  """Roles activos del usuario"""
+  roles: [ValidRoles!]
 
   """Nombre completo del usuario (nombre + apellido)"""
   fullName: String!
@@ -251,11 +674,6 @@ type User {
   """Edad calculada del usuario basada en su fecha de nacimiento"""
   age: Float
 }
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
 
 """Opciones de género disponibles"""
 enum Gender {
@@ -336,22 +754,6 @@ type SimpleRoleResponse {
   createdByUser: User
   updatedByUser: User
 }
-
-"""Roles de la paltaforma"""
-enum ValidRoles {
-  SUPER_ADMIN_ROL
-  COMPILANCE_OFFICER_ROL
-  COMPLEX_ROL
-  ACCOUNTANT_ROL
-  SUPERVISOR_ROL
-  SECURITY_ROL
-  RESIDENT_ROL
-}
-
-"""
-The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
-"""
-scalar JSON
 
 type ChangeParentResponse {
   """ID of the role that was moved"""
@@ -546,45 +948,6 @@ type RoleHierarchyResponse {
 
   """Hierarchy statistics"""
   stats: HierarchyStats!
-}
-
-type PermissionGroupSummary {
-  """Nombre del grupo de permisos (ej: USERS, PACKAGES)"""
-  group: String!
-
-  """Cantidad de permisos en este grupo"""
-  count: Int!
-
-  """Permisos de este grupo"""
-  permissions: [Permission!]!
-}
-
-type RoleDetailResponse {
-  id: String!
-  name: ValidRoles!
-  frontName: String!
-  icon: String!
-  description: String
-  hierarchyLevel: Int!
-  status: Boolean!
-  isSystem: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-
-  """Rol padre en la jerarquía"""
-  parent: SimpleRoleResponse
-
-  """Roles hijos en la jerarquía"""
-  children: [SimpleRoleResponse!]
-
-  """Todos los permisos asignados al rol"""
-  permissions: [Permission!]!
-
-  """Total de permisos asignados"""
-  permissionCount: Int!
-
-  """Permisos organizados por grupo"""
-  permissionsByGroup: [PermissionGroupSummary!]!
 }
 
 type Role {
@@ -828,6 +1191,79 @@ type AssignedUserRolResponse {
   message: String!
 }
 
+"""Número especial de marcado rápido configurado en el complejo"""
+type SpecialNumber {
+  id: String!
+
+  """Nombre descriptivo (ej: Policía Nacional)"""
+  name: String!
+
+  """Número de teléfono de marcado rápido"""
+  phoneNumber: String!
+  category: SpecialNumberCategory!
+
+  """Descripción opcional del número"""
+  description: String
+
+  """Orden de visualización ascendente"""
+  order: Int!
+
+  """
+  Si es true: creado por SUPER_ADMIN, visible en todos los complejos y no editable por ningún otro rol
+  """
+  isGlobal: Boolean!
+
+  """null para números globales; UUID del complejo para números específicos"""
+  complexId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Categoría del número especial de marcado rápido"""
+enum SpecialNumberCategory {
+  """Emergencias (policía, bomberos, ambulancia)"""
+  EMERGENCY
+
+  """Seguridad interna (supervisor, central de monitoreo)"""
+  SECURITY
+
+  """Mantenimiento del conjunto"""
+  MAINTENANCE
+
+  """Administración"""
+  ADMINISTRATION
+
+  """Otro"""
+  OTHER
+}
+
+"""Resultado de crear o reintegrar un miembro del personal"""
+type CreateStaffMemberResponse {
+  id: ID!
+  name: String!
+  lastName: String!
+  email: String!
+  phoneNumber: String!
+  identity: String!
+  complexId: String
+  status: UserStatus!
+  action: StaffMemberAction!
+}
+
+"""Resultado de la operación createStaffMember"""
+enum StaffMemberAction {
+  """Usuario nuevo creado e incorporado al complejo"""
+  CREATED
+
+  """Usuario existente reactivado y reintegrado a este complejo"""
+  REINTEGRATED
+
+  """
+  Usuario existente asignado a este complejo adicional (sin alterar sus otras asignaciones)
+  """
+  ADDED_TO_COMPLEX
+}
+
 """Resultado de eliminar un miembro del personal"""
 type RemoveStaffMemberResponse {
   success: Boolean!
@@ -840,225 +1276,10 @@ enum RemoveStaffAction {
   """Se quitó el rol de personal; el usuario continúa como residente"""
   STAFF_ROLE_REMOVED
 
-  """El usuario fue eliminado del sistema"""
+  """
+  El usuario fue dado de baja (soft delete); sus credenciales quedan disponibles para nuevos registros
+  """
   USER_DELETED
-}
-
-"""Complejo residencial del sistema"""
-type ResidentialComplex {
-  id: String!
-
-  """Nombre del complejo"""
-  name: String!
-
-  """Slug único derivado del nombre"""
-  slug: String!
-
-  """Descripción del complejo"""
-  description: String
-
-  """Dirección principal del complejo"""
-  address: String!
-
-  """Ciudad"""
-  city: String!
-
-  """Departamento o estado"""
-  state: String!
-
-  """País"""
-  country: String!
-
-  """Código postal"""
-  zipCode: String
-
-  """Tipo de complejo residencial"""
-  type: ComplexType!
-
-  """Plan de suscripción activo"""
-  plan: ComplexPlan!
-
-  """Estado operativo del complejo"""
-  status: ComplexStatus!
-
-  """Máximo de unidades permitidas por el plan"""
-  maxUnits: Int!
-
-  """Teléfono de administración"""
-  phone: String
-
-  """Email administrativo"""
-  email: String
-
-  """Sitio web"""
-  website: String
-
-  """NIT o identificación fiscal"""
-  nit: String
-
-  """Nombre del representante legal"""
-  legalRepresentative: String
-
-  """URL del logo del complejo"""
-  logoUrl: String
-
-  """URL de imagen de portada"""
-  coverUrl: String
-
-  """Configuración avanzada del complejo"""
-  settings: JSON
-
-  """ID del propietario/administrador principal"""
-  ownerId: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  deletedAt: DateTime
-
-  """Propietario/administrador principal"""
-  owner: User
-
-  """Torres o edificios del complejo"""
-  buildings: [Building!]
-}
-
-"""Tipo de complejo residencial"""
-enum ComplexType {
-  """Conjunto cerrado de apartamentos"""
-  APARTMENT_COMPLEX
-
-  """Urbanización de casas"""
-  HOUSES_COMMUNITY
-
-  """Edificio de oficinas o comercial"""
-  OFFICE_BUILDING
-
-  """Uso mixto residencial y comercial"""
-  MIXED
-}
-
-"""Plan de suscripción del complejo residencial"""
-enum ComplexPlan {
-  """Gratuito, hasta 10 unidades"""
-  FREE
-
-  """Básico, hasta 50 unidades"""
-  BASIC
-
-  """Pro, hasta 200 unidades"""
-  PRO
-
-  """Enterprise, ilimitado"""
-  ENTERPRISE
-}
-
-"""Estado operativo del complejo residencial"""
-enum ComplexStatus {
-  PENDING_SETUP
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-"""Torre o edificio dentro de un complejo"""
-type Building {
-  id: String!
-
-  """
-  Nombre de la torre/edificio. Ej: "Torre A"
-  """
-  name: String!
-
-  """Descripción opcional"""
-  description: String
-
-  """Número total de pisos"""
-  floors: Int!
-
-  """Estado activo/inactivo"""
-  status: Boolean!
-
-  """ID del complejo al que pertenece"""
-  complexId: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  deletedAt: DateTime
-
-  """Complejo al que pertenece"""
-  complex: ResidentialComplex
-
-  """Unidades dentro de esta torre"""
-  units: [Unit!]
-}
-
-"""Unidad habitable dentro de un edificio o complejo"""
-type Unit {
-  id: String!
-
-  """
-  Número o identificador de la unidad. Ej: "101", "B-202"
-  """
-  number: String!
-
-  """Piso en el que se ubica la unidad"""
-  floor: Int!
-
-  """Tipo de unidad"""
-  type: UnitType!
-
-  """Estado de disponibilidad"""
-  status: UnitStatus!
-
-  """Área en metros cuadrados"""
-  area: Float
-
-  """Número de habitaciones"""
-  bedrooms: Int
-
-  """Número de baños"""
-  bathrooms: Int
-
-  """Cupos de parqueadero asignados"""
-  parkingSpots: Int!
-
-  """Cuartos útiles o bodegas asignadas"""
-  storageRooms: Int!
-
-  """Descripción u observaciones adicionales"""
-  description: String
-
-  """ID del complejo al que pertenece"""
-  complexId: String!
-
-  """ID de la torre/edificio (null si complejo sin torres)"""
-  buildingId: String
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  deletedAt: DateTime
-
-  """Complejo al que pertenece"""
-  complex: ResidentialComplex
-
-  """Torre o edificio contenedor"""
-  building: Building
-}
-
-"""Tipo de unidad dentro del complejo"""
-enum UnitType {
-  APARTMENT
-  HOUSE
-  OFFICE
-  STUDIO
-  PENTHOUSE
-  COMMERCIAL
-  WAREHOUSE
-}
-
-"""Estado de disponibilidad de la unidad"""
-enum UnitStatus {
-  AVAILABLE
-  OCCUPIED
-  MAINTENANCE
-  DISABLED
 }
 
 """Relación entre un Usuario y una Unidad dentro de un Complejo"""
@@ -1165,6 +1386,126 @@ enum ResidentStatus {
   REJECTED
 }
 
+"""Registro de auditoría de una acción realizada en el sistema"""
+type AuditLog {
+  id: ID!
+
+  """Número de referencia único (AUD-YYYYMMDD-XXXX)"""
+  referenceNumber: String!
+
+  """Tipo de entidad afectada"""
+  entityType: AuditEntityType!
+
+  """ID de la entidad afectada"""
+  entityId: String!
+
+  """Acción realizada"""
+  action: AuditAction!
+
+  """Descripción legible de la acción"""
+  description: String
+
+  """Estado de la entidad ANTES de la acción (null en CREATE)"""
+  previousValue: JSON
+
+  """Estado de la entidad DESPUÉS de la acción (null en DELETE)"""
+  newValue: JSON
+
+  """ID del usuario o complejo que realizó la acción"""
+  performedById: String!
+
+  """Nombre para mostrar del actor (email, nombre, etc.)"""
+  performedByName: String
+
+  """Rol del actor al momento de la acción"""
+  performedByRole: String!
+
+  """ID del complejo (para filtrado multi-tenant)"""
+  complexId: String
+
+  """Indica si esta acción fue revertida"""
+  isReverted: Boolean!
+
+  """Fecha en que fue revertida"""
+  revertedAt: DateTime
+
+  """ID del usuario que revirtió la acción"""
+  revertedById: String
+  createdAt: DateTime!
+}
+
+"""Tipo de entidad afectada en el historial de auditoría"""
+enum AuditEntityType {
+  User
+  Vehicle
+  ParkingRecord
+  ParkingConfig
+  Resident
+  FeeCharge
+  FeeConfig
+  Payment
+  Note
+  ResidentialComplex
+  Unit
+  Building
+  VisitorVehicle
+  Visit
+  Visitor
+  SupervisorVisit
+  SupervisorAccessRequest
+  SentMessage
+  CallLog
+  SpecialNumber
+}
+
+"""Tipo de acción registrada en el historial de auditoría"""
+enum AuditAction {
+  """Creación de un registro"""
+  CREATE
+
+  """Modificación de un registro existente"""
+  UPDATE
+
+  """Eliminación (soft o hard delete)"""
+  DELETE
+
+  """Restauración de un registro eliminado"""
+  RESTORE
+
+  """Suspensión de una entidad"""
+  SUSPEND
+
+  """Activación o reactivación de una entidad"""
+  ACTIVATE
+
+  """Aprobación de una solicitud o entidad"""
+  APPROVE
+
+  """Rechazo de una solicitud o entidad"""
+  REJECT
+
+  """Inicio de sesión"""
+  LOGIN
+
+  """Cierre de sesión"""
+  LOGOUT
+
+  """Reversión a estado anterior"""
+  REVERT
+
+  """Llamada entrante contestada"""
+  CALL_INCOMING
+
+  """Llamada saliente contestada"""
+  CALL_OUTGOING
+
+  """Llamada entrante no contestada"""
+  CALL_MISSED
+
+  """Llamada rechazada"""
+  CALL_REJECTED
+}
+
 type ChangePasswordResponse {
   success: Boolean!
   message: String!
@@ -1269,6 +1610,35 @@ type UsersListResponse {
   offset: Int!
 }
 
+"""Lista paginada de registros de auditoría"""
+type PaginatedAuditLogsResponse {
+  items: [AuditLog!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+"""Resultado de la reversión de una acción de auditoría"""
+type RevertAuditResponse {
+  success: Boolean!
+  message: String!
+
+  """El registro de auditoría que fue revertido"""
+  auditLog: AuditLog!
+}
+
+"""Detalle enriquecido de un registro de auditoría con labels resueltos"""
+type AuditLogDetailResponse {
+  """Registro de auditoría completo"""
+  auditLog: AuditLog!
+
+  """Etiqueta legible de la entidad afectada"""
+  entityLabel: String
+
+  """Nombre del usuario que revirtió la acción"""
+  revertedByName: String
+}
+
 type DeviceInfo {
   userAgent: String!
   ip: String!
@@ -1299,9 +1669,86 @@ type OtpRequestResponse {
   debugCode: String
 }
 
+"""Respuesta al auto-registro de supervisor"""
+type RegisterSupervisorResponse {
+  success: Boolean!
+  message: String!
+
+  """ID del supervisor creado; null si hubo error o el correo ya existe"""
+  supervisorId: String
+}
+
+"""Respuesta con el token QR generado y su fecha de expiración"""
+type QrLoginTokenResponse {
+  """Token UUID de un solo uso para el login por QR"""
+  token: String!
+
+  """Fecha y hora de expiración del token (72 horas)"""
+  expiresAt: DateTime!
+
+  """
+  PIN de 4 dígitos (últimos 4 del NIT sin dígito de verificación). El complejo ya lo conoce.
+  """
+  pin: String!
+}
+
+type SetPasswordResponse {
+  success: Boolean!
+}
+
+type RequestPasswordResetResponse {
+  success: Boolean!
+  message: String!
+}
+
+"""Registro de visita de supervisor a un complejo residencial"""
+type SupervisorVisit {
+  id: String!
+  supervisorId: String!
+  complexId: String!
+
+  """Fecha y hora de check-in"""
+  checkInAt: DateTime!
+
+  """Latitud GPS al momento del check-in"""
+  checkInLat: Float!
+
+  """Longitud GPS al momento del check-in"""
+  checkInLng: Float!
+
+  """Fecha y hora de check-out (null si visita activa)"""
+  checkOutAt: DateTime
+
+  """Estado de la visita: ACTIVE o CLOSED"""
+  status: SupervisorVisitStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  supervisor: User
+  complex: ResidentialComplex
+}
+
+"""Estado de la visita del supervisor al complejo residencial"""
+enum SupervisorVisitStatus {
+  ACTIVE
+  CLOSED
+}
+
 type PaginatedComplexesResponse {
   items: [ResidentialComplex!]!
   pagination: PaginationReponse!
+}
+
+type NearbyComplexResponse {
+  id: String!
+  name: String!
+  address: String!
+  city: String!
+
+  """Distancia en metros desde la posición del supervisor"""
+  distanceMeters: Int!
+
+  """Radio GPS configurado en el complejo (metros)"""
+  gpsRadius: Int
 }
 
 type PaginatedBuildingsResponse {
@@ -1317,6 +1764,40 @@ type PaginatedUnitsResponse {
 type PaginatedResidentsResponse {
   items: [Resident!]!
   pagination: PaginationReponse!
+}
+
+type ResidentTypeBreakdown {
+  owners: Int!
+  tenants: Int!
+  familyMembers: Int!
+  caretakers: Int!
+}
+
+"""Estadísticas del módulo de residentes para un complejo"""
+type ResidentStatsResponse {
+  """Total de registros activos (no eliminados)"""
+  total: Int!
+
+  """Residentes activos y verificados"""
+  active: Int!
+
+  """Solicitudes pendientes de aprobación"""
+  pendingApproval: Int!
+
+  """Residentes actualmente suspendidos"""
+  suspended: Int!
+
+  """Residentes que se mudaron"""
+  movedOut: Int!
+
+  """Solicitudes rechazadas"""
+  rejected: Int!
+
+  """Residentes principales activos (uno por unidad)"""
+  mainResidents: Int!
+
+  """Desglose por tipo de residente (solo activos)"""
+  byType: ResidentTypeBreakdown!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -1367,6 +1848,9 @@ type Visit {
 
   """Notas del guardia de seguridad"""
   notes: String
+
+  """Datos adicionales del visitante (sexo, grupo sanguíneo, etc.)"""
+  metadata: JSON
   visitorId: String!
   unitId: String!
   complexId: String!
@@ -1375,7 +1859,7 @@ type Visit {
   hostResidentId: String!
 
   """ID del guardia que registró la visita"""
-  registeredByUserId: String!
+  registeredByUserId: String
 
   """ID del guardia que registró la salida"""
   exitRegisteredByUserId: String
@@ -1443,6 +1927,7 @@ type Visitor {
 
   """URL de la foto capturada en portería"""
   photoUrl: String
+  metadata: JSON
 
   """Visitante en lista negra — no puede ingresar"""
   isBlacklisted: Boolean!
@@ -1551,7 +2036,7 @@ type Vehicle {
   notes: String
 
   """ID del residente propietario del vehículo"""
-  residentId: String!
+  residentId: String
 
   """ID de la unidad (desnormalizado de residente)"""
   unitId: String!
@@ -1591,30 +2076,6 @@ type Vehicle {
   approvedByUser: User
 }
 
-"""Tipo de vehículo registrado"""
-enum VehicleType {
-  """Automóvil / carro"""
-  CAR
-
-  """Motocicleta"""
-  MOTORCYCLE
-
-  """Camioneta o camión"""
-  TRUCK
-
-  """Van o furgoneta"""
-  VAN
-
-  """Bicicleta (no ocupa parqueadero vehicular)"""
-  BICYCLE
-
-  """Patineta eléctrica"""
-  ELECTRIC_SCOOTER
-
-  """Otro tipo de vehículo"""
-  OTHER
-}
-
 """Tipo de combustible del vehículo"""
 enum VehicleFuelType {
   GASOLINE
@@ -1643,137 +2104,85 @@ enum VehicleStatus {
   REMOVED
 }
 
-type PaginatedVehiclesResponse {
-  items: [Vehicle!]!
-  pagination: PaginationReponse!
-}
+"""Configuración de rotación de parqueaderos del complejo"""
+type ParkingRotationConfig {
+  id: String!
 
-type PlateCheckResponse {
-  """Placa registrada en el complejo"""
-  isRegistered: Boolean!
-
-  """Vehículo autorizado para ingresar"""
-  isAuthorized: Boolean!
-
-  """Mensaje explicativo para el guardia"""
-  message: String!
-
-  """Datos del vehículo si está registrado"""
-  vehicle: Vehicle
-}
-
-type Package {
-  id: ID!
-  trackingCode: String
-  senderName: String!
-  description: String
-  type: PackageType!
-  status: PackageStatus!
-  photoUrl: String
-  receivedAt: DateTime!
-  notifiedAt: DateTime
-  deliveredAt: DateTime
-  returnedAt: DateTime
-  maxStorageDays: Float
-  receivedByName: String
-  receivedByIdentity: String
-  notes: String
-  returnReason: String
+  """ID del complejo al que pertenece la configuración"""
   complexId: String!
-  unitId: String!
-  registeredByUserId: String!
-  deliveredByUserId: String
-  unit: Unit!
-  complex: ResidentialComplex!
-  registeredBy: User
-  deliveredBy: User
+
+  """Valor numérico del intervalo (ej: 3 si es "cada 3 meses")"""
+  rotationIntervalValue: Int!
+
+  """Unidad de tiempo del intervalo (DAYS | WEEKS | MONTHS)"""
+  rotationIntervalUnit: RotationIntervalUnit!
+
+  """
+  Mapa de cupos disponibles por tipo de vehículo. Ej: { "CAR": 20, "MOTORCYCLE": 13 }. Solo los tipos listados participan en la rotación.
+  """
+  slotsByType: JSON!
+
+  """Si la rotación automática está habilitada"""
+  isActive: Boolean!
+
+  """Última vez que se ejecutó la rotación"""
+  lastExecutedAt: DateTime
+
+  """Próxima ejecución programada de la rotación"""
+  nextExecutionAt: DateTime
+
+  """
+  Número del gran ciclo actual por tipo de vehículo. Se incrementa cuando todos los vehículos de ese tipo han rotado al menos una vez.
+  """
+  grandCycleByType: JSON!
+  createdByUserId: String
+  updatedByUserId: String
+  createdAt: DateTime!
   updatedAt: DateTime!
-  deletedAt: DateTime
+  createdByUser: User
+  updatedByUser: User
 }
 
-"""Tipo / categoría del paquete recibido"""
-enum PackageType {
-  PARCEL
-  ENVELOPE
-  FOOD
-  FRAGILE
-  DOCUMENT
-  OTHER
+"""Unidad de tiempo para el intervalo de rotación de parqueaderos"""
+enum RotationIntervalUnit {
+  """Días (ej: cada 30 días)"""
+  DAYS
+
+  """Semanas (ej: cada 2 semanas)"""
+  WEEKS
+
+  """Meses (ej: cada 3 meses)"""
+  MONTHS
 }
 
-"""Estado del paquete en el ciclo de vida de la paquetería"""
-enum PackageStatus {
-  RECEIVED
-  NOTIFIED
-  READY_FOR_PICKUP
-  DELIVERED
-  RETURNED
-  LOST
-}
-
-type Notification {
+type ChargeCategory {
   id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-  metadata: String
-  isRead: Boolean!
-  readAt: DateTime
-  recipientUserId: String
+  name: String!
+  description: String
+  color: String
+  isActive: Boolean!
   complexId: String!
-  entityId: String
-  entityType: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""Tipo de evento que originó la notificación"""
-enum NotificationType {
-  PACKAGE_RECEIVED
-  PACKAGE_READY
-  PACKAGE_DELIVERED
-  PACKAGE_RETURNED
-  VISITOR_WALK_IN
-  VISIT_APPROVED
-  VISIT_DENIED
-  VISIT_REMINDER
-  VISITOR_ARRIVED
-  RESIDENT_APPROVED
-  RESIDENT_REJECTED
-  RESIDENT_PENDING
-  VEHICLE_APPROVED
-  VEHICLE_REJECTED
-  VEHICLE_SUSPENDED
-  VEHICLE_PENDING
-  PAYMENT_DUE
-  PAYMENT_OVERDUE
-  PAYMENT_RECEIVED
-  SYSTEM_ANNOUNCEMENT
-  COMPLEX_ALERT
-  AMENITY_REMINDER
+type ComplexFinanceConfig {
+  id: ID!
+  complexId: String!
+  moraRate: Float!
+  moraGraceDays: Int!
+  autoApplyMora: Boolean!
+  autoGenerateCharges: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
-"""Prioridad de entrega de la notificación"""
-enum NotificationPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-type PaginatedPackagesResponse {
-  items: [Package!]!
-  pagination: PaginationReponse!
-}
-
-type PaginatedNotificationsResponse {
-  items: [Notification!]!
-  pagination: PaginationReponse!
-}
-
-type UnreadCountResponse {
-  count: Int!
+type FeeConfigTargetRules {
+  excludeFloor1: Boolean
+  floorMin: Int
+  floorMax: Int
+  buildingIds: [String!]
+  unitTypes: [String!]
 }
 
 type FeeConfig {
@@ -1781,15 +2190,25 @@ type FeeConfig {
   name: String!
   description: String
   amount: Float!
+  earlyPaymentAmount: Float
   frequency: FeeFrequency!
   dueDayOfMonth: Float!
+  chargeType: ChargeType!
+  installments: Int
+  installmentsPaid: Int!
   unitId: String
   unitType: UnitType
   isActive: Boolean!
+  billingMode: FeeConfigBillingMode!
+  isOptional: Boolean!
+  targetRules: FeeConfigTargetRules
+  triggerType: FeeConfigTriggerType
   complexId: String!
   createdByUserId: String!
+  categoryId: String
   complex: ResidentialComplex!
   unit: Unit
+  category: ChargeCategory
   createdAt: DateTime!
   updatedAt: DateTime!
   deletedAt: DateTime
@@ -1800,16 +2219,39 @@ enum FeeFrequency {
   MONTHLY
   BIMONTHLY
   QUARTERLY
+  SEMIANNUAL
   ANNUAL
   ONE_TIME
+}
+
+"""Tipo de recurrencia de la configuración de cuota"""
+enum ChargeType {
+  """Recurrente indefinido (mes a mes hasta cancelación manual)"""
+  MONTHLY
+
+  """Cobro único, se genera una sola vez"""
+  ONCE
+
+  """Recurrente por un número fijo de cuotas"""
+  LIMITED
+}
+
+enum FeeConfigBillingMode {
+  ADVANCE
+  ARREARS
+}
+
+enum FeeConfigTriggerType {
+  VEHICLE
 }
 
 type FeeCharge {
   id: ID!
   period: String!
-  dueDate: DateTime!
+  dueDate: DateTime
   amount: Float!
   paidAmount: Float!
+  normalAmount: Float
   balance: Float!
   description: String!
   status: ChargeStatus!
@@ -1818,10 +2260,10 @@ type FeeCharge {
   cancelledAt: DateTime
   complexId: String!
   unitId: String!
-  feeConfigId: String!
+  feeConfigId: String
   complex: ResidentialComplex!
   unit: Unit!
-  feeConfig: FeeConfig!
+  feeConfig: FeeConfig
   createdAt: DateTime!
   updatedAt: DateTime!
   deletedAt: DateTime
@@ -1852,7 +2294,7 @@ type Payment {
   reversedAt: DateTime
   complexId: String!
   unitId: String!
-  registeredByUserId: String!
+  registeredByUserId: String
   complex: ResidentialComplex!
   unit: Unit!
   charge: FeeCharge!
@@ -1873,6 +2315,222 @@ enum PaymentMethod {
   OTHER
 }
 
+type ComplexExpense {
+  id: ID!
+  description: String!
+  amount: Float!
+  category: ExpenseCategory!
+  period: String!
+  expenseDate: DateTime!
+  receiptUrl: String
+  notes: String
+  isReversed: Boolean!
+  reversalReason: String
+  reversedByUserId: String
+  reversedAt: DateTime
+  complexId: String!
+  registeredByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  complex: ResidentialComplex!
+}
+
+"""Categoría del gasto operativo del complejo"""
+enum ExpenseCategory {
+  """Insumos y materiales"""
+  SUPPLIES
+
+  """Reparaciones y obras"""
+  REPAIRS
+
+  """Servicios públicos"""
+  UTILITIES
+
+  """Salarios y nómina"""
+  SALARIES
+
+  """Mantenimiento preventivo"""
+  MAINTENANCE
+
+  """Vigilancia y seguridad"""
+  SECURITY
+
+  """Seguros"""
+  INSURANCE
+
+  """Gastos administrativos"""
+  ADMINISTRATIVE
+
+  """Otros"""
+  OTHER
+}
+
+type Notification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  complexId: String!
+  entityId: String
+  entityType: String
+  createdByUserId: String
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionResult: NotificationActionResult
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de evento que originó la notificación"""
+enum NotificationType {
+  PACKAGE_RECEIVED
+  PACKAGE_READY
+  PACKAGE_DELIVERED
+  PACKAGE_RETURNED
+  VISITOR_WALK_IN
+  VISIT_APPROVED
+  VISIT_DENIED
+  VISIT_REMINDER
+  VISITOR_ARRIVED
+  RESIDENT_APPROVED
+  RESIDENT_REJECTED
+  RESIDENT_PENDING
+  PARKING_ASSIGNED
+  VEHICLE_APPROVED
+  VEHICLE_REJECTED
+  VEHICLE_SUSPENDED
+  VEHICLE_PENDING
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  PAYMENT_RECEIVED
+  PAYMENT_CONFIRMED
+  CHARGE_ADDED
+  DIRECT_CHARGE
+  PANIC_ALERT
+  SYSTEM_ANNOUNCEMENT
+  COMPLEX_ALERT
+  AMENITY_REMINDER
+  ACCESS_REQUEST_APPROVED
+  ACCESS_REQUEST_REJECTED
+  ACCESS_REVOKED_INACTIVITY
+}
+
+"""Prioridad de entrega de la notificación"""
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+"""
+Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
+"""
+enum NotificationActionType {
+  """Nueva solicitud de residencia — [Aprobar] [Rechazar]"""
+  RESIDENT_APPROVAL
+
+  """Nuevo vehículo pendiente — [Aprobar] [Rechazar]"""
+  VEHICLE_APPROVAL
+
+  """Visita walk-in esperando entrada — [Autorizar] [Denegar]"""
+  VISIT_APPROVAL
+
+  """Solicitud de acceso de supervisor — [Aprobar acceso] [Rechazar]"""
+  ACCESS_REQUEST
+
+  """Alerta que requiere confirmación — [Reconocer]"""
+  ACKNOWLEDGE
+}
+
+"""Resultado de la acción tomada sobre la notificación"""
+enum NotificationActionResult {
+  """Acción aprobada"""
+  APPROVED
+
+  """Acción rechazada"""
+  REJECTED
+
+  """Alerta reconocida"""
+  ACKNOWLEDGED
+}
+
+type PaginatedVehiclesResponse {
+  items: [Vehicle!]!
+  pagination: PaginationReponse!
+}
+
+"""Estado de la rotación para un tipo de vehículo"""
+type RotationTypeStatus {
+  """Tipo de vehículo (ej: CAR, MOTORCYCLE)"""
+  vehicleType: String!
+
+  """Cupos de parqueadero disponibles para este tipo"""
+  availableSlots: Int!
+
+  """Total de vehículos registrados activos y en rotación"""
+  totalVehicles: Int!
+
+  """Vehículos activos con acceso a parqueadero"""
+  activeVehicles: Int!
+
+  """Vehículos actualmente fuera por rotación"""
+  suspendedByRotationCount: Int!
+
+  """
+  Exceso de vehículos (totalVehicles - availableSlots). 0 si no hay exceso.
+  """
+  excessVehicles: Int!
+
+  """Número del gran ciclo actual para este tipo"""
+  grandCycleNumber: Int!
+
+  """Vehículos actualmente fuera por rotación"""
+  vehiclesSuspendedByRotation: [Vehicle!]!
+
+  """
+  Próximos candidatos a ser suspendidos en la siguiente rotación (ordenados por prioridad: menos rotaciones → más antiguo en rotación)
+  """
+  nextRotationCandidates: [Vehicle!]!
+}
+
+"""Estado completo de la rotación de parqueaderos del complejo"""
+type RotationStatusResponse {
+  """Configuración activa de la rotación"""
+  config: ParkingRotationConfig
+
+  """Si hay configuración de rotación definida para el complejo"""
+  isConfigured: Boolean!
+
+  """Estado de la rotación desglosado por tipo de vehículo"""
+  byType: [RotationTypeStatus!]!
+}
+
+type PlateCheckResponse {
+  """Placa registrada en el complejo"""
+  isRegistered: Boolean!
+
+  """Vehículo autorizado para ingresar"""
+  isAuthorized: Boolean!
+
+  """Mensaje explicativo para el guardia"""
+  message: String!
+
+  """Datos del vehículo si está registrado"""
+  vehicle: Vehicle
+}
+
 type PaginatedChargesResponse {
   items: [FeeCharge!]!
   pagination: PaginationReponse!
@@ -1882,6 +2540,16 @@ type GenerateChargesResponse {
   generated: Int!
   skipped: Int!
   period: String!
+}
+
+type CreateDirectChargesResponse {
+  created: Int!
+  skipped: Int!
+}
+
+type RegisterBulkPaymentResponse {
+  paid: Int!
+  created: Int!
 }
 
 type UnitBalanceResponse {
@@ -1902,41 +2570,256 @@ type ComplexFinancialSummaryResponse {
   collectionRate: Float!
   unitsWithDebt: Int!
   unitsFullyPaid: Int!
+  totalExpenses: Float!
+  netCashFlow: Float!
 }
 
-"""Tarifa de parqueadero por tipo de vehículo"""
-type ParkingRate {
+type WalletEntryObject {
   id: String!
+  type: String!
+  amount: Float!
+  description: String!
+  unitId: String!
+  chargeId: String
+  createdAt: String!
+}
 
-  """Tipo de vehículo al que aplica la tarifa"""
-  vehicleType: VehicleType!
+type UnitWalletResponse {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  currentBalance: Float!
+  totalCredits: Float!
+  totalDebits: Float!
+  entries: [WalletEntryObject!]!
+}
 
-  """Tarifa por minuto (en moneda local)"""
-  ratePerMinute: Float!
+type WalletSummaryItem {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  currentBalance: Float!
+  totalCredits: Float!
+  totalDebits: Float!
+}
 
-  """Indica si la tarifa está activa"""
-  isActive: Boolean!
+type WalletSummaryPaginated {
+  items: [WalletSummaryItem!]!
+  pagination: PaginationReponse!
+}
 
-  """Descripción o nombre de la tarifa"""
-  description: String
+type ApplyWalletResult {
+  chargeId: String!
+  appliedAmount: Float!
+  remainingWalletBalance: Float!
+  chargeStatus: String!
+}
 
-  """ID del complejo al que pertenece la tarifa"""
+type AccountMovement {
+  id: String!
+  date: String!
+  type: String!
+  description: String!
+  debit: Float!
+  credit: Float!
+  balance: Float!
+  reference: String
+}
+
+type UnitAccountStatementResponse {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  totalDebits: Float!
+  totalCredits: Float!
+  currentBalance: Float!
+  walletBalance: Float!
+  movements: [AccountMovement!]!
+}
+
+type UnitFinancialStatusItem {
+  unitId: String!
+  unitNumber: String!
+  building: String
+  status: String!
+  totalDebt: Float!
+  walletBalance: Float!
+  overdueCount: Int!
+  pendingCount: Int!
+}
+
+type UnitFinancialStatusPaginated {
+  items: [UnitFinancialStatusItem!]!
+  pagination: PaginationReponse!
+}
+
+type MoraApplicationResult {
+  period: String!
+  applied: Int!
+  totalMoraAmount: Float!
+  skipped: Int!
+}
+
+type ExpenseCategoryBreakdown {
+  category: ExpenseCategory!
+  total: Float!
+  count: Float!
+}
+
+type PaginatedExpensesResponse {
+  items: [ComplexExpense!]!
+  pagination: PaginationReponse!
+  totalAmount: Float!
+  byCategory: [ExpenseCategoryBreakdown!]!
+}
+
+type PaginatedNotificationsResponse {
+  items: [Notification!]!
+  pagination: PaginationReponse!
+}
+
+type UnreadCountResponse {
+  count: Int!
+}
+
+type PushSubscriptionResult {
+  success: Boolean!
+}
+
+type SendNotificationResult {
+  id: ID!
+  title: String!
+  body: String!
+  createdAt: DateTime!
+}
+
+"""Notificación masiva enviada por el administrador"""
+type SentNotification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+
+  """Total de destinatarios al momento del envío"""
+  recipientsCount: Int!
+
+  """Roles destinatarios. Vacío = todos los usuarios."""
+  targetRoles: [String!]
+  createdAt: DateTime!
+}
+
+type SentNotificationPaginatedResult {
+  items: [SentNotification!]!
+  pagination: PaginationReponse!
+}
+
+type TriggerPanicAlertResult {
+  success: Boolean!
+}
+
+type NotificationUserInfo {
+  id: ID!
+  name: String!
+  lastName: String!
+  fullName: String!
+  email: String!
+  phoneNumber: String
+  identity: String
+  profilePicture: String
+  roles: [String!]!
+}
+
+type NotificationDetailResponse {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  recipientUser: NotificationUserInfo
   complexId: String!
-
-  """Usuario que creó la tarifa"""
-  createdByUserId: String!
-
-  """Usuario que actualizó la tarifa"""
-  updatedByUserId: String
+  entityId: String
+  entityType: String
+  createdByUserId: String
+  createdByUser: NotificationUserInfo
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionTakenByUser: NotificationUserInfo
+  actionResult: NotificationActionResult
   createdAt: DateTime!
   updatedAt: DateTime!
-  complex: ResidentialComplex
-  createdByUser: User
+}
+
+type Package {
+  id: ID!
+  trackingCode: String
+  senderName: String!
+  description: String
+  type: PackageType!
+  status: PackageStatus!
+  photoUrl: String
+  receivedAt: DateTime!
+  notifiedAt: DateTime
+  deliveredAt: DateTime
+  returnedAt: DateTime
+  maxStorageDays: Float
+  recipientName: String
+  receivedByName: String
+  receivedByIdentity: String
+  notes: String
+  returnReason: String
+  complexId: String!
+  unitId: String!
+  registeredByUserId: String
+  deliveredByUserId: String
+  unit: Unit!
+  complex: ResidentialComplex!
+  registeredBy: User
+  deliveredBy: User
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Tipo / categoría del paquete recibido"""
+enum PackageType {
+  PARCEL
+  ENVELOPE
+  FOOD
+  FRAGILE
+  DOCUMENT
+  OTHER
+}
+
+"""Estado del paquete en el ciclo de vida de la paquetería"""
+enum PackageStatus {
+  RECEIVED
+  NOTIFIED
+  READY_FOR_PICKUP
+  DELIVERED
+  RETURNED
+  LOST
+}
+
+type PaginatedPackagesResponse {
+  items: [Package!]!
+  pagination: PaginationReponse!
 }
 
 """Registro de vehículo visitante en el parqueadero"""
 type VisitorVehicle {
   id: String!
+
+  """Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)"""
+  invoiceNumber: String!
 
   """Placa del vehículo (normalizada: mayúsculas, sin espacios)"""
   plate: String!
@@ -1944,26 +2827,35 @@ type VisitorVehicle {
   """Tipo de vehículo"""
   vehicleType: VehicleType!
 
+  """Marca del vehículo"""
+  brand: String
+
+  """Color del vehículo"""
+  color: String
+
   """Nombre del conductor"""
   driverName: String
 
-  """Hora de ingreso al parqueadero"""
-  entryTime: DateTime!
+  """Fecha/hora de entrada (asignada por el servidor)"""
+  entryDate: DateTime!
 
-  """Hora de salida del parqueadero"""
-  exitTime: DateTime
+  """Alias de entryDate"""
+  createdAt: DateTime!
+
+  """Fecha/hora de salida"""
+  exitDate: DateTime
+
+  """Duración en minutos (calculada en la salida)"""
+  duration: Int
 
   """Costo total generado al momento de la salida"""
   parkingCost: Float
 
-  """Tarifa por hora aplicada al momento de la salida"""
-  rateApplied: Float
-
-  """Minutos totales en el parqueadero"""
-  minutesParked: Float
+  """Método de pago (disponible tras el cierre)"""
+  paymentMethod: ParkingPaymentMethod
 
   """Estado actual del registro"""
-  status: ParkingStatus!
+  status: ParkingRecordStatus!
 
   """Motivo de cancelación"""
   cancellationReason: String
@@ -1985,7 +2877,6 @@ type VisitorVehicle {
 
   """Usuario que canceló el registro"""
   cancelledByUserId: String
-  createdAt: DateTime!
   updatedAt: DateTime!
 
   """Residente anfitrión"""
@@ -1999,15 +2890,30 @@ type VisitorVehicle {
   exitRegisteredByUser: User
 }
 
-"""Estado del vehículo visitante en el parqueadero"""
-enum ParkingStatus {
-  """Vehículo actualmente en el parqueadero"""
-  INSIDE
+"""Método de pago del parqueadero visitante"""
+enum ParkingPaymentMethod {
+  """Efectivo"""
+  CASH
 
-  """Vehículo que ya salió (cobro generado)"""
-  EXITED
+  """Transferencia bancaria / QR"""
+  TRANSFER
 
-  """Registro cancelado manualmente"""
+  """Cargo a la cuenta de la unidad visitada"""
+  CHARGE_TO_UNIT
+}
+
+"""Estado del registro de parqueadero visitante"""
+enum ParkingRecordStatus {
+  """Vehículo dentro del parqueadero, sin liquidar"""
+  OPEN
+
+  """Cobro liquidado (efectivo o transferencia)"""
+  PAID
+
+  """Cobro cargado a la cuenta de la unidad visitada"""
+  CHARGED_TO_UNIT
+
+  """Registro anulado"""
   CANCELLED
 }
 
@@ -2026,10 +2932,16 @@ type Note {
   """Cuerpo de la nota"""
   content: String!
 
-  """URLs de imágenes adjuntas (Cloudinary)"""
+  """URLs de imágenes adjuntas (R2)"""
   imageUrls: [String!]
   complexId: String!
-  createdByUserId: String!
+  createdByUserId: String
+
+  """Rol del creador al momento de registrar la nota"""
+  createdByRole: String
+
+  """ID de la visita activa del supervisor bajo la cual se creó esta nota"""
+  supervisorVisitId: String
   createdAt: DateTime!
 
   """Fecha de eliminación lógica (solo SUPER_ADMIN)"""
@@ -2045,33 +2957,174 @@ type PaginatedNotesResponse {
   pagination: PaginationReponse!
 }
 
+"""Solicitud de acceso de un supervisor a un complejo residencial"""
+type SupervisorAccessRequest {
+  id: String!
+  supervisorId: String!
+  complexId: String!
+  status: AccessRequestStatus!
+
+  """Mensaje opcional del supervisor al solicitar acceso"""
+  message: String
+
+  """Motivo de rechazo (solo cuando status = REJECTED)"""
+  rejectionReason: String
+
+  """Latitud GPS del supervisor al solicitar acceso"""
+  requestLat: Float
+
+  """Longitud GPS del supervisor al solicitar acceso"""
+  requestLng: Float
+
+  """ID del usuario que aprobó o rechazó la solicitud"""
+  resolvedById: String
+  resolvedAt: DateTime
+  createdAt: DateTime!
+
+  """Supervisor que solicitó el acceso"""
+  supervisor: User
+  complex: ResidentialComplex
+
+  """Admin que resolvió la solicitud"""
+  resolvedBy: User
+}
+
+"""Estado de la solicitud de acceso del supervisor al complejo"""
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+"""Mensaje enviado a residentes del complejo"""
+type SentMessage {
+  id: String!
+  channel: MessageChannel!
+  messageType: MessageType!
+  body: String!
+  recipientCount: Int!
+  recipientPhones: [String!]!
+  complexId: String!
+  sentByUserId: String!
+  unitId: String!
+
+  """Número de unidad desnormalizado para queries rápidas"""
+  unitNumber: String!
+  sentAt: DateTime!
+  createdAt: DateTime!
+  complex: ResidentialComplex
+
+  """Usuario que envió el mensaje"""
+  sentBy: User
+}
+
+"""Canal por el que se envió el mensaje"""
+enum MessageChannel {
+  SMS
+  WHATSAPP
+}
+
+"""Tipo/categoría del mensaje enviado"""
+enum MessageType {
+  COMUNICADO
+  ALERTA
+  INFORMATIVO
+  URGENTE
+  RECORDATORIO
+}
+
+type PaginatedSentMessagesResponse {
+  items: [SentMessage!]!
+  pagination: PaginationReponse!
+}
+
+"""Registro de llamada realizada o recibida por el guardia"""
+type CallLog {
+  id: String!
+  direction: CallDirection!
+  outcome: CallOutcome!
+  phoneNumber: String!
+  agentName: String!
+  agentUserId: String
+  residentId: String
+  residentName: String
+  unitId: String
+  unitNumber: String
+  buildingName: String
+  startedAt: DateTime!
+  answeredAt: DateTime
+  endedAt: DateTime
+  durationSeconds: Int!
+  notes: String
+  complexId: String!
+  createdAt: DateTime!
+  complex: ResidentialComplex
+
+  """Guardia/agente que realizó o recibió la llamada"""
+  agent: User
+}
+
+"""Dirección de la llamada"""
+enum CallDirection {
+  OUTGOING
+  INCOMING
+}
+
+"""Resultado de la llamada"""
+enum CallOutcome {
+  ANSWERED
+  MISSED
+  REJECTED
+  FAILED
+}
+
+type CallLogsPage {
+  items: [CallLog!]!
+  totalItems: Int!
+  totalPages: Int!
+  currentPage: Int!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
 type Query {
+  """Retorna todos los módulos disponibles en el sistema"""
+  availableModules: [ComplexModule!]!
+  complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
+  complex(id: String!): ResidentialComplex!
+  nearbyComplexes(lat: Float!, lng: Float!, radiusMeters: Float = 200): [NearbyComplexResponse!]!
+  buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
+  building(id: String!): Building!
+  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus): PaginatedUnitsResponse!
+  unit(id: String!): Unit!
+
+  """
+  Historial de auditoría paginado. SUPER_ADMIN ve todo el sistema. COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.
+  """
+  auditLogs(filter: FilterAuditLogsInput): PaginatedAuditLogsResponse!
+
+  """
+  Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX) con labels enriquecidos.
+  """
+  auditLog(referenceNumber: String!): AuditLogDetailResponse!
   permissions(input: SearchPermissionsInput!): PaginatedPermissionsResponse!
   permission(id: String!): Permission!
   roles(input: SearchRolesInput!): PaginatedRolesResponse!
   role(term: String!): Role!
-
-  """
-  Obtiene la información completa de un rol con sus permisos agrupados por categoría
-  """
-  roleDetail(
-    """UUID del rol"""
-    id: String!
-  ): RoleDetailResponse!
   getRoleHierarchy(roleId: String!): RoleHierarchyResponse!
 
   """Lista paginada de usuarios. Filtrable por status y complexId."""
   users(input: UsersFilterInput): UsersListResponse!
   user(id: String!): UserInfoCompleteResponse
 
-  """Perfil completo del usuario autenticado"""
-  me: UserInfoCompleteResponse!
-  complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
-  complex(id: String!): ResidentialComplex!
-  buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
-  building(id: String!): Building!
-  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus): PaginatedUnitsResponse!
-  unit(id: String!): Unit!
+  """
+  Perfil completo del usuario autenticado (usuario o complejo residencial)
+  """
+  me: MeResponse!
+  residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
   pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
   resident(id: String!): Resident!
@@ -2087,22 +3140,136 @@ type Query {
   vehiclesByResident(residentId: String!): [Vehicle!]!
   checkPlate(plate: String!, complexId: String!): PlateCheckResponse!
   vehicle(id: String!): Vehicle!
-  packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
-  pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
-  package(packageId: String!): Package!
-  myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
-  unreadNotificationsCount(complexId: String!): UnreadCountResponse!
+  rotationStatus(complexId: String!): RotationStatusResponse!
+  complexFinanceConfig(complexId: String!): ComplexFinanceConfig!
+  chargeCategories(complexId: String!): [ChargeCategory!]!
   feeConfigs(complexId: String!): [FeeConfig!]!
   charges(complexId: String!, pagination: PaginationInput, filters: FilterChargesInput): PaginatedChargesResponse!
   paymentsByCharge(chargeId: String!): [Payment!]!
   unitBalance(unitId: String!, complexId: String!): UnitBalanceResponse!
   complexFinancialSummary(complexId: String!, period: String!): ComplexFinancialSummaryResponse!
-  parkingRates(complexId: String!): [ParkingRate!]!
+  unitWallet(unitId: String!, complexId: String!): UnitWalletResponse!
+  walletsSummary(complexId: String!, pagination: PaginationInput): WalletSummaryPaginated!
+  unitAccountStatement(unitId: String!, complexId: String!, period: String): UnitAccountStatementResponse!
+  unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
+  complexExpenses(complexId: String!, pagination: PaginationInput, filters: FilterExpensesInput): PaginatedExpensesResponse!
+  myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  notificationDetail(notificationId: String!, complexId: String!): NotificationDetailResponse!
+  unreadNotificationsCount(complexId: String!): UnreadCountResponse!
+  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
+  vapidPublicKey: String!
+  activePanicAlerts(complexId: String!): [Notification!]!
+  packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
+  pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
+  package(packageId: String!): Package!
+  visitorParkingConfig(complexId: String!): VisitorParkingConfig
+  parkingRates(complexId: String!): [VisitorParkingRate!]!
   activeVisitorVehicles(complexId: String!): [VisitorVehicle!]!
   visitorVehicles(filters: FilterVisitorVehiclesInput!, pagination: PaginationInput! = {page: 1, limit: 10}): PaginatedVisitorVehiclesResponse!
   visitorVehicle(id: String!): VisitorVehicle!
   findnotes(complexId: String!, pagination: PaginationInput, filters: FilterNotesInput): PaginatedNotesResponse!
   note(id: String!): Note!
+
+  """
+  Retorna el historial de solicitudes de acceso del supervisor (últimas 50).
+  """
+  myAccessRequests: [SupervisorAccessRequest!]!
+
+  """
+  Retorna las solicitudes de acceso PENDIENTES para un complejo. Permite al COMPLEX_ROL gestionar los supervisores que solicitan acceso.
+  """
+  pendingAccessRequests(complexId: String!): [SupervisorAccessRequest!]!
+
+  """
+  Retorna el número de solicitudes de acceso PENDIENTES para un complejo. Úsalo para mostrar el badge numérico en la sección Supervisores del panel.
+  """
+  pendingAccessRequestsCount(complexId: String!): Int!
+
+  """Retorna las últimas 50 visitas del supervisor. Filtrable por estado."""
+  mySupervisorVisits(status: SupervisorVisitStatus): [SupervisorVisit!]!
+
+  """
+  Retorna la visita activa del supervisor en el complejo indicado, o null.
+  """
+  activeSupervisorVisit(complexId: String!): SupervisorVisit
+
+  """
+  Retorna los complejos con asignación activa del supervisor. Solo puede hacer check-in en estos complejos.
+  """
+  myAssignedComplexes: [ResidentialComplex!]!
+  sentMessages(complexId: String!, pagination: PaginationInput): PaginatedSentMessagesResponse!
+  callLogs(input: CallLogsInput!): CallLogsPage!
+  specialNumbers(complexId: String!): [SpecialNumber!]!
+
+  """Verifica conectividad con el backend. Siempre retorna "pong"."""
+  ping: String!
+}
+
+"""Módulos funcionales disponibles para un complejo residencial"""
+enum ComplexModule {
+  EDIFICIOS
+  UNIDADES
+  RESIDENTES
+  VISITAS
+  VEHICULOS
+  PAQUETES
+  FINANZAS
+  NOTAS
+  PERSONAL
+  MENSAJES
+  MOVIMIENTOS
+  NOTIFICACIONES
+  PARKING_ROTATION
+  PARKING_BILLING
+}
+
+input PaginationInput {
+  page: Int! = 1
+  limit: Int! = 10
+}
+
+input FilterComplexInput {
+  """Buscar por nombre, ciudad o dirección"""
+  search: String
+  type: ComplexType
+  plan: ComplexPlan
+  status: ComplexStatus
+
+  """Filtrar por ciudad"""
+  city: String
+}
+
+"""Filtros para consultar el historial de auditoría"""
+input FilterAuditLogsInput {
+  """Filtrar por ID del complejo"""
+  complexId: String
+
+  """Filtrar por tipo de acción"""
+  action: AuditAction
+
+  """Filtrar por tipo de entidad"""
+  entityType: AuditEntityType
+
+  """Filtrar por ID de la entidad"""
+  entityId: String
+
+  """Filtrar por ID del actor"""
+  performedById: String
+
+  """Filtrar por rol del actor"""
+  performedByRole: String
+
+  """Número de referencia exacto"""
+  referenceNumber: String
+
+  """Desde esta fecha (ISO 8601)"""
+  from: String
+
+  """Hasta esta fecha (ISO 8601)"""
+  to: String
+  limit: Int = 20
+  offset: Int = 0
 }
 
 input SearchPermissionsInput {
@@ -2124,11 +3291,6 @@ input PermissionFiltersInput {
 input DateRangeInput {
   from: String
   to: String
-}
-
-input PaginationInput {
-  page: Int! = 1
-  limit: Int! = 10
 }
 
 input SortInput {
@@ -2170,16 +3332,7 @@ input UsersFilterInput {
   offset: Int = 0
 }
 
-input FilterComplexInput {
-  """Buscar por nombre, ciudad o dirección"""
-  search: String
-  type: ComplexType
-  plan: ComplexPlan
-  status: ComplexStatus
-
-  """Filtrar por ciudad"""
-  city: String
-}
+union MeResponse = User | ResidentialComplex
 
 input FilterResidentsInput {
   """Buscar por nombre, apellido o email del usuario"""
@@ -2187,11 +3340,20 @@ input FilterResidentsInput {
   status: ResidentStatus
   type: ResidentType
 
-  """Filtrar por edificio/torre"""
+  """Filtrar por edificio/torre (UUID)"""
   buildingId: String
 
-  """Filtrar por unidad específica"""
+  """Filtrar por unidad específica (UUID)"""
   unitId: String
+
+  """Tipo de unidad: HOUSE, APARTMENT, OFFICE..."""
+  unitType: UnitType
+
+  """Número/identificador de la unidad (ej: "39", "601")"""
+  unitNumber: String
+
+  """Nombre de torre/edificio (ej: "5", "TORRE A"). Búsqueda exacta."""
+  buildingName: String
 }
 
 input FilterVisitsInput {
@@ -2224,6 +3386,28 @@ input FilterVehiclesInput {
   unitId: String
 }
 
+input FilterChargesInput {
+  status: ChargeStatus
+  unitId: String
+  period: String
+  unitSearch: String
+  feeConfigId: String
+}
+
+input FilterExpensesInput {
+  category: ExpenseCategory
+  period: String
+  startDate: DateTime
+  endDate: DateTime
+  includeReversed: Boolean
+}
+
+input FilterNotificationsInput {
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: Boolean
+}
+
 input FilterPackagesInput {
   status: PackageStatus
   type: PackageType
@@ -2233,25 +3417,13 @@ input FilterPackagesInput {
   receivedUntil: String
 }
 
-input FilterNotificationsInput {
-  type: NotificationType
-  priority: NotificationPriority
-  isRead: Boolean
-}
-
-input FilterChargesInput {
-  status: ChargeStatus
-  unitId: String
-  period: String
-}
-
 """Filtros para listar vehículos visitantes"""
 input FilterVisitorVehiclesInput {
   """ID del complejo residencial"""
   complexId: String!
 
   """Filtrar por estado del registro"""
-  status: ParkingStatus
+  status: ParkingRecordStatus
 
   """Filtrar por tipo de vehículo"""
   vehicleType: VehicleType
@@ -2273,6 +3445,11 @@ input FilterNotesInput {
   """Filtrar por usuario creador (solo SUPER_ADMIN y COMPLEX_ROL)"""
   createdByUserId: String
 
+  """
+  Filtrar por uno o varios roles creadores. Cada rol solo puede filtrar dentro de los roles que tiene visibilidad
+  """
+  createdByRoles: [String!]
+
   """Fecha de inicio del rango (ISO 8601)"""
   dateFrom: String
 
@@ -2280,7 +3457,97 @@ input FilterNotesInput {
   dateTo: String
 }
 
+input CallLogsInput {
+  complexId: String!
+  agentUserId: String
+  direction: CallDirection
+  outcome: CallOutcome
+  dateFrom: String
+  dateTo: String
+  pagination: PaginationInput
+}
+
 type Mutation {
+  """
+  Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL
+  """
+  loginWithEmail(input: LoginEmailInput!): AuthResponse!
+
+  """
+  Inicia sesión con email y código de sistema. Disponible para: SUPERVISOR_ROL, SECURITY_ROL, RESIDENT_ROL
+  """
+  loginWithIdentityNum(input: LoginSystemCodeInput!): AuthResponse!
+
+  """
+  Auto-registro público para supervisores. La cuenta queda en estado PENDING_VERIFICATION hasta que el supervisor confirme su correo electrónico con el enlace enviado. No se emiten tokens JWT hasta la verificación.
+  """
+  registerSupervisor(input: RegisterSupervisorInput!): RegisterSupervisorResponse!
+
+  """
+  Verifica el correo electrónico del supervisor usando el token enviado por email. Activa la cuenta (ACTIVE) y devuelve los tokens JWT. Tras esto el supervisor puede solicitar acceso a un complejo.
+  """
+  verifySupervisorEmail(token: String!): AuthResponse!
+
+  """
+  Solicita un código OTP al número de celular. Exclusivo para residentes (RESIDENT_ROL). El código se envía por SMS y tiene validez de 5 minutos.
+  """
+  requestOtp(input: RequestOtpInput!): OtpRequestResponse!
+
+  """
+  Verifica el código OTP del residente y devuelve los tokens JWT de acceso.
+  """
+  verifyOtp(input: VerifyOtpInput!): AuthResponse!
+
+  """
+  Genera un token QR de un solo uso (72 h de vigencia) para que un usuario inicie sesión sin contraseña. Solo accesible por SUPER_ADMIN.
+  """
+  generateQrLoginToken(complexId: String!): QrLoginTokenResponse!
+
+  """
+  Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del NIT del complejo, sin dígito de verificación). No requiere autenticación previa.
+  """
+  redeemQrToken(token: String!, pin: String!): AuthResponse!
+
+  """
+  Solicita el restablecimiento de contraseña por email. Siempre responde igual para no revelar si el email está registrado.
+  """
+  requestPasswordReset(email: String!): RequestPasswordResetResponse!
+
+  """
+  Establece una nueva contraseña usando el token recibido por email. El token es de un solo uso y tiene validez de 1 hora.
+  """
+  resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
+
+  """
+  Establece la contraseña inicial del usuario autenticado. Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.
+  """
+  setInitialPassword(newPassword: String!): SetPasswordResponse!
+
+  """
+  Renueva el access token usando el refresh token. Implementa rotación de tokens.
+  """
+  refreshToken(refreshToken: String!): AuthResponse!
+
+  """Cierra la sesión actual e invalida los tokens."""
+  logout: Boolean!
+  createComplex(input: CreateComplexInput!): ResidentialComplex!
+  updateComplex(input: UpdateComplexInput!): ResidentialComplex!
+  changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
+  removeComplex(id: String!): Boolean!
+  restoreComplex(id: String!): ResidentialComplex!
+  updateComplexModules(complexId: String!, modules: [ComplexModule!]!): ResidentialComplex!
+  createBuilding(input: CreateBuildingInput!): Building!
+  updateBuilding(input: UpdateBuildingInput!): Building!
+  toggleBuildingStatus(id: String!): Building!
+  removeBuilding(id: String!): Boolean!
+  createUnit(input: CreateUnitInput!): Unit!
+  updateUnit(input: UpdateUnitInput!): Unit!
+  removeUnit(id: String!): Boolean!
+
+  """
+  Revierte una acción registrada en el historial a su estado anterior. Solo disponible para SUPER_ADMIN_ROL. Una acción solo puede revertirse una vez.
+  """
+  revertAudit(referenceNumber: String!): RevertAuditResponse!
   createPermission(input: CreatePermissionInput!): CreatePermissionResponse!
 
   """Update an existing permission"""
@@ -2322,7 +3589,7 @@ type Mutation {
   """
   Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
   """
-  createStaffMember(input: CreateStaffMemberInput!): User!
+  createStaffMember(input: CreateStaffMemberInput!): CreateStaffMemberResponse!
 
   """
   Elimina a un miembro del personal del complejo. Si el usuario tiene residencia activa en algún complejo, solo se le quita el rol de personal. Si no tiene ninguna residencia activa, se elimina del sistema. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
@@ -2332,47 +3599,26 @@ type Mutation {
   """Cambiar la contraseña del usuario autenticado"""
   changePassword(input: ChangePasswordInput!): ChangePasswordResponse!
   updateUser(updateUserInput: UpdateUserInput!): User!
-  removeUser(id: Int!): User!
+
+  """Suspende la cuenta de un usuario"""
+  suspendUser(userId: String!, reason: String!): User!
+
+  """Reactiva un usuario suspendido"""
+  reactivateUser(userId: String!): User!
+
+  """Elimina (soft delete) un usuario del sistema"""
+  deleteUser(userId: String!): User!
 
   """
-  Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL
+  Restaura un usuario previamente eliminado (soft delete), dejándolo activo
   """
-  loginWithEmail(input: LoginEmailInput!): AuthResponse!
-
-  """
-  Solicita un código OTP al número de celular. Exclusivo para residentes (RESIDENT_ROL). El código se envía por SMS y tiene validez de 5 minutos.
-  """
-  requestOtp(input: RequestOtpInput!): OtpRequestResponse!
-
-  """
-  Verifica el código OTP del residente y devuelve los tokens JWT de acceso.
-  """
-  verifyOtp(input: VerifyOtpInput!): AuthResponse!
-
-  """
-  Renueva el access token usando el refresh token. Implementa rotación de tokens.
-  """
-  refreshToken(refreshToken: String!): AuthResponse!
-
-  """Cierra la sesión actual e invalida los tokens."""
-  logout: Boolean!
-  createComplex(input: CreateComplexInput!): ResidentialComplex!
-  updateComplex(input: UpdateComplexInput!): ResidentialComplex!
-  changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
-  removeComplex(id: String!): Boolean!
-  restoreComplex(id: String!): ResidentialComplex!
-  createBuilding(input: CreateBuildingInput!): Building!
-  updateBuilding(input: UpdateBuildingInput!): Building!
-  toggleBuildingStatus(id: String!): Building!
-  removeBuilding(id: String!): Boolean!
-  createUnit(input: CreateUnitInput!): Unit!
-  updateUnit(input: UpdateUnitInput!): Unit!
-  removeUnit(id: String!): Boolean!
+  restoreUser(userId: String!): User!
   createResident(input: CreateResidentInput!): Resident!
   updateResident(input: UpdateResidentInput!): Resident!
   suspendResident(residentId: String!, reason: String!): Resident!
   reactivateResident(residentId: String!): Resident!
   moveOutResident(input: MoveOutResidentInput!): Resident!
+  undoMoveOutResident(residentId: String!): Resident!
   removeResident(id: String!): Boolean!
   approveResident(input: ApproveResidentInput!): Resident!
   rejectResident(input: RejectResidentInput!): Resident!
@@ -2391,25 +3637,324 @@ type Mutation {
   suspendVehicle(vehicleId: String!, reason: String!): Vehicle!
   reactivateVehicle(vehicleId: String!): Vehicle!
   removeVehicle(vehicleId: String!): Boolean!
+  configureRotation(input: ConfigureRotationInput!): ParkingRotationConfig!
+  executeRotation(complexId: String!): RotationStatusResponse!
+  upsertComplexFinanceConfig(input: UpsertComplexFinanceConfigInput!): ComplexFinanceConfig!
+  createChargeCategory(input: CreateChargeCategoryInput!): ChargeCategory!
+  updateChargeCategory(input: UpdateChargeCategoryInput!): ChargeCategory!
+  deleteChargeCategory(id: String!): Boolean!
+  createFeeConfig(input: CreateFeeConfigInput!): FeeConfig!
+  updateFeeConfig(input: UpdateFeeConfigInput!): FeeConfig!
+  deleteFeeConfig(id: String!): Boolean!
+  toggleFeeConfig(configId: String!): FeeConfig!
+  generateCharges(input: GenerateChargesInput!): GenerateChargesResponse!
+  waiveCharge(chargeId: String!, reason: String!): FeeCharge!
+  createDirectCharges(input: CreateDirectChargesInput!): CreateDirectChargesResponse!
+  registerPayment(input: RegisterPaymentInput!): Payment!
+  registerBulkPayment(input: RegisterBulkPaymentInput!): RegisterBulkPaymentResponse!
+  reversePayment(paymentId: String!, reason: String!): Payment!
+  createWalletCredit(input: CreateWalletCreditInput!): WalletEntryObject!
+  applyWalletToCharge(input: ApplyWalletToChargeInput!): ApplyWalletResult!
+  applyMoraToPeriod(input: ApplyMoraInput!): MoraApplicationResult!
+  registerExpense(input: RegisterExpenseInput!): ComplexExpense!
+  reverseExpense(expenseId: String!, reason: String!): ComplexExpense!
+  markNotificationAsRead(notificationId: String!): Notification!
+  markAllNotificationsAsRead(complexId: String!): Int!
+  sendNotification(input: SendNotificationInput!): SendNotificationResult!
+  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
+  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  acknowledgePanicAlert(notificationId: String!): Notification!
+  deleteNotification(notificationId: String!): Boolean!
+  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   registerPackage(input: RegisterPackageInput!): Package!
   markPackageAsNotified(packageId: String!): Package!
   confirmPackageDelivery(input: ConfirmDeliveryInput!): Package!
   returnPackage(packageId: String!, reason: String!): Package!
   markPackageAsLost(packageId: String!, reason: String!): Package!
-  markNotificationAsRead(notificationId: String!): Notification!
-  markAllNotificationsAsRead(complexId: String!): Int!
-  createFeeConfig(input: CreateFeeConfigInput!): FeeConfig!
-  toggleFeeConfig(configId: String!): FeeConfig!
-  generateCharges(input: GenerateChargesInput!): GenerateChargesResponse!
-  waiveCharge(chargeId: String!, reason: String!): FeeCharge!
-  registerPayment(input: RegisterPaymentInput!): Payment!
-  reversePayment(paymentId: String!, reason: String!): Payment!
-  setParkingRate(input: SetParkingRateInput!): ParkingRate!
-  toggleParkingRate(rateId: String!): ParkingRate!
+  updateVisitorParkingConfig(input: UpdateVisitorParkingConfigInput!): VisitorParkingConfig!
+  setParkingRate(input: SetParkingRateInput!): VisitorParkingConfig!
+  toggleParkingRate(rateId: String!): VisitorParkingConfig!
   registerVisitorVehicleEntry(input: RegisterVisitorVehicleInput!): VisitorVehicle!
-  registerVisitorVehicleExit(visitorVehicleId: String!): VisitorVehicle!
+  registerVisitorVehicleExit(input: ResgiterExitVehicle!): VisitorVehicle!
   cancelVisitorVehicleEntry(visitorVehicleId: String!, cancellationReason: String!): VisitorVehicle!
   deleteNote(id: String!): Note!
+
+  """
+  Registra el check-in del supervisor en un complejo residencial. Requiere asignación activa al complejo y validación GPS. Solo puede existir una visita ACTIVA por complejo a la vez.
+  """
+  supervisorCheckIn(input: SupervisorCheckInInput!): SupervisorVisit!
+
+  """
+  Registra el check-out del supervisor. Cierra la visita activa (status: CLOSED).
+  """
+  supervisorCheckOut(input: SupervisorCheckOutInput!): SupervisorVisit!
+
+  """
+  El supervisor solicita acceso a un complejo al que no está asignado. El administrador del complejo recibe la solicitud y puede aprobarla o rechazarla remotamente.
+  """
+  requestComplexAccess(input: RequestComplexAccessInput!): SupervisorAccessRequest!
+
+  """
+  Aprueba la solicitud de acceso de un supervisor. Crea automáticamente la asignación UserComplexAssignment (ACTIVE). El supervisor podrá hacer check-in inmediatamente después.
+  """
+  approveAccessRequest(requestId: String!): SupervisorAccessRequest!
+
+  """
+  Rechaza la solicitud de acceso de un supervisor con un motivo opcional.
+  """
+  rejectAccessRequest(input: RejectAccessRequestInput!): SupervisorAccessRequest!
+  saveSentMessage(input: SaveSentMessageInput!): SentMessage!
+  logCall(input: LogCallInput!): CallLog!
+  createSpecialNumber(input: CreateSpecialNumberInput!): SpecialNumber!
+  updateSpecialNumber(input: UpdateSpecialNumberInput!): SpecialNumber!
+  removeSpecialNumber(id: String!): Boolean!
+  reorderSpecialNumbers(complexId: String!, ids: [String!]!): [SpecialNumber!]!
+
+  """Reordena los números especiales globales. Solo SUPER_ADMIN."""
+  reorderGlobalSpecialNumbers(ids: [String!]!): [SpecialNumber!]!
+}
+
+"""Credenciales para inicio de sesión con email y contraseña"""
+input LoginEmailInput {
+  """Correo electrónico"""
+  email: String!
+
+  """Contraseña"""
+  password: String!
+
+  """Mantener sesión activa por más tiempo"""
+  rememberMe: Boolean
+}
+
+"""Credenciales para inicio de sesión con email y código de sistema"""
+input LoginSystemCodeInput {
+  """Correo electrónico del usuario"""
+  identity: String!
+
+  """Contraseña"""
+  password: String!
+}
+
+"""Datos para el auto-registro de un supervisor en la plataforma"""
+input RegisterSupervisorInput {
+  """Nombre completo del supervisor"""
+  fullName: String!
+
+  """Correo electrónico"""
+  email: String!
+
+  """Contraseña (mínimo 8 caracteres)"""
+  password: String!
+
+  """Número de teléfono celular colombiano (ej: 3001234567)"""
+  phone: String!
+
+  """Número de documento de identidad"""
+  documentNumber: String!
+}
+
+"""Solicitud de OTP para residentes"""
+input RequestOtpInput {
+  """Número de celular del residente (ej: 3001234567)"""
+  phoneNumber: String!
+}
+
+"""Verificación de OTP para completar el login del residente"""
+input VerifyOtpInput {
+  """Número de celular del residente"""
+  phoneNumber: String!
+
+  """Código OTP de 6 dígitos recibido por SMS"""
+  code: String!
+}
+
+input ResetPasswordInput {
+  token: String!
+  newPassword: String!
+}
+
+input CreateComplexInput {
+  name: String!
+  description: String
+  address: String!
+  city: String!
+  state: String!
+  country: String! = "Colombia"
+  zipCode: String
+  type: ComplexType! = APARTMENT_COMPLEX
+  plan: ComplexPlan! = FREE
+  countryCode: CountryCode
+  phoneNumber: String
+  email: String
+
+  """Contraseña de acceso al portal del complejo"""
+  password: String
+  website: String
+  nit: String
+
+  """ID (UUID) del representante legal"""
+  legalRepresentativeId: String
+  logoUrl: String
+  coverUrl: String
+  settings: JSON
+
+  """Latitud GPS del complejo para validación de presencia de supervisores"""
+  latitude: Float
+
+  """Longitud GPS del complejo para validación de presencia de supervisores"""
+  longitude: Float
+
+  """Radio en metros para validar presencia GPS (por defecto 200 m)"""
+  gpsRadius: Int
+}
+
+"""Código de país para el número de teléfono"""
+input CountryCode {
+  code: String!
+  name: String!
+  dialCode: String!
+  flag: String!
+}
+
+input UpdateComplexInput {
+  name: String
+  description: String
+  address: String
+  city: String
+  state: String
+  country: String = "Colombia"
+  zipCode: String
+  type: ComplexType = APARTMENT_COMPLEX
+  plan: ComplexPlan = FREE
+  countryCode: CountryCode
+  phoneNumber: String
+  email: String
+
+  """Contraseña de acceso al portal del complejo"""
+  password: String
+  website: String
+  nit: String
+
+  """
+  ID (UUID) del nuevo representante legal. Enviar "" o null para limpiar.
+  """
+  legalRepresentativeId: String
+  logoUrl: String
+  coverUrl: String
+  settings: JSON
+
+  """Latitud GPS del complejo para validación de presencia de supervisores"""
+  latitude: Float
+
+  """Longitud GPS del complejo para validación de presencia de supervisores"""
+  longitude: Float
+
+  """Radio en metros para validar presencia GPS (por defecto 200 m)"""
+  gpsRadius: Int
+
+  """ID del complejo a actualizar"""
+  id: String!
+}
+
+input CreateBuildingInput {
+  """
+  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
+  """
+  name: String!
+
+  """Número de pisos"""
+  floors: Int! = 1
+  description: String
+
+  """ID del complejo"""
+  complexId: String!
+}
+
+input UpdateBuildingInput {
+  """
+  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
+  """
+  name: String
+
+  """Número de pisos"""
+  floors: Int = 1
+  description: String
+
+  """ID del complejo"""
+  complexId: String
+
+  """ID de la torre a actualizar"""
+  id: String!
+}
+
+input CreateUnitInput {
+  """
+  Número o código de la unidad. Ej: "101", "B-302"
+  """
+  number: String!
+
+  """Piso donde se ubica la unidad"""
+  floor: Int! = 1
+
+  """Tipo de unidad"""
+  type: UnitType! = APARTMENT
+
+  """Área en m²"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero"""
+  parkingSpots: Int! = 0
+
+  """Cuartos de bodega"""
+  storageRooms: Int! = 0
+  description: String
+
+  """ID del complejo"""
+  complexId: String!
+
+  """ID de la torre (opcional, para complejos con edificios)"""
+  buildingId: String
+}
+
+input UpdateUnitInput {
+  """
+  Número o código de la unidad. Ej: "101", "B-302"
+  """
+  number: String
+
+  """Piso donde se ubica la unidad"""
+  floor: Int = 1
+
+  """Tipo de unidad"""
+  type: UnitType = APARTMENT
+
+  """Área en m²"""
+  area: Float
+
+  """Número de habitaciones"""
+  bedrooms: Int
+
+  """Número de baños"""
+  bathrooms: Int
+
+  """Cupos de parqueadero"""
+  parkingSpots: Int = 0
+
+  """Cuartos de bodega"""
+  storageRooms: Int = 0
+  description: String
+
+  """ID de la unidad a actualizar"""
+  id: String!
+
+  """Cambiar estado de la unidad"""
+  status: UnitStatus
 }
 
 """Datos requeridos para crear un nuevo permiso"""
@@ -2527,6 +4072,7 @@ input CreateAdminUserInput {
   lastName: String!
   email: String!
   password: String!
+  countryCode: CountryCode
   phoneNumber: String!
   identity: String
 
@@ -2562,20 +4108,21 @@ input CreateResidentUserInput {
 }
 
 """
-Datos para crear un miembro del personal del complejo (guardia, supervisor, contador)
+Datos para crear un miembro del personal del complejo (guardia o contador)
 """
 input CreateStaffMemberInput {
   name: String!
   lastName: String!
   phoneNumber: String!
-  identityNumber: String!
+  identity: String!
+  identityNumber: String
   email: String!
-  password: String!
+  password: String
 
   """ID del complejo al que se asigna el personal"""
   complexId: String!
 
-  """Rol a asignar: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL"""
+  """Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL"""
   role: ValidRoles!
 
   """Turno asignado (MAÑANA, TARDE, NOCHE)"""
@@ -2589,6 +4136,11 @@ input RemoveStaffMemberInput {
 
   """ID del complejo del que se elimina al personal"""
   complexId: String!
+
+  """
+  Rol específico a revocar: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL
+  """
+  role: ValidRoles!
 }
 
 input ChangePasswordInput {
@@ -2603,178 +4155,11 @@ input ChangePasswordInput {
 }
 
 input UpdateUserInput {
-  id: Int!
-}
-
-"""Credenciales para inicio de sesión con email y contraseña"""
-input LoginEmailInput {
-  """Correo electrónico del usuario"""
-  email: String!
-
-  """Contraseña del usuario"""
-  password: String!
-
-  """Mantener sesión activa por más tiempo"""
-  rememberMe: Boolean
-}
-
-"""Solicitud de OTP para residentes"""
-input RequestOtpInput {
-  """Número de celular del residente (ej: 3001234567)"""
-  phoneNumber: String!
-}
-
-"""Verificación de OTP para completar el login del residente"""
-input VerifyOtpInput {
-  """Número de celular del residente"""
-  phoneNumber: String!
-
-  """Código OTP de 6 dígitos recibido por SMS"""
-  code: String!
-}
-
-input CreateComplexInput {
-  name: String!
-  description: String
-  address: String!
-  city: String!
-  state: String!
-  country: String! = "Colombia"
-  zipCode: String
-  type: ComplexType! = APARTMENT_COMPLEX
-  plan: ComplexPlan! = FREE
-  phone: String
-  email: String
-  website: String
-  nit: String
-  legalRepresentative: String
-  logoUrl: String
-  coverUrl: String
-  settings: JSON
-}
-
-input UpdateComplexInput {
+  userId: String!
   name: String
-  description: String
-  address: String
-  city: String
-  state: String
-  country: String = "Colombia"
-  zipCode: String
-  type: ComplexType = APARTMENT_COMPLEX
-  plan: ComplexPlan = FREE
-  phone: String
-  email: String
-  website: String
-  nit: String
-  legalRepresentative: String
-  logoUrl: String
-  coverUrl: String
-  settings: JSON
-
-  """ID del complejo a actualizar"""
-  id: String!
-}
-
-input CreateBuildingInput {
-  """
-  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
-  """
-  name: String!
-
-  """Número de pisos"""
-  floors: Int! = 1
-  description: String
-
-  """ID del complejo"""
-  complexId: String!
-}
-
-input UpdateBuildingInput {
-  """
-  Nombre de la torre. Ej: "Torre A", "Edificio Norte"
-  """
-  name: String
-
-  """Número de pisos"""
-  floors: Int = 1
-  description: String
-
-  """ID del complejo"""
-  complexId: String
-
-  """ID de la torre a actualizar"""
-  id: String!
-}
-
-input CreateUnitInput {
-  """
-  Número o código de la unidad. Ej: "101", "B-302"
-  """
-  number: String!
-
-  """Piso donde se ubica la unidad"""
-  floor: Int! = 1
-
-  """Tipo de unidad"""
-  type: UnitType! = APARTMENT
-
-  """Área en m²"""
-  area: Float
-
-  """Número de habitaciones"""
-  bedrooms: Int
-
-  """Número de baños"""
-  bathrooms: Int
-
-  """Cupos de parqueadero"""
-  parkingSpots: Int! = 0
-
-  """Cuartos de bodega"""
-  storageRooms: Int! = 0
-  description: String
-
-  """ID del complejo"""
-  complexId: String!
-
-  """ID de la torre (opcional, para complejos con edificios)"""
-  buildingId: String
-}
-
-input UpdateUnitInput {
-  """
-  Número o código de la unidad. Ej: "101", "B-302"
-  """
-  number: String
-
-  """Piso donde se ubica la unidad"""
-  floor: Int = 1
-
-  """Tipo de unidad"""
-  type: UnitType = APARTMENT
-
-  """Área en m²"""
-  area: Float
-
-  """Número de habitaciones"""
-  bedrooms: Int
-
-  """Número de baños"""
-  bathrooms: Int
-
-  """Cupos de parqueadero"""
-  parkingSpots: Int = 0
-
-  """Cuartos de bodega"""
-  storageRooms: Int = 0
-  description: String
-
-  """ID de la unidad a actualizar"""
-  id: String!
-
-  """Cambiar estado de la unidad"""
-  status: UnitStatus
+  lastName: String
+  phoneNumber: String
+  role: String
 }
 
 input CreateResidentInput {
@@ -2877,6 +4262,7 @@ input RegisterWalkInInput {
 
   """URL de la foto capturada en portería"""
   visitorPhotoUrl: String
+  metadata: JSON
 
   """ID del residente anfitrión"""
   hostResidentId: String!
@@ -2958,8 +4344,8 @@ input RegisterVehicleInput {
   """Notas adicionales"""
   notes: String
 
-  """ID del residente propietario del vehículo"""
-  residentId: String!
+  """ID de la unidad a la que pertenece el vehículo"""
+  unitId: String!
 
   """ID del complejo"""
   complexId: String!
@@ -2995,40 +4381,113 @@ input UpdateVehicleInput {
   id: String!
 }
 
-input RegisterPackageInput {
-  unitId: String!
+"""Datos para configurar la rotación de parqueaderos del complejo"""
+input ConfigureRotationInput {
+  """ID del complejo residencial"""
   complexId: String!
-  senderName: String!
-  type: PackageType! = PARCEL
-  trackingCode: String
-  description: String
-  photoUrl: String
-  maxStorageDays: Float
-  notes: String
+
+  """Valor numérico del intervalo de rotación (ej: 3 para "cada 3 meses")"""
+  rotationIntervalValue: Int!
+
+  """Unidad de tiempo del intervalo (DAYS | WEEKS | MONTHS)"""
+  rotationIntervalUnit: RotationIntervalUnit!
+
+  """
+  Lista de cupos disponibles por tipo de vehículo. Ej: [{ vehicleType: "CAR", slots: 20 }, { vehicleType: "MOTORCYCLE", slots: 13 }]. Solo los tipos listados participarán en la rotación.
+  """
+  slotsByType: [ParkingSlotByTypeInput!]!
+
+  """Activar o desactivar la rotación. Por defecto: true"""
+  isActive: Boolean
 }
 
-input ConfirmDeliveryInput {
-  packageId: String!
-  receivedByName: String
-  receivedByIdentity: String
-  notes: String
+"""Cupos de parqueadero disponibles para un tipo de vehículo"""
+input ParkingSlotByTypeInput {
+  """Tipo de vehículo (ej: "CAR", "MOTORCYCLE", "TRUCK", "VAN")"""
+  vehicleType: String!
+
+  """Cantidad de cupos disponibles para ese tipo"""
+  slots: Int!
+}
+
+input UpsertComplexFinanceConfigInput {
+  complexId: String!
+  moraRate: Float
+  moraGraceDays: Int
+  autoApplyMora: Boolean
+  autoGenerateCharges: Boolean
+}
+
+input CreateChargeCategoryInput {
+  name: String!
+  description: String
+  color: String
+  complexId: String!
+}
+
+input UpdateChargeCategoryInput {
+  id: ID!
+  name: String
+  description: String
+  color: String
+  isActive: Boolean
 }
 
 input CreateFeeConfigInput {
   name: String!
   description: String
   amount: Float!
+  earlyPaymentAmount: Float
   frequency: FeeFrequency! = MONTHLY
   dueDayOfMonth: Int! = 5
   complexId: String!
   unitId: String
+  categoryId: String
   unitType: UnitType
+  chargeType: ChargeType! = MONTHLY
+  installments: Int
+  billingMode: FeeConfigBillingMode! = ADVANCE
+  isOptional: Boolean = false
+  targetRules: FeeConfigTargetRulesInput
+  triggerType: FeeConfigTriggerType
+}
+
+input FeeConfigTargetRulesInput {
+  excludeFloor1: Boolean
+  floorMin: Int
+  floorMax: Int
+  buildingIds: [String!]
+  unitTypes: [String!]
+}
+
+input UpdateFeeConfigInput {
+  id: String!
+  name: String
+  description: String
+  amount: Float
+  earlyPaymentAmount: Float
+  frequency: FeeFrequency
+  dueDayOfMonth: Int
+  isActive: Boolean
+  chargeType: ChargeType
+  installments: Int
+  billingMode: FeeConfigBillingMode
+  isOptional: Boolean
+  targetRules: FeeConfigTargetRulesInput
+  triggerType: FeeConfigTriggerType
 }
 
 input GenerateChargesInput {
   complexId: String!
   period: String!
-  feeConfigId: String
+}
+
+input CreateDirectChargesInput {
+  complexId: String!
+  unitIds: [String!]!
+  description: String!
+  amount: Float!
+  period: String!
 }
 
 input RegisterPaymentInput {
@@ -3041,6 +4500,130 @@ input RegisterPaymentInput {
   notes: String
 }
 
+input RegisterBulkPaymentInput {
+  unitId: String!
+  complexId: String!
+  amount: Float!
+  method: PaymentMethod!
+  paidAt: String!
+  reference: String
+  notes: String
+}
+
+input CreateWalletCreditInput {
+  unitId: String!
+  complexId: String!
+  amount: Float!
+  description: String!
+}
+
+input ApplyWalletToChargeInput {
+  unitId: String!
+  complexId: String!
+  chargeId: String!
+  amount: Float
+}
+
+input ApplyMoraInput {
+  complexId: String!
+  period: String!
+  rate: Float!
+  graceDays: Float!
+}
+
+input RegisterExpenseInput {
+  complexId: String!
+  amount: Float!
+  description: String!
+  category: ExpenseCategory!
+  period: String!
+  expenseDate: DateTime!
+  receiptUrl: String
+  notes: String
+}
+
+input SendNotificationInput {
+  complexId: String!
+  title: String!
+  body: String!
+  type: NotificationType
+  priority: NotificationPriority
+  targetRoles: [String!]
+  targetUnitId: String
+  metadata: JSON
+}
+
+input SavePushSubscriptionInput {
+  complexId: String!
+  endpoint: String!
+  p256dh: String!
+  auth: String!
+}
+
+input SaveMobileTokenInput {
+  complexId: String!
+  deviceToken: String!
+  platform: PushPlatform!
+}
+
+"""Plataforma de destino para notificaciones push"""
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
+input RegisterPackageInput {
+  unitId: String!
+  complexId: String!
+  senderName: String!
+  type: PackageType! = PARCEL
+  trackingCode: String
+  description: String
+  photoUrl: String
+  maxStorageDays: Float
+  recipientName: String
+  notes: String
+}
+
+input ConfirmDeliveryInput {
+  packageId: String!
+  receivedByName: String
+  receivedByIdentity: String
+  notes: String
+}
+
+"""Datos para crear/actualizar la configuración del parqueadero visitante"""
+input UpdateVisitorParkingConfigInput {
+  """ID del complejo residencial"""
+  complexId: String!
+  maxCapacity: Int
+  gracePeriodMinutes: Int
+  receiptMessage: String
+  showLogoOnReceipt: Boolean
+
+  """UUID de la tarifa activa por defecto"""
+  activeRateId: String
+  currency: String
+
+  """Tarifas a crear o actualizar"""
+  rates: [VisitorParkingRateInput!]
+}
+
+"""Datos para crear/actualizar una tarifa de parqueadero visitante"""
+input VisitorParkingRateInput {
+  """ID de la tarifa a actualizar (omitir para crear nueva)"""
+  id: String
+  name: String!
+
+  """Tipo de tarifa aplicada"""
+  type: ParkingRateType!
+  amount: Float!
+  currency: String!
+  description: String
+  isActive: Boolean! = true
+}
+
 """Datos para configurar o actualizar la tarifa de parqueadero"""
 input SetParkingRateInput {
   """ID del complejo residencial"""
@@ -3050,7 +4633,7 @@ input SetParkingRateInput {
   vehicleType: VehicleType!
 
   """Tarifa cobrada por minuto de parqueo (en moneda local)"""
-  ratePerMinute: Float!
+  rateType: ParkingRateType!
 
   """Si la tarifa está activa"""
   isActive: Boolean = true
@@ -3080,6 +4663,101 @@ input RegisterVisitorVehicleInput {
   notes: String
 }
 
-type Subscription {
-  notificationAdded(complexId: String!): Notification!
+"""Datos para registrar la salida de vehículos visitantes"""
+input ResgiterExitVehicle {
+  """ID del vehiculo en parqueadero"""
+  visitorVehicleId: String!
+
+  """Metodos de pago del parqueadero"""
+  paymentMethod: ParkingPaymentMethod! = CASH
+}
+
+input SupervisorCheckInInput {
+  """ID del complejo residencial donde el supervisor hace check-in"""
+  complexId: String!
+
+  """Latitud GPS actual del supervisor (-90 a 90)"""
+  lat: Float!
+
+  """Longitud GPS actual del supervisor (-180 a 180)"""
+  lng: Float!
+}
+
+input SupervisorCheckOutInput {
+  """ID del complejo del que el supervisor hace check-out"""
+  complexId: String!
+}
+
+input RequestComplexAccessInput {
+  """ID del complejo al que el supervisor solicita acceso"""
+  complexId: String!
+
+  """Latitud GPS actual del supervisor (-90 a 90)"""
+  lat: Float!
+
+  """Longitud GPS actual del supervisor (-180 a 180)"""
+  lng: Float!
+
+  """Mensaje opcional para el administrador del complejo"""
+  message: String
+}
+
+input RejectAccessRequestInput {
+  """ID de la solicitud a rechazar"""
+  requestId: String!
+
+  """Motivo del rechazo (visible para el supervisor)"""
+  reason: String
+}
+
+input SaveSentMessageInput {
+  complexId: String!
+  unitId: String!
+  unitNumber: String!
+  channel: MessageChannel!
+  messageType: MessageType!
+  body: String!
+  recipientCount: Int!
+  recipientPhones: [String!]!
+}
+
+input LogCallInput {
+  complexId: String!
+  direction: CallDirection!
+  outcome: CallOutcome!
+  phoneNumber: String!
+  residentId: String
+  residentName: String
+  unitId: String
+  unitNumber: String
+  buildingName: String
+  startedAt: String!
+  answeredAt: String
+  endedAt: String
+  durationSeconds: Int!
+  notes: String
+}
+
+input CreateSpecialNumberInput {
+  """
+  Requerido para números de complejo; omitir para números globales (solo SUPER_ADMIN)
+  """
+  complexId: String
+
+  """true = número global visible en todos los complejos (solo SUPER_ADMIN)"""
+  isGlobal: Boolean = false
+  name: String!
+  phoneNumber: String!
+  category: SpecialNumberCategory!
+  description: String
+  order: Int
+}
+
+input UpdateSpecialNumberInput {
+  id: String!
+  name: String
+  phoneNumber: String
+  category: SpecialNumberCategory
+  description: String
+  order: Int
 }

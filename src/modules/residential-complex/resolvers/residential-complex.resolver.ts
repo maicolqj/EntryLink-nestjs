@@ -1,11 +1,14 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import { ComplexModule } from '../enums/complex-module.enum';
 
 import { ResidentialComplex } from '../entities/residential-complex.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentialComplexService } from '../services/residential-complex.service';
 import { CreateComplexInput } from '../dto/inputs/create-complex.input';
 import { UpdateComplexInput } from '../dto/inputs/update-complex.input';
 import { FilterComplexInput } from '../dto/inputs/filter-complex.input';
 import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes.response';
+import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -88,6 +91,40 @@ export class ResidentialComplexResolver {
     return this.complexService.restore(id, currentUser);
   }
 
+  /**
+   * Actualiza los módulos habilitados de un complejo.
+   * Reemplaza completamente la lista actual de módulos.
+   */
+  @Mutation(() => ResidentialComplex, { name: 'updateComplexModules' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  updateComplexModules(
+    @Args('complexId') complexId: string,
+    @Args('modules', { type: () => [ComplexModule] }) modules: ComplexModule[],
+  ): Promise<ResidentialComplex> {
+    return this.complexService.updateEnabledModules(complexId, modules);
+  }
+
+  @Query(() => [ComplexModule], { name: 'availableModules', description: 'Retorna todos los módulos disponibles en el sistema' })
+  availableModules(): ComplexModule[] {
+    return Object.values(ComplexModule);
+  }
+
+  // ================================================================
+  // RESOLVE FIELDS
+  // ================================================================
+
+  /**
+   * Filtra el representante legal eliminado (soft-delete).
+   * Si el usuario tiene deletedAt o status DELETED, retorna null
+   * en lugar del objeto del usuario eliminado.
+   */
+  @ResolveField('legalRepresentative', () => User, { nullable: true })
+  resolveLegalRepresentative(@Parent() complex: ResidentialComplex): User | null {
+    const rep = complex.legalRepresentative;
+    if (!rep || rep.deletedAt) return null;
+    return rep;
+  }
+
   // ================================================================
   // QUERIES
   // ================================================================
@@ -118,13 +155,27 @@ export class ResidentialComplexResolver {
    */
   @Query(() => ResidentialComplex, { name: 'complex' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL, ValidRoles.SUPERVISOR_ROL],
-    // permissions: [ValidPermissions.VIEW_RESIDENCES],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    permissions: [ValidPermissions.VIEW_RESIDENCES],
   })
   findOne(
     @Args('id') id: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     return this.complexService.findById(id, currentUser);
+  }
+
+  /**
+   * Devuelve los complejos activos dentro del radio GPS indicado (por defecto 200 m).
+   * Uso principal: el supervisor descubre complejos cercanos para solicitar acceso.
+   */
+  @Query(() => [NearbyComplexResponse], { name: 'nearbyComplexes' })
+  @Auth({ roles: [ValidRoles.SUPERVISOR_ROL] })
+  findNearby(
+    @Args('lat', { type: () => Number }) lat: number,
+    @Args('lng', { type: () => Number }) lng: number,
+    @Args('radiusMeters', { type: () => Number, nullable: true, defaultValue: 200 }) radiusMeters: number,
+  ): Promise<NearbyComplexResponse[]> {
+    return this.complexService.findNearby(lat, lng, radiusMeters);
   }
 }

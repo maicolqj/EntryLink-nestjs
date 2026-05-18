@@ -18,6 +18,7 @@ import { Permission } from '../../permissions/entities/permission.entity';
 import { UserRole } from './user_has_roles.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { hash, compare } from 'bcrypt'
+import { VisitorParkingRate } from '../../visitor-parking/entities/visitor-parking-rate.entity';
 
 @ObjectType({
     description: 'CountryCode'
@@ -89,7 +90,7 @@ export class User {
     @Column({ name: 'coverPicture', type: 'text', nullable: true })
     @Field(() => String, { description: 'Profile picture of port URL', nullable: true })
     coverPicture?: string;
-
+ 
     @Column({ name: 'password', type: 'text', select: false })
     @Field(() => String, { description: 'Password', nullable: true })
     password: string;
@@ -243,6 +244,10 @@ export class User {
     @Field(() => String, { description: 'ID del complejo residencial asociado', nullable: true })
     complexId?: string;
 
+
+    @Column({ name: 'company_card_url', type: 'varchar', length: 500, nullable: true })
+    companyCardUrl?: string;
+
     @Column({ name: 'last_password_change', type: 'timestamptz', nullable: true })
     @Field(() => Date, { description: 'Date of last password change', nullable: true })
     lastPasswordChange?: Date;
@@ -265,6 +270,14 @@ export class User {
     @OneToMany(() => Permission, (permission) => permission.updatedByUser)
     @Field(() => [Permission], { nullable: true, description: 'Permissions last updated by this user' })
     updatedPermissions?: Permission[];
+ 
+    @OneToMany(() => VisitorParkingRate, (visitorParking) => visitorParking.createdByUser)
+    @Field(() => [VisitorParkingRate], { nullable: true, description: 'Visitor last created by this user' })
+    createVisitorParking?: VisitorParkingRate[];
+
+    @OneToMany(() => VisitorParkingRate, (visitorParking) => visitorParking.updatedByUser)
+    @Field(() => [VisitorParkingRate], { nullable: true, description: 'Visitor last updated by this user' })
+    updateVisitorParking?: VisitorParkingRate[];
 
     @OneToMany(() => Role, (role) => role.createdByUser, { cascade: false })
     @Field(() => [Role], { nullable: true })

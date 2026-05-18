@@ -7,9 +7,12 @@ import {
   Index,
 } from 'typeorm';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+import GraphQLJSON from 'graphql-type-json';
 
-import { NotificationType }     from '../enums/notification-type.enum';
-import { NotificationPriority } from '../enums/notification-priority.enum';
+import { NotificationType }          from '../enums/notification-type.enum';
+import { NotificationPriority }      from '../enums/notification-priority.enum';
+import { NotificationActionType }    from '../enums/notification-action-type.enum';
+import { NotificationActionResult }  from '../enums/notification-action-result.enum';
 
 /**
  * Notificación persistida en base de datos.
@@ -55,9 +58,21 @@ export class Notification {
    * Metadatos estructurados: { entityId, entityType, deepLink, ... }
    * Permite a la app navegar al recurso relacionado al tocar la notificación.
    */
-  @Field(() => String, { nullable: true })
+  @Field(() => GraphQLJSON, { nullable: true })
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
+
+  // ─── Broadcast ───────────────────────────────────────────────
+
+  /** true = notificación masiva; recipientUserId es NULL en este caso */
+  @Field()
+  @Column({ default: false })
+  isBroadcast: boolean;
+
+  /** Roles destinatarios del broadcast (vacío = todos los usuarios del complejo) */
+  @Field(() => [String], { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  targetRoles?: string[];
 
   // ─── Estado de lectura ────────────────────────────────────────
 
@@ -71,7 +86,7 @@ export class Notification {
 
   // ─── Destinatario ─────────────────────────────────────────────
 
-  /** ID del usuario al que va dirigida. NULL = broadcast. */
+  /** ID del usuario al que va dirigida. NULL cuando isBroadcast = true. */
   @Field(() => String, { nullable: true })
   @Column({ nullable: true })
   recipientUserId?: string;
@@ -93,6 +108,51 @@ export class Notification {
   @Field(() => String, { nullable: true })
   @Column({ nullable: true })
   entityType?: string;
+
+  // ─── Trazabilidad — quién originó la notificación ────────────
+
+  /**
+   * ID del usuario (o entidad) que disparó la notificación.
+   * NULL = generada por el sistema (cron, evento automático).
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  createdByUserId?: string;
+
+  // ─── Acciones requeridas ──────────────────────────────────────
+
+  /**
+   * Indica si el destinatario debe tomar una acción (aprobar/rechazar/confirmar).
+   * El frontend usa este flag para mostrar botones de acción en la tarjeta.
+   */
+  @Field()
+  @Column({ default: false })
+  isActionable: boolean;
+
+  /** Tipo de acción esperada. Solo presente cuando isActionable = true. */
+  @Field(() => NotificationActionType, { nullable: true })
+  @Column({ type: 'enum', enum: NotificationActionType, nullable: true })
+  actionType?: NotificationActionType;
+
+  /** Etiqueta del botón principal de acción (p.ej. "Aprobar acceso"). */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  actionLabel?: string;
+
+  /** Cuándo se ejecutó la acción. NULL = pendiente. */
+  @Field(() => Date, { nullable: true, })
+  @Column({ nullable: true })
+  actionTakenAt?: Date;
+
+  /** ID del usuario que ejecutó la acción. */
+  @Field(() => String, { nullable: true })
+  @Column({ nullable: true })
+  actionTakenByUserId?: string;
+
+  /** Resultado de la acción tomada. */
+  @Field(() => NotificationActionResult, { nullable: true })
+  @Column({ type: 'enum', enum: NotificationActionResult, nullable: true })
+  actionResult?: NotificationActionResult;
 
   // ─── Auditoría ────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ export interface UserSeedData {
     identity: string
     email: string
     password: string
-    systemCode: string
+    passwordSet: boolean
     phoneVerified: boolean
     emailVerified: boolean
     identityVerified: boolean
@@ -28,18 +28,19 @@ export interface UserSeedData {
 export const USER_TO_SEED: UserSeedData[] = [
     {
         id: 'f3b9d0a1-b2c3-4d4e-af6a-7b8c9d0e1f2b',
-        name: 'Maicol',
-        lastName: 'Quiñones',
-        phoneNumber: '3168325485',
+        name: 'Admin',
+        lastName: 'Sistema',
+        phoneNumber: process.env.SEED_ADMIN_PHONE ?? '3000000000',
         countryCode: {
             code: 'CO',
             name: 'Colombia',
             dialCode: '+57',
             flag: '🇨🇴'
         },
-        identity: '1012427216',
-        email: 'maicolqj.crow@gmail.com',
-        password: '123456Ab*',
+        identity: process.env.SEED_ADMIN_IDENTITY ?? '0000000000',
+        email: process.env.SEED_ADMIN_EMAIL ?? 'admin@entrylink.local',
+        password: process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!',
+        passwordSet: true,
         phoneVerified: true,
         emailVerified: true,
         identityVerified: true,

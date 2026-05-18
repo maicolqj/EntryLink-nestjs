@@ -70,9 +70,9 @@ export class RegisterVehicleInput {
 
   // ---- Relaciones ----
 
-  @Field(() => String, { description: 'ID del residente propietario del vehículo' })
+  @Field(() => String, { description: 'ID de la unidad a la que pertenece el vehículo' })
   @IsUUID()
-  residentId: string;
+  unitId: string;
 
   @Field(() => String, { description: 'ID del complejo' })
   @IsUUID()

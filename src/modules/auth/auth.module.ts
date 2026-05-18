@@ -6,6 +6,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 
 import { AuthResolver } from './auth.resolver';
+import { SupervisorsController } from './controllers/supervisors.controller';
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
@@ -22,16 +23,21 @@ import { OtpCode } from './entities/otp-code.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { UserSession } from './entities/user-session.entity';
 import { User } from '../users/entities/user.entity';
+import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
+import { Role } from '../roles/entities/role.entity';
+import { UserRole } from '../users/entities/user_has_roles.entity';
+
 
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 
 @Module({
+  controllers: [SupervisorsController],
   imports: [
     ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}), // Configurado sin secret fijo; cada llamada usa su propio secret
-    TypeOrmModule.forFeature([User, OtpCode, RefreshToken, UserSession]),
+    TypeOrmModule.forFeature([User, ResidentialComplex, OtpCode, RefreshToken, UserSession, Role, UserRole]),
     BullModule.registerQueue({ name: OTP_QUEUE_NAME }),
     CacheModule,
   ],

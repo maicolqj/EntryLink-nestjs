@@ -35,6 +35,11 @@ export class CreateStaffMemberResponse {
   @Field(() => String)
   phoneNumber: string;
 
+
+  @Field(() => String)
+  identity: string;
+
+
   @Field(() => String, { nullable: true })
   complexId?: string;
 
