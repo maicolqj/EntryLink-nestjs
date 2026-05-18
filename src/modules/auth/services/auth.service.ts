@@ -40,6 +40,7 @@ import { RegisterSupervisorResponse } from '../dto/responses/register-supervisor
 import { MailService } from '../../../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -49,6 +50,7 @@ export class AuthService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
+
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
     private readonly tokenService: TokenService,
@@ -95,7 +97,6 @@ export class AuthService {
       if (!hasValidRole) {
         throw new UnauthorizedException('Este usuario no puede iniciar sesión con email y contraseña');
       }
-
       return this.loginUser(input, user, deviceInfo);
     }
 
@@ -189,7 +190,6 @@ export class AuthService {
 
     this.assertUserAccountActive(user);
     await this.otpService.generateAndSend(user.id, phoneNumber, ip);
-
     return { success: true, message: genericMessage };
   }
 
@@ -227,6 +227,7 @@ export class AuthService {
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1_000);
 
+
     // VULN-02 fix: PIN aleatorio criptográficamente seguro — el NIT es dato público/predecible
     const { randomInt } = await import('crypto');
     const rawPin = String(randomInt(100_000, 1_000_000)); // 6 dígitos, espacio 900k
@@ -252,6 +253,7 @@ export class AuthService {
       .createQueryBuilder('complex')
       .addSelect('complex.qrLoginToken')
       .addSelect('complex.qrLoginTokenExp')
+
       .addSelect('complex.qrLoginPin')
       .leftJoinAndSelect('complex.owner', 'owner')
       .leftJoinAndSelect('owner.userRoles', 'userRoles')
@@ -260,6 +262,7 @@ export class AuthService {
       .where('complex.qrLoginToken = :token', { token })
       .andWhere('complex.deleted_at IS NULL')
       .getOne();
+
 
     if (!complex) {
       throw new NotFoundException('Token QR no válido');
@@ -272,6 +275,7 @@ export class AuthService {
     if (!complex.qrLoginTokenExp || new Date() > complex.qrLoginTokenExp) {
       throw new UnauthorizedException('El token QR ha expirado');
     }
+
 
     if (!complex.qrLoginPin) {
       throw new BadRequestException('PIN no configurado para este token QR');
@@ -289,6 +293,7 @@ export class AuthService {
     await this.complexRepo.update(complex.id, {
       qrLoginTokenUsed: true,
       qrLoginPin: null as unknown as string,
+
     });
 
     this.assertComplexAccountActive(complex);
@@ -308,6 +313,7 @@ export class AuthService {
   // ═══════════════════════════════════════════════════════════════
 
   async setInitialPassword(complexId: string, newPassword: string): Promise<SetPasswordResponse> {
+
     // VULN-07 fix: usar ConfigService en lugar de process.env directo
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
@@ -319,6 +325,7 @@ export class AuthService {
       qrLoginToken: null as unknown as string,
       qrLoginTokenExp: null as unknown as Date,
       qrLoginPin: null as unknown as string,
+
       tokenVersion: () => '"tokenVersion" + 1',
     });
 
@@ -360,338 +367,7 @@ export class AuthService {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // REGISTRO PÚBLICO: Supervisor se auto-registra en la plataforma
-  // ═══════════════════════════════════════════════════════════════
 
-  async registerSupervisor(
-    input: RegisterSupervisorInput,
-  ): Promise<RegisterSupervisorResponse> {
-    // 1. Verificar email no en uso (incluyendo cuentas pendientes)
-    const existing = await this.userRepo.findOne({
-      where: { email: input.email.toLowerCase().trim() },
-    });
-    if (existing) {
-      // Respuesta genérica para no revelar si el email existe
-      return {
-        success: true,
-        supervisorId: null,
-        message: 'Si el correo es válido, recibirás un enlace de verificación en los próximos minutos.',
-      };
-    }
-
-    // 2. Obtener rol SUPERVISOR_ROL
-    const supervisorRole = await this.roleRepo.findOne({
-      where: { name: ValidRoles.SUPERVISOR_ROL },
-    });
-    if (!supervisorRole) {
-      throw new CustomError({
-        message: 'Rol SUPERVISOR_ROL no encontrado en la base de datos',
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-      });
-    }
-
-    // 3. Crear usuario con PENDING_VERIFICATION — sin emitir JWT
-    const [firstName, ...rest] = input.fullName.trim().split(' ');
-    const lastName = rest.join(' ') || firstName;
-    const verificationToken = uuidv4();
-    const tokenExp = new Date(
-      Date.now() + AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES * 60_000,
-    );
-
-    const user = await this.dataSource.transaction(async (manager) => {
-      const newUser = manager.create(User, {
-        name:                  firstName,
-        lastName:              lastName,
-        email:                 input.email,
-        password:              input.password,   // BeforeInsert hashea automáticamente
-        phoneNumber:           input.phone,
-        identity:              input.documentNumber,
-        status:                UserStatus.PENDING_VERIFICATION,
-        passwordSet:           true,
-        phoneVerified:         false,
-        emailVerified:         false,
-        identityVerified:      false,
-        passwordResetToken:    verificationToken,
-        passwordResetTokenExp: tokenExp,
-      });
-
-      const savedUser = await manager.save(User, newUser);
-
-      await manager.save(
-        manager.create(UserRole, {
-          user: { id: savedUser.id },
-          role: { id: supervisorRole.id },
-          isPrimary: true,
-        }),
-      );
-
-      return savedUser;
-    });
-
-    // 4. Enviar email de verificación (fire-and-forget)
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-    const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
-
-    void this.mailService.queueEmailVerificationEmail({
-      userId:          user.id,
-      email:           user.email,
-      name:            user.name,
-      verificationUrl,
-      expiresInMinutes: AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES,
-    });
-
-    this.logger.log(`Supervisor registrado (pendiente de verificación): userId=${user.id}`);
-
-    return {
-      success: true,
-      supervisorId: user.id,
-      message: 'Si el correo es válido, recibirás un enlace de verificación en los próximos minutos.',
-    };
-  }
-
-  async verifySupervisorEmail(
-    token: string,
-    deviceInfo: DeviceInfo,
-  ): Promise<AuthResponse> {
-    // 1. Buscar usuario por token de verificación
-    const user = await this.userRepo
-      .createQueryBuilder('user')
-      .addSelect('user.passwordResetToken')
-      .addSelect('user.passwordResetTokenExp')
-      .leftJoinAndSelect('user.userRoles', 'userRoles')
-      .leftJoinAndSelect('userRoles.role', 'role')
-      .leftJoinAndSelect('role.permissions', 'permissions')
-      .where('user.passwordResetToken = :token', { token })
-      .andWhere('user.status = :status', { status: UserStatus.PENDING_VERIFICATION })
-      .andWhere('user.deleted_at IS NULL')
-      .getOne();
-
-    if (!user) {
-      throw new CustomError({
-        message: 'El enlace de verificación no es válido o ya fue utilizado',
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: GeneralErrorCode.INVALID_INPUT,
-      });
-    }
-
-    // 2. Verificar que el token no haya expirado
-    if (!user.passwordResetTokenExp || new Date() > user.passwordResetTokenExp) {
-      throw new CustomError({
-        message: 'El enlace de verificación ha expirado. Por favor regístrate nuevamente',
-        statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: GeneralErrorCode.INVALID_INPUT,
-      });
-    }
-
-    // 3. Activar cuenta y limpiar token
-    await this.userRepo.update(user.id, {
-      status:                UserStatus.ACTIVE,
-      emailVerified:         true,
-      passwordResetToken:    null,
-      passwordResetTokenExp: null,
-    });
-
-    user.status        = UserStatus.ACTIVE;
-    user.emailVerified = true;
-
-    this.logger.log(`Email verificado — supervisor activado: userId=${user.id}`);
-
-    // 4. Emitir sesión JWT
-    return this.createUserSession(user, deviceInfo, false);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // Reset de contraseña por email
-  // ═══════════════════════════════════════════════════════════════
-
-  async requestPasswordReset(email: string): Promise<RequestPasswordResetResponse> {
-    const genericResponse: RequestPasswordResetResponse = {
-      success: true,
-      message: 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.',
-    };
-
-    const normalizedEmail = email.toLowerCase().trim();
-    const rateLimitKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_RATE_LIMIT, key: normalizedEmail };
-
-    const rateData = await this.cacheService.get<{ count: number }>({ key: rateLimitKey });
-    if ((rateData?.count ?? 0) >= AUTH_CONSTANTS.PASSWORD_RESET_RATE_LIMIT_MAX) {
-      return genericResponse;
-    }
-
-    // Buscar primero en usuarios (SUPER_ADMIN, COMPILANCE, ACCOUNTANT, SUPERVISOR)
-    const user = await this.userRepo
-      .createQueryBuilder('user')
-      .where('LOWER(user.email) = LOWER(:email)', { email: normalizedEmail })
-      .andWhere('user.deleted_at IS NULL')
-      .getOne();
-
-    if (user) {
-      const token = uuidv4();
-      const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES * 60_000);
-
-      await this.userRepo.update(user.id, {
-        passwordResetToken: token,
-        passwordResetTokenExp: expiresAt,
-      });
-
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-      const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-
-      await this.mailService.queuePasswordResetEmail({
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        resetUrl,
-        expiresInMinutes: AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES,
-      });
-
-      await this.cacheService.set({
-        key: rateLimitKey,
-        data: { count: (rateData?.count ?? 0) + 1 },
-        options: { ttl: AUTH_CONSTANTS.CACHE_TTL.PASSWORD_RESET_RATE_LIMIT },
-      });
-
-      this.logger.log(`Password reset solicitado — userId: ${user.id}`);
-      return genericResponse;
-    }
-
-    // Buscar en complejos residenciales (COMPLEX_ROL)
-    const complex = await this.complexRepo
-      .createQueryBuilder('complex')
-      .where('LOWER(complex.email) = LOWER(:email)', { email: normalizedEmail })
-      .andWhere('complex.deleted_at IS NULL')
-      .getOne();
-
-    // Si el complejo no ha establecido contraseña vía QR, no permitir reset por email
-    if (!complex || !complex.passwordSet) {
-      return genericResponse;
-    }
-
-    const token = uuidv4();
-    const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES * 60_000);
-
-    await this.complexRepo.update(complex.id, {
-      passwordResetToken: token,
-      passwordResetTokenExp: expiresAt,
-    });
-
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-
-    await this.mailService.queuePasswordResetEmail({
-      userId: complex.id,
-      email: complex.email!,
-      name: complex.name,
-      resetUrl,
-      expiresInMinutes: AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES,
-    });
-
-    await this.cacheService.set({
-      key: rateLimitKey,
-      data: { count: (rateData?.count ?? 0) + 1 },
-      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.PASSWORD_RESET_RATE_LIMIT },
-    });
-
-    this.logger.log(`Password reset solicitado — complexId: ${complex.id}`);
-    return genericResponse;
-  }
-
-  async resetPassword(input: ResetPasswordInput): Promise<SetPasswordResponse> {
-    // Buscar token en usuarios
-    const user = await this.userRepo
-      .createQueryBuilder('user')
-      .addSelect('user.passwordResetToken')
-      .addSelect('user.passwordResetTokenExp')
-      .where('user.passwordResetToken = :token', { token: input.token })
-      .andWhere('user.deleted_at IS NULL')
-      .getOne();
-
-    if (user) {
-      if (!user.passwordResetTokenExp || new Date() > user.passwordResetTokenExp) {
-        await this.userRepo.update(user.id, {
-          passwordResetToken: null as unknown as string,
-          passwordResetTokenExp: null as unknown as Date,
-        });
-        throw new BadRequestException({
-          message: 'El enlace de restablecimiento ha expirado. Solicita uno nuevo.',
-          errorCode: UserErrorCode.TOKEN_EXPIRED,
-        });
-      }
-
-      const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
-      const hashedPassword = await bcrypt.hash(input.newPassword, saltRounds);
-
-      await this.userRepo.update(user.id, {
-        password: hashedPassword,
-        passwordResetToken: null as unknown as string,
-        passwordResetTokenExp: null as unknown as Date,
-        passwordSet: true,
-        lastPasswordChange: new Date(),
-        tokenVersion: () => '"tokenVersion" + 1',
-      });
-
-      // VULN-15 fix: terminar sesiones activas, consistente con el flujo de complejos
-      await Promise.all([
-        this.tokenService.revokeAllUserTokens(user.id, 'password_reset'),
-        this.tokenService.clearUserTokenVersionCache(user.id),
-        this.sessionService.terminateAllUserSessions(user.id),
-      ]);
-
-      this.logger.log(`Contraseña restablecida exitosamente — userId: ${user.id}`);
-      return { success: true };
-    }
-
-    // Buscar token en complejos residenciales
-    const complex = await this.complexRepo
-      .createQueryBuilder('complex')
-      .addSelect('complex.passwordResetToken')
-      .addSelect('complex.passwordResetTokenExp')
-      .where('complex.passwordResetToken = :token', { token: input.token })
-      .andWhere('complex.deleted_at IS NULL')
-      .getOne();
-
-    if (!complex) {
-      throw new BadRequestException({
-        message: 'El enlace de restablecimiento no es válido',
-        errorCode: UserErrorCode.INVALID_TOKEN,
-      });
-    }
-
-    if (!complex.passwordResetTokenExp || new Date() > complex.passwordResetTokenExp) {
-      await this.complexRepo.update(complex.id, {
-        passwordResetToken: null as unknown as string,
-        passwordResetTokenExp: null as unknown as Date,
-      });
-      throw new BadRequestException({
-        message: 'El enlace de restablecimiento ha expirado. Solicita uno nuevo.',
-        errorCode: UserErrorCode.TOKEN_EXPIRED,
-      });
-    }
-
-    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
-    const hashedPassword = await bcrypt.hash(input.newPassword, saltRounds);
-
-    await this.complexRepo.update(complex.id, {
-      password: hashedPassword,
-      passwordResetToken: null as unknown as string,
-      passwordResetTokenExp: null as unknown as Date,
-      passwordSet: true,
-      lastPasswordChange: new Date(),
-      tokenVersion: () => '"tokenVersion" + 1',
-    });
-
-    await Promise.all([
-      this.tokenService.revokeAllUserTokens(complex.id, 'password_reset'),
-      this.tokenService.clearUserTokenVersionCache(complex.id),
-      this.sessionService.terminateAllUserSessions(complex.id),
-    ]);
-
-    this.logger.log(`Contraseña restablecida exitosamente — complexId: ${complex.id}`);
-    return { success: true };
-  }
-
-  // ═══════════════════════════════════════════════════════════════
   // Métodos privados de autenticación
   // ═══════════════════════════════════════════════════════════════
 
@@ -763,11 +439,59 @@ export class AuthService {
     return this.createComplexSession(complex, deviceInfo, rememberMe ?? false);
   }
 
+
+  /**
+   * Valida email+password contra residential_complexes y crea sesión con entityType='complex'.
+   * Usado exclusivamente por COMPLEX_ROL.
+   */
+  private async loginComplex(
+    input: LoginEmailInput,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
+    const { email, password, rememberMe } = input;
+
+    // Cargar el complejo con su owner (para roles y permisos en el JWT)
+    const complex = await this.complexRepo
+      .createQueryBuilder('complex')
+      .addSelect('complex.password')
+      .leftJoinAndSelect('complex.owner', 'owner')
+      .leftJoinAndSelect('owner.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .where('LOWER(complex.email) = LOWER(:email)', { email: email.trim() })
+      .andWhere('complex.deleted_at IS NULL')
+      .getOne();
+
+    if (!complex || !complex.password || !complex.passwordSet) {
+      await this.registerFailedAttempt(email, deviceInfo.ip, false);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const passwordValid = await bcrypt.compare(password, complex.password);
+    if (!passwordValid) {
+      await this.registerFailedAttempt(email, deviceInfo.ip, false);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    this.assertComplexAccountActive(complex);
+
+    if (!complex.owner) {
+      throw new UnauthorizedException('No se encontró el propietario del complejo');
+    }
+
+    this.assertUserAccountActive(complex.owner);
+    await this.clearFailedAttempts(email);
+
+    this.logger.log(`Login exitoso (complex email+pwd): complexId=${complex.id} owner=${complex.ownerId}`);
+    return this.createComplexSession(complex, deviceInfo, rememberMe ?? false);
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // Creación de sesiones
   // ═══════════════════════════════════════════════════════════════
 
   /**
+
    * Crea sesión para un User (SUPER_ADMIN, COMPLIANCE, ACCOUNTANT, SUPERVISOR, SECURITY, RESIDENT).
    * sub JWT = user.id | email JWT = user.email | tokenVersion = user.tokenVersion
    */
@@ -800,7 +524,7 @@ export class AuthService {
 
     const tokenPair = await this.tokenService.generateTokenPairForComplex(complex, deviceInfo, rememberMe);
 
-    await this.sessionService.createOrUpdateSession(complex.ownerId, tokenPair.sessionId, deviceInfo);
+      await this.sessionService.createOrUpdateSession(complex.ownerId, tokenPair.sessionId, deviceInfo);
 
     this.logger.log(`Sesión complex creada — sub: ${complex.id} | owner: ${complex.ownerId} | sessionId: ${tokenPair.sessionId}`);
     return this.toAuthResponse(tokenPair);
@@ -840,12 +564,14 @@ export class AuthService {
       throw new UnauthorizedException(`Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`);
     }
 
+
     const blockedStatuses: UserStatus[] = [
       UserStatus.SUSPENDED,
       UserStatus.BANNED,
       UserStatus.INACTIVE,
       UserStatus.PENDING_VERIFICATION,
     ];
+
     if (blockedStatuses.includes(user.status)) {
       const isPending = user.status === UserStatus.PENDING_VERIFICATION;
       throw new UnauthorizedException(
@@ -863,6 +589,7 @@ export class AuthService {
     ip: string,
     updateUserDb = true,
     userEmail?: string,
+
   ): Promise<void> {
     const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.FAILED_ATTEMPTS, key: identifier };
     const current = await this.cacheService.get<{ count: number }>({ key });
@@ -870,6 +597,7 @@ export class AuthService {
 
     if (updateUserDb && newCount >= AUTH_CONSTANTS.MAX_LOGIN_ATTEMPTS) {
       const emailToLock = userEmail ?? identifier;
+
       await this.userRepo.update(
         { email: emailToLock },
         { accountLockedUntil: new Date(Date.now() + AUTH_CONSTANTS.LOGIN_BLOCK_DURATION * 1_000) },

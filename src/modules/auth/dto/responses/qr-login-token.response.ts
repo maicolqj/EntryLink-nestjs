@@ -10,4 +10,5 @@ export class QrLoginTokenResponse {
 
   @Field(() => String, { description: 'PIN de 4 dígitos (últimos 4 del NIT sin dígito de verificación). El complejo ya lo conoce.' })
   pin: string;
+
 }

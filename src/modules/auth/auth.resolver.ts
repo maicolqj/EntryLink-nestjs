@@ -19,6 +19,7 @@ import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { Auth } from '../shared/decorators/auth.decorator';
 import { SetPasswordResponse } from './dto/responses/set-password.response';
+
 import { ResetPasswordInput } from './dto/inputs/reset-password.input';
 import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
 
@@ -46,7 +47,6 @@ export class AuthResolver {
     return this.authService.loginWithEmail(input, deviceInfo);
   }
 
-  // ── Login por numero de identidad del usuario ──────────────────────────────────
 
   @Public()
   @Mutation(() => AuthResponse, {

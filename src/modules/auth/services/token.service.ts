@@ -89,12 +89,13 @@ export class TokenService {
     const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
     const issuer = this.configService.get<string>('JWT_ISSUER');
 
-    // VULN-12 fix: algoritmo explícito para evitar algorithm confusion attacks
+
     return this.jwtService.signAsync(payload, {
       secret,
       expiresIn: AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY,
       issuer,
       algorithm: 'HS256',
+
     });
   }
 
@@ -150,6 +151,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
     const refreshToken = await this.jwtService.signAsync(
       { sub: userId, type: 'refresh', entityType, complexId, sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+
       // VULN-12 fix: algoritmo explícito
       { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn, jwtid: tokenId, algorithm: 'HS256' }
     );
@@ -185,9 +187,11 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
     const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
+
     const refreshExpiry = storedToken.rememberMe
       ? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER
       : AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
+
     let accessToken: string;
     let newRefreshToken: string;
 
@@ -206,6 +210,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       if (!complex) throw new UnauthorizedException('Complejo no encontrado o eliminado');
 
       accessToken = await this.generateAccessTokenForComplex(complex, storedToken.sessionId);
+
       // VULN-12 fix: algoritmo explícito en rotación de refresh token
       newRefreshToken = await this.jwtService.signAsync(
         { sub: storedToken.user.id, type: 'refresh', entityType, complexId: complex.id, sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
@@ -215,6 +220,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       accessToken = await this.generateAccessToken(storedToken.user, storedToken.sessionId, 'user');
       newRefreshToken = await this.jwtService.signAsync(
         { sub: storedToken.user.id, type: 'refresh', entityType: 'user', sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+
         { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: refreshExpiry, jwtid: tokenId, algorithm: 'HS256' }
       );
     }

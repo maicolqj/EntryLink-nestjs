@@ -11,6 +11,7 @@ export const EMAIL_PASSWORD_USER_ROLES = [
   ValidRoles.COMPILANCE_OFFICER_ROL,
   ValidRoles.ACCOUNTANT_ROL,
   ValidRoles.SUPERVISOR_ROL,
+
 ] as const;
 
 @InputType({ description: 'Credenciales para inicio de sesión con email y contraseña' })

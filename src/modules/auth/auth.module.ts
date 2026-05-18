@@ -27,6 +27,7 @@ import { ResidentialComplex } from '../residential-complex/entities/residential-
 import { Role } from '../roles/entities/role.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
 
+
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 
