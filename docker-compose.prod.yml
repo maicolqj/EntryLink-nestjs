@@ -47,10 +47,7 @@ services:
       retries: 3
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
+    image: ghcr.io/maicolqj/entrylink-nestjs:latest
     restart: unless-stopped
     container_name: entrylink-app
     environment:
