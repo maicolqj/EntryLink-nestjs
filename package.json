@@ -80,7 +80,8 @@
     "socket.io": "^4.8.3",
     "typeorm": "^0.3.28",
     "web-push": "^3.6.7",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "dotenv": "^17.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -97,7 +98,6 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^9.0.8",
-    "dotenv": "^17.3.1",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
