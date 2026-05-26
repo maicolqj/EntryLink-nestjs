@@ -1,0 +1,39 @@
+name: Push Schema to Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/schema.gql'
+  workflow_dispatch:
+
+jobs:
+  push-schema:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Push schema to EntryLink-Web
+        env:
+          FRONTEND_REPO_TOKEN: ${{ secrets.FRONTEND_REPO_TOKEN }}
+        run: |
+          git clone \
+            https://x-access-token:${FRONTEND_REPO_TOKEN}@github.com/maicolqj/EntryLink-Web.git \
+            frontend-repo
+
+          cp src/schema.gql frontend-repo/schema.gql
+
+          cd frontend-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add schema.gql
+
+          if git diff --staged --exit-code > /dev/null 2>&1; then
+            echo "Schema unchanged — nothing to push"
+          else
+            git commit -m "chore: sync schema from phone-dialer-nestjs"
+            git push
+            echo "Schema pushed to EntryLink-Web — codegen will run automatically"
+          fi
