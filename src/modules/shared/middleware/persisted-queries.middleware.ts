@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { stripIgnoredCharacters } from 'graphql';
 
 /**
  * Implements the Automatic Persisted Queries (APQ) protocol and, in production,
@@ -79,7 +80,7 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
       this.logger.log(
         `Loaded ${Object.keys(this.manifest).length} trusted queries from query-manifest.json`,
       );
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error(`Failed to parse query-manifest.json: ${err.message}`);
     }
   }
@@ -148,7 +149,11 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
     }
 
     // ── Hash + query present (first-time or re-registration) ─────────────────
-    const actualHash = createHash('sha256').update(queryInBody).digest('hex');
+    // Apollo Client computes: sha256(stripIgnoredCharacters(print(document)))
+    // but sends query: print(document) (with whitespace) on retry.
+    // Normalize before hashing to match the client's algorithm.
+    const normalizedQuery = stripIgnoredCharacters(queryInBody);
+    const actualHash = createHash('sha256').update(normalizedQuery).digest('hex');
 
     if (actualHash !== hash) {
       res.status(400).json({
@@ -178,9 +183,9 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Dev: cache for future hash-only requests and log the hash
+    // Dev: cache normalized query for future hash-only requests and log the hash
     if (!PersistedQueriesMiddleware.devCache.has(hash)) {
-      PersistedQueriesMiddleware.devCache.set(hash, queryInBody);
+      PersistedQueriesMiddleware.devCache.set(hash, normalizedQuery);
       this.logger.log(
         `[APQ] hash: ${hash}  op: ${body.operationName ?? 'anonymous'}`,
       );
