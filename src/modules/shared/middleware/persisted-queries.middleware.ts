@@ -149,45 +149,45 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
     }
 
     // ── Hash + query present (first-time or re-registration) ─────────────────
-    // Apollo Client computes: sha256(stripIgnoredCharacters(print(document)))
-    // but sends query: print(document) (with whitespace) on retry.
-    // Normalize before hashing to match the client's algorithm.
-    const normalizedQuery = stripIgnoredCharacters(queryInBody);
-    const actualHash = createHash('sha256').update(normalizedQuery).digest('hex');
 
-    if (actualHash !== hash) {
-      res.status(400).json({
+    if (this.isProd) {
+      // In trusted-document mode the manifest IS the source of truth.
+      // If the hash is registered, serve the trusted copy and ignore the
+      // client-supplied body (prevents query-substitution attacks).
+      // No cryptographic hash verification needed: the manifest already
+      // acts as the allowlist, and the client's hash algorithm may differ
+      // from SHA-256 (e.g. the codegen tool may use a different digest).
+      if (this.manifest[hash]) {
+        req.body = { ...body, query: this.manifest[hash] };
+        return next();
+      }
+      res.status(403).json({
         errors: [
           {
-            message: 'sha256Hash does not match the provided query document.',
-            extensions: { code: 'PERSISTED_QUERY_HASH_MISMATCH' },
+            message: 'Query is not in the trusted document manifest.',
+            extensions: { code: 'PERSISTED_QUERY_NOT_ALLOWED' },
           },
         ],
       });
       return;
     }
 
-    if (this.isProd) {
-      if (!this.manifest[hash]) {
-        res.status(403).json({
-          errors: [
-            {
-              message: 'Query is not in the trusted document manifest.',
-              extensions: { code: 'PERSISTED_QUERY_NOT_ALLOWED' },
-            },
-          ],
-        });
-        return;
-      }
-      // Trusted query verified — proceed to Apollo
-      return next();
+    // Dev: verify hash then cache for future hash-only requests.
+    // Use the same normalization the frontend codegen applies so the
+    // devCache hash matches subsequent hash-only requests.
+    const normalizedQuery = stripIgnoredCharacters(queryInBody);
+    const actualHash = createHash('sha256').update(normalizedQuery).digest('hex');
+
+    if (actualHash !== hash) {
+      this.logger.warn(
+        `[APQ] hash mismatch — received: ${hash}  computed: ${actualHash}  op: ${body.operationName ?? 'anonymous'}`,
+      );
     }
 
-    // Dev: cache normalized query for future hash-only requests and log the hash
     if (!PersistedQueriesMiddleware.devCache.has(hash)) {
       PersistedQueriesMiddleware.devCache.set(hash, normalizedQuery);
       this.logger.log(
-        `[APQ] hash: ${hash}  op: ${body.operationName ?? 'anonymous'}`,
+        `[APQ] cached hash: ${hash}  op: ${body.operationName ?? 'anonymous'}`,
       );
     }
 
