@@ -27,6 +27,13 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [],
     credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-device-id',
+      'x-app-version',
+    ],
   });
 
   // Gzip — reduce ancho de banda 60-80% en respuestas JSON/GraphQL
@@ -59,7 +66,7 @@ async function bootstrap() {
   app.useGlobalFilters(new UniversalExceptionFilter());
 
   app.setGlobalPrefix(prefix, {
-    exclude: ['/graphql', 'admin/bull-board', 'admin/bull-board/(.*)', 'health'],
+    exclude: ['/graphql', 'admin/bull-board', 'admin/bull-board/*path', 'health'],
   });
 
   app.useGlobalPipes(
