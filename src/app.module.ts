@@ -8,6 +8,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { GqlThrottlerGuard } from './modules/shared/guards/gql-throttler.guard';
 import { PersistedQueriesMiddleware } from './modules/shared/middleware/persisted-queries.middleware';
+import { ManifestModule } from './modules/graphql-manifest/manifest.module';
+import { ManifestService } from './modules/graphql-manifest/manifest.service';
 import { GraphQLFormattedError } from 'graphql';
 import { join } from 'node:path';
 import depthLimit from 'graphql-depth-limit';
@@ -71,9 +73,9 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
     // ── GraphQL ───────────────────────────────────────────────────────────
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
+      imports: [ConfigModule, ManifestModule],
+      inject: [ConfigService, ManifestService],
+      useFactory: (config: ConfigService, manifest: ManifestService) => {
         const isProd = config.get<string>('NODE_ENV') === 'production';
 
         return {
@@ -89,6 +91,17 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
           graphiql:      !isProd,
 
           validationRules: [depthLimit(7)],
+
+          // Trusted-document cache: get resolves from ManifestService (Redis-backed).
+          // set and delete are no-ops — only POST /graphql-manifest/sync may update
+          // the manifest, preventing dynamic query injection by clients.
+          persistedQueries: {
+            cache: {
+              get:    async (key: string): Promise<string | undefined> => manifest.getOperation(key),
+              set:    async (_k: string, _v: string): Promise<void> => {},
+              delete: async (_k: string): Promise<boolean | void> => {},
+            },
+          },
 
           context: ({ req, res }: any) => ({ req, res }),
           formatError: (formattedError: GraphQLFormattedError, error: any) => ({
@@ -127,6 +140,7 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
     BullConfigModule,     // Configura BullMQ con Redis
     R2Module,             // Global — almacenamiento de archivos en Cloudflare R2
     SocketModule,         // Global — Socket.io con Redis Adapter
+    ManifestModule,       // Global — trusted-document manifest (Redis-backed)
 
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
