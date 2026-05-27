@@ -70,5 +70,8 @@ export const envValidationSchema = Joi.object({
   BULL_REMOVE_ON_COMPLETE: Joi.number().integer().default(10),
   BULL_REMOVE_ON_FAIL:     Joi.number().integer().default(5),
   BULL_ATTEMPTS:           Joi.number().integer().default(3),
+
+  // ── Trusted Documents sync (solo requerido en producción) ─────────────────
+  GRAPHQL_SYNC_SECRET: prodRequired(Joi.string().min(32)),
 })
   .options({ allowUnknown: true }); // permite vars de OS que no son del proyecto
