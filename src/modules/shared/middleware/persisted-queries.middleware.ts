@@ -77,14 +77,18 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
     if (!queryInBody) {
       const fromManifest = this.manifestService.getOperation(hash);
       if (fromManifest) {
-        req.body = { ...body, query: fromManifest };
+        const newBody = { ...body, query: fromManifest };
+        delete newBody.extensions?.persistedQuery;
+        req.body = newBody;
         return next();
       }
 
       if (!this.isProd) {
         const fromDevCache = PersistedQueriesMiddleware.devCache.get(hash);
         if (fromDevCache) {
-          req.body = { ...body, query: fromDevCache };
+          const newBody = { ...body, query: fromDevCache };
+          delete newBody.extensions?.persistedQuery;
+          req.body = newBody;
           return next();
         }
       }
@@ -108,7 +112,9 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
       // body to prevent query-substitution attacks.
       const trusted = this.manifestService.getOperation(hash);
       if (trusted) {
-        req.body = { ...body, query: trusted };
+        const newBody = { ...body, query: trusted };
+        delete newBody.extensions?.persistedQuery;
+        req.body = newBody;
         return next();
       }
       res.status(403).json({
