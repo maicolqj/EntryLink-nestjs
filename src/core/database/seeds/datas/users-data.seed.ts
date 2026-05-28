@@ -39,7 +39,7 @@ export const USER_TO_SEED: UserSeedData[] = [
             flag: '🇨🇴'
         },
         identity: process.env.SEED_ADMIN_IDENTITY ?? '0000000000',
-        email: process.env.SEED_ADMIN_EMAIL ?? 'admin@entrylink.local',
+        email: process.env.SEED_ADMIN_EMAIL ?? 'admin@alternaqj.com',
         password: process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!',
         passwordSet: true,
         phoneVerified: true,

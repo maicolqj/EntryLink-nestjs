@@ -95,13 +95,13 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
           // Trusted-document cache: get resolves from ManifestService (Redis-backed).
           // set and delete are no-ops — only POST /graphql-manifest/sync may update
           // the manifest, preventing dynamic query injection by clients.
-          persistedQueries: {
-            cache: {
-              get:    async (key: string): Promise<string | undefined> => manifest.getOperation(key),
-              set:    async (_k: string, _v: string): Promise<void> => {},
-              delete: async (_k: string): Promise<boolean | void> => {},
-            },
-          },
+          // persistedQueries: {
+          //   cache: {
+          //     get:    async (key: string): Promise<string | undefined> => manifest.getOperation(key),
+          //     set:    async (_k: string, _v: string): Promise<void> => {},
+          //     delete: async (_k: string): Promise<boolean | void> => {},
+          //   },
+          // },
 
           context: ({ req, res }: any) => ({ req, res }),
           formatError: (formattedError: GraphQLFormattedError, error: any) => ({

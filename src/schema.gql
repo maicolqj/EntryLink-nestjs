@@ -1678,6 +1678,11 @@ type RegisterSupervisorResponse {
   supervisorId: String
 }
 
+type RequestPasswordResetResponse {
+  success: Boolean!
+  message: String!
+}
+
 """Respuesta con el token QR generado y su fecha de expiración"""
 type QrLoginTokenResponse {
   """Token UUID de un solo uso para el login por QR"""
@@ -1694,11 +1699,6 @@ type QrLoginTokenResponse {
 
 type SetPasswordResponse {
   success: Boolean!
-}
-
-type RequestPasswordResetResponse {
-  success: Boolean!
-  message: String!
 }
 
 """Registro de visita de supervisor a un complejo residencial"""
@@ -3479,14 +3479,24 @@ type Mutation {
   loginWithIdentityNum(input: LoginSystemCodeInput!): AuthResponse!
 
   """
-  Auto-registro público para supervisores. La cuenta queda en estado PENDING_VERIFICATION hasta que el supervisor confirme su correo electrónico con el enlace enviado. No se emiten tokens JWT hasta la verificación.
+  Auto-registro público para supervisores. La cuenta queda en PENDING_VERIFICATION hasta verificar el correo.
   """
   registerSupervisor(input: RegisterSupervisorInput!): RegisterSupervisorResponse!
 
   """
-  Verifica el correo electrónico del supervisor usando el token enviado por email. Activa la cuenta (ACTIVE) y devuelve los tokens JWT. Tras esto el supervisor puede solicitar acceso a un complejo.
+  Verifica el correo del supervisor con el token enviado por email. Activa la cuenta y devuelve tokens JWT.
   """
   verifySupervisorEmail(token: String!): AuthResponse!
+
+  """
+  Solicita restablecimiento de contraseña por email. Respuesta genérica para no revelar si el email existe.
+  """
+  requestPasswordReset(email: String!): RequestPasswordResetResponse!
+
+  """
+  Establece nueva contraseña usando el token recibido por email. Token de un solo uso, válido 1 hora.
+  """
+  resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
 
   """
   Solicita un código OTP al número de celular. Exclusivo para residentes (RESIDENT_ROL). El código se envía por SMS y tiene validez de 5 minutos.
@@ -3507,16 +3517,6 @@ type Mutation {
   Canjea el token QR de un solo uso validando el PIN (últimos 4 dígitos del NIT del complejo, sin dígito de verificación). No requiere autenticación previa.
   """
   redeemQrToken(token: String!, pin: String!): AuthResponse!
-
-  """
-  Solicita el restablecimiento de contraseña por email. Siempre responde igual para no revelar si el email está registrado.
-  """
-  requestPasswordReset(email: String!): RequestPasswordResetResponse!
-
-  """
-  Establece una nueva contraseña usando el token recibido por email. El token es de un solo uso y tiene validez de 1 hora.
-  """
-  resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
 
   """
   Establece la contraseña inicial del usuario autenticado. Diseñado para el flujo post-login por QR donde el usuario aún no tiene contraseña propia.
@@ -3753,6 +3753,11 @@ input RegisterSupervisorInput {
   documentNumber: String!
 }
 
+input ResetPasswordInput {
+  token: String!
+  newPassword: String!
+}
+
 """Solicitud de OTP para residentes"""
 input RequestOtpInput {
   """Número de celular del residente (ej: 3001234567)"""
@@ -3766,11 +3771,6 @@ input VerifyOtpInput {
 
   """Código OTP de 6 dígitos recibido por SMS"""
   code: String!
-}
-
-input ResetPasswordInput {
-  token: String!
-  newPassword: String!
 }
 
 input CreateComplexInput {
