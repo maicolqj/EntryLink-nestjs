@@ -50,4 +50,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "node -e \"const{default:ds}=require('./dist/core/database/data-source');ds.initialize().then(()=>ds.runMigrations()).then(m=>{console.log('[startup] migrations ran:',m.length)}).catch(e=>{console.error('[startup] migration failed:',e);process.exit(1)})\" && node dist/main"]
