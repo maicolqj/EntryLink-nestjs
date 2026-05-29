@@ -9,7 +9,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { GqlThrottlerGuard } from './modules/shared/guards/gql-throttler.guard';
 import { PersistedQueriesMiddleware } from './modules/shared/middleware/persisted-queries.middleware';
 import { ManifestModule } from './modules/graphql-manifest/manifest.module';
-import { ManifestService } from './modules/graphql-manifest/manifest.service';
 import { GraphQLFormattedError } from 'graphql';
 import { join } from 'node:path';
 import depthLimit from 'graphql-depth-limit';
@@ -73,9 +72,9 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
     // ── GraphQL ───────────────────────────────────────────────────────────
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule, ManifestModule],
-      inject: [ConfigService, ManifestService],
-      useFactory: (config: ConfigService, manifest: ManifestService) => {
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
         const isProd = config.get<string>('NODE_ENV') === 'production';
 
         return {
