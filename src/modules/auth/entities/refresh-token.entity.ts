@@ -75,11 +75,11 @@ export class RefreshToken {
   replacedByTokenId?: string;
 
   @HideField()
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ name: 'previous_token_hash', type: 'varchar', nullable: true })
   previousTokenHash?: string;
 
   @Field({ nullable: true })
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'previous_token_valid_until', type: 'timestamp', nullable: true })
   previousTokenValidUntil?: Date;
 
   @Field()
