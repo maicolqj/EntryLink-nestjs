@@ -20,6 +20,11 @@ export const AUTH_CONSTANTS = {
   // ── Sesiones ─────────────────────────────────────────────────────────────
   MAX_SESSIONS_PER_USER: 5, 
 
+  // ── Refresh token race-condition grace window ────────────────────────────
+  // Concurrent requests arriving with the same RT within this window are served
+  // idempotently (same AT+RT returned) instead of being treated as reuse attacks.
+  GRACE_WINDOW_MS: 5_000,    // 5 seconds
+
   // ── Cache prefixes ───────────────────────────────────────────────────────
   CACHE_PREFIX: {
     BLACKLIST: 'bl',
@@ -36,6 +41,7 @@ export const AUTH_CONSTANTS = {
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
     EMAIL_VERIFICATION_TOKEN: 'ev-tok',
     PASSWORD_RESET_TOKEN: 'pr-tok',
+    GRACE_WINDOW: 'rt-grace',
   },
 
   // ── Cache TTL (segundos) ─────────────────────────────────────────────────
@@ -47,6 +53,7 @@ export const AUTH_CONSTANTS = {
     OTP_ATTEMPTS: 1_800,       // 30 min
     OTP_RATE_LIMIT: 600,       // 10 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
+    GRACE_WINDOW: 5,           // 5 s (same as GRACE_WINDOW_MS / 1000)
   },
 
   // ── Reset de contraseña ──────────────────────────────────────────────────

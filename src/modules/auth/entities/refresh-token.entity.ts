@@ -74,6 +74,14 @@ export class RefreshToken {
   @Column({ type: 'varchar', length: 64, nullable: true })
   replacedByTokenId?: string;
 
+  @HideField()
+  @Column({ type: 'varchar', nullable: true })
+  previousTokenHash?: string;
+
+  @Field({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
+  previousTokenValidUntil?: Date;
+
   @Field()
   @Column({ type: 'boolean', default: false })
   rememberMe: boolean;
