@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -22,17 +22,17 @@ interface DeleteOptions {
 }
 
 @Injectable()
-export class CacheService implements OnModuleInit, OnModuleDestroy {
+export class CacheService implements OnModuleDestroy {
   private readonly logger = new Logger(CacheService.name);
-  private client: Redis;
+  private readonly client: Redis;
 
-  constructor(private readonly configService: ConfigService) {}
-
-  onModuleInit(): void {
-    const host = this.configService.get<string>('REDIS_HOST', 'localhost');
-    const port = this.configService.get<number>('REDIS_PORT', 6379);
+  constructor(private readonly configService: ConfigService) {
+    // Initialize in constructor so this.client is never undefined when
+    // other modules' onModuleInit / onApplicationBootstrap hooks run.
+    const host     = this.configService.get<string>('REDIS_HOST', 'localhost');
+    const port     = this.configService.get<number>('REDIS_PORT', 6379);
     const password = this.configService.get<string>('REDIS_PASSWORD');
-    const db = this.configService.get<number>('REDIS_DB', 0);
+    const db       = this.configService.get<number>('REDIS_DB', 0);
 
     this.client = new Redis({
       host,
