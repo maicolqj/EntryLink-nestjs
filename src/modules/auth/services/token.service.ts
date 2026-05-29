@@ -168,12 +168,25 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
   async rotateRefreshToken(currentToken: string, deviceInfo: DeviceInfo): Promise<TokenPair> {
     const payload = await this.verifyRefreshToken(currentToken);
+    const currentTokenHash = this.hashToken(currentToken);
+
     const storedToken = await this.refreshTokenRepo.findOne({
-      where: { tokenHash: this.hashToken(currentToken), isRevoked: false },
+      where: { tokenHash: currentTokenHash, isRevoked: false },
       relations: ['user', 'user.userRoles', 'user.userRoles.role', 'user.userRoles.role.permissions'],
     });
 
     if (!storedToken) {
+      // Grace window: concurrent request arrived after first rotation already completed.
+      // Return the same token pair idempotently instead of triggering family revocation.
+      const gracePayload = await this.cacheService.get<{ accessToken: string; refreshToken: string; sessionId: string }>({
+        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW, key: currentTokenHash },
+      });
+
+      if (gracePayload) {
+        return { ...gracePayload, expiresIn: this.getAccessTokenExpirySeconds() };
+      }
+
+      // Outside grace window → genuine reuse attack or expired token → revoke family
       await this.revokeTokenFamily(payload.tokenFamily, 'token_reuse_detected');
       throw new UnauthorizedException('Token inválido');
     }
@@ -182,7 +195,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       await this.revokeTokenFamily(payload.tokenFamily, 'fingerprint_mismatch');
       throw new UnauthorizedException('Sesión invalidada');
     }
-  
+
     await this.refreshTokenRepo.update(storedToken.id, { isRevoked: true, revokedReason: 'rotated', lastUsedAt: new Date() });
 
     const entityType = payload.entityType ?? 'user';
@@ -227,10 +240,20 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
     await this.refreshTokenRepo.save({
       id: tokenId, userId: storedToken.user.id, tokenHash: this.hashToken(newRefreshToken), tokenFamily: payload.tokenFamily,
+      previousTokenHash: currentTokenHash,
+      previousTokenValidUntil: new Date(Date.now() + AUTH_CONSTANTS.GRACE_WINDOW_MS),
       sessionId: storedToken.sessionId, deviceFingerprint: deviceInfo.fingerprint,
       deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform },
       expiresAt: this.calculateExpiry(refreshExpiry), lastUsedAt: new Date(),
       rememberMe: storedToken.rememberMe,
+    });
+
+    // Cache the result so concurrent requests with the old token are served idempotently
+    // within the grace window instead of triggering family revocation.
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW, key: currentTokenHash },
+      data: { accessToken, refreshToken: newRefreshToken, sessionId: storedToken.sessionId },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.GRACE_WINDOW },
     });
 
     return { accessToken, refreshToken: newRefreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId: storedToken.sessionId };
