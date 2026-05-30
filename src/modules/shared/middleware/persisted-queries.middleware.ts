@@ -118,7 +118,9 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
         req.body = newBody;
         return next();
       }
-      this.logger.warn(`[APQ] hash not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}`);
+      this.logger.warn(
+        `[APQ] hash not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}\nQUERY: ${queryInBody}`,
+      );
       res.status(403).json({
         errors: [
           {
