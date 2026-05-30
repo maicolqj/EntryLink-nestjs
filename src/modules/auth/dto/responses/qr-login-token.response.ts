@@ -8,7 +8,7 @@ export class QrLoginTokenResponse {
   @Field(() => Date, { description: 'Fecha y hora de expiración del token (72 horas)' })
   expiresAt: Date;
 
-  @Field(() => String, { description: 'PIN de 4 dígitos (últimos 4 del NIT sin dígito de verificación). El complejo ya lo conoce.' })
+  @Field(() => String, { description: 'PIN: últimos 4 dígitos del NIT base (antes del guion). El complejo ya lo conoce.' })
   pin: string;
 
 }
