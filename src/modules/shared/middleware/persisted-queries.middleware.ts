@@ -93,6 +93,7 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
         }
       }
 
+      this.logger.warn(`[APQ] hash-only request not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}`);
       res.status(200).json({
         errors: [
           {
@@ -117,6 +118,7 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
         req.body = newBody;
         return next();
       }
+      this.logger.warn(`[APQ] hash not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}`);
       res.status(403).json({
         errors: [
           {
