@@ -17,3 +17,6 @@ Este documento establece las normas estrictas de acceso y manejo de información
 
 ## 4. Respuesta ante Violaciones
 * Si por error se expone un secreto en el chat, el asistente debe advertir al usuario que debe rotar (cambiar) esa llave inmediatamente en el panel de Cloudflare o DigitalOcean.
+
+## 4. Commits
+* Si se debe realizar commits para cargar el codigo a github o gitlab, debe realizarse partiendo de main en ramas separadas, con una descripción profesional 
