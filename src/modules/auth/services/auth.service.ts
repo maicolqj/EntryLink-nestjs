@@ -234,14 +234,16 @@ export class AuthService {
     const rawPin = String(randomInt(100_000, 1_000_000)); // 6 dígitos, espacio 900k
     const hashedPin = await bcrypt.hash(rawPin, 12);
 
-    await this.complexRepo.update(complexId, {
+    const updateResult = await this.complexRepo.update(complexId, {
       qrLoginToken: token,
       qrLoginTokenExp: expiresAt,
       qrLoginTokenUsed: false,
       qrLoginPin: hashedPin,
     });
 
-    this.logger.log(`QR login token generado para complejo ${complexId}`);
+    this.logger.log(
+      `QR login token generado para complejo ${complexId} | affected: ${updateResult.affected} | pinLen: ${rawPin.length} | hashLen: ${hashedPin.length} | hashPrefix: ${hashedPin.substring(0, 7)}`,
+    );
     return { token, expiresAt, pin: rawPin };
   }
 
@@ -250,11 +252,16 @@ export class AuthService {
   // ═══════════════════════════════════════════════════════════════
 
   async redeemQrToken(token: string, pin: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+    const normalizedPin = (pin ?? '').trim();
+
+    if (!normalizedPin) {
+      throw new BadRequestException('PIN es requerido');
+    }
+
     const complex = await this.complexRepo
       .createQueryBuilder('complex')
       .addSelect('complex.qrLoginToken')
       .addSelect('complex.qrLoginTokenExp')
-
       .addSelect('complex.qrLoginPin')
       .leftJoinAndSelect('complex.owner', 'owner')
       .leftJoinAndSelect('owner.userRoles', 'userRoles')
@@ -277,14 +284,17 @@ export class AuthService {
       throw new UnauthorizedException('El token QR ha expirado');
     }
 
-
     if (!complex.qrLoginPin) {
       throw new BadRequestException('PIN no configurado para este token QR');
     }
 
-    const pinValid = await bcrypt.compare(pin, complex.qrLoginPin);
+    this.logger.debug(
+      `[QR redeem] complexId: ${complex.id} | pinLen: ${normalizedPin.length} | hashLen: ${complex.qrLoginPin.length} | hashPrefix: ${complex.qrLoginPin.substring(0, 7)}`,
+    );
+
+    const pinValid = await bcrypt.compare(normalizedPin, complex.qrLoginPin);
     if (!pinValid) {
-      this.logger.warn(`PIN incorrecto al canjear QR — complexId: ${complex.id}`);
+      this.logger.warn(`PIN incorrecto al canjear QR — complexId: ${complex.id} | pinLen: ${normalizedPin.length} | hashLen: ${complex.qrLoginPin.length} | hashPrefix: ${complex.qrLoginPin.substring(0, 7)}`);
       throw new UnauthorizedException('PIN incorrecto');
     }
 
