@@ -229,9 +229,12 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1_000);
 
 
-    // VULN-02 fix: PIN aleatorio criptográficamente seguro — el NIT es dato público/predecible
-    const { randomInt } = await import('crypto');
-    const rawPin = String(randomInt(100_000, 1_000_000)); // 6 dígitos, espacio 900k
+    // PIN = últimos 4 dígitos del NIT base (antes del dígito de verificación tras "-")
+    const nitBase = (complex.nit ?? '').split('-')[0].replace(/\D/g, '');
+    if (nitBase.length < 4) {
+      throw new BadRequestException('NIT del complejo no tiene suficientes dígitos para generar el PIN');
+    }
+    const rawPin = nitBase.slice(-4);
     const hashedPin = await bcrypt.hash(rawPin, 12);
 
     await this.complexRepo.update(complexId, {
