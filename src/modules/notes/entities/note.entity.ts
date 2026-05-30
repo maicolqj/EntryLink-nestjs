@@ -39,7 +39,26 @@ export class Note {
   content: string;
 
   @Field(() => [String], { description: 'URLs de imágenes adjuntas (R2)', nullable: true })
-  @Column({ name: 'image_urls', type: 'text', array: true, nullable: true, default: [] })
+  @Column({
+    name: 'image_urls',
+    type: 'text',
+    array: true,
+    nullable: true,
+    default: [],
+    transformer: {
+      to: (value: string[] | null) => value ?? [],
+      from: (value: any): string[] => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          const stripped = value.replace(/^\{|\}$/g, '');
+          if (!stripped) return [];
+          return stripped.split(',').map(s => s.replace(/^"|"$/g, '').trim()).filter(Boolean);
+        }
+        return [];
+      },
+    },
+  })
   imageUrls: string[];
 
   // ==================== FKs (MULTI-TENANT) ====================
