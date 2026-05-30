@@ -26,6 +26,8 @@ export interface LogParams {
   performedByRole:  string;
   complexId?:       string;
   description?:     string;
+  /** Marcar true en operaciones masivas — COMPLEX_ROL no las audita */
+  isBulk?:          boolean;
 }
 
 @Injectable()
@@ -43,17 +45,19 @@ export class AuditService {
   // ================================================================
 
   /**
-   * Roles cuyas acciones se auditan.
-   * SUPER_ADMIN incluido para registrar reversiones.
+   * SECURITY_ROL: todos los movimientos del guardia.
+   * COMPLEX_ROL: acciones individuales (bulk excluido vía isBulk).
+   * SUPER_ADMIN_ROL: solo reversiones (acción REVERT).
    */
   private static readonly AUDITED_ROLES = new Set<string>([
-    ValidRoles.SUPERVISOR_ROL,
     ValidRoles.SECURITY_ROL,
+    ValidRoles.COMPLEX_ROL,
     ValidRoles.SUPER_ADMIN_ROL,
   ]);
 
   async log(params: LogParams): Promise<void> {
     if (!AuditService.AUDITED_ROLES.has(params.performedByRole)) return;
+    if (params.performedByRole === ValidRoles.COMPLEX_ROL && params.isBulk) return;
 
     try {
       const referenceNumber = await this.generateReferenceNumber();
@@ -107,8 +111,7 @@ export class AuditService {
         qb.andWhere('al.complex_id = :complexId', { complexId: filter.complexId });
       }
     } else {
-      // COMPLEX_ROL, COMPILANCE_OFFICER_ROL, SUPERVISOR_ROL:
-      // siempre se limitan al complexId del usuario autenticado (no al del input)
+      // COMPLEX_ROL: solo ve su complejo y solo los roles auditados relevantes
       if (!callerComplexId) {
         throw new CustomError({
           message: 'No se pudo determinar el complejo del usuario autenticado.',
@@ -117,6 +120,9 @@ export class AuditService {
         });
       }
       qb.andWhere('al.complex_id = :complexId', { complexId: callerComplexId });
+      qb.andWhere('al.performed_by_role IN (:...visibleRoles)', {
+        visibleRoles: [ValidRoles.SECURITY_ROL, ValidRoles.COMPLEX_ROL],
+      });
     }
 
     // ── Filtros opcionales adicionales ─────────────────────────────
