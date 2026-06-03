@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import * as webpush from 'web-push';
 
@@ -838,16 +838,18 @@ export class NotificationsService implements OnModuleInit {
       };
 
       const allIds = [...residentIds, ...securityIds].filter(id => id !== currentUser.sub);
-      if (allIds.length > 0) {
-        await this.notify({
-          ...panicPayload,
-          userIds:     allIds,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
-        });
-      }
 
       this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
       this.logger.warn(`PANIC ALERT (staff) — complejo ${complexId}, activado por ${currentUser.sub}`);
+
+      if (allIds.length > 0) {
+        void this.notify({
+          ...panicPayload,
+          userIds:     allIds,
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+        }).catch(e => this.logger.error(`PANIC notify error (staff): ${e?.message}`));
+      }
+
       return { success: true };
     }
 
@@ -871,15 +873,21 @@ export class NotificationsService implements OnModuleInit {
         metadata:        { triggeredByLabel },
       };
 
-      const allIds = [...residentIds.filter(id => id !== currentUser.sub), complexId];
-      await this.notify({
-        ...panicPayload,
-        userIds:     allIds,
-        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
-      });
+      const complexAdminIds = await this.resolveTargetUserIds(complexId, [ValidRoles.COMPLEX_ROL]);
+      const allIds = [
+        ...residentIds.filter(id => id !== currentUser.sub),
+        ...complexAdminIds,
+      ];
 
       this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
       this.logger.warn(`PANIC ALERT (security) — complejo ${complexId}, activado por ${currentUser.sub}`);
+
+      void this.notify({
+        ...panicPayload,
+        userIds:     allIds,
+        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+      }).catch(e => this.logger.error(`PANIC notify error (security): ${e?.message}`));
+
       return { success: true };
     }
 
@@ -937,7 +945,8 @@ export class NotificationsService implements OnModuleInit {
           targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
         });
       }
-      await Promise.allSettled([
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+      void Promise.allSettled([
         this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
         this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
       ]);
@@ -973,13 +982,13 @@ export class NotificationsService implements OnModuleInit {
           targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
         });
       }
-      await Promise.allSettled([
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+      void Promise.allSettled([
         this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
         this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
       ]);
     }
 
-    this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
     this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
     return { success: true };
   }
@@ -997,7 +1006,7 @@ export class NotificationsService implements OnModuleInit {
       where: {
         complexId,
         type:          NotificationType.PANIC_ALERT,
-        actionTakenAt: undefined,
+        actionTakenAt: IsNull(),
       },
       order: { createdAt: 'DESC' },
     });
