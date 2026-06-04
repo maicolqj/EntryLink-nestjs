@@ -750,6 +750,7 @@ export class FinanceService {
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId,
         description: `Cargos generados: ${totalGenerated} para período ${period} — complejo ${complexId}`,
+        isBulk: true,
       });
     }
 
@@ -828,6 +829,7 @@ export class FinanceService {
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId,
         description: `Cargos directos creados: ${created} unidades — "${description}" $${amount} — período ${period}`,
+        isBulk: true,
       });
     }
 
@@ -1114,6 +1116,7 @@ export class FinanceService {
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId,
         description: `Pago masivo FIFO: $${amount} — ${paid} cargos saldados, ${created} pagos creados`,
+        isBulk: true,
       });
 
       for (const { charge, paymentAmount, paymentDate } of paidNotifications) {
