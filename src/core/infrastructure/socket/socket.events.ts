@@ -20,4 +20,8 @@ export enum SocketEvent {
   // Panic
   PANIC_ALERT_NEW             = 'panic:alert:new',
   PANIC_ALERT_ACKNOWLEDGED    = 'panic:alert:acknowledged',
+
+  // Resident bulk import
+  RESIDENT_IMPORT_PROGRESS    = 'resident:import:progress',
+  RESIDENT_IMPORT_DONE        = 'resident:import:done',
 }
