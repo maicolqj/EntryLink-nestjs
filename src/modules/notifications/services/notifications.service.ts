@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { In, IsNull, Repository } from 'typeorm';
+import { Between, In, IsNull, Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import * as webpush from 'web-push';
 
@@ -1043,11 +1043,32 @@ export class NotificationsService implements OnModuleInit {
       return notif;
     }
 
-    notif.actionTakenAt       = new Date();
+    const ackedAt = new Date();
+
+    notif.actionTakenAt       = ackedAt;
     notif.actionTakenByUserId = currentUser.sub;
     notif.actionResult        = NotificationActionResult.ACKNOWLEDGED;
 
     const updated = await this.notifRepo.save(notif);
+
+    // Mark all sibling notifications from the same panic event (±30s window)
+    // so every recipient's record is cleared — one ACK closes the modal for everyone.
+    const windowMs    = 30_000;
+    const windowStart = new Date(notif.createdAt.getTime() - windowMs);
+    const windowEnd   = new Date(notif.createdAt.getTime() + windowMs);
+    await this.notifRepo.update(
+      {
+        complexId:     notif.complexId,
+        type:          NotificationType.PANIC_ALERT,
+        actionTakenAt: IsNull(),
+        createdAt:     Between(windowStart, windowEnd),
+      },
+      {
+        actionTakenAt:       ackedAt,
+        actionTakenByUserId: currentUser.sub,
+        actionResult:        NotificationActionResult.ACKNOWLEDGED,
+      },
+    );
 
     this.socketService.emitToComplex(notif.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
 
