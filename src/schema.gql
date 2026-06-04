@@ -1692,7 +1692,7 @@ type QrLoginTokenResponse {
   expiresAt: DateTime!
 
   """
-  PIN de 4 dígitos (últimos 4 del NIT sin dígito de verificación). El complejo ya lo conoce.
+  PIN: últimos 4 dígitos del NIT base (antes del guion). El complejo ya lo conoce.
   """
   pin: String!
 }
