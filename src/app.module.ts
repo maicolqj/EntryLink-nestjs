@@ -13,6 +13,7 @@ import { GraphQLFormattedError } from 'graphql';
 import { join } from 'node:path';
 import depthLimit from 'graphql-depth-limit';
 import GraphQLJSON from 'graphql-type-json';
+import './core/infrastructure/graphql/date-time.scalar'; // patch GraphQLISODateTime.serialize
 
 import databaseConfig from './core/config/database.config';
 import redisConfig    from './core/config/redis.config';
