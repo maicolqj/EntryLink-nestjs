@@ -65,16 +65,19 @@ export class ManifestService implements OnApplicationBootstrap {
   }
 
   /**
-   * Replaces the in-memory store and persists to Redis atomically.
+   * Merges incoming entries into the in-memory store and persists to Redis atomically.
+   * Multiple clients (web, mobile) can sync independently without overwriting each other.
    * Called exclusively by ManifestController on authenticated POST /graphql-manifest/sync.
    */
   async updateManifest(manifest: Record<string, string>): Promise<void> {
-    this.store = manifest;
+    const before = Object.keys(this.store).length;
+    this.store = { ...this.store, ...manifest };
     await this.cache.set({
       key:  { prefix: CACHE_PREFIX, key: CACHE_KEY },
-      data: manifest,
+      data: this.store,
     });
-    this.logger.log(`Manifest synced — ${Object.keys(manifest).length} trusted queries loaded`);
+    const added = Object.keys(this.store).length - before;
+    this.logger.log(`Manifest synced — ${Object.keys(manifest).length} incoming, ${added} new, ${Object.keys(this.store).length} total trusted queries`);
   }
 
   /** O(1) in-memory lookup. Returns undefined when hash is not trusted. */
