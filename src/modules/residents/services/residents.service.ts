@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
 
@@ -13,6 +13,8 @@ import { FilterResidentsInput } from '../dto/inputs/filter-residents.input';
 import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
 import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
 import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
+import { MoveResidentsToUnitInput } from '../dto/inputs/move-residents-to-unit.input';
+import { BulkMoveOutResidentsInput } from '../dto/inputs/bulk-move-out-residents.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
 import { ResidentStatsResponse } from '../dto/responses/resident-stats.response';
 
@@ -606,15 +608,331 @@ export class ResidentsService {
       });
     }
 
-    // Si se cambia isMainResident a true, verificar que no haya otro principal
-    if (input.isMainResident === true && !resident.isMainResident) {
-      await this.assertNoMainResident(resident.unitId, resident.id);
+    if (input.isMainResident === false && resident.isMainResident === true) {
+      throw new CustomError({
+        message: 'Debe asignar un nuevo residente principal antes de quitar esta designación',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
     }
 
-    Object.assign(resident, input);
-    const savedUpdate = await this.residentRepo.save(resident);
+    const { name, lastName, phoneNumber, ...residentFields } = input;
+    const hasUserFields = name !== undefined || lastName !== undefined || phoneNumber !== undefined;
+
+    const savedUpdate = await this.dataSource.transaction(async (manager) => {
+      if (input.isMainResident === true) {
+        await manager.update(
+          Resident,
+          {
+            unitId: resident.unitId,
+            isMainResident: true,
+            status: In([ResidentStatus.ACTIVE, ResidentStatus.SUSPENDED]),
+            deletedAt: IsNull(),
+            id: Not(resident.id),
+          },
+          { isMainResident: false },
+        );
+      }
+
+      if (hasUserFields) {
+        await manager.update(User, resident.userId, {
+          ...(name       !== undefined && { name }),
+          ...(lastName   !== undefined && { lastName }),
+          ...(phoneNumber !== undefined && { phoneNumber }),
+        });
+      }
+
+      Object.assign(resident, residentFields);
+      return manager.save(Resident, resident);
+    });
+
     await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
     return savedUpdate;
+  }
+
+  // ================================================================
+  // TRASLADAR RESIDENTES A OTRA UNIDAD — COMPLEX_ROL o SUPER_ADMIN
+  // Todos deben ser ACTIVOS. Unidades origen: AVAILABLE si quedan sin activos.
+  // Unidad destino: OCCUPIED. Transacción única.
+  // ================================================================
+
+  async moveResidentsToUnit(
+    input: MoveResidentsToUnitInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<Resident[]> {
+    const unit = await this.unitService.findById(input.newUnitId, currentUser);
+
+    if (unit.status === UnitStatus.MAINTENANCE || unit.status === UnitStatus.DISABLED) {
+      throw new CustomError({
+        message: `La unidad N°${unit.number} está en estado "${unit.status}" y no puede recibir residentes`,
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: ComplexErrorCode.UNIT_IS_OCCUPIED,
+      });
+    }
+
+    const residents = await this.residentRepo.find({
+      where: { id: In(input.residentIds), deletedAt: IsNull() },
+    });
+
+    if (residents.length !== input.residentIds.length) {
+      const foundIds = new Set(residents.map(r => r.id));
+      const missing = input.residentIds.filter(id => !foundIds.has(id));
+      throw new CustomError({
+        message: `Residentes no encontrados: ${missing.join(', ')}`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ResidentErrorCode.RESIDENT_NOT_FOUND,
+      });
+    }
+
+    const wrongComplex = residents.filter(r => r.complexId !== unit.complexId);
+    if (wrongComplex.length > 0) {
+      throw new CustomError({
+        message: 'Todos los residentes deben pertenecer al mismo complejo que la unidad destino',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const nonActive = residents.filter(
+      r => r.status !== ResidentStatus.ACTIVE && r.status !== ResidentStatus.SUSPENDED,
+    );
+    if (nonActive.length > 0) {
+      throw new CustomError({
+        message: `Solo se pueden trasladar residentes ACTIVE o SUSPENDED. IDs inválidos: ${nonActive.map(r => r.id).join(', ')}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const alreadyInUnit = residents.filter(r => r.unitId === input.newUnitId);
+    if (alreadyInUnit.length > 0) {
+      throw new CustomError({
+        message: `Algunos residentes ya pertenecen a la unidad destino: ${alreadyInUnit.map(r => r.id).join(', ')}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    // Residentes activos ya existentes en la unidad destino (para detectar conflicto de residente principal)
+    const existingInDestination = await this.residentRepo.find({
+      where: { unitId: input.newUnitId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+    });
+
+    const incomingMainCount  = residents.filter(r => r.isMainResident).length;
+    const existingMainCount  = existingInDestination.filter(r => r.isMainResident).length;
+    const totalMainAfterMove = incomingMainCount + existingMainCount;
+
+    if (totalMainAfterMove > 1 && !input.newMainResidentId) {
+      throw new CustomError({
+        message: `El traslado resultaría en ${totalMainAfterMove} residentes principales en la unidad destino. Indica newMainResidentId para designar el único residente principal`,
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: GeneralErrorCode.CONFLICT,
+      });
+    }
+
+    if (input.newMainResidentId) {
+      const allAffectedIds = [
+        ...residents.map(r => r.id),
+        ...existingInDestination.map(r => r.id),
+      ];
+      if (!allAffectedIds.includes(input.newMainResidentId)) {
+        throw new CustomError({
+          message: 'newMainResidentId debe corresponder a uno de los residentes trasladados o a un residente activo en la unidad destino',
+          statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: GeneralErrorCode.BAD_REQUEST,
+        });
+      }
+    }
+
+    const oldUnitIds = [...new Set(residents.map(r => r.unitId))];
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const resident of residents) {
+        resident.unitId = input.newUnitId;
+        if (input.newMainResidentId !== undefined) {
+          resident.isMainResident = resident.id === input.newMainResidentId;
+        }
+        await queryRunner.manager.save(Resident, resident);
+      }
+
+      // Ajustar residente principal en los ya existentes de la unidad destino
+      if (input.newMainResidentId) {
+        for (const existing of existingInDestination) {
+          const shouldBeMain = existing.id === input.newMainResidentId;
+          if (existing.isMainResident !== shouldBeMain) {
+            existing.isMainResident = shouldBeMain;
+            await queryRunner.manager.save(Resident, existing);
+          }
+        }
+      }
+
+      for (const oldUnitId of oldUnitIds) {
+        const remainingCount = await queryRunner.manager.count(Resident, {
+          where: { unitId: oldUnitId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+        });
+        if (remainingCount === 0) {
+          await queryRunner.manager.update('units', { id: oldUnitId }, { status: UnitStatus.AVAILABLE });
+          this.logger.log(`Unidad ${oldUnitId} liberada (sin residentes activos)`);
+        }
+      }
+
+      await queryRunner.manager.update('units', { id: input.newUnitId }, { status: UnitStatus.OCCUPIED });
+
+      await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(unit.complexId));
+      this.logger.log(`${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`);
+
+      void this.auditService.log({
+        entityType:      AuditEntityType.Resident,
+        entityId:        input.newUnitId,
+        action:          AuditAction.UPDATE,
+        newValue:        { residentIds: input.residentIds, newUnitId: input.newUnitId },
+        performedById:   currentUser.sub,
+        performedByName: currentUser.email,
+        performedByRole: currentUser.roles?.[0] ?? '',
+        complexId:       unit.complexId,
+        description:     `${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`,
+      });
+
+      return this.residentRepo.find({
+        where: { id: In(input.residentIds) },
+        relations: ['user', 'unit', 'unit.building', 'complex'],
+      });
+    } catch (error: any) {
+      await queryRunner.rollbackTransaction();
+      if (error instanceof CustomError) throw error;
+      this.logger.error(`Error al trasladar residentes: ${error?.message}`, error?.stack);
+      throw new CustomError({
+        message: 'Error interno al trasladar los residentes',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
+      });
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ================================================================
+  // BAJA MASIVA (MOVED_OUT) — COMPLEX_ROL o SUPER_ADMIN
+  // Todos deben ser ACTIVE o SUSPENDED. moveOutDate no puede ser futura.
+  // Unidades sin residentes ACTIVE/SUSPENDED → AVAILABLE. Transacción única.
+  // ================================================================
+
+  async bulkMoveOutResidents(
+    input: BulkMoveOutResidentsInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<Resident[]> {
+    const moveOutDateObj = new Date(input.moveOutDate);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    if (moveOutDateObj > todayEnd) {
+      throw new CustomError({
+        message: 'La fecha de mudanza no puede ser futura',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const residents = await this.residentRepo.find({
+      where: { id: In(input.residentIds), deletedAt: IsNull() },
+    });
+
+    if (residents.length !== input.residentIds.length) {
+      const foundIds = new Set(residents.map(r => r.id));
+      const missing = input.residentIds.filter(id => !foundIds.has(id));
+      throw new CustomError({
+        message: `Residentes no encontrados: ${missing.join(', ')}`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ResidentErrorCode.RESIDENT_NOT_FOUND,
+      });
+    }
+
+    const complexIds = [...new Set(residents.map(r => r.complexId))];
+    if (complexIds.length > 1) {
+      throw new CustomError({
+        message: 'Todos los residentes deben pertenecer al mismo complejo',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    await this.complexService.findById(complexIds[0], currentUser);
+
+    const invalidStatus = residents.filter(
+      r => r.status !== ResidentStatus.ACTIVE && r.status !== ResidentStatus.SUSPENDED,
+    );
+    if (invalidStatus.length > 0) {
+      throw new CustomError({
+        message: `Solo se pueden dar de baja residentes ACTIVE o SUSPENDED. IDs inválidos: ${invalidStatus.map(r => r.id).join(', ')}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const unitIds = [...new Set(residents.map(r => r.unitId))];
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const resident of residents) {
+        resident.status = ResidentStatus.MOVED_OUT;
+        resident.moveOutDate = moveOutDateObj;
+        resident.moveOutReason = input.moveOutReason;
+        resident.isMainResident = false;
+        await queryRunner.manager.save(Resident, resident);
+      }
+
+      for (const unitId of unitIds) {
+        const remainingCount = await queryRunner.manager.count(Resident, {
+          where: [
+            { unitId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+            { unitId, status: ResidentStatus.SUSPENDED, deletedAt: IsNull() },
+          ],
+        });
+        if (remainingCount === 0) {
+          await queryRunner.manager.update('units', { id: unitId }, { status: UnitStatus.AVAILABLE });
+          this.logger.log(`Unidad ${unitId} liberada (sin residentes activos/suspendidos)`);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      await this.cacheService.deleteByPrefix(BK.resident.prefix(complexIds[0]));
+      this.logger.log(`${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`);
+
+      void this.auditService.log({
+        entityType:      AuditEntityType.Resident,
+        entityId:        complexIds[0],
+        action:          AuditAction.UPDATE,
+        newValue:        { residentIds: input.residentIds, status: ResidentStatus.MOVED_OUT, moveOutDate: input.moveOutDate },
+        performedById:   currentUser.sub,
+        performedByName: currentUser.email,
+        performedByRole: currentUser.roles?.[0] ?? '',
+        complexId:       complexIds[0],
+        description:     `${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`,
+      });
+
+      return this.residentRepo.find({
+        where: { id: In(input.residentIds) },
+        relations: ['user', 'unit', 'unit.building', 'complex'],
+      });
+    } catch (error: any) {
+      await queryRunner.rollbackTransaction();
+      if (error instanceof CustomError) throw error;
+      this.logger.error(`Error en baja masiva de residentes: ${error?.message}`, error?.stack);
+      throw new CustomError({
+        message: 'Error interno al registrar la baja masiva de residentes',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
+      });
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // ================================================================

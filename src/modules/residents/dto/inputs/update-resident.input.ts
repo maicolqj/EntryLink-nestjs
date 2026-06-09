@@ -60,4 +60,22 @@ export class UpdateResidentInput {
   @IsUUID()
   unitId: string;
 
+  @Field(() => String, { nullable: true, description: 'Nombre del usuario residente' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @Field(() => String, { nullable: true, description: 'Apellido del usuario residente' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  lastName?: string;
+
+  @Field(() => String, { nullable: true, description: 'Teléfono del usuario residente' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phoneNumber?: string;
+
 }
