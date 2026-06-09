@@ -104,14 +104,22 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
           // },
 
           context: ({ req, res }: any) => ({ req, res }),
-          formatError: (formattedError: GraphQLFormattedError, error: any) => ({
-            message: formattedError.message,
-            code: error?.extensions?.code || 'INTERNAL_SERVER_ERROR',
-            statusCode: error?.extensions?.statusCode || 500,
-            detail: isProd ? '' : (error?.extensions?.details || ''),
-            timestamp: new Date().toISOString(),
-            path: formattedError.path,
-          }),
+          formatError: (formattedError: GraphQLFormattedError, error: any) => {
+            const originalError = error?.extensions?.originalError;
+            const code = originalError?.errorCode
+              || error?.extensions?.code
+              || 'INTERNAL_SERVER_ERROR';
+            return {
+              message: formattedError.message,
+              path: formattedError.path,
+              extensions: {
+                code,
+                statusCode: originalError?.statusCode || 500,
+                detail: isProd ? '' : (originalError?.details || ''),
+                timestamp: new Date().toISOString(),
+              },
+            };
+          },
         };
       },
     }),
