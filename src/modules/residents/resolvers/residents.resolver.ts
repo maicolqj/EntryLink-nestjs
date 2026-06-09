@@ -8,6 +8,8 @@ import { FilterResidentsInput } from '../dto/inputs/filter-residents.input';
 import { ApproveResidentInput } from '../dto/inputs/approve-resident.input';
 import { RejectResidentInput } from '../dto/inputs/reject-resident.input';
 import { MoveOutResidentInput } from '../dto/inputs/move-out-resident.input';
+import { MoveResidentsToUnitInput } from '../dto/inputs/move-residents-to-unit.input';
+import { BulkMoveOutResidentsInput } from '../dto/inputs/bulk-move-out-residents.input';
 import { PaginatedResidentsResponse } from '../dto/responses/paginated-residents.response';
 import { ResidentStatsResponse } from '../dto/responses/resident-stats.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
@@ -133,6 +135,38 @@ export class ResidentsResolver {
   ): Promise<boolean> {
     const result = await this.residentsService.remove(id, currentUser);
     return result.success;
+  }
+
+  /**
+   * Traslada un grupo de residentes ACTIVOS a una nueva unidad del mismo complejo.
+   * Unidades origen sin residentes activos quedan AVAILABLE; destino queda OCCUPIED.
+   */
+  @Mutation(() => [Resident], { name: 'moveResidentsToUnit' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
+  })
+  moveResidentsToUnit(
+    @Args('input') input: MoveResidentsToUnitInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident[]> {
+    return this.residentsService.moveResidentsToUnit(input, currentUser);
+  }
+
+  /**
+   * Da de baja masiva (MOVED_OUT) a un grupo de residentes ACTIVE o SUSPENDED.
+   * Unidades sin residentes activos/suspendidos restantes quedan AVAILABLE.
+   */
+  @Mutation(() => [Resident], { name: 'bulkMoveOutResidents' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
+  })
+  bulkMoveOutResidents(
+    @Args('input') input: BulkMoveOutResidentsInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident[]> {
+    return this.residentsService.bulkMoveOutResidents(input, currentUser);
   }
 
   // ================================================================
