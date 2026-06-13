@@ -23,6 +23,7 @@ import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { LoginEmailInput, EMAIL_PASSWORD_USER_ROLES } from '../dto/inputs/login-email.input';
 import { LoginSystemCodeInput, SYSTEM_CODE_ROLES } from '../dto/inputs/login-system-code.input';
+import { LoginResidentInput } from '../dto/inputs/login-resident.input';
 import { RequestOtpInput } from '../dto/inputs/request-otp.input';
 import { VerifyOtpInput } from '../dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from '../dto/responses/auth-response';
@@ -162,7 +163,56 @@ export class AuthService {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // LOGIN C: Teléfono + OTP (RESIDENT_ROL)
+  // LOGIN C: Identidad + systemCode (RESIDENT_ROL)
+  // ═══════════════════════════════════════════════════════════════
+
+  async loginResident(
+    input: LoginResidentInput,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
+    const { identity, systemCode } = input;
+
+    await this.checkIpRateLimit(deviceInfo.ip);
+
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.systemCode')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .where('LOWER(user.identity) = LOWER(:identity)', { identity: identity.trim() })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) {
+      await this.registerFailedAttempt(identity, deviceInfo.ip, false);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const isResident = (user.userRoles ?? []).some(
+      ur => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
+
+    if (!isResident) {
+      await this.registerFailedAttempt(identity, deviceInfo.ip, false);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // Comparar systemCode antes de revelar estado de cuenta (evita user enumeration)
+    if (!user.systemCode || user.systemCode.toUpperCase() !== systemCode.trim().toUpperCase()) {
+      await this.registerFailedAttempt(identity, deviceInfo.ip, false);
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    this.assertUserAccountActive(user);
+
+    await this.clearFailedAttempts(identity);
+    this.logger.log(`Login exitoso (resident identity+systemCode): userId=${user.id}`);
+    return this.createUserSession(user, deviceInfo, false);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOGIN D: Teléfono + OTP (RESIDENT_ROL - flujo alternativo)
   // ═══════════════════════════════════════════════════════════════
 
   async requestOtp(input: RequestOtpInput, ip: string): Promise<OtpRequestResponse> {

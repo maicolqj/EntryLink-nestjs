@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { join } from 'path';
@@ -15,6 +15,7 @@ import { RESIDENTS_IMPORT_QUEUE } from './queues/residents-import.constants';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { AuditModule }              from '../audit/audit.module';
+import { NotificationsModule }      from '../notifications/notifications.module';
 
 import { User }     from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
@@ -32,6 +33,7 @@ try { mkdirSync(tmpDir, { recursive: true }); } catch { /* already exists */ }
     BullModule.registerQueue({ name: RESIDENTS_IMPORT_QUEUE }),
     ResidentialComplexModule,
     AuditModule,
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [ResidentsController],
   providers: [

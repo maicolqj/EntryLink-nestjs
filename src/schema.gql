@@ -1761,6 +1761,115 @@ type PaginatedUnitsResponse {
   pagination: PaginationReponse!
 }
 
+type Notification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  complexId: String!
+  entityId: String
+  entityType: String
+  createdByUserId: String
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionResult: NotificationActionResult
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de evento que originó la notificación"""
+enum NotificationType {
+  PACKAGE_RECEIVED
+  PACKAGE_READY
+  PACKAGE_DELIVERED
+  PACKAGE_RETURNED
+  PACKAGE_LOST
+  VISITOR_WALK_IN
+  VISIT_APPROVED
+  VISIT_DENIED
+  VISIT_REMINDER
+  VISITOR_ARRIVED
+  RESIDENT_APPROVED
+  RESIDENT_REJECTED
+  RESIDENT_PENDING
+  PARKING_ASSIGNED
+  VEHICLE_REGISTERED
+  VEHICLE_APPROVED
+  VEHICLE_REJECTED
+  VEHICLE_SUSPENDED
+  VEHICLE_REACTIVATED
+  VEHICLE_REMOVED
+  VEHICLE_PENDING
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  PAYMENT_RECEIVED
+  PAYMENT_CONFIRMED
+  PAYMENT_REVERSED
+  CHARGE_ADDED
+  DIRECT_CHARGE
+  CHARGE_WAIVED
+  MORA_APPLIED
+  WALLET_CREDIT
+  WALLET_APPLIED
+  PANIC_ALERT
+  SYSTEM_ANNOUNCEMENT
+  COMPLEX_ALERT
+  AMENITY_REMINDER
+  ACCESS_REQUEST_APPROVED
+  ACCESS_REQUEST_REJECTED
+  ACCESS_REVOKED_INACTIVITY
+}
+
+"""Prioridad de entrega de la notificación"""
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+"""
+Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
+"""
+enum NotificationActionType {
+  """Nueva solicitud de residencia — [Aprobar] [Rechazar]"""
+  RESIDENT_APPROVAL
+
+  """Nuevo vehículo pendiente — [Aprobar] [Rechazar]"""
+  VEHICLE_APPROVAL
+
+  """Visita walk-in esperando entrada — [Autorizar] [Denegar]"""
+  VISIT_APPROVAL
+
+  """Solicitud de acceso de supervisor — [Aprobar acceso] [Rechazar]"""
+  ACCESS_REQUEST
+
+  """Alerta que requiere confirmación — [Reconocer]"""
+  ACKNOWLEDGE
+}
+
+"""Resultado de la acción tomada sobre la notificación"""
+enum NotificationActionResult {
+  """Acción aprobada"""
+  APPROVED
+
+  """Acción rechazada"""
+  REJECTED
+
+  """Alerta reconocida"""
+  ACKNOWLEDGED
+}
+
 type PaginatedResidentsResponse {
   items: [Resident!]!
   pagination: PaginationReponse!
@@ -1798,6 +1907,92 @@ type ResidentStatsResponse {
 
   """Desglose por tipo de residente (solo activos)"""
   byType: ResidentTypeBreakdown!
+}
+
+type PaginatedNotificationsResponse {
+  items: [Notification!]!
+  pagination: PaginationReponse!
+}
+
+type UnreadCountResponse {
+  count: Int!
+}
+
+type PushSubscriptionResult {
+  success: Boolean!
+}
+
+type SendNotificationResult {
+  id: ID!
+  title: String!
+  body: String!
+  createdAt: DateTime!
+}
+
+"""Notificación masiva enviada por el administrador"""
+type SentNotification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+
+  """Total de destinatarios al momento del envío"""
+  recipientsCount: Int!
+
+  """Roles destinatarios. Vacío = todos los usuarios."""
+  targetRoles: [String!]
+  createdAt: DateTime!
+}
+
+type SentNotificationPaginatedResult {
+  items: [SentNotification!]!
+  pagination: PaginationReponse!
+}
+
+type TriggerPanicAlertResult {
+  success: Boolean!
+}
+
+type NotificationUserInfo {
+  id: ID!
+  name: String!
+  lastName: String!
+  fullName: String!
+  email: String!
+  phoneNumber: String
+  identity: String
+  profilePicture: String
+  roles: [String!]!
+}
+
+type NotificationDetailResponse {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  recipientUser: NotificationUserInfo
+  complexId: String!
+  entityId: String
+  entityType: String
+  createdByUserId: String
+  createdByUser: NotificationUserInfo
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionTakenByUser: NotificationUserInfo
+  actionResult: NotificationActionResult
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -2366,106 +2561,6 @@ enum ExpenseCategory {
   OTHER
 }
 
-type Notification {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-  metadata: JSON
-  isBroadcast: Boolean!
-  targetRoles: [String!]
-  isRead: Boolean!
-  readAt: DateTime
-  recipientUserId: String
-  complexId: String!
-  entityId: String
-  entityType: String
-  createdByUserId: String
-  isActionable: Boolean!
-  actionType: NotificationActionType
-  actionLabel: String
-  actionTakenAt: DateTime
-  actionTakenByUserId: String
-  actionResult: NotificationActionResult
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""Tipo de evento que originó la notificación"""
-enum NotificationType {
-  PACKAGE_RECEIVED
-  PACKAGE_READY
-  PACKAGE_DELIVERED
-  PACKAGE_RETURNED
-  VISITOR_WALK_IN
-  VISIT_APPROVED
-  VISIT_DENIED
-  VISIT_REMINDER
-  VISITOR_ARRIVED
-  RESIDENT_APPROVED
-  RESIDENT_REJECTED
-  RESIDENT_PENDING
-  PARKING_ASSIGNED
-  VEHICLE_APPROVED
-  VEHICLE_REJECTED
-  VEHICLE_SUSPENDED
-  VEHICLE_PENDING
-  PAYMENT_DUE
-  PAYMENT_OVERDUE
-  PAYMENT_RECEIVED
-  PAYMENT_CONFIRMED
-  CHARGE_ADDED
-  DIRECT_CHARGE
-  PANIC_ALERT
-  SYSTEM_ANNOUNCEMENT
-  COMPLEX_ALERT
-  AMENITY_REMINDER
-  ACCESS_REQUEST_APPROVED
-  ACCESS_REQUEST_REJECTED
-  ACCESS_REVOKED_INACTIVITY
-}
-
-"""Prioridad de entrega de la notificación"""
-enum NotificationPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-"""
-Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
-"""
-enum NotificationActionType {
-  """Nueva solicitud de residencia — [Aprobar] [Rechazar]"""
-  RESIDENT_APPROVAL
-
-  """Nuevo vehículo pendiente — [Aprobar] [Rechazar]"""
-  VEHICLE_APPROVAL
-
-  """Visita walk-in esperando entrada — [Autorizar] [Denegar]"""
-  VISIT_APPROVAL
-
-  """Solicitud de acceso de supervisor — [Aprobar acceso] [Rechazar]"""
-  ACCESS_REQUEST
-
-  """Alerta que requiere confirmación — [Reconocer]"""
-  ACKNOWLEDGE
-}
-
-"""Resultado de la acción tomada sobre la notificación"""
-enum NotificationActionResult {
-  """Acción aprobada"""
-  APPROVED
-
-  """Acción rechazada"""
-  REJECTED
-
-  """Alerta reconocida"""
-  ACKNOWLEDGED
-}
-
 type PaginatedVehiclesResponse {
   items: [Vehicle!]!
   pagination: PaginationReponse!
@@ -2671,92 +2766,6 @@ type PaginatedExpensesResponse {
   pagination: PaginationReponse!
   totalAmount: Float!
   byCategory: [ExpenseCategoryBreakdown!]!
-}
-
-type PaginatedNotificationsResponse {
-  items: [Notification!]!
-  pagination: PaginationReponse!
-}
-
-type UnreadCountResponse {
-  count: Int!
-}
-
-type PushSubscriptionResult {
-  success: Boolean!
-}
-
-type SendNotificationResult {
-  id: ID!
-  title: String!
-  body: String!
-  createdAt: DateTime!
-}
-
-"""Notificación masiva enviada por el administrador"""
-type SentNotification {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-
-  """Total de destinatarios al momento del envío"""
-  recipientsCount: Int!
-
-  """Roles destinatarios. Vacío = todos los usuarios."""
-  targetRoles: [String!]
-  createdAt: DateTime!
-}
-
-type SentNotificationPaginatedResult {
-  items: [SentNotification!]!
-  pagination: PaginationReponse!
-}
-
-type TriggerPanicAlertResult {
-  success: Boolean!
-}
-
-type NotificationUserInfo {
-  id: ID!
-  name: String!
-  lastName: String!
-  fullName: String!
-  email: String!
-  phoneNumber: String
-  identity: String
-  profilePicture: String
-  roles: [String!]!
-}
-
-type NotificationDetailResponse {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-  metadata: JSON
-  isBroadcast: Boolean!
-  targetRoles: [String!]
-  isRead: Boolean!
-  readAt: DateTime
-  recipientUserId: String
-  recipientUser: NotificationUserInfo
-  complexId: String!
-  entityId: String
-  entityType: String
-  createdByUserId: String
-  createdByUser: NotificationUserInfo
-  isActionable: Boolean!
-  actionType: NotificationActionType
-  actionLabel: String
-  actionTakenAt: DateTime
-  actionTakenByUserId: String
-  actionTakenByUser: NotificationUserInfo
-  actionResult: NotificationActionResult
-  createdAt: DateTime!
-  updatedAt: DateTime!
 }
 
 type Package {
@@ -3124,11 +3133,19 @@ type Query {
   Perfil completo del usuario autenticado (usuario o complejo residencial)
   """
   me: MeResponse!
+  myResidentProfile: Resident!
   residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
   pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
   resident(id: String!): Resident!
   residentHistoryByUnit(unitId: String!): [Resident!]!
+  myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  notificationDetail(notificationId: String!, complexId: String!): NotificationDetailResponse!
+  unreadNotificationsCount(complexId: String!): UnreadCountResponse!
+  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
+  vapidPublicKey: String!
+  activePanicAlerts(complexId: String!): [Notification!]!
   visitors(complexId: String!, pagination: PaginationInput, search: String, onlyBlacklisted: Boolean): PaginatedVisitorsResponse!
   visitor(id: String!): Visitor!
   visits(complexId: String!, pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
@@ -3153,13 +3170,6 @@ type Query {
   unitAccountStatement(unitId: String!, complexId: String!, period: String): UnitAccountStatementResponse!
   unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
   complexExpenses(complexId: String!, pagination: PaginationInput, filters: FilterExpensesInput): PaginatedExpensesResponse!
-  myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
-  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
-  notificationDetail(notificationId: String!, complexId: String!): NotificationDetailResponse!
-  unreadNotificationsCount(complexId: String!): UnreadCountResponse!
-  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
-  vapidPublicKey: String!
-  activePanicAlerts(complexId: String!): [Notification!]!
   packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
   pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
   package(packageId: String!): Package!
@@ -3356,6 +3366,12 @@ input FilterResidentsInput {
   buildingName: String
 }
 
+input FilterNotificationsInput {
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: Boolean
+}
+
 input FilterVisitsInput {
   status: VisitStatus
   type: VisitType
@@ -3400,12 +3416,6 @@ input FilterExpensesInput {
   startDate: DateTime
   endDate: DateTime
   includeReversed: Boolean
-}
-
-input FilterNotificationsInput {
-  type: NotificationType
-  priority: NotificationPriority
-  isRead: Boolean
 }
 
 input FilterPackagesInput {
@@ -3477,6 +3487,11 @@ type Mutation {
   Inicia sesión con email y código de sistema. Disponible para: SUPERVISOR_ROL, SECURITY_ROL, RESIDENT_ROL
   """
   loginWithIdentityNum(input: LoginSystemCodeInput!): AuthResponse!
+
+  """
+  Inicia sesión como residente usando número de identidad y código de sistema. Exclusivo para RESIDENT_ROL.
+  """
+  loginResident(input: LoginResidentInput!): AuthResponse!
 
   """
   Auto-registro público para supervisores. La cuenta queda en PENDING_VERIFICATION hasta verificar el correo.
@@ -3620,8 +3635,18 @@ type Mutation {
   moveOutResident(input: MoveOutResidentInput!): Resident!
   undoMoveOutResident(residentId: String!): Resident!
   removeResident(id: String!): Boolean!
+  moveResidentsToUnit(input: MoveResidentsToUnitInput!): [Resident!]!
+  bulkMoveOutResidents(input: BulkMoveOutResidentsInput!): [Resident!]!
   approveResident(input: ApproveResidentInput!): Resident!
   rejectResident(input: RejectResidentInput!): Resident!
+  markNotificationAsRead(notificationId: String!): Notification!
+  markAllNotificationsAsRead(complexId: String!): Int!
+  sendNotification(input: SendNotificationInput!): SendNotificationResult!
+  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
+  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  acknowledgePanicAlert(notificationId: String!): Notification!
+  deleteNotification(notificationId: String!): Boolean!
+  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   blacklistVisitor(input: BlacklistVisitorInput!): Visitor!
   removeVisitorFromBlacklist(visitorId: String!): Visitor!
   registerWalkIn(input: RegisterWalkInInput!): Visit!
@@ -3658,14 +3683,6 @@ type Mutation {
   applyMoraToPeriod(input: ApplyMoraInput!): MoraApplicationResult!
   registerExpense(input: RegisterExpenseInput!): ComplexExpense!
   reverseExpense(expenseId: String!, reason: String!): ComplexExpense!
-  markNotificationAsRead(notificationId: String!): Notification!
-  markAllNotificationsAsRead(complexId: String!): Int!
-  sendNotification(input: SendNotificationInput!): SendNotificationResult!
-  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
-  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
-  acknowledgePanicAlert(notificationId: String!): Notification!
-  deleteNotification(notificationId: String!): Boolean!
-  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   registerPackage(input: RegisterPackageInput!): Package!
   markPackageAsNotified(packageId: String!): Package!
   confirmPackageDelivery(input: ConfirmDeliveryInput!): Package!
@@ -3733,6 +3750,17 @@ input LoginSystemCodeInput {
 
   """Contraseña"""
   password: String!
+}
+
+"""
+Credenciales para inicio de sesión de residentes (documento + código de sistema)
+"""
+input LoginResidentInput {
+  """Número de documento de identidad del residente"""
+  identity: String!
+
+  """Código de sistema asignado al residente (formato RES-xxxxx)"""
+  systemCode: String!
 }
 
 """Datos para el auto-registro de un supervisor en la plataforma"""
@@ -4213,6 +4241,15 @@ input UpdateResidentInput {
 
   """ID de la unidad a la que se asignará"""
   unitId: String!
+
+  """Nombre del usuario residente"""
+  name: String
+
+  """Apellido del usuario residente"""
+  lastName: String
+
+  """Teléfono del usuario residente"""
+  phoneNumber: String
 }
 
 input MoveOutResidentInput {
@@ -4224,6 +4261,18 @@ input MoveOutResidentInput {
 
   """Razón de la salida"""
   moveOutReason: String
+}
+
+input MoveResidentsToUnitInput {
+  residentIds: [String!]!
+  newUnitId: String!
+  newMainResidentId: String
+}
+
+input BulkMoveOutResidentsInput {
+  residentIds: [String!]!
+  moveOutDate: String!
+  moveOutReason: String!
 }
 
 input ApproveResidentInput {
@@ -4240,6 +4289,37 @@ input RejectResidentInput {
 
   """Razón del rechazo (obligatoria)"""
   rejectionReason: String!
+}
+
+input SendNotificationInput {
+  complexId: String!
+  title: String!
+  body: String!
+  type: NotificationType
+  priority: NotificationPriority
+  targetRoles: [String!]
+  targetUnitId: String
+  metadata: JSON
+}
+
+input SavePushSubscriptionInput {
+  complexId: String!
+  endpoint: String!
+  p256dh: String!
+  auth: String!
+}
+
+input SaveMobileTokenInput {
+  complexId: String!
+  deviceToken: String!
+  platform: PushPlatform!
+}
+
+"""Plataforma de destino para notificaciones push"""
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
 }
 
 input BlacklistVisitorInput {
@@ -4540,37 +4620,6 @@ input RegisterExpenseInput {
   expenseDate: DateTime!
   receiptUrl: String
   notes: String
-}
-
-input SendNotificationInput {
-  complexId: String!
-  title: String!
-  body: String!
-  type: NotificationType
-  priority: NotificationPriority
-  targetRoles: [String!]
-  targetUnitId: String
-  metadata: JSON
-}
-
-input SavePushSubscriptionInput {
-  complexId: String!
-  endpoint: String!
-  p256dh: String!
-  auth: String!
-}
-
-input SaveMobileTokenInput {
-  complexId: String!
-  deviceToken: String!
-  platform: PushPlatform!
-}
-
-"""Plataforma de destino para notificaciones push"""
-enum PushPlatform {
-  WEB
-  ANDROID
-  IOS
 }
 
 input RegisterPackageInput {

@@ -12,6 +12,7 @@ export enum NotificationType {
   PACKAGE_READY          = 'PACKAGE_READY',          // Paquete listo para retirar
   PACKAGE_DELIVERED      = 'PACKAGE_DELIVERED',      // Paquete entregado (confirmación)
   PACKAGE_RETURNED       = 'PACKAGE_RETURNED',       // Paquete devuelto al remitente
+  PACKAGE_LOST           = 'PACKAGE_LOST',           // Paquete reportado como perdido
 
   // ── Visitantes / Visitas ───────────────────────────────────────
   VISITOR_WALK_IN        = 'VISITOR_WALK_IN',        // Visitante walk-in esperando aprobación
@@ -29,9 +30,12 @@ export enum NotificationType {
   PARKING_ASSIGNED       = 'PARKING_ASSIGNED',       // Cargo de parqueadero visitante generado a la unidad
 
   // ── Vehículos ─────────────────────────────────────────────────
+  VEHICLE_REGISTERED     = 'VEHICLE_REGISTERED',     // Vehículo registrado en la unidad
   VEHICLE_APPROVED       = 'VEHICLE_APPROVED',       // Vehículo aprobado
   VEHICLE_REJECTED       = 'VEHICLE_REJECTED',       // Vehículo rechazado
   VEHICLE_SUSPENDED      = 'VEHICLE_SUSPENDED',      // Vehículo suspendido
+  VEHICLE_REACTIVATED    = 'VEHICLE_REACTIVATED',    // Vehículo reactivado
+  VEHICLE_REMOVED        = 'VEHICLE_REMOVED',        // Vehículo retirado del complejo
   VEHICLE_PENDING        = 'VEHICLE_PENDING',        // Nuevo vehículo pendiente (admin)
 
   // ── Finanzas ──────────────────────────────────────────────────
@@ -39,8 +43,13 @@ export enum NotificationType {
   PAYMENT_OVERDUE        = 'PAYMENT_OVERDUE',        // Cuota vencida
   PAYMENT_RECEIVED       = 'PAYMENT_RECEIVED',       // Pago registrado
   PAYMENT_CONFIRMED      = 'PAYMENT_CONFIRMED',      // Pago confirmado (automático tras registrar pago)
+  PAYMENT_REVERSED       = 'PAYMENT_REVERSED',       // Pago anulado en la unidad
   CHARGE_ADDED           = 'CHARGE_ADDED',           // Nuevo cargo generado en bulk
   DIRECT_CHARGE          = 'DIRECT_CHARGE',          // Cargo directo aplicado manualmente a una unidad
+  CHARGE_WAIVED          = 'CHARGE_WAIVED',          // Cargo exonerado / cancelado a la unidad
+  MORA_APPLIED           = 'MORA_APPLIED',           // Interés de mora aplicado a la unidad
+  WALLET_CREDIT          = 'WALLET_CREDIT',          // Saldo a favor agregado a la unidad
+  WALLET_APPLIED         = 'WALLET_APPLIED',         // Saldo a favor aplicado a un cargo
 
   // ── Seguridad / Emergencias ────────────────────────────────────
   PANIC_ALERT            = 'PANIC_ALERT',            // Alerta de pánico activada por residente o guardia

@@ -14,6 +14,7 @@ import { VisitorsController }  from './controllers/visitors.controller';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule }          from '../residents/residents.module';
 import { AuditModule }              from '../audit/audit.module';
+import { NotificationsModule }      from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuditModule }              from '../audit/audit.module';
     ResidentialComplexModule, // provee ResidentialComplexService y UnitService
     ResidentsModule,          // provee ResidentsService
     AuditModule,
+    NotificationsModule,      // provee NotificationsService
   ],
   controllers: [VisitorsController],
   providers: [

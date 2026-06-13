@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
@@ -96,6 +96,7 @@ export class NotificationsService implements OnModuleInit {
     private readonly roleRepo: Repository<Role>,
 
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => ResidentsService))
     private readonly residentsService: ResidentsService,
     private readonly socketService: SocketService,
   ) {}
@@ -861,7 +862,7 @@ export class NotificationsService implements OnModuleInit {
       const panicPayload = {
         complexId,
         type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.URGENT,
+        priority:        NotificationPriority.HIGH,
         title:           'Alerta de pánico — Seguridad',
         body:            `Alerta de pánico activada por ${triggeredByLabel}.`,
         isBroadcast:     true,
@@ -1096,32 +1097,51 @@ export class NotificationsService implements OnModuleInit {
     const batches = chunk(tokens, BATCH_SIZE);
 
     for (const batch of batches) {
+      const isPanic  = params.type === NotificationType.PANIC_ALERT;
+      const metadata = (params.metadata ?? {}) as Record<string, string>;
+
       const message: admin.messaging.MulticastMessage = {
         tokens: batch,
-        notification: {
-          title: params.title,
-          body:  params.body,
-        },
+        // Non-panic: include a notification payload so the Android OS shows it
+        // directly (visits/payments). Panic must be DATA-ONLY: a notification
+        // payload makes Android display it itself and SKIP the JS background
+        // handler when the app is killed, so the app's full-screen panic alarm
+        // would never fire. Data-only + android.priority:'high' wakes the killed
+        // app and runs setBackgroundMessageHandler, which drives the alarm.
+        ...(!isPanic && { notification: { title: params.title, body: params.body } }),
         data: {
           type:      params.type,
           priority:  params.priority,
           complexId: params.complexId,
+          title:     params.title,
+          body:      params.body,
           metadata:  JSON.stringify(params.metadata ?? {}),
           url:       '/dashboard/notificaciones',
+          ...(isPanic && {
+            triggeredBy:      params.createdByUserId ?? '',
+            triggeredByLabel: metadata.triggeredByLabel ?? '',
+          }),
         },
         android: {
-          priority: params.priority === NotificationPriority.URGENT || params.priority === NotificationPriority.HIGH
-            ? 'high'
-            : 'normal',
-          notification: {
-            channelId: 'entrylink-default',
-            priority:
-              params.priority === NotificationPriority.URGENT ? 'max' :
-              params.priority === NotificationPriority.HIGH   ? 'high' :
-              'default',
-            defaultVibrateTimings: true,
-            sound: 'default',
-          },
+          priority: isPanic
+            || params.priority === NotificationPriority.URGENT
+            || params.priority === NotificationPriority.HIGH
+            ? 'high' : 'normal',
+          ...(isPanic && { collapseKey: `panic-${params.complexId}` }),
+          // android.notification only applies to a displayed (non-data-only)
+          // message, so omit it for panic — the app builds its own Notifee
+          // full-screen notification from the data payload.
+          ...(!isPanic && {
+            notification: {
+              channelId: 'entrylink-default',
+              priority:
+                params.priority === NotificationPriority.URGENT ? 'max' :
+                params.priority === NotificationPriority.HIGH ? 'high' :
+                'default',
+              defaultVibrateTimings: true,
+              sound: 'default',
+            },
+          }),
         },
         apns: {
           headers: {
@@ -1130,6 +1150,10 @@ export class NotificationsService implements OnModuleInit {
           },
           payload: {
             aps: {
+              // Android goes data-only for panic (handled above), but iOS still
+              // needs a visible alert since it has no JS-driven full-screen path —
+              // the top-level notification was removed, so set the APNS alert here.
+              ...(isPanic && { alert: { title: params.title, body: params.body } }),
               sound: 'default',
               badge: 1,
               'content-available': 1,

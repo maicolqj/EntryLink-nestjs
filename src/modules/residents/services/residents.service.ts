@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 import { hash } from 'bcrypt';
@@ -34,6 +34,9 @@ import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { AuditService }    from '../../audit/services/audit.service';
 import { AuditAction }     from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType }     from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { CacheService }    from '../../../core/infrastructure/cache/cache.service';
 import { BK, filterKey }   from '../../../core/infrastructure/cache/business-cache.constants';
 
@@ -55,8 +58,37 @@ export class ResidentsService {
     private readonly unitService: UnitService,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
     private readonly cacheService: CacheService,
   ) { }
+
+  // ================================================================
+  // HELPER — notificar al residente (usuario destinatario)
+  // ================================================================
+
+  /** Notifica directamente al usuario residente (fire & forget). */
+  private async notifyResident(
+    resident: Resident,
+    type: NotificationType,
+    priority: NotificationPriority,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    if (!resident.userId) return;
+
+    await this.notificationsService.notify({
+      complexId:  resident.complexId,
+      userIds:    [resident.userId],
+      type,
+      priority,
+      title,
+      body,
+      entityId:   resident.id,
+      entityType: 'resident',
+      metadata:   { residentId: resident.id, unitId: resident.unitId },
+    });
+  }
 
   // ================================================================
   // CREAR RESIDENTE (lo hace COMPLEX_ROL o SUPER_ADMIN)
@@ -319,6 +351,14 @@ export class ResidentsService {
         description:     `Residente aprobado: ${resident.id}`,
       });
 
+      this.notifyResident(
+        resident,
+        NotificationType.RESIDENT_APPROVED,
+        NotificationPriority.HIGH,
+        'Solicitud de residencia aprobada',
+        'Tu solicitud de residencia fue aprobada. Ya puedes acceder a los servicios de tu unidad.',
+      ).catch(err => this.logger.warn(`Error al notificar aprobación de residente ${resident.id}: ${err?.message}`));
+
       return resident;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -371,6 +411,14 @@ export class ResidentsService {
       complexId:       resident.complexId,
       description:     `Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`,
     });
+
+    this.notifyResident(
+      saved,
+      NotificationType.RESIDENT_REJECTED,
+      NotificationPriority.HIGH,
+      'Solicitud de residencia rechazada',
+      `Tu solicitud de residencia fue rechazada. Motivo: ${input.rejectionReason}.`,
+    ).catch(err => this.logger.warn(`Error al notificar rechazo de residente ${saved.id}: ${err?.message}`));
 
     return saved;
   }
@@ -1100,6 +1148,32 @@ export class ResidentsService {
       success: true,
       message: `Registro de residente eliminado correctamente`,
     };
+  }
+
+  // ================================================================
+  // PERFIL PROPIO DEL RESIDENTE AUTENTICADO
+  // ================================================================
+
+  async findMyProfile(userId: string, complexId: string): Promise<Resident> {
+    const resident = await this.residentRepo.findOne({
+      where: {
+        userId,
+        complexId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
+      relations: ['user', 'unit', 'unit.building', 'complex'],
+    });
+
+    if (!resident) {
+      throw new CustomError({
+        message: 'No se encontró un registro de residente activo para este usuario',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ResidentErrorCode.RESIDENT_NOT_FOUND,
+      });
+    }
+
+    return resident;
   }
 
   // ================================================================

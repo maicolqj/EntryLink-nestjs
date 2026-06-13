@@ -27,6 +27,9 @@ import { AuditEntityType }           from '../../audit/enums/audit-entity-type.e
 import { UnitService }               from '../../residential-complex/services/unit.service';
 import { ResidentsService }          from '../../residents/services/residents.service';
 import { FinanceService }            from '../../finance/services/finance.service';
+import { NotificationsService }      from '../../notifications/services/notifications.service';
+import { NotificationType }          from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
 import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
 import { CacheService }              from '../../../core/infrastructure/cache/cache.service';
 import { BK, filterKey }             from '../../../core/infrastructure/cache/business-cache.constants';
@@ -51,6 +54,7 @@ export class VehiclesService {
     private readonly residentsService: ResidentsService,
     private readonly auditService:     AuditService,
     private readonly financeService:   FinanceService,
+    private readonly notificationsService: NotificationsService,
     private readonly cacheService:     CacheService,
   ) {}
 
@@ -118,6 +122,14 @@ export class VehiclesService {
     await this.financeService.triggerVehicleCharges(saved.unitId, saved.complexId);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(input.complexId));
 
+    this.notifyUnit(
+      saved,
+      NotificationType.VEHICLE_REGISTERED,
+      NotificationPriority.NORMAL,
+      'Vehículo registrado',
+      `Se ha registrado un vehículo ${this.describeVehicle(saved)} en tu unidad el día ${this.formatDate(saved.createdAt)}.`,
+    ).catch(err => this.logger.warn(`Error al notificar registro de vehículo ${saved.id}: ${err?.message}`));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        saved.id,
@@ -163,6 +175,14 @@ export class VehiclesService {
     await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
+    this.notifyUnit(
+      saved,
+      NotificationType.VEHICLE_APPROVED,
+      NotificationPriority.NORMAL,
+      'Vehículo aprobado',
+      `Tu vehículo ${this.describeVehicle(saved)} fue aprobado y está autorizado para ingresar.`,
+    ).catch(err => this.logger.warn(`Error al notificar aprobación de vehículo ${saved.id}: ${err?.message}`));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        vehicle.id,
@@ -206,6 +226,14 @@ export class VehiclesService {
     const saved = await this.vehicleRepo.save(vehicle);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
+    this.notifyUnit(
+      saved,
+      NotificationType.VEHICLE_REJECTED,
+      NotificationPriority.HIGH,
+      'Vehículo rechazado',
+      `Tu vehículo ${this.describeVehicle(saved)} fue rechazado. Motivo: ${reason}.`,
+    ).catch(err => this.logger.warn(`Error al notificar rechazo de vehículo ${saved.id}: ${err?.message}`));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        vehicle.id,
@@ -247,6 +275,14 @@ export class VehiclesService {
     const savedSuspend = await this.vehicleRepo.save(vehicle);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
 
+    this.notifyUnit(
+      savedSuspend,
+      NotificationType.VEHICLE_SUSPENDED,
+      NotificationPriority.HIGH,
+      'Vehículo suspendido',
+      `Tu vehículo ${this.describeVehicle(savedSuspend)} fue suspendido. Motivo: ${reason}.`,
+    ).catch(err => this.logger.warn(`Error al notificar suspensión de vehículo ${savedSuspend.id}: ${err?.message}`));
+
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
       entityId:        vehicle.id,
@@ -283,6 +319,14 @@ export class VehiclesService {
 
     await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+
+    this.notifyUnit(
+      savedReactivate,
+      NotificationType.VEHICLE_REACTIVATED,
+      NotificationPriority.NORMAL,
+      'Vehículo reactivado',
+      `Tu vehículo ${this.describeVehicle(savedReactivate)} fue reactivado y está autorizado nuevamente.`,
+    ).catch(err => this.logger.warn(`Error al notificar reactivación de vehículo ${savedReactivate.id}: ${err?.message}`));
 
     void this.auditService.log({
       entityType:      AuditEntityType.Vehicle,
@@ -322,6 +366,14 @@ export class VehiclesService {
     vehicle.deletedAt = new Date();
     await this.vehicleRepo.save(vehicle);
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+
+    this.notifyUnit(
+      vehicle,
+      NotificationType.VEHICLE_REMOVED,
+      NotificationPriority.NORMAL,
+      'Vehículo retirado',
+      `Tu vehículo ${this.describeVehicle(vehicle)} fue retirado del complejo.`,
+    ).catch(err => this.logger.warn(`Error al notificar retiro de vehículo ${vehicle.id}: ${err?.message}`));
 
     this.logger.log(`Vehículo retirado: ${vehicleId} — placa ${vehicle.plate}`);
 
@@ -892,5 +944,55 @@ export class VehiclesService {
         break;
     }
     return next;
+  }
+
+  // ================================================================
+  // HELPER — notificar a los residentes de la unidad del vehículo
+  // ================================================================
+
+  private formatDate(date: Date): string {
+    return new Date(date).toLocaleDateString('es-CO', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'America/Bogota',
+    });
+  }
+
+  /** Descripción legible del vehículo para el cuerpo de la notificación. */
+  private describeVehicle(vehicle: Vehicle): string {
+    const parts = [vehicle.type, vehicle.brand, vehicle.model].filter(Boolean);
+    const desc = parts.join(' ');
+    return desc ? `${desc} (placa ${vehicle.plate})` : `placa ${vehicle.plate}`;
+  }
+
+  /** Notifica a los residentes activos de la unidad de un vehículo (fire & forget). */
+  private async notifyUnit(
+    vehicle: Vehicle,
+    type: NotificationType,
+    priority: NotificationPriority,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const residents = await this.residentsService.findActiveByUnitInternal(vehicle.unitId);
+    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId:  vehicle.complexId,
+      userIds,
+      type,
+      priority,
+      title,
+      body,
+      entityId:   vehicle.id,
+      entityType: 'vehicle',
+      metadata:   {
+        vehicleId: vehicle.id,
+        plate:     vehicle.plate,
+        type:      vehicle.type,
+        unitId:    vehicle.unitId,
+      },
+    });
   }
 }

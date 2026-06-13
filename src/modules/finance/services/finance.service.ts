@@ -334,6 +334,10 @@ export class FinanceService {
         );
         configGenerated++;
         totalGenerated++;
+
+        this.notifyChargeGeneratedToUnit(complexId, unit.id, config.name, chargeAmount, period).catch(err =>
+          this.logger.warn(`Error al notificar cargo generado en unidad ${unit.id} (config ${config.id}): ${err?.message}`),
+        );
       }
 
       if (config.chargeType === ChargeType.LIMITED && configGenerated > 0) {
@@ -430,6 +434,8 @@ export class FinanceService {
     let totalMoraAmount = 0;
     let skipped = 0;
 
+    const moraNotifications: Array<{ unitId: string; complexId: string; amount: number; description: string }> = [];
+
     try {
       for (const charge of chargesToProcess) {
         // Fecha de referencia: día 1 del mes siguiente al período del cargo
@@ -465,9 +471,22 @@ export class FinanceService {
 
         applied++;
         totalMoraAmount += mora;
+        moraNotifications.push({
+          unitId: charge.unitId,
+          complexId: charge.complexId,
+          amount: mora,
+          description: moraDescription,
+        });
       }
 
       await queryRunner.commitTransaction();
+
+      for (const m of moraNotifications) {
+        this.notifyMoraApplied(m.unitId, m.complexId, m.amount, m.description).catch(err =>
+          this.logger.warn(`Error al notificar mora en unidad ${m.unitId}: ${err?.message}`),
+        );
+      }
+
       return { applied, skipped, totalMoraAmount: Math.round(totalMoraAmount * 100) / 100 };
 
     } catch (err) {
@@ -712,6 +731,10 @@ export class FinanceService {
         );
         configGenerated++;
         totalGenerated++;
+
+        this.notifyChargeGeneratedToUnit(complexId, unit.id, config.name, chargeAmount, period).catch(err =>
+          this.logger.warn(`Error al notificar cargo generado en unidad ${unit.id} (config ${config.id}): ${err?.message}`),
+        );
       }
 
       // Actualizar config tras la generación
@@ -724,12 +747,6 @@ export class FinanceService {
       } else if (config.chargeType === ChargeType.ONCE && configGenerated > 0) {
         config.isActive = false;
         await this.feeConfigRepo.save(config);
-      }
-
-      if (configGenerated > 0) {
-        this.notifyChargeGenerated(complexId, config.name, Number(config.amount), period).catch(err =>
-          this.logger.warn(`Error al notificar cargo generado (config ${config.id}): ${err?.message}`),
-        );
       }
     }
 
@@ -892,6 +909,10 @@ export class FinanceService {
     charge.cancelledAt = new Date();
 
     const savedWaive = await this.chargeRepo.save(charge);
+
+    this.notifyChargeWaived(savedWaive, reason).catch(err =>
+      this.logger.warn(`Error al notificar exoneración de cargo ${chargeId}: ${err?.message}`),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.FeeCharge,
@@ -1195,6 +1216,10 @@ export class FinanceService {
         description: `Pago anulado: ${paymentId} — razón: ${reason} — cargo: ${payment.chargeId}`,
       });
 
+      this.notifyPaymentReversed(charge, Number(payment.amount), reason).catch(err =>
+        this.logger.warn(`Error al notificar anulación de pago ${paymentId}: ${err?.message}`),
+      );
+
       return payment;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -1235,6 +1260,10 @@ export class FinanceService {
         complexId: input.complexId,
         chargeId: null,
       }),
+    );
+
+    this.notifyWalletCredit(input.unitId, input.complexId, Number(input.amount), input.description).catch(err =>
+      this.logger.warn(`Error al notificar saldo a favor en unidad ${input.unitId}: ${err?.message}`),
     );
 
     return this.toWalletEntryObject(entry);
@@ -1330,6 +1359,10 @@ export class FinanceService {
 
       await queryRunner.commitTransaction();
 
+      this.notifyWalletApplied(charge, Math.round(montoAplicado * 100) / 100).catch(err =>
+        this.logger.warn(`Error al notificar aplicación de saldo en cargo ${charge.id}: ${err?.message}`),
+      );
+
       const remainingWalletBalance = walletBalance - montoAplicado;
 
       return {
@@ -1379,6 +1412,8 @@ export class FinanceService {
     let applied = 0;
     let totalMoraAmount = 0;
     let skipped = 0;
+
+    const moraNotifications: Array<{ unitId: string; complexId: string; amount: number; description: string }> = [];
 
     try {
       for (const charge of chargesToProcess) {
@@ -1435,9 +1470,21 @@ export class FinanceService {
 
         applied++;
         totalMoraAmount += mora;
+        moraNotifications.push({
+          unitId: charge.unitId,
+          complexId: charge.complexId,
+          amount: mora,
+          description: moraDescription,
+        });
       }
 
       await queryRunner.commitTransaction();
+
+      for (const m of moraNotifications) {
+        this.notifyMoraApplied(m.unitId, m.complexId, m.amount, m.description).catch(err =>
+          this.logger.warn(`Error al notificar mora en unidad ${m.unitId}: ${err?.message}`),
+        );
+      }
 
       this.logger.log(
         `applyMoraToPeriod — período ${input.period}, complejo ${input.complexId}: ` +
@@ -2392,14 +2439,15 @@ export class FinanceService {
     });
   }
 
-  /** Notifica a todos los residentes del complejo que se generó un nuevo cargo masivo. */
-  private async notifyChargeGenerated(
+  /** Notifica a los residentes de una unidad específica que se le generó un nuevo cargo. */
+  private async notifyChargeGeneratedToUnit(
     complexId: string,
+    unitId: string,
     configName: string,
-    configAmount: number,
+    amount: number,
     period: string,
   ): Promise<void> {
-    const userIds = await this.residentsService.findActiveUserIdsByComplexInternal(complexId);
+    const userIds = await this.resolveUnitUserIds(unitId);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
@@ -2408,7 +2456,8 @@ export class FinanceService {
       type: NotificationType.CHARGE_ADDED,
       priority: NotificationPriority.NORMAL,
       title: 'Nuevo cargo generado',
-      body: `Se ha generado un cargo por concepto de "${configName}" por un valor de ${this.formatCurrency(configAmount)} para el período ${period}.`,
+      body: `Se ha generado un cargo por concepto de "${configName}" por un valor de ${this.formatCurrency(amount)} para el período ${period}.`,
+      metadata: { unitId, complexId, amount, configName, period },
     });
   }
 
@@ -2432,6 +2481,102 @@ export class FinanceService {
       title: 'Nuevo cargo aplicado a tu unidad',
       body: `Se ha aplicado un cargo de $${amount.toLocaleString('es-CO')} por concepto: "${description}" para el período ${period}.`,
       metadata: { amount, description, period, unitId, complexId },
+    });
+  }
+
+  /** Resuelve los userId de los residentes activos de una unidad. */
+  private async resolveUnitUserIds(unitId: string): Promise<string[]> {
+    const residents = await this.residentsService.findActiveByUnitInternal(unitId);
+    return residents.map(r => r.userId).filter(Boolean) as string[];
+  }
+
+  /** Notifica a la unidad que un pago fue anulado. */
+  private async notifyPaymentReversed(charge: FeeCharge, amount: number, reason: string): Promise<void> {
+    const userIds = await this.resolveUnitUserIds(charge.unitId);
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId: charge.complexId,
+      userIds,
+      type: NotificationType.PAYMENT_REVERSED,
+      priority: NotificationPriority.HIGH,
+      title: 'Pago anulado',
+      body: `Se ha anulado un pago de ${this.formatCurrency(amount)} aplicado al cargo "${charge.description}". Motivo: ${reason}.`,
+      metadata: { chargeId: charge.id, unitId: charge.unitId, amount, reason },
+    });
+  }
+
+  /** Notifica a la unidad que un cargo fue exonerado. */
+  private async notifyChargeWaived(charge: FeeCharge, reason: string): Promise<void> {
+    const userIds = await this.resolveUnitUserIds(charge.unitId);
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId: charge.complexId,
+      userIds,
+      type: NotificationType.CHARGE_WAIVED,
+      priority: NotificationPriority.NORMAL,
+      title: 'Cargo exonerado',
+      body: `Se ha exonerado el cargo "${charge.description}" por un valor de ${this.formatCurrency(Number(charge.amount))}. Motivo: ${reason}.`,
+      metadata: { chargeId: charge.id, unitId: charge.unitId, reason },
+    });
+  }
+
+  /** Notifica a la unidad que se agregó saldo a favor. */
+  private async notifyWalletCredit(
+    unitId: string,
+    complexId: string,
+    amount: number,
+    description: string,
+  ): Promise<void> {
+    const userIds = await this.resolveUnitUserIds(unitId);
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId,
+      userIds,
+      type: NotificationType.WALLET_CREDIT,
+      priority: NotificationPriority.NORMAL,
+      title: 'Saldo a favor agregado',
+      body: `Se ha agregado un saldo a favor de ${this.formatCurrency(amount)} a tu unidad por concepto: "${description}".`,
+      metadata: { unitId, complexId, amount, description },
+    });
+  }
+
+  /** Notifica a la unidad que se aplicó saldo a favor a un cargo. */
+  private async notifyWalletApplied(charge: FeeCharge, amount: number): Promise<void> {
+    const userIds = await this.resolveUnitUserIds(charge.unitId);
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId: charge.complexId,
+      userIds,
+      type: NotificationType.WALLET_APPLIED,
+      priority: NotificationPriority.NORMAL,
+      title: 'Saldo a favor aplicado',
+      body: `Se aplicó ${this.formatCurrency(amount)} de tu saldo a favor al cargo "${charge.description}".`,
+      metadata: { chargeId: charge.id, unitId: charge.unitId, amount },
+    });
+  }
+
+  /** Notifica a la unidad que se aplicó un interés de mora. */
+  private async notifyMoraApplied(
+    unitId: string,
+    complexId: string,
+    amount: number,
+    description: string,
+  ): Promise<void> {
+    const userIds = await this.resolveUnitUserIds(unitId);
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId,
+      userIds,
+      type: NotificationType.MORA_APPLIED,
+      priority: NotificationPriority.HIGH,
+      title: 'Interés de mora aplicado',
+      body: `Se ha aplicado un interés de mora de ${this.formatCurrency(amount)} por: "${description}".`,
+      metadata: { unitId, complexId, amount, description },
     });
   }
 }
