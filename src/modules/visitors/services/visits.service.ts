@@ -21,6 +21,9 @@ import { UnitService }              from '../../residential-complex/services/uni
 import { VisitorsService }         from './visitors.service';
 import { ResidentsService }        from '../../residents/services/residents.service';
 import { ResidentStatus }          from '../../residents/enums/resident-status.enum';
+import { NotificationsService }    from '../../notifications/services/notifications.service';
+import { NotificationType }        from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority }    from '../../notifications/enums/notification-priority.enum';
 import { AuditService }            from '../../audit/services/audit.service';
 import { AuditAction }             from '../../audit/enums/audit-action.enum';
 import { AuditEntityType }         from '../../audit/enums/audit-entity-type.enum';
@@ -41,9 +44,39 @@ export class VisitsService {
     private readonly complexService:  ResidentialComplexService,
     private readonly unitService:     UnitService,
     private readonly residentsService: ResidentsService,
+    private readonly notificationsService: NotificationsService,
     private readonly auditService:    AuditService,
     private readonly socketService:   SocketService,
   ) {}
+
+  // ================================================================
+  // HELPER — notificar a los residentes de la unidad anfitriona
+  // ================================================================
+
+  /** Notifica a los residentes activos de la unidad de una visita (fire & forget). */
+  private async notifyUnit(
+    visit: Visit,
+    type: NotificationType,
+    priority: NotificationPriority,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const residents = await this.residentsService.findActiveByUnitInternal(visit.unitId);
+    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId:  visit.complexId,
+      userIds,
+      type,
+      priority,
+      title,
+      body,
+      entityId:   visit.id,
+      entityType: 'visit',
+      metadata:   { visitId: visit.id, unitId: visit.unitId, visitorId: visit.visitorId },
+    });
+  }
 
   // ================================================================
   // REGISTRAR WALK-IN (guardia de seguridad)
@@ -114,7 +147,14 @@ export class VisitsService {
       description:     `Walk-in registrado: ${visitor.fullName} → unidad ${input.unitId}`,
     });
 
-    // TODO: Fase de notificaciones — notificar al residente en tiempo real via WebSocket
+    this.notifyUnit(
+      saved,
+      NotificationType.VISITOR_ARRIVED,
+      NotificationPriority.HIGH,
+      'Visitante en portería',
+      `${visitor.fullName} llegó a portería para visitar tu unidad.`,
+    ).catch(err => this.logger.warn(`Error al notificar walk-in ${saved.id}: ${err?.message}`));
+
     return this.loadRelations(saved.id);
   }
 
@@ -319,6 +359,15 @@ export class VisitsService {
 
     const entered = await this.visitRepo.save(visit);
     this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_ENTRY, { visitId, unitId: visit.unitId, entryTime: visit.entryTime });
+
+    this.notifyUnit(
+      entered,
+      NotificationType.VISITOR_ARRIVED,
+      NotificationPriority.HIGH,
+      'Visitante ingresó',
+      `${visit.visitor?.fullName ?? 'Un visitante'} ingresó al complejo hacia tu unidad.`,
+    ).catch(err => this.logger.warn(`Error al notificar entrada de visita ${visitId}: ${err?.message}`));
+
     return entered;
   }
 
@@ -397,6 +446,14 @@ export class VisitsService {
       entryTime: visit.entryTime,
       qrAccess: true,
     });
+
+    this.notifyUnit(
+      visit,
+      NotificationType.VISITOR_ARRIVED,
+      NotificationPriority.HIGH,
+      'Visitante ingresó',
+      `${visit.visitor?.fullName ?? 'Tu visitante'} ingresó al complejo mediante código QR.`,
+    ).catch(err => this.logger.warn(`Error al notificar acceso QR de visita ${visit.id}: ${err?.message}`));
 
     return {
       isValid:  true,

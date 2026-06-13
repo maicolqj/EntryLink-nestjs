@@ -16,6 +16,7 @@ import { ResidentialComplexModule } from '../residential-complex/residential-com
 import { ResidentsModule }          from '../residents/residents.module';
 import { AuditModule }              from '../audit/audit.module';
 import { FinanceModule }            from '../finance/finance.module';
+import { NotificationsModule }      from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { FinanceModule }            from '../finance/finance.module';
     ResidentsModule,
     AuditModule,
     FinanceModule,
+    NotificationsModule,
   ],
   controllers: [VehiclesController],
   providers: [

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
@@ -17,7 +17,7 @@ import { NotificationsResolver } from './resolvers/notifications.resolver';
 @Module({
   imports: [
     ConfigModule,
-    ResidentsModule,
+    forwardRef(() => ResidentsModule),
     TypeOrmModule.forFeature([
       Notification,
       PushSubscription,

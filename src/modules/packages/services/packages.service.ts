@@ -107,6 +107,31 @@ export class PackagesService {
     }
   }
 
+  /** Notifica a los residentes activos de la unidad un cambio de estado del paquete (fire & forget). */
+  private async notifyUnitResidents(
+    pkg: Package,
+    type: NotificationType,
+    priority: NotificationPriority,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const residents = await this.residentsService.findActiveByUnitInternal(pkg.unitId);
+    for (const resident of residents) {
+      if (!resident.userId) continue;
+      await this.notificationsService.create({
+        type,
+        priority,
+        title,
+        body,
+        complexId:       pkg.complexId,
+        recipientUserId: resident.userId,
+        entityId:        pkg.id,
+        entityType:      'package',
+        metadata:        { packageId: pkg.id, unitId: pkg.unitId, trackingCode: pkg.trackingCode },
+      });
+    }
+  }
+
   /**
    * Marca el paquete como NOTIFIED (residente avisado — push/SMS externo).
    */
@@ -134,6 +159,15 @@ export class PackagesService {
       packageId: notified.id,
       unitId: notified.unitId,
     });
+
+    this.notifyUnitResidents(
+      notified,
+      NotificationType.PACKAGE_READY,
+      NotificationPriority.NORMAL,
+      '📦 Paquete listo para retirar',
+      `Tu paquete de ${notified.senderName} está listo para retirar en portería.`,
+    ).catch(err => this.logger.warn(`Error al notificar paquete listo ${notified.id}: ${err?.message}`));
+
     return notified;
   }
 
@@ -172,6 +206,15 @@ export class PackagesService {
       unitId: delivered.unitId,
       deliveredAt: delivered.deliveredAt,
     });
+
+    this.notifyUnitResidents(
+      delivered,
+      NotificationType.PACKAGE_DELIVERED,
+      NotificationPriority.NORMAL,
+      '📦 Paquete entregado',
+      `Tu paquete de ${delivered.senderName} fue entregado${delivered.receivedByName ? ` a ${delivered.receivedByName}` : ''}.`,
+    ).catch(err => this.logger.warn(`Error al notificar paquete entregado ${delivered.id}: ${err?.message}`));
+
     return delivered;
   }
 
@@ -201,6 +244,15 @@ export class PackagesService {
 
     const returned = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(returned.complexId));
+
+    this.notifyUnitResidents(
+      returned,
+      NotificationType.PACKAGE_RETURNED,
+      NotificationPriority.NORMAL,
+      '📦 Paquete devuelto',
+      `Tu paquete de ${returned.senderName} fue devuelto al remitente. Motivo: ${reason}.`,
+    ).catch(err => this.logger.warn(`Error al notificar paquete devuelto ${returned.id}: ${err?.message}`));
+
     return returned;
   }
 
@@ -229,6 +281,15 @@ export class PackagesService {
 
     const lost = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(lost.complexId));
+
+    this.notifyUnitResidents(
+      lost,
+      NotificationType.PACKAGE_LOST,
+      NotificationPriority.HIGH,
+      '📦 Paquete extraviado',
+      `Tu paquete de ${lost.senderName} fue reportado como extraviado. Motivo: ${reason}. Contacta a administración.`,
+    ).catch(err => this.logger.warn(`Error al notificar paquete perdido ${lost.id}: ${err?.message}`));
+
     return lost;
   }
 

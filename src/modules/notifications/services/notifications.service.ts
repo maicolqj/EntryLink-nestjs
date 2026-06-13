@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
@@ -96,6 +96,7 @@ export class NotificationsService implements OnModuleInit {
     private readonly roleRepo: Repository<Role>,
 
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => ResidentsService))
     private readonly residentsService: ResidentsService,
     private readonly socketService: SocketService,
   ) {}
