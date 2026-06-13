@@ -118,6 +118,7 @@ export class NotificationsResolver {
       ValidRoles.COMPLEX_ROL,
       ValidRoles.SUPERVISOR_ROL,
       ValidRoles.SECURITY_ROL,
+      ValidRoles.RESIDENT_ROL,
     ],
   })
   acknowledgePanicAlert(
@@ -264,6 +265,7 @@ export class NotificationsResolver {
       ValidRoles.COMPLEX_ROL,
       ValidRoles.SUPERVISOR_ROL,
       ValidRoles.SECURITY_ROL,
+      ValidRoles.RESIDENT_ROL,
     ],
   })
   activePanicAlerts(

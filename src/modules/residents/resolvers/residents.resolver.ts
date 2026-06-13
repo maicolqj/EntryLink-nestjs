@@ -209,6 +209,18 @@ export class ResidentsResolver {
   // ================================================================
 
   /**
+   * Perfil propio del residente autenticado.
+   * Exclusivo para RESIDENT_ROL. Usa sub + complexId del JWT.
+   */
+  @Query(() => Resident, { name: 'myResidentProfile' })
+  @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
+  myProfile(
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident> {
+    return this.residentsService.findMyProfile(currentUser.sub, currentUser.complexId!);
+  }
+
+  /**
    * Estadísticas de residentes del complejo.
    */
   @Query(() => ResidentStatsResponse, { name: 'residentStats' })

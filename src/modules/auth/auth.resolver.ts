@@ -5,6 +5,7 @@ import { createHmac } from 'crypto';
 import { AuthService } from './services/auth.service';
 import { LoginEmailInput } from './dto/inputs/login-email.input';
 import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
+import { LoginResidentInput } from './dto/inputs/login-resident.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
@@ -62,6 +63,23 @@ export class AuthResolver {
     return this.authService.loginWithIdentity(input, deviceInfo);
   }
 
+  // ── Login residente: documento + systemCode ──────────────────────────────
+
+  @Public()
+  @Mutation(() => AuthResponse, {
+    name: 'loginResident',
+    description:
+      'Inicia sesión como residente usando número de identidad y código de sistema. ' +
+      'Exclusivo para RESIDENT_ROL.',
+  })
+  async loginResident(
+    @Args('input') input: LoginResidentInput,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    const deviceInfo = this.extractDeviceInfo(context);
+    return this.authService.loginResident(input, deviceInfo);
+  }
+
   // ── Auto-registro del supervisor ────────────────────────────────────────
 
   @Public()
@@ -99,7 +117,7 @@ export class AuthResolver {
     @Args('email', { type: () => String }) email: string,
   ): Promise<RequestPasswordResetResponse> {
     return this.authService.requestPasswordReset(email);
-  }
+  } 
 
   @Public()
   @Mutation(() => SetPasswordResponse, {

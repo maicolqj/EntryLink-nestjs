@@ -1103,6 +1103,32 @@ export class ResidentsService {
   }
 
   // ================================================================
+  // PERFIL PROPIO DEL RESIDENTE AUTENTICADO
+  // ================================================================
+
+  async findMyProfile(userId: string, complexId: string): Promise<Resident> {
+    const resident = await this.residentRepo.findOne({
+      where: {
+        userId,
+        complexId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
+      relations: ['user', 'unit', 'unit.building', 'complex'],
+    });
+
+    if (!resident) {
+      throw new CustomError({
+        message: 'No se encontró un registro de residente activo para este usuario',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ResidentErrorCode.RESIDENT_NOT_FOUND,
+      });
+    }
+
+    return resident;
+  }
+
+  // ================================================================
   // HISTORIAL DE RESIDENTES DE UNA UNIDAD
   // ================================================================
 
