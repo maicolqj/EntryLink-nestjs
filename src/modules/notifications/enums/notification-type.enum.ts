@@ -20,6 +20,7 @@ export enum NotificationType {
   VISIT_DENIED           = 'VISIT_DENIED',           // Residente denegó la visita
   VISIT_REMINDER         = 'VISIT_REMINDER',         // Recordatorio de visita agendada
   VISITOR_ARRIVED        = 'VISITOR_ARRIVED',        // Visitante pre-agendado llegó
+  VISITOR_BLACKLISTED    = 'VISITOR_BLACKLISTED',    // Visitante agregado a la lista negra
 
   // ── Residentes ────────────────────────────────────────────────
   RESIDENT_APPROVED      = 'RESIDENT_APPROVED',      // Solicitud de residencia aprobada

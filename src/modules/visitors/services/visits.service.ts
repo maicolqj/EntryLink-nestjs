@@ -19,6 +19,7 @@ import { JwtAccessPayload }        from '../../shared/interfaces/jwt-payload.int
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService }              from '../../residential-complex/services/unit.service';
 import { VisitorsService }         from './visitors.service';
+import { VisitAccessTokenService } from './visit-access-token.service';
 import { ResidentsService }        from '../../residents/services/residents.service';
 import { ResidentStatus }          from '../../residents/enums/resident-status.enum';
 import { NotificationsService }    from '../../notifications/services/notifications.service';
@@ -41,6 +42,7 @@ export class VisitsService {
     @InjectRepository(Visit)
     private readonly visitRepo: Repository<Visit>,
     private readonly visitorsService: VisitorsService,
+    private readonly visitAccessTokenService: VisitAccessTokenService,
     private readonly complexService:  ResidentialComplexService,
     private readonly unitService:     UnitService,
     private readonly residentsService: ResidentsService,
@@ -122,7 +124,7 @@ export class VisitsService {
       unitId:             input.unitId,
       complexId:          input.complexId,
       type:               input.type ?? VisitType.WALK_IN,
-      status:             VisitStatus.INSIDE,
+      status:             VisitStatus.PENDING_APPROVAL,
       purpose:            input.purpose,
       vehiclePlate:       input.vehiclePlate?.toUpperCase().trim(),
       notes:              input.notes,
@@ -184,10 +186,11 @@ export class VisitsService {
 
     // 4. Obtener o crear visitante
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
-      name:     input.visitorName,
-      lastName: input.visitorLastName,
-      identity: input.visitorIdentity,
-      phone:    input.visitorPhone,
+      name:         input.visitorName,
+      lastName:     input.visitorLastName,
+      identity:     input.visitorIdentity,
+      identityType: input.identityType,
+      phone:        input.visitorPhone,
     });
 
     // 5. Verificar lista negra
@@ -328,15 +331,59 @@ export class VisitsService {
   async registerEntry(
     visitId: string,
     currentUser: JwtAccessPayload,
+    accessToken?: string,
   ): Promise<Visit> {
     const visit = await this.findById(visitId, currentUser);
 
+    // ── Gate QR (Option A) ──────────────────────────────────────────────
+    // Solo las visitas SCHEDULED exigen un token de acceso de un solo uso,
+    // emitido por validateQrAccess al escanear el QR. Walk-in / delivery /
+    // service-provider ignoran accessToken y conservan su flujo actual.
+    let tokenJti: string | undefined;
+    if (visit.type === VisitType.SCHEDULED) {
+      if (!accessToken) {
+        throw new CustomError({
+          message: 'Visita programada: escanea el QR para registrar el ingreso',
+          statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: AccessErrorCode.QR_CODE_INVALID,
+        });
+      }
+
+      const payload = await this.visitAccessTokenService.verify(accessToken);
+      if (!payload) {
+        throw new CustomError({
+          message: 'Token inválido o expirado',
+          statusCode: HttpStatus.UNAUTHORIZED,
+          errorCode: AccessErrorCode.QR_CODE_INVALID,
+        });
+      }
+
+      if (payload.visitId !== visitId) {
+        throw new CustomError({
+          message: 'El token no corresponde a esta visita',
+          statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: AccessErrorCode.QR_CODE_INVALID,
+        });
+      }
+
+      tokenJti = payload.jti;
+    }
+
     if (visit.status !== VisitStatus.APPROVED) {
       throw new CustomError({
-        message: `Solo se puede registrar entrada de visitas APPROVED. Estado: ${visit.status}`,
+        message: visit.type === VisitType.SCHEDULED
+          ? 'La visita no está en estado válido para ingresar'
+          : `Solo se puede registrar entrada de visitas APPROVED. Estado: ${visit.status}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AccessErrorCode.VISIT_NOT_AUTHORIZED,
       });
+    }
+
+    // Consumir el token ANTES de transicionar → un solo uso: no permite
+    // reingresos reutilizando un QR/token ya escaneado.
+    if (tokenJti) {
+      await this.visitAccessTokenService.consume(tokenJti);
+      visit.qrUsed = true;
     }
 
     visit.status    = VisitStatus.INSIDE;
@@ -372,12 +419,16 @@ export class VisitsService {
   }
 
   // ================================================================
-  // VALIDAR Y USAR QR (guardia escanea QR — permite entrada directa)
+  // VALIDAR QR (guardia escanea QR — emite token de acceso de un solo uso)
   // ================================================================
+  // No registra la entrada: solo valida el QR y, si es válido, devuelve un
+  // accessToken de un solo uso que registerVisitorEntry exige y consume para
+  // confirmar el ingreso (Option A). Así una visita SCHEDULED no puede pasar
+  // a INSIDE sin haber escaneado primero su QR.
 
-  async validateAndUseQr(
+  async validateQrAccess(
     qrToken: string,
-    currentUser: JwtAccessPayload,
+    _currentUser: JwtAccessPayload,
   ): Promise<QrValidationResponse> {
     const visit = await this.visitRepo.findOne({
       where:     { qrToken },
@@ -386,19 +437,19 @@ export class VisitsService {
 
     // QR no existe
     if (!visit) {
-      return { isValid: false, message: 'QR inválido o no encontrado' };
+      return { isValid: false, message: 'QR inválido o no encontrado', accessToken: null };
     }
 
     // QR ya fue usado
     if (visit.qrUsed) {
-      return { isValid: false, message: 'Este QR ya fue utilizado', visit, visitor: visit.visitor };
+      return { isValid: false, message: 'Este QR ya fue utilizado', accessToken: null, visit, visitor: visit.visitor };
     }
 
     // QR expirado
     if (visit.qrExpiresAt && new Date() > visit.qrExpiresAt) {
       visit.status = VisitStatus.EXPIRED;
       await this.visitRepo.save(visit);
-      return { isValid: false, message: 'El QR de acceso ha expirado', visit, visitor: visit.visitor };
+      return { isValid: false, message: 'El QR de acceso ha expirado', accessToken: null, visit, visitor: visit.visitor };
     }
 
     // Visita en estado inválido para ingreso
@@ -406,6 +457,7 @@ export class VisitsService {
       return {
         isValid: false,
         message:  `La visita no está en estado APPROVED. Estado: ${visit.status}`,
+        accessToken: null,
         visit,
         visitor: visit.visitor,
       };
@@ -416,48 +468,19 @@ export class VisitsService {
       return {
         isValid: false,
         message:  `Visitante en lista negra: ${visit.visitor.blacklistReason}`,
+        accessToken: null,
         visitor:  visit.visitor,
       };
     }
 
-    // ✅ QR válido — registrar entrada
-    visit.status    = VisitStatus.INSIDE;
-    visit.entryTime = new Date();
-    visit.qrUsed    = true;
-
-    await this.visitRepo.save(visit);
-    this.logger.log(`QR validado y entrada registrada: visita ${visit.id}`);
-
-    void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visit.id,
-      action:          AuditAction.APPROVE,
-      newValue:        { status: VisitStatus.INSIDE, entryTime: visit.entryTime, qrUsed: true },
-      performedById:   currentUser.sub,
-      performedByName: currentUser.email,
-      performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Acceso por QR: ${visit.visitor?.fullName} → unidad ${visit.unitId}`,
-    });
-
-    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_ENTRY, {
-      visitId: visit.id,
-      unitId: visit.unitId,
-      entryTime: visit.entryTime,
-      qrAccess: true,
-    });
-
-    this.notifyUnit(
-      visit,
-      NotificationType.VISITOR_ARRIVED,
-      NotificationPriority.HIGH,
-      'Visitante ingresó',
-      `${visit.visitor?.fullName ?? 'Tu visitante'} ingresó al complejo mediante código QR.`,
-    ).catch(err => this.logger.warn(`Error al notificar acceso QR de visita ${visit.id}: ${err?.message}`));
+    // ✅ QR válido — emitir token de acceso de un solo uso (NO registra entrada aún)
+    const accessToken = await this.visitAccessTokenService.issue(visit.id, visit.visitorId);
+    this.logger.log(`QR validado y token de acceso emitido: visita ${visit.id}`);
 
     return {
       isValid:  true,
-      message:  `Acceso autorizado. Bienvenido ${visit.visitor?.fullName}`,
+      message:  `QR válido. Confirma el ingreso de ${visit.visitor?.fullName}`,
+      accessToken,
       visit,
       visitor:  visit.visitor,
     };
@@ -594,6 +617,48 @@ export class VisitsService {
         hasPreviousPage: page > 1,
       },
     };
+  }
+
+  // ================================================================
+  // VISITAS DEL RESIDENTE — el residente lista las que él agendó
+  // ================================================================
+
+  /**
+   * Lista paginada de las visitas agendadas por el residente autenticado.
+   * Resuelve el residente desde el token (sub + complexId), sin exponer IDs internos.
+   */
+  async findMyVisits(
+    pagination: PaginationInput,
+    filters: FilterVisitsInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<PaginatedVisitsResponse> {
+    if (!currentUser.complexId) {
+      throw new CustomError({
+        message: 'El usuario no está asociado a ningún complejo.',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const resident = await this.residentsService.findActiveResidentByUserIdInternal(
+      currentUser.sub,
+      currentUser.complexId,
+    );
+
+    if (!resident) {
+      throw new CustomError({
+        message: 'No se encontró un residente activo para el usuario actual.',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    return this.findByComplex(
+      currentUser.complexId,
+      pagination,
+      { ...filters, hostResidentId: resident.id },
+      currentUser,
+    );
   }
 
   // ================================================================

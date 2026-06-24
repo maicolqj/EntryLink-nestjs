@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
 
 import { Visitor }  from './entities/visitor.entity';
 import { Visit }    from './entities/visit.entity';
 
-import { VisitorsService }  from './services/visitors.service';
-import { VisitsService }    from './services/visits.service';
+import { VisitorsService }         from './services/visitors.service';
+import { VisitsService }           from './services/visits.service';
+import { VisitAccessTokenService } from './services/visit-access-token.service';
 
 import { VisitorsResolver }    from './resolvers/visitors.resolver';
 import { VisitsResolver }      from './resolvers/visits.resolver';
@@ -19,6 +22,8 @@ import { NotificationsModule }      from '../notifications/notifications.module'
 @Module({
   imports: [
     TypeOrmModule.forFeature([Visitor, Visit]),
+    ConfigModule,
+    JwtModule.register({}),   // sin secret fijo; cada firma usa JWT_ACCESS_SECRET
     ResidentialComplexModule, // provee ResidentialComplexService y UnitService
     ResidentsModule,          // provee ResidentsService
     AuditModule,
@@ -28,6 +33,7 @@ import { NotificationsModule }      from '../notifications/notifications.module'
   providers: [
     VisitorsService,
     VisitsService,
+    VisitAccessTokenService,
     VisitorsResolver,
     VisitsResolver,
   ],
