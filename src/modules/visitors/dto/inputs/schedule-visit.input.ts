@@ -1,5 +1,6 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsDateString, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { VisitorIdentityType } from '../../enums/visitor-identity-type.enum';
 
 /**
  * Input para que el RESIDENTE pre-autorice una visita programada.
@@ -24,6 +25,11 @@ export class ScheduleVisitInput {
   @IsString()
   @MaxLength(30)
   visitorIdentity: string;
+
+  @Field(() => VisitorIdentityType, { description: 'Tipo de documento del visitante', defaultValue: VisitorIdentityType.CC })
+  @IsOptional()
+  @IsEnum(VisitorIdentityType)
+  identityType?: VisitorIdentityType;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
