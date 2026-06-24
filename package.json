@@ -24,9 +24,15 @@
     "seed:roles": "yarn seed roles",
     "seed:users": "yarn seed users",
     "seed:all": "yarn seed all",
+    "seed:puc": "yarn seed puc",
+    "seed:finance-backfill": "yarn seed finance-backfill",
     "seed:refresh-categories": "yarn seed refresh-categories",
     "seed:clear-categories": "yarn seed clear-categories",
-    "seed:prod": "node dist/core/database/seeds/commands/seed.commands.js"
+    "seed:prod": "node dist/core/database/seeds/commands/seed.commands.js",
+    "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/core/database/data-source.ts",
+    "migration:run": "yarn typeorm migration:run",
+    "migration:revert": "yarn typeorm migration:revert",
+    "migration:show": "yarn typeorm migration:show"
   },
   "dependencies": {
     "@apollo/server": "^5.4.0",

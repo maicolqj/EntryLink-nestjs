@@ -41,8 +41,26 @@ export class ComplexFinancialSummaryResponse {
   @Field(() => Float)
   totalCollected: number;
 
+  /**
+   * Cartera ACUMULADA: saldo pendiente (amount − paidAmount) de cargos abiertos
+   * de TODOS los períodos, no solo el consultado. Es el total adeudado al corte.
+   */
   @Field(() => Float)
   totalOutstanding: number;
+
+  /**
+   * Cartera del PERÍODO consultado: saldo pendiente de los cargos cuyo `period`
+   * es el período de la consulta. Subconjunto de `totalOutstanding`.
+   */
+  @Field(() => Float)
+  periodOutstanding: number;
+
+  /**
+   * Interés de mora causado en el período (cargos con prelación INTEREST_MORA),
+   * excluye anulados/condonados.
+   */
+  @Field(() => Float)
+  totalMora: number;
 
   @Field(() => Float)
   collectionRate: number;  // % cobrado vs total emitido

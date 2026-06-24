@@ -7,6 +7,7 @@ import { Type } from 'class-transformer';
 
 import { FeeFrequency } from '../../enums/fee-frequency.enum';
 import { ChargeType } from '../../enums/charge-type.enum';
+import { PrelacionConcept } from '../../enums/prelacion-concept.enum';
 import { FeeConfigBillingMode } from '../../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../../enums/fee-config-trigger-type.enum';
 import { UnitType } from '../../../residential-complex/enums/unit-type.enum';
@@ -37,6 +38,14 @@ export class CreateFeeConfigInput {
   @IsNumber()
   @IsPositive()
   earlyPaymentAmount?: number;
+
+  /** Día del mes en que vence el pronto pago. Si null, usa dueDayOfMonth. */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(28)
+  earlyPaymentDueDayOfMonth?: number;
 
   @Field(() => FeeFrequency, { defaultValue: FeeFrequency.MONTHLY })
   @IsEnum(FeeFrequency)
@@ -107,4 +116,10 @@ export class CreateFeeConfigInput {
   @IsOptional()
   @IsEnum(FeeConfigTriggerType)
   triggerType?: FeeConfigTriggerType | null;
+
+  /** Concepto de prelación que heredan los cargos generados (ORDINARY por defecto). */
+  @Field(() => PrelacionConcept, { defaultValue: PrelacionConcept.ORDINARY })
+  @IsOptional()
+  @IsEnum(PrelacionConcept)
+  prelacionConcept?: PrelacionConcept;
 }

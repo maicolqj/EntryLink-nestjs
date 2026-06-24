@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GraphQLModule } from '@nestjs/graphql';
@@ -109,6 +109,18 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
             const code = originalError?.errorCode
               || error?.extensions?.code
               || 'INTERNAL_SERVER_ERROR';
+
+            // Observabilidad: loguear server-side el stack real de errores no esperados
+            // (Apollo enmascara el mensaje como "Internal server error" hacia el cliente).
+            const statusCode = originalError?.statusCode ?? 500;
+            if (!originalError?.errorCode || statusCode >= 500) {
+              const stack = error?.originalError?.stack || error?.stack;
+              new Logger('GraphQL').error(
+                `${code} en ${JSON.stringify(formattedError.path)}: ${formattedError.message}`,
+                stack,
+              );
+            }
+
             return {
               message: formattedError.message,
               path: formattedError.path,
@@ -142,6 +154,9 @@ import { SpecialNumbersModule }   from './modules/special-numbers/special-number
         limit: 500,
       },
     ]),
+
+    // ── Tareas programadas (cron) ─────────────────────────────────────────
+    ScheduleModule.forRoot(), // Activa los @Cron (finanzas: mora, overdue, causación)
 
     // ── Infraestructura ───────────────────────────────────────────────────
     CacheModule,          // Global — disponible en todos los módulos

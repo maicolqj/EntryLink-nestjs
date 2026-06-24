@@ -71,6 +71,15 @@ export class Unit {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
+  /**
+   * Coeficiente de copropiedad (Ley 675). Fracción del total del conjunto;
+   * la suma de los coeficientes de todas las unidades debe ser 1 (100%).
+   * Ej: 0.012345 = 1.2345%. Se usa para prorratear cuotas/cobros recurrentes.
+   */
+  @Field(() => Float, { description: 'Coeficiente de copropiedad (fracción, suma=1)', nullable: true })
+  @Column({ type: 'numeric', precision: 9, scale: 6, nullable: true })
+  coefficient?: number;
+
   // ==================== MULTI-TENANT ====================
 
   @Field(() => String, { description: 'ID del complejo al que pertenece' })

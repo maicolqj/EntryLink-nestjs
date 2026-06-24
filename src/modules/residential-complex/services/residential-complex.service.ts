@@ -41,6 +41,7 @@ import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
 import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
+import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -125,6 +126,9 @@ export class ResidentialComplexService {
 
     const saved = await this.complexRepo.save(complex);
     this.logger.log(`Complejo creado: ${saved.id} — "${saved.name}" por usuario ${currentUser.sub}`);
+
+    // Sembrar el PUC contable base (idempotente, best-effort: no rompe el alta)
+    await this.seedPucSafe(saved.id);
 
     void this.auditService.log({
       entityType:      AuditEntityType.ResidentialComplex,
@@ -322,6 +326,12 @@ export class ResidentialComplexService {
       if (status === ComplexStatus.INACTIVE) {
         await manager.update(Unit, { complexId: id }, { status: UnitStatus.DISABLED });
         this.logger.warn(`Complejo ${id} desactivado — unidades marcadas como DISABLED`);
+      }
+
+      // Al activar un complejo (p. ej. aprobación de registro PENDING_REVIEW→ACTIVE),
+      // garantizar que tenga su PUC contable sembrado (idempotente, best-effort).
+      if (status === ComplexStatus.ACTIVE && previousStatus !== ComplexStatus.ACTIVE) {
+        await this.seedPucSafe(id);
       }
 
       await this.cacheService.delete({ key: BK.complex.one(id) });
@@ -522,6 +532,18 @@ export class ResidentialComplexService {
    * Verifica que el usuario existe, está activo y no ha sido eliminado.
    * Lanza error descriptivo si alguna condición no se cumple.
    */
+  /**
+   * Siembra el PUC contable base de un complejo sin romper el flujo que la invoca.
+   * Idempotente (salta códigos existentes). Cualquier error solo se loguea.
+   */
+  private async seedPucSafe(complexId: string): Promise<void> {
+    try {
+      await seedPucForComplex(this.dataSource, complexId);
+    } catch (err: any) {
+      this.logger.error(`No se pudo sembrar el PUC del complejo ${complexId}: ${err?.message}`, err?.stack);
+    }
+  }
+
   private async assertValidLegalRepresentative(userId: string): Promise<void> {
     const user = await this.userRepo.findOne({
       where: { id: userId },

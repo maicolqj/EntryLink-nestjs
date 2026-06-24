@@ -6,6 +6,7 @@ import {
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
 import { ChargeStatus }       from '../enums/charge-status.enum';
+import { PrelacionConcept }   from '../enums/prelacion-concept.enum';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Unit }               from '../../residential-complex/entities/unit.entity';
 import { FeeConfig }          from './fee-config.entity';
@@ -60,10 +61,56 @@ export class FeeCharge {
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   normalAmount?: number | null;
 
+  /**
+   * Fecha límite de pronto pago. Solo se establece cuando el cargo se generó con
+   * descuento (earlyPaymentAmount). Pasada esta fecha sin pago total, el cron
+   * revierte `amount` a `normalAmount`. El front la usa para mostrar
+   * "vence pronto pago el …".
+   */
+  @Field(() => Date, { nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
+  earlyPaymentDueDate?: Date | null;
+
+  /**
+   * Cuenta de ingreso PUC acreditada al causar (heredada del RecurringCharge).
+   * Se usa para emitir la nota crédito del descuento por pronto pago.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ type: 'uuid', nullable: true })
+  incomeAccountId?: string | null;
+
   /** Saldo pendiente = amount - paidAmount */
   @Field(() => Float)
   get balance(): number {
     return Number(this.amount) - Number(this.paidAmount);
+  }
+
+  /**
+   * Interés de mora acumulado para este cargo (suma del saldo de las filas
+   * INTEREST_MORA cuyo `sourceChargeId` apunta a este cargo). No persistido;
+   * lo llena el service en las queries de lectura. null si no se cargó.
+   */
+  @Field(() => Float, { nullable: true })
+  moraAmount?: number | null;
+
+  /**
+   * Estado derivado en tiempo de lectura: si el cargo sigue con saldo y ya pasó
+   * su `dueDate`, se reporta OVERDUE aunque el cron aún no haya transicionado el
+   * `status` en BD. No persistido.
+   */
+  @Field(() => ChargeStatus)
+  get effectiveStatus(): ChargeStatus {
+    if (
+      this.status === ChargeStatus.PAID ||
+      this.status === ChargeStatus.CANCELLED ||
+      this.status === ChargeStatus.WAIVED
+    ) {
+      return this.status;
+    }
+    if (this.dueDate && new Date(this.dueDate) < new Date() && this.balance > 0) {
+      return ChargeStatus.OVERDUE;
+    }
+    return this.status;
   }
 
   // ─── Descripción ──────────────────────────────────────────────
@@ -77,6 +124,14 @@ export class FeeCharge {
   @Field(() => ChargeStatus)
   @Column({ type: 'enum', enum: ChargeStatus, default: ChargeStatus.PENDING })
   status: ChargeStatus;
+
+  /**
+   * Concepto contable para la prelación legal de pagos.
+   * Determina el orden en que un abono/anticipo se imputa a los cargos.
+   */
+  @Field(() => PrelacionConcept)
+  @Column({ type: 'enum', enum: PrelacionConcept, default: PrelacionConcept.ORDINARY })
+  prelacionConcept: PrelacionConcept;
 
   @Field(() => String, { nullable: true })
   @Column({ nullable: true })
@@ -104,6 +159,14 @@ export class FeeCharge {
   @Field(() => String, { nullable: true })
   @Column({ nullable: true })
   feeConfigId?: string;
+
+  /**
+   * Para filas de mora (prelacionConcept=INTEREST_MORA): id del cargo padre que
+   * generó el interés. Habilita el cálculo de `moraAmount` del cargo padre.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ type: 'uuid', nullable: true })
+  sourceChargeId?: string | null;
 
   // ─── Relaciones ───────────────────────────────────────────────
 

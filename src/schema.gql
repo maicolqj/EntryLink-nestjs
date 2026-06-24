@@ -171,6 +171,9 @@ type Unit {
   """Descripción u observaciones adicionales"""
   description: String
 
+  """Coeficiente de copropiedad (fracción, suma=1)"""
+  coefficient: Float
+
   """ID del complejo al que pertenece"""
   complexId: String!
 
@@ -1237,6 +1240,37 @@ enum SpecialNumberCategory {
   OTHER
 }
 
+type PucAccount {
+  id: ID!
+  code: String!
+  name: String!
+  accountClass: AccountClass!
+  nature: AccountNature!
+  isPostable: Boolean!
+  isActive: Boolean!
+  level: Int!
+  parentId: String
+  children: [PucAccount!]
+  complexId: String!
+  createdAt: DateTime!
+}
+
+"""Clase contable PUC (primer dígito del código)"""
+enum AccountClass {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+  COST
+}
+
+"""Naturaleza del saldo de la cuenta contable"""
+enum AccountNature {
+  DEBIT
+  CREDIT
+}
+
 """Resultado de crear o reintegrar un miembro del personal"""
 type CreateStaffMemberResponse {
   id: ID!
@@ -1443,6 +1477,7 @@ enum AuditEntityType {
   Resident
   FeeCharge
   FeeConfig
+  PucAccount
   Payment
   Note
   ResidentialComplex
@@ -1799,6 +1834,7 @@ enum NotificationType {
   VISIT_DENIED
   VISIT_REMINDER
   VISITOR_ARRIVED
+  VISITOR_BLACKLISTED
   RESIDENT_APPROVED
   RESIDENT_REJECTED
   RESIDENT_PENDING
@@ -2180,6 +2216,11 @@ type QrValidationResponse {
   """Mensaje de resultado del escaneo"""
   message: String!
 
+  """
+  Token de acceso de un solo uso. Presente solo cuando isValid === true; debe enviarse a registerVisitorEntry para confirmar el ingreso de una visita programada.
+  """
+  accessToken: String
+
   """Datos de la visita si el QR es válido"""
   visit: Visit
 
@@ -2366,6 +2407,8 @@ type ComplexFinanceConfig {
   complexId: String!
   moraRate: Float!
   moraGraceDays: Int!
+  earlyDiscountPct: Float!
+  earlyDiscountDay: Int
   autoApplyMora: Boolean!
   autoGenerateCharges: Boolean!
   createdAt: DateTime!
@@ -2386,9 +2429,11 @@ type FeeConfig {
   description: String
   amount: Float!
   earlyPaymentAmount: Float
+  earlyPaymentDueDayOfMonth: Int
   frequency: FeeFrequency!
   dueDayOfMonth: Float!
   chargeType: ChargeType!
+  prelacionConcept: PrelacionConcept!
   installments: Int
   installmentsPaid: Int!
   unitId: String
@@ -2431,6 +2476,14 @@ enum ChargeType {
   LIMITED
 }
 
+"""Concepto del cargo para la prelación legal de imputación de pagos"""
+enum PrelacionConcept {
+  INTEREST_MORA
+  FINE
+  EXTRAORDINARY
+  ORDINARY
+}
+
 enum FeeConfigBillingMode {
   ADVANCE
   ARREARS
@@ -2447,15 +2500,21 @@ type FeeCharge {
   amount: Float!
   paidAmount: Float!
   normalAmount: Float
+  earlyPaymentDueDate: DateTime
+  incomeAccountId: String
   balance: Float!
+  moraAmount: Float
+  effectiveStatus: ChargeStatus!
   description: String!
   status: ChargeStatus!
+  prelacionConcept: PrelacionConcept!
   cancellationReason: String
   cancelledByUserId: String
   cancelledAt: DateTime
   complexId: String!
   unitId: String!
   feeConfigId: String
+  sourceChargeId: String
   complex: ResidentialComplex!
   unit: Unit!
   feeConfig: FeeConfig
@@ -2561,6 +2620,106 @@ enum ExpenseCategory {
   OTHER
 }
 
+type RecurringCharge {
+  id: ID!
+  concept: String!
+  type: RecurringChargeType!
+  amount: Float!
+  totalInstallments: Int
+  currentInstallment: Int!
+  isActive: Boolean!
+  billingDay: Int!
+  billingMode: FeeConfigBillingMode!
+  lastBilledPeriod: String
+  incomeAccountId: String!
+  complexId: String!
+  unitId: String
+  prorateByCoefficient: Boolean!
+  distribution: RecurringChargeDistribution!
+  triggerType: RecurringChargeTrigger!
+  vehicleTypes: [String!]
+  targetRules: FeeConfigTargetRules
+  targetUnitIds: [String!]
+  earlyDiscountPct: Float
+  earlyDiscountDay: Int
+  createdByUserId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Modalidad de recurrencia de un cobro programado"""
+enum RecurringChargeType {
+  INDEFINITE
+  DEFERRED
+  ONE_TIME
+}
+
+"""Método de reparto del monto de un cobro recurrente"""
+enum RecurringChargeDistribution {
+  COEFFICIENT
+  EQUAL
+  FIXED_PER_UNIT
+}
+
+"""Mecanismo de asignación de un cobro recurrente"""
+enum RecurringChargeTrigger {
+  MANUAL
+  VEHICLE
+}
+
+type AccountingLine {
+  id: ID!
+  headerId: String!
+  pucAccountId: String!
+  pucAccount: PucAccount!
+  debit: Float!
+  credit: Float!
+  memo: String
+  complexId: String!
+  unitId: String
+  createdAt: DateTime!
+}
+
+type AccountingHeader {
+  id: ID!
+  documentType: AccountingDocumentType!
+  consecutive: Int!
+  documentDate: DateTime!
+  period: String!
+  memo: String
+  totalDebit: Float!
+  totalCredit: Float!
+  thirdPartyName: String
+  reversesHeaderId: String
+  reversedByHeaderId: String
+  createdByUserId: String!
+  complexId: String!
+  unitId: String
+  lines: [AccountingLine!]!
+  createdAt: DateTime!
+}
+
+"""Tipo de comprobante contable del libro diario"""
+enum AccountingDocumentType {
+  INVOICE
+  CASH_RECEIPT
+  EXPENSE_VOUCHER
+  ACCOUNTING_NOTE
+  CREDIT_NOTE
+}
+
+type PropertyAccountStatus {
+  id: ID!
+  complexId: String!
+  unitId: String!
+  currentBalance: Float!
+  prepaidBalance: Float!
+  version: Int!
+  lastMovementAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type PaginatedVehiclesResponse {
   items: [Vehicle!]!
   pagination: PaginationReponse!
@@ -2662,6 +2821,8 @@ type ComplexFinancialSummaryResponse {
   totalCharged: Float!
   totalCollected: Float!
   totalOutstanding: Float!
+  periodOutstanding: Float!
+  totalMora: Float!
   collectionRate: Float!
   unitsWithDebt: Int!
   unitsFullyPaid: Int!
@@ -2766,6 +2927,32 @@ type PaginatedExpensesResponse {
   pagination: PaginationReponse!
   totalAmount: Float!
   byCategory: [ExpenseCategoryBreakdown!]!
+}
+
+type PrepaidApplicationItem {
+  unitId: String!
+  appliedAmount: Float!
+  remainingPrepaid: Float!
+  remainingDebt: Float!
+  accountingHeaderId: String
+}
+
+type PrepaidApplicationResult {
+  unitsProcessed: Int!
+  totalApplied: Float!
+  dryRun: Boolean!
+  items: [PrepaidApplicationItem!]!
+}
+
+type RecurringCausationResult {
+  caused: Int!
+  skipped: Int!
+  totalAmount: Float!
+}
+
+type PaginatedAccountingDocumentsResponse {
+  items: [AccountingHeader!]!
+  pagination: PaginationReponse!
 }
 
 type Package {
@@ -3148,6 +3335,7 @@ type Query {
   activePanicAlerts(complexId: String!): [Notification!]!
   visitors(complexId: String!, pagination: PaginationInput, search: String, onlyBlacklisted: Boolean): PaginatedVisitorsResponse!
   visitor(id: String!): Visitor!
+  myVisits(pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
   visits(complexId: String!, pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
   activeVisits(complexId: String!): [Visit!]!
   pendingApprovalVisits(complexId: String!): [Visit!]!
@@ -3170,7 +3358,13 @@ type Query {
   unitAccountStatement(unitId: String!, complexId: String!, period: String): UnitAccountStatementResponse!
   unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
   complexExpenses(complexId: String!, pagination: PaginationInput, filters: FilterExpensesInput): PaginatedExpensesResponse!
+  pucAccounts(complexId: String!, onlyPostable: Boolean = false): [PucAccount!]!
+  accountingDocuments(filter: FilterAccountingDocumentsInput!, pagination: PaginationInput): PaginatedAccountingDocumentsResponse!
+  accountingDocument(id: String!, complexId: String!): AccountingHeader!
+  unitAccountStatus(complexId: String!, unitId: String!): PropertyAccountStatus
+  recurringCharges(complexId: String!, onlyActive: Boolean = false): [RecurringCharge!]!
   packages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
+  myUnitPackages(complexId: String!, pagination: PaginationInput, filters: FilterPackagesInput): PaginatedPackagesResponse!
   pendingPackagesByUnit(unitId: String!, complexId: String!): [Package!]!
   package(packageId: String!): Package!
   visitorParkingConfig(complexId: String!): VisitorParkingConfig
@@ -3418,6 +3612,13 @@ input FilterExpensesInput {
   includeReversed: Boolean
 }
 
+input FilterAccountingDocumentsInput {
+  complexId: String!
+  documentType: AccountingDocumentType
+  period: String
+  unitId: String
+}
+
 input FilterPackagesInput {
   status: PackageStatus
   type: PackageType
@@ -3651,7 +3852,7 @@ type Mutation {
   removeVisitorFromBlacklist(visitorId: String!): Visitor!
   registerWalkIn(input: RegisterWalkInInput!): Visit!
   validateQrAccess(qrToken: String!): QrValidationResponse!
-  registerVisitorEntry(visitId: String!): Visit!
+  registerVisitorEntry(visitId: String!, accessToken: String): Visit!
   registerVisitorExit(visitId: String!, notes: String): Visit!
   scheduleVisit(input: ScheduleVisitInput!): Visit!
   approveVisitEntry(visitId: String!): Visit!
@@ -3681,10 +3882,24 @@ type Mutation {
   createWalletCredit(input: CreateWalletCreditInput!): WalletEntryObject!
   applyWalletToCharge(input: ApplyWalletToChargeInput!): ApplyWalletResult!
   applyMoraToPeriod(input: ApplyMoraInput!): MoraApplicationResult!
+  applyMoraAllPeriods(complexId: String!): MoraApplicationResult!
   registerExpense(input: RegisterExpenseInput!): ComplexExpense!
   reverseExpense(expenseId: String!, reason: String!): ComplexExpense!
+  seedPucAccounts(complexId: String!): [PucAccount!]!
+  createPucAccount(input: CreatePucAccountInput!): PucAccount!
+  updatePucAccount(input: UpdatePucAccountInput!): PucAccount!
+  togglePucAccount(id: String!, complexId: String!): PucAccount!
+  deletePucAccount(id: String!, complexId: String!): Boolean!
+  createExpenseVoucher(input: CreateExpenseInput!): AccountingHeader!
+  applyPrepaidBalances(input: ProcessPrepaidBalancesInput!): PrepaidApplicationResult!
+  createRecurringCharge(input: CreateRecurringChargeInput!): RecurringCharge!
+  updateRecurringCharge(input: UpdateRecurringChargeInput!): RecurringCharge!
+  deleteRecurringCharge(id: String!, complexId: String!): Boolean!
+  causeRecurringCharges(complexId: String!, period: String!): RecurringCausationResult!
+  causeRecurringChargesRange(complexId: String!, fromPeriod: String!, toPeriod: String!, applyMora: Boolean = false): RecurringCausationResult!
   registerPackage(input: RegisterPackageInput!): Package!
   markPackageAsNotified(packageId: String!): Package!
+  markPackageAsReadyForPickup(packageId: String!): Package!
   confirmPackageDelivery(input: ConfirmDeliveryInput!): Package!
   returnPackage(packageId: String!, reason: String!): Package!
   markPackageAsLost(packageId: String!, reason: String!): Package!
@@ -3943,6 +4158,9 @@ input CreateUnitInput {
   storageRooms: Int! = 0
   description: String
 
+  """Coeficiente de copropiedad (fracción, suma=1). Ej: 0.012345"""
+  coefficient: Float
+
   """ID del complejo"""
   complexId: String!
 
@@ -3977,6 +4195,9 @@ input UpdateUnitInput {
   """Cuartos de bodega"""
   storageRooms: Int = 0
   description: String
+
+  """Coeficiente de copropiedad (fracción, suma=1). Ej: 0.012345"""
+  coefficient: Float
 
   """ID de la unidad a actualizar"""
   id: String!
@@ -4370,6 +4591,9 @@ input ScheduleVisitInput {
 
   """Número de documento del visitante"""
   visitorIdentity: String!
+
+  """Tipo de documento del visitante"""
+  identityType: VisitorIdentityType! = CC
   visitorPhone: String
 
   """ID del residente que agenda (anfitrión)"""
@@ -4496,6 +4720,8 @@ input UpsertComplexFinanceConfigInput {
   moraGraceDays: Int
   autoApplyMora: Boolean
   autoGenerateCharges: Boolean
+  earlyDiscountPct: Float
+  earlyDiscountDay: Int
 }
 
 input CreateChargeCategoryInput {
@@ -4518,6 +4744,7 @@ input CreateFeeConfigInput {
   description: String
   amount: Float!
   earlyPaymentAmount: Float
+  earlyPaymentDueDayOfMonth: Int
   frequency: FeeFrequency! = MONTHLY
   dueDayOfMonth: Int! = 5
   complexId: String!
@@ -4530,6 +4757,7 @@ input CreateFeeConfigInput {
   isOptional: Boolean = false
   targetRules: FeeConfigTargetRulesInput
   triggerType: FeeConfigTriggerType
+  prelacionConcept: PrelacionConcept! = ORDINARY
 }
 
 input FeeConfigTargetRulesInput {
@@ -4546,6 +4774,7 @@ input UpdateFeeConfigInput {
   description: String
   amount: Float
   earlyPaymentAmount: Float
+  earlyPaymentDueDayOfMonth: Int
   frequency: FeeFrequency
   dueDayOfMonth: Int
   isActive: Boolean
@@ -4620,6 +4849,87 @@ input RegisterExpenseInput {
   expenseDate: DateTime!
   receiptUrl: String
   notes: String
+}
+
+input CreatePucAccountInput {
+  complexId: String!
+  code: String!
+  name: String!
+  accountClass: AccountClass!
+  nature: AccountNature!
+  parentId: String
+  isPostable: Boolean = true
+}
+
+input UpdatePucAccountInput {
+  id: String!
+  complexId: String!
+  name: String
+  nature: AccountNature
+  isActive: Boolean
+}
+
+input CreateExpenseInput {
+  complexId: String!
+  documentDate: DateTime!
+  period: String!
+  memo: String!
+  paymentAccountId: String!
+  thirdPartyName: String
+  lines: [ExpenseLineInput!]!
+}
+
+input ExpenseLineInput {
+  pucAccountId: String!
+  amount: Float!
+  memo: String!
+  unitId: String
+}
+
+input ProcessPrepaidBalancesInput {
+  complexId: String!
+  period: String!
+  unitIds: [String!]
+  dryRun: Boolean = false
+}
+
+input CreateRecurringChargeInput {
+  complexId: String!
+  concept: String!
+  type: RecurringChargeType!
+  amount: Float!
+  totalInstallments: Int
+  billingDay: Int! = 1
+  billingMode: FeeConfigBillingMode = ARREARS
+  incomeAccountId: String!
+  unitId: String
+  prorateByCoefficient: Boolean = false
+  distribution: RecurringChargeDistribution = FIXED_PER_UNIT
+  triggerType: RecurringChargeTrigger = MANUAL
+  vehicleTypes: [String!]
+  targetRules: FeeConfigTargetRulesInput
+  targetUnitIds: [String!]
+  earlyDiscountPct: Float
+  earlyDiscountDay: Int
+}
+
+input UpdateRecurringChargeInput {
+  id: String!
+  complexId: String!
+  concept: String
+  amount: Float
+  totalInstallments: Int
+  billingDay: Int
+  billingMode: FeeConfigBillingMode
+  incomeAccountId: String
+  distribution: RecurringChargeDistribution
+  triggerType: RecurringChargeTrigger
+  vehicleTypes: [String!]
+  targetRules: FeeConfigTargetRulesInput
+  targetUnitIds: [String!]
+  earlyDiscountPct: Float
+  earlyDiscountDay: Int
+  isActive: Boolean
 }
 
 input RegisterPackageInput {
