@@ -9,13 +9,25 @@ import { Payment }              from './entities/payment.entity';
 import { WalletEntry }          from './entities/wallet-entry.entity';
 import { ComplexExpense }       from './entities/complex-expense.entity';
 
+// ─── Ledger contable (partida doble) ─────────────────────────────
+import { PucAccount }             from './entities/puc-account.entity';
+import { AccountingHeader }       from './entities/accounting-header.entity';
+import { AccountingLine }         from './entities/accounting-line.entity';
+import { PropertyAccountStatus }  from './entities/property-account-status.entity';
+import { RecurringCharge }        from './entities/recurring-charge.entity';
+import { TenantFinancialConfig }  from './entities/tenant-financial-config.entity';
+import { DocumentSequence }       from './entities/document-sequence.entity';
+
 import { Vehicle }              from '../vehicles/entities/vehicle.entity';
 
 import { FinanceService }           from './services/finance.service';
 import { FinanceResolver }          from './resolvers/finance.resolver';
+import { AccountingService }        from './services/accounting.service';
+import { AccountingResolver }       from './resolvers/accounting.resolver';
 import { OverdueChargesCron }       from './cron/overdue-charges.cron';
 import { AutoGenerateChargesCron }  from './cron/auto-generate-charges.cron';
 import { AutoApplyMoraCron }        from './cron/auto-apply-mora.cron';
+import { AutoCauseRecurringCron }   from './cron/auto-cause-recurring.cron';
 
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule }          from '../residents/residents.module';
@@ -33,6 +45,14 @@ import { AuditModule }              from '../audit/audit.module';
       WalletEntry,
       Vehicle,
       ComplexExpense,
+      // Ledger contable
+      PucAccount,
+      AccountingHeader,
+      AccountingLine,
+      PropertyAccountStatus,
+      RecurringCharge,
+      TenantFinancialConfig,
+      DocumentSequence,
     ]),
     ResidentialComplexModule, // ResidentialComplexService + UnitService
     ResidentsModule,          // ResidentsService.findActiveByUnitInternal
@@ -42,12 +62,16 @@ import { AuditModule }              from '../audit/audit.module';
   providers: [
     FinanceService,
     FinanceResolver,
+    AccountingService,
+    AccountingResolver,
     OverdueChargesCron,
     AutoGenerateChargesCron,
     AutoApplyMoraCron,
+    AutoCauseRecurringCron,
   ],
   exports: [
     FinanceService,
+    AccountingService,
   ],
 })
 export class FinanceModule {}

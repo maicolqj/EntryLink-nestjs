@@ -48,6 +48,25 @@ export class ComplexFinanceConfig {
   @Column({ type: 'int', default: 5 })
   moraGraceDays: number;
 
+  // ─── Pronto pago (descuento por pago anticipado) ──────────────
+
+  /**
+   * Porcentaje de descuento por pronto pago (0 = sin descuento).
+   * Ej: 5 = 5% menos si paga antes del día `earlyDiscountDay`.
+   * Default global del complejo; cada RecurringCharge puede sobrescribirlo.
+   */
+  @Field(() => Float)
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  earlyDiscountPct: number;
+
+  /**
+   * Día del mes (1-28) hasta el cual aplica el descuento de pronto pago.
+   * Null = sin ventana definida (no se aplica descuento global).
+   */
+  @Field(() => Int, { nullable: true })
+  @Column({ type: 'int', nullable: true })
+  earlyDiscountDay: number | null;
+
   // ─── Automatización ───────────────────────────────────────────
 
   /**

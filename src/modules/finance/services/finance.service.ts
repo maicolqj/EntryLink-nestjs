@@ -9,9 +9,12 @@ import { FeeCharge } from '../entities/fee-charge.entity';
 import { Payment } from '../entities/payment.entity';
 import { WalletEntry } from '../entities/wallet-entry.entity';
 import { ComplexExpense } from '../entities/complex-expense.entity';
+import { RecurringCharge } from '../entities/recurring-charge.entity';
 import { UpsertComplexFinanceConfigInput } from '../dto/inputs/upsert-complex-finance-config.input';
 import { ChargeStatus } from '../enums/charge-status.enum';
 import { ChargeType } from '../enums/charge-type.enum';
+import { PrelacionConcept } from '../enums/prelacion-concept.enum';
+import { AccountingService } from './accounting.service';
 import { FeeFrequency } from '../enums/fee-frequency.enum';
 import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
@@ -76,6 +79,9 @@ import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
+/** Usuario de sistema para procesos automáticos (cron). Sin FK; solo trazabilidad. */
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 @Injectable()
 export class FinanceService {
   private readonly logger = new Logger(FinanceService.name);
@@ -97,6 +103,7 @@ export class FinanceService {
     private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(ComplexExpense)
     private readonly expenseRepo: Repository<ComplexExpense>,
+    private readonly accountingService: AccountingService,
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
@@ -218,6 +225,8 @@ export class FinanceService {
     if (input.moraGraceDays !== undefined) config.moraGraceDays = input.moraGraceDays;
     if (input.autoApplyMora !== undefined) config.autoApplyMora = input.autoApplyMora;
     if (input.autoGenerateCharges !== undefined) config.autoGenerateCharges = input.autoGenerateCharges;
+    if (input.earlyDiscountPct !== undefined) config.earlyDiscountPct = input.earlyDiscountPct;
+    if (input.earlyDiscountDay !== undefined) config.earlyDiscountDay = input.earlyDiscountDay;
 
     const saved = await this.financeConfigRepo.save(config);
     await this.cacheService.deleteByPrefix(BK.finance.prefix(input.complexId));
@@ -244,10 +253,29 @@ export class FinanceService {
 
     const allUnits = await this.unitService.findAllByComplexInternal(complexId);
 
+    // Candado anti-doble-facturación: RecurringCharge es el mecanismo canónico.
+    // Si un FeeConfig comparte concepto (name) con un recurrente activo, se omite
+    // para no causar el mismo cobro por ambos caminos.
+    const recurringConcepts = new Set(
+      (await this.dataSource.getRepository(RecurringCharge).find({
+        where: { complexId, isActive: true },
+        select: ['concept'],
+      })).map(r => r.concept.trim().toLowerCase()),
+    );
+
     let totalGenerated = 0;
     let totalSkipped = 0;
 
     for (const config of activeConfigs) {
+      if (recurringConcepts.has(config.name.trim().toLowerCase())) {
+        this.logger.warn(
+          `[candado] FeeConfig "${config.name}" coincide con un RecurringCharge activo ` +
+          `del complejo ${complexId}; omitido para evitar doble facturación`,
+        );
+        totalSkipped++;
+        continue;
+      }
+
       if (config.chargeType === ChargeType.LIMITED) {
         const paid = config.installmentsPaid ?? 0;
         const total = config.installments ?? 0;
@@ -288,6 +316,9 @@ export class FinanceService {
       let configGenerated = 0;
 
       for (const unit of targetUnits) {
+        const description = `${config.name} — ${period}`;
+
+        // Idempotencia propia (re-corrida del mismo FeeConfig)
         if (config.chargeType === ChargeType.ONCE) {
           const existingOnce = await this.chargeRepo.findOne({
             where: { feeConfigId: config.id, unitId: unit.id },
@@ -300,11 +331,29 @@ export class FinanceService {
           if (existing) { totalSkipped++; continue; }
         }
 
+        // Guardia anti-doble-cobro (red de seguridad): ya existe un cargo del
+        // MISMO concepto+período para la unidad creado por OTRO motor (p. ej.
+        // RecurringCharge, que comparte el formato de descripción "<concepto> —
+        // <período>"). Evita facturar dos veces la misma cuota. Determinista por
+        // descripción; conceptos con nombres distintos no se consideran colisión.
+        const crossSource = await this.chargeRepo.findOne({
+          where: { complexId, unitId: unit.id, period, description, deletedAt: null as any },
+        });
+        if (crossSource) {
+          this.logger.warn(
+            `[anti-doble-cobro] cargo "${description}" ya existe para unidad ${unit.id} ` +
+            `(generado por otro motor); FeeConfig ${config.id} omitido`,
+          );
+          totalSkipped++;
+          continue;
+        }
+
         const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
 
         // Descuento de pronto pago: usar earlyPaymentAmount si la unidad está al día
         let chargeAmount: number = Number(config.amount);
         let normalAmount: number | null = null;
+        let earlyPaymentDueDate: Date | null = null;
 
         if (config.earlyPaymentAmount != null) {
           const priorUnpaid = await this.chargeRepo
@@ -321,15 +370,21 @@ export class FinanceService {
           if (!priorUnpaid) {
             chargeAmount = Number(config.earlyPaymentAmount);
             normalAmount = Number(config.amount);
+            earlyPaymentDueDate = this.buildDueDate(
+              period,
+              config.earlyPaymentDueDayOfMonth ?? config.dueDayOfMonth,
+              config.billingMode,
+            );
           }
         }
 
         await this.chargeRepo.save(
           this.chargeRepo.create({
             complexId, unitId: unit.id, feeConfigId: config.id,
-            period, dueDate, amount: chargeAmount, normalAmount, paidAmount: 0,
-            description: `${config.name} — ${period}`,
+            period, dueDate, amount: chargeAmount, normalAmount, earlyPaymentDueDate, paidAmount: 0,
+            description,
             status: ChargeStatus.PENDING,
+            prelacionConcept: config.prelacionConcept,
           }),
         );
         configGenerated++;
@@ -351,6 +406,10 @@ export class FinanceService {
     }
 
     if (totalGenerated > 0) {
+      // Reconciliar el saldo materializado de las unidades del complejo
+      for (const u of allUnits) {
+        await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, u.id);
+      }
       this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, { period, created: totalGenerated });
     }
 
@@ -362,56 +421,107 @@ export class FinanceService {
    * Idempotente: omite si ya existe cargo para la misma config+unidad+período.
    */
   async triggerVehicleCharges(unitId: string, complexId: string): Promise<void> {
-    const vehicleConfigs = await this.feeConfigRepo.find({
-      where: {
-        complexId,
-        isActive: true,
-        isOptional: true,
-        triggerType: FeeConfigTriggerType.VEHICLE,
-        deletedAt: null as any,
-      },
-    });
+    // Best-effort: la causación de cargos NUNCA debe tumbar el registro del vehículo.
+    try {
+      // Modelo nuevo (canónico): cargos por vehículo vía RecurringCharge triggerType=VEHICLE.
+      await this.accountingService.causeVehicleChargesForUnit(complexId, unitId, SYSTEM_USER_ID);
 
-    if (!vehicleConfigs.length) return;
-
-    const today = new Date();
-    const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-    for (const config of vehicleConfigs) {
-      const existing = await this.chargeRepo.findOne({
-        where: { feeConfigId: config.id, unitId, period },
-      });
-      if (existing) continue;
-
-      const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
-      await this.chargeRepo.save(
-        this.chargeRepo.create({
+      const vehicleConfigs = await this.feeConfigRepo.find({
+        where: {
           complexId,
-          unitId,
-          feeConfigId: config.id,
-          period,
-          dueDate,
-          amount: Number(config.amount),
-          paidAmount: 0,
-          description: `${config.name} — ${period}`,
-          status: ChargeStatus.PENDING,
-        }),
+          isActive: true,
+          isOptional: true,
+          triggerType: FeeConfigTriggerType.VEHICLE,
+          deletedAt: null as any,
+        },
+      });
+
+      if (!vehicleConfigs.length) return;
+
+      const today = new Date();
+      const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+      for (const config of vehicleConfigs) {
+        const existing = await this.chargeRepo.findOne({
+          where: { feeConfigId: config.id, unitId, period },
+        });
+        if (existing) continue;
+
+        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
+        await this.chargeRepo.save(
+          this.chargeRepo.create({
+            complexId,
+            unitId,
+            feeConfigId: config.id,
+            period,
+            dueDate,
+            amount: Number(config.amount),
+            paidAmount: 0,
+            description: `${config.name} — ${period}`,
+            status: ChargeStatus.PENDING,
+            prelacionConcept: config.prelacionConcept,
+          }),
+        );
+      }
+
+      // Reconciliar el saldo materializado de la unidad
+      await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, unitId);
+    } catch (e: any) {
+      this.logger.error(
+        `triggerVehicleCharges(unit=${unitId}, complex=${complexId}): ${e?.message}`,
+        e?.stack,
       );
     }
   }
 
   /**
    * Versión interna de applyMoraToPeriod para uso desde cron jobs.
-   * Omite la verificación de acceso del usuario.
+   * Omite la verificación de acceso del usuario; el asiento contable se registra
+   * con el usuario de sistema.
    */
   async applyMoraInternal(
     complexId: string,
     period: string,
     rate: number,
     graceDays: number,
-  ): Promise<{ applied: number; skipped: number; totalMoraAmount: number }> {
+  ): Promise<MoraApplicationResult> {
     this.assertValidPeriod(period);
+    return this.applyMoraCore(complexId, period, rate, graceDays, SYSTEM_USER_ID);
+  }
 
+  /**
+   * Aplica mora usando la tasa/gracia de la config del complejo. Devuelve null si
+   * no hay tasa configurada (> 0). Usado por el backfill con mora.
+   */
+  async applyMoraUsingConfig(
+    complexId: string,
+    period: string,
+  ): Promise<MoraApplicationResult | null> {
+    const cfg = await this.financeConfigRepo.findOne({ where: { complexId } });
+    const rate = cfg ? Number(cfg.moraRate) : 0;
+    if (!rate || rate <= 0) return null;
+    return this.applyMoraInternal(complexId, period, rate, cfg!.moraGraceDays);
+  }
+
+  /**
+   * Núcleo de la causación de mora. Recorre TODOS los cargos vencidos de
+   * períodos anteriores al mes actual del complejo, calcula el interés y, por
+   * cada cargo de mora generado:
+   *   1. Crea el FeeCharge de mora (CxC operativa, prelación INTEREST_MORA).
+   *   2. Registra el asiento contable (Débito 1345 = Crédito 4210), best-effort.
+   *   3. Reconcilia el saldo materializado de la unidad.
+   * Todo en una única transacción ACID. Idempotente: omite si ya existe la nota
+   * de mora para (unidad, period, descripción).
+   *
+   * @param period etiqueta YYYY-MM que reciben los cargos de mora generados.
+   */
+  private async applyMoraCore(
+    complexId: string,
+    period: string,
+    rate: number,
+    graceDays: number,
+    createdByUserId: string,
+  ): Promise<MoraApplicationResult> {
     const now = new Date();
     const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -423,8 +533,11 @@ export class FinanceService {
       },
     });
 
-    // Procesar solo cargos de períodos ANTERIORES al mes actual
-    const chargesToProcess = overdueCharges.filter(c => c.period < currentPeriod);
+    // Procesar solo cargos de períodos ANTERIORES al mes actual.
+    // Excluir cargos que YA son de mora para no generar interés sobre interés.
+    const chargesToProcess = overdueCharges.filter(
+      c => c.period < currentPeriod && c.prelacionConcept !== PrelacionConcept.INTEREST_MORA,
+    );
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -466,8 +579,20 @@ export class FinanceService {
             complexId: charge.complexId, unitId: charge.unitId,
             period, dueDate: moraDueDate, amount: mora, paidAmount: 0,
             description: moraDescription, status: ChargeStatus.PENDING,
+            prelacionConcept: PrelacionConcept.INTEREST_MORA,
+            sourceChargeId: charge.id,
           }),
         );
+
+        // Asiento contable de causación de mora (best-effort si hay PUC)
+        await this.accountingService.emitMoraNote(queryRunner.manager, {
+          complexId: charge.complexId,
+          unitId: charge.unitId,
+          amount: mora,
+          period,
+          createdByUserId,
+          memo: moraDescription,
+        });
 
         applied++;
         totalMoraAmount += mora;
@@ -479,6 +604,13 @@ export class FinanceService {
         });
       }
 
+      // Reconciliar saldo materializado de las unidades con mora (misma TX)
+      const moraUnits = new Map<string, string>(); // unitId -> complexId
+      for (const m of moraNotifications) moraUnits.set(m.unitId, m.complexId);
+      for (const [uid, cid] of moraUnits) {
+        await this.accountingService.recomputeUnitStatus(queryRunner.manager, cid, uid);
+      }
+
       await queryRunner.commitTransaction();
 
       for (const m of moraNotifications) {
@@ -487,7 +619,12 @@ export class FinanceService {
         );
       }
 
-      return { applied, skipped, totalMoraAmount: Math.round(totalMoraAmount * 100) / 100 };
+      return {
+        period,
+        applied,
+        skipped,
+        totalMoraAmount: Math.round(totalMoraAmount * 100) / 100,
+      };
 
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -621,157 +758,31 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
     this.assertValidPeriod(period);
 
-    const activeConfigs = await this.feeConfigRepo.find({
-      where: { complexId, isActive: true, deletedAt: null as any },
-    });
-
-    const allUnits = await this.unitService.findAllByComplexInternal(complexId);
-
-    let totalGenerated = 0;
-    let totalSkipped = 0;
-
-    for (const config of activeConfigs) {
-      // Verificar cuotas para LIMITED antes de continuar
-      if (config.chargeType === ChargeType.LIMITED) {
-        const paid = config.installmentsPaid ?? 0;
-        const total = config.installments ?? 0;
-        if (paid >= total) {
-          config.isActive = false;
-          await this.feeConfigRepo.save(config);
-          continue;
-        }
-      }
-
-      // Verificar si la frecuencia aplica para este período
-      if (!this.shouldGenerateForPeriod(config, period)) {
-        totalSkipped++;
-        continue;
-      }
-
-      let targetUnits: Unit[];
-
-      if (config.isOptional) {
-        if (config.triggerType === FeeConfigTriggerType.VEHICLE) {
-          const vehicleRows = await this.vehicleRepo
-            .createQueryBuilder('v')
-            .select('DISTINCT v.unitId', 'unitId')
-            .where('v.complexId = :complexId', { complexId })
-            .andWhere("v.status = 'ACTIVE'")
-            .andWhere('v.deleted_at IS NULL')
-            .getRawMany();
-          const vehicleUnitIds = new Set(vehicleRows.map((r: any) => r.unitId));
-          targetUnits = allUnits.filter(u => vehicleUnitIds.has(u.id));
-        } else if (config.targetRules) {
-          targetUnits = this.applyTargetRules(allUnits, config.targetRules);
-        } else {
-          continue;
-        }
-      } else {
-        targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
-      }
-
-      let configGenerated = 0;
-
-      for (const unit of targetUnits) {
-        if (config.chargeType === ChargeType.ONCE) {
-          const existingOnce = await this.chargeRepo.findOne({
-            where: { feeConfigId: config.id, unitId: unit.id },
-          });
-          if (existingOnce) {
-            totalSkipped++;
-            continue;
-          }
-        } else {
-          const existing = await this.chargeRepo.findOne({
-            where: { feeConfigId: config.id, unitId: unit.id, period },
-          });
-          if (existing) {
-            totalSkipped++;
-            continue;
-          }
-        }
-
-        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
-
-        // Descuento de pronto pago: usar earlyPaymentAmount si la unidad está al día
-        let chargeAmount: number = Number(config.amount);
-        let normalAmount: number | null = null;
-
-        if (config.earlyPaymentAmount != null) {
-          const priorUnpaid = await this.chargeRepo
-            .createQueryBuilder('c')
-            .where('c.complexId = :complexId', { complexId })
-            .andWhere('c.unitId = :unitId', { unitId: unit.id })
-            .andWhere('c.period < :period', { period })
-            .andWhere('c.status IN (:...statuses)', {
-              statuses: [ChargeStatus.OVERDUE, ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID],
-            })
-            .andWhere('c.deletedAt IS NULL')
-            .getOne();
-
-          if (!priorUnpaid) {
-            chargeAmount = Number(config.earlyPaymentAmount);
-            normalAmount = Number(config.amount);
-          }
-        }
-
-        await this.chargeRepo.save(
-          this.chargeRepo.create({
-            complexId,
-            unitId: unit.id,
-            feeConfigId: config.id,
-            period,
-            dueDate,
-            amount: chargeAmount,
-            normalAmount,
-            paidAmount: 0,
-            description: `${config.name} — ${period}`,
-            status: ChargeStatus.PENDING,
-          }),
-        );
-        configGenerated++;
-        totalGenerated++;
-
-        this.notifyChargeGeneratedToUnit(complexId, unit.id, config.name, chargeAmount, period).catch(err =>
-          this.logger.warn(`Error al notificar cargo generado en unidad ${unit.id} (config ${config.id}): ${err?.message}`),
-        );
-      }
-
-      // Actualizar config tras la generación
-      if (config.chargeType === ChargeType.LIMITED && configGenerated > 0) {
-        config.installmentsPaid = (config.installmentsPaid ?? 0) + 1;
-        if (config.installmentsPaid >= (config.installments ?? 0)) {
-          config.isActive = false;
-        }
-        await this.feeConfigRepo.save(config);
-      } else if (config.chargeType === ChargeType.ONCE && configGenerated > 0) {
-        config.isActive = false;
-        await this.feeConfigRepo.save(config);
-      }
-    }
+    // Núcleo compartido: misma lógica que el cron (incluye reconciliación de
+    // saldos materializados y emisión del socket FINANCE_CHARGE_NEW).
+    const result = await this.generateChargesInternal(complexId, period);
 
     this.logger.log(
       `generateCharges — período ${period}, complejo ${complexId}: ` +
-      `${totalGenerated} generados, ${totalSkipped} omitidos, ` +
-      `${activeConfigs.length} configs procesadas.`,
+      `${result.generated} generados, ${result.skipped} omitidos.`,
     );
 
-    if (totalGenerated > 0) {
+    if (result.generated > 0) {
       void this.auditService.log({
         entityType: AuditEntityType.FeeCharge,
         entityId: complexId,
         action: AuditAction.CREATE,
-        newValue: { period, generated: totalGenerated, skipped: totalSkipped, complexId },
+        newValue: { period, generated: result.generated, skipped: result.skipped, complexId },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId,
-        description: `Cargos generados: ${totalGenerated} para período ${period} — complejo ${complexId}`,
+        description: `Cargos generados: ${result.generated} para período ${period} — complejo ${complexId}`,
         isBulk: true,
       });
     }
 
-    return { generated: totalGenerated, skipped: totalSkipped, period };
+    return result;
   }
 
   /**
@@ -828,6 +839,11 @@ export class FinanceService {
     this.logger.log(`createDirectCharges: ${created} creados, ${skipped} omitidos.`);
 
     if (created > 0) {
+      // Reconciliar el saldo materializado de las unidades afectadas
+      for (const uid of unitIds) {
+        await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, uid);
+      }
+
       this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, {
         complexId,
         period,
@@ -909,6 +925,9 @@ export class FinanceService {
     charge.cancelledAt = new Date();
 
     const savedWaive = await this.chargeRepo.save(charge);
+
+    // Reconciliar el saldo materializado: el cargo exonerado deja de ser deuda
+    await this.accountingService.recomputeUnitStatus(this.dataSource.manager, charge.complexId, charge.unitId);
 
     this.notifyChargeWaived(savedWaive, reason).catch(err =>
       this.logger.warn(`Error al notificar exoneración de cargo ${chargeId}: ${err?.message}`),
@@ -997,6 +1016,40 @@ export class FinanceService {
         : ChargeStatus.PARTIALLY_PAID;
 
       await queryRunner.manager.save(FeeCharge, charge);
+
+      // Nota crédito por descuento de pronto pago: si el cargo queda PAID y se
+      // facturó el valor pleno (normalAmount > amount), se acredita el descuento
+      // para cuadrar el ledger (best-effort, misma TX).
+      const discount = charge.normalAmount != null
+        ? Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100
+        : 0;
+      if (charge.status === ChargeStatus.PAID && discount > 0) {
+        await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
+          complexId: charge.complexId,
+          unitId: charge.unitId,
+          incomeAccountId: charge.incomeAccountId ?? null,
+          amount: discount,
+          period: charge.period,
+          createdByUserId: currentUser.sub,
+        });
+      }
+
+      // Reconciliar el saldo materializado de la unidad (misma TX)
+      await this.accountingService.recomputeUnitStatus(queryRunner.manager, charge.complexId, charge.unitId);
+
+      // Recibo de caja contable (best-effort; omitido si la copropiedad no tiene PUC)
+      await this.accountingService.emitCashReceipt(queryRunner.manager, {
+        complexId: charge.complexId,
+        unitId: charge.unitId,
+        documentDate: new Date(input.paidAt),
+        period: charge.period,
+        appliedToCharges: Number(input.amount),
+        prepaidExcess: 0,
+        method: input.method,
+        createdByUserId: currentUser.sub,
+        reference: input.reference,
+      });
+
       await queryRunner.commitTransaction();
 
       void this.auditService.log({
@@ -1101,6 +1154,22 @@ export class FinanceService {
         paidNotifications.push({ charge, paymentAmount, paymentDate });
 
         await queryRunner.manager.save(FeeCharge, charge);
+
+        // Nota crédito por descuento pronto pago si el cargo quedó PAID con descuento.
+        if (charge.status === ChargeStatus.PAID && charge.normalAmount != null) {
+          const bulkDiscount = Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100;
+          if (bulkDiscount > 0) {
+            await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
+              complexId,
+              unitId,
+              incomeAccountId: charge.incomeAccountId ?? null,
+              amount: bulkDiscount,
+              period: charge.period,
+              createdByUserId: currentUser.sub,
+            });
+          }
+        }
+
         remaining = Math.round((remaining - paymentAmount) * 100) / 100;
       }
 
@@ -1118,6 +1187,24 @@ export class FinanceService {
           }),
         );
       }
+
+      // Reconciliar el saldo materializado de la unidad (misma TX)
+      await this.accountingService.recomputeUnitStatus(queryRunner.manager, complexId, unitId);
+
+      // Recibo de caja contable: parte imputada a cargos + excedente a anticipo (2805)
+      const appliedToCharges = Math.round((amount - remaining) * 100) / 100;
+      const receiptDate = new Date(paidAt);
+      await this.accountingService.emitCashReceipt(queryRunner.manager, {
+        complexId,
+        unitId,
+        documentDate: receiptDate,
+        period: `${receiptDate.getFullYear()}-${String(receiptDate.getMonth() + 1).padStart(2, '0')}`,
+        appliedToCharges,
+        prepaidExcess: remaining > 0.001 ? Math.round(remaining * 100) / 100 : 0,
+        method,
+        createdByUserId: currentUser.sub,
+        reference,
+      });
 
       await queryRunner.commitTransaction();
 
@@ -1201,6 +1288,10 @@ export class FinanceService {
       }
 
       await queryRunner.manager.save(FeeCharge, charge);
+
+      // Reconciliar el saldo materializado de la unidad (misma TX)
+      await this.accountingService.recomputeUnitStatus(queryRunner.manager, charge.complexId, charge.unitId);
+
       await queryRunner.commitTransaction();
 
       void this.auditService.log({
@@ -1251,16 +1342,22 @@ export class FinanceService {
       });
     }
 
-    const entry = await this.walletEntryRepo.save(
-      this.walletEntryRepo.create({
-        type: 'CREDIT',
-        amount: input.amount,
-        description: input.description,
-        unitId: input.unitId,
-        complexId: input.complexId,
-        chargeId: null,
-      }),
-    );
+    const entry = await this.dataSource.transaction(async (em) => {
+      const saved = await em.save(
+        WalletEntry,
+        em.create(WalletEntry, {
+          type: 'CREDIT',
+          amount: input.amount,
+          description: input.description,
+          unitId: input.unitId,
+          complexId: input.complexId,
+          chargeId: null,
+        }),
+      );
+      // Reconciliar el saldo materializado de la unidad (misma TX)
+      await this.accountingService.recomputeUnitStatus(em, input.complexId, input.unitId);
+      return saved;
+    });
 
     this.notifyWalletCredit(input.unitId, input.complexId, Number(input.amount), input.description).catch(err =>
       this.logger.warn(`Error al notificar saldo a favor en unidad ${input.unitId}: ${err?.message}`),
@@ -1357,6 +1454,34 @@ export class FinanceService {
         }),
       );
 
+      // Reconciliar el saldo materializado de la unidad (misma TX)
+      await this.accountingService.recomputeUnitStatus(queryRunner.manager, input.complexId, input.unitId);
+
+      // Nota contable de aplicación de anticipo (best-effort; 2805 → 1311)
+      await this.accountingService.emitPrepaidApplicationNote(queryRunner.manager, {
+        complexId: input.complexId,
+        unitId: input.unitId,
+        amount: montoAplicado,
+        period: charge.period,
+        createdByUserId: currentUser.sub,
+        memo: `Aplicación manual de anticipo — ${charge.description}`,
+      });
+
+      // Nota crédito por descuento pronto pago si el cargo quedó PAID con descuento.
+      const walletDiscount = charge.normalAmount != null
+        ? Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100
+        : 0;
+      if (charge.status === ChargeStatus.PAID && walletDiscount > 0) {
+        await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
+          complexId: input.complexId,
+          unitId: input.unitId,
+          incomeAccountId: charge.incomeAccountId ?? null,
+          amount: walletDiscount,
+          period: charge.period,
+          createdByUserId: currentUser.sub,
+        });
+      }
+
       await queryRunner.commitTransaction();
 
       this.notifyWalletApplied(charge, Math.round(montoAplicado * 100) / 100).catch(err =>
@@ -1381,7 +1506,9 @@ export class FinanceService {
   }
 
   /**
-   * Calcula y registra mora sobre cargos vencidos del complejo.
+   * Calcula y registra mora sobre los cargos vencidos del complejo usando la
+   * tasa y días de gracia indicados en el input. `input.period` es solo la
+   * etiqueta de período que reciben los cargos de mora generados.
    */
   async applyMoraToPeriod(
     input: ApplyMoraInput,
@@ -1390,120 +1517,51 @@ export class FinanceService {
     await this.complexService.findById(input.complexId, currentUser);
     this.assertValidPeriod(input.period);
 
-    const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const result = await this.applyMoraCore(
+      input.complexId, input.period, input.rate, input.graceDays, currentUser.sub,
+    );
 
-    const overdueCharges = await this.chargeRepo.find({
-      where: {
-        complexId: input.complexId,
-        status: In([ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID]),
-        deletedAt: null as any,
-      },
-    });
+    this.logger.log(
+      `applyMoraToPeriod — período ${input.period}, complejo ${input.complexId}: ` +
+      `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
+    );
+    return result;
+  }
 
-    // Procesar solo cargos de períodos ANTERIORES al mes actual
-    // El parámetro input.period se usa únicamente como etiqueta de los cargos de mora generados
-    const chargesToProcess = overdueCharges.filter(c => c.period < currentPeriod);
+  /**
+   * Endpoint de respaldo (disparo manual del cron de mora): aplica mora a TODOS
+   * los períodos vencidos del complejo usando la tasa y días de gracia
+   * configurados en su ComplexFinanceConfig. Los cargos de mora se etiquetan con
+   * el período del mes actual (Bogotá). Idempotente.
+   */
+  async applyMoraAllPeriods(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MoraApplicationResult> {
+    await this.complexService.findById(complexId, currentUser);
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const config = await this.financeConfigRepo.findOne({ where: { complexId } });
+    const rate      = config ? Number(config.moraRate) : 0;
+    const graceDays = config ? config.moraGraceDays : 0;
 
-    let applied = 0;
-    let totalMoraAmount = 0;
-    let skipped = 0;
-
-    const moraNotifications: Array<{ unitId: string; complexId: string; amount: number; description: string }> = [];
-
-    try {
-      for (const charge of chargesToProcess) {
-        // Fecha de referencia: día 1 del mes siguiente al período del cargo
-        const [chargeYear, chargeMonth] = charge.period.split('-').map(Number);
-        const refDate = new Date(chargeYear, chargeMonth, 1); // chargeMonth es 1-indexed → mes siguiente en Date (0-indexed)
-        const diasVencidos = Math.floor((now.getTime() - refDate.getTime()) / 86_400_000);
-
-        if (diasVencidos <= input.graceDays) {
-          skipped++;
-          continue;
-        }
-
-        const diasEfectivos = diasVencidos - input.graceDays;
-        const chargeBalance = Number(charge.amount) - Number(charge.paidAmount);
-        const mora = Math.round(chargeBalance * (input.rate / 100) * (diasEfectivos / 30) * 100) / 100;
-
-        if (mora <= 0) {
-          skipped++;
-          continue;
-        }
-
-        const moraDescription = `Interés mora — ${charge.description} (${charge.period})`;
-        const existingMora = await queryRunner.manager.findOne(FeeCharge, {
-          where: {
-            complexId: charge.complexId,
-            unitId: charge.unitId,
-            period: input.period,
-            description: moraDescription,
-          },
-        });
-
-        if (existingMora) {
-          skipped++;
-          continue;
-        }
-
-        const moraDueDate = new Date(now);
-        moraDueDate.setDate(moraDueDate.getDate() + 5);
-
-        await queryRunner.manager.save(
-          FeeCharge,
-          queryRunner.manager.create(FeeCharge, {
-            complexId: charge.complexId,
-            unitId: charge.unitId,
-            period: input.period,
-            dueDate: moraDueDate,
-            amount: mora,
-            paidAmount: 0,
-            description: moraDescription,
-            status: ChargeStatus.PENDING,
-          }),
-        );
-
-        applied++;
-        totalMoraAmount += mora;
-        moraNotifications.push({
-          unitId: charge.unitId,
-          complexId: charge.complexId,
-          amount: mora,
-          description: moraDescription,
-        });
-      }
-
-      await queryRunner.commitTransaction();
-
-      for (const m of moraNotifications) {
-        this.notifyMoraApplied(m.unitId, m.complexId, m.amount, m.description).catch(err =>
-          this.logger.warn(`Error al notificar mora en unidad ${m.unitId}: ${err?.message}`),
-        );
-      }
-
-      this.logger.log(
-        `applyMoraToPeriod — período ${input.period}, complejo ${input.complexId}: ` +
-        `${applied} cargos de mora creados, ${skipped} omitidos.`,
-      );
-
-      return {
-        period: input.period,
-        applied,
-        totalMoraAmount: Math.round(totalMoraAmount * 100) / 100,
-        skipped,
-      };
-
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
+    if (rate <= 0) {
+      throw new CustomError({
+        message: 'La copropiedad no tiene una tasa de mora (moraRate) configurada',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: FinanceErrorCode.INVALID_AMOUNT,
+      });
     }
+
+    const now    = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const result = await this.applyMoraCore(complexId, period, rate, graceDays, currentUser.sub);
+
+    this.logger.log(
+      `applyMoraAllPeriods — complejo ${complexId}, período ${period}: ` +
+      `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
+    );
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1527,7 +1585,27 @@ export class FinanceService {
       .where('c.complexId = :complexId', { complexId })
       .andWhere('c.deletedAt IS NULL');
 
-    if (filters.status) qb.andWhere('c.status = :status', { status: filters.status });
+    // Derivación read-time de OVERDUE: un cargo PENDING/PARTIALLY_PAID con saldo
+    // y dueDate pasado se considera vencido aunque el cron aún no lo haya transicionado.
+    const now = new Date();
+    if (filters.status === ChargeStatus.OVERDUE) {
+      qb.andWhere(
+        `(c.status = :overdue OR (c.status IN (:...openStatuses) AND c.dueDate < :now AND (c.amount - c.paidAmount) > 0))`,
+        {
+          overdue: ChargeStatus.OVERDUE,
+          openStatuses: [ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID],
+          now,
+        },
+      );
+    } else if (filters.status === ChargeStatus.PENDING) {
+      // Excluir los vencidos por fecha: deben aparecer bajo "Vencido", no "Pendiente".
+      qb.andWhere(
+        `c.status = :pending AND NOT (c.dueDate < :now AND (c.amount - c.paidAmount) > 0)`,
+        { pending: ChargeStatus.PENDING, now },
+      );
+    } else if (filters.status) {
+      qb.andWhere('c.status = :status', { status: filters.status });
+    }
     if (filters.unitId) qb.andWhere('c.unitId = :unitId', { unitId: filters.unitId });
     if (filters.period) qb.andWhere('c.period = :period', { period: filters.period });
     if (filters.feeConfigId) qb.andWhere('c.feeConfigId = :feeConfigId', { feeConfigId: filters.feeConfigId });
@@ -1544,6 +1622,8 @@ export class FinanceService {
     const items = await qb.skip((page - 1) * limit).take(limit).getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
+    await this.populateMoraAmount(items);
+
     return {
       items,
       pagination: {
@@ -1551,6 +1631,34 @@ export class FinanceService {
         hasNextPage: page < totalPages, hasPreviousPage: page > 1,
       },
     };
+  }
+
+  /**
+   * Llena el campo no persistido `moraAmount` de cada cargo con la suma del saldo
+   * de sus filas de mora (INTEREST_MORA) asociadas vía `sourceChargeId`. Una sola
+   * query agregada para todos los cargos (evita N+1).
+   */
+  private async populateMoraAmount(charges: FeeCharge[]): Promise<void> {
+    if (!charges.length) return;
+    const ids = charges.map(c => c.id);
+
+    const rows = await this.chargeRepo
+      .createQueryBuilder('m')
+      .select('m.sourceChargeId', 'sourceChargeId')
+      .addSelect('SUM(m.amount - m.paidAmount)', 'mora')
+      .where('m.sourceChargeId IN (:...ids)', { ids })
+      .andWhere('m.prelacionConcept = :concept', { concept: PrelacionConcept.INTEREST_MORA })
+      .andWhere('m.status NOT IN (:...closed)', {
+        closed: [ChargeStatus.PAID, ChargeStatus.CANCELLED, ChargeStatus.WAIVED],
+      })
+      .andWhere('m.deletedAt IS NULL')
+      .groupBy('m.sourceChargeId')
+      .getRawMany<{ sourceChargeId: string; mora: string }>();
+
+    const byParent = new Map(rows.map(r => [r.sourceChargeId, Number(r.mora)]));
+    for (const c of charges) {
+      c.moraAmount = byParent.get(c.id) ?? 0;
+    }
   }
 
   async findPaymentsByCharge(
@@ -1584,8 +1692,9 @@ export class FinanceService {
 
     const totalDebt = pendingCharges.reduce((sum, c) => sum + (Number(c.amount) - Number(c.paidAmount)), 0);
     const totalPaid = charges.reduce((sum, c) => sum + Number(c.paidAmount), 0);
-    const overdueCount = charges.filter(c => c.status === ChargeStatus.OVERDUE).length;
-    const pendingCount = charges.filter(c => c.status === ChargeStatus.PENDING).length;
+    const overdueCount = charges.filter(c => c.effectiveStatus === ChargeStatus.OVERDUE).length;
+    // "Pendientes" = total de cargos por pagar (incluye vencidos); overdue es el subconjunto.
+    const pendingCount = pendingCharges.length;
 
     return {
       unitId,
@@ -1643,21 +1752,51 @@ export class FinanceService {
       .getRawOne<{ total: string }>();
     const totalOutstanding = Number(outstandingRow?.total ?? 0);
 
+    // periodOutstanding: cartera pendiente SOLO de los cargos de este período
+    const periodOutstandingRow = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('COALESCE(SUM(c.amount - c.paidAmount), 0)', 'total')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.period = :period', { period })
+      .andWhere('c.amount - c.paidAmount > 0')
+      .andWhere('c.status IN (:...debtStatuses)', {
+        debtStatuses: [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID],
+      })
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const periodOutstanding = Number(periodOutstandingRow?.total ?? 0);
+
+    // totalMora: interés de mora causado en el período (prelación INTEREST_MORA)
+    const moraRow = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('COALESCE(SUM(c.amount), 0)', 'total')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.period = :period', { period })
+      .andWhere('c.prelacionConcept = :mora', { mora: PrelacionConcept.INTEREST_MORA })
+      .andWhere('c.status NOT IN (:...excluded)', {
+        excluded: [ChargeStatus.WAIVED, ChargeStatus.CANCELLED],
+      })
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const totalMora = Number(moraRow?.total ?? 0);
+
     // unitsWithDebt / unitsFullyPaid: misma lógica que getUnitsFinancialStatus
     const allUnitStatuses = await this.getAllUnitStatusItems(complexId);
     const unitsWithDebt = allUnitStatuses.filter(u => u.status === 'OVERDUE' || u.status === 'IN_DEBT').length;
     const unitsFullyPaid = allUnitStatuses.filter(u => u.status === 'UP_TO_DATE' || u.status === 'CREDIT').length;
 
-    // totalExpenses: gastos operativos del período, no revertidos
-    const expensesRow = await this.expenseRepo
-      .createQueryBuilder('e')
-      .select('COALESCE(SUM(e.amount), 0)', 'total')
-      .where('e.complexId = :complexId', { complexId })
-      .andWhere('e.period = :period', { period })
-      .andWhere('e.isReversed = false')
-      .andWhere('e.deletedAt IS NULL')
-      .getRawOne<{ total: string }>();
-    const totalExpenses = Number(expensesRow?.total ?? 0);
+    // totalExpenses: comprobantes de egreso del LEDGER (EXPENSE_VOUCHER) del período,
+    // excluyendo los reversados. Es el mecanismo canónico (createExpenseVoucher);
+    // antes sumaba la tabla legacy ComplexExpense, que el editor nuevo ya no escribe.
+    const ledgerExp = await this.dataSource.query(
+      `SELECT COALESCE(SUM("totalDebit"), 0) AS total
+         FROM accounting_headers
+        WHERE "complexId" = $1 AND period = $2
+          AND "documentType" = 'EXPENSE_VOUCHER'
+          AND "reversedByHeaderId" IS NULL`,
+      [complexId, period],
+    );
+    const totalExpenses = Number(ledgerExp?.[0]?.total ?? 0);
 
     return {
       complexId,
@@ -1665,6 +1804,8 @@ export class FinanceService {
       totalCharged: Math.round(totalCharged * 100) / 100,
       totalCollected: Math.round(totalCollected * 100) / 100,
       totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+      periodOutstanding: Math.round(periodOutstanding * 100) / 100,
+      totalMora: Math.round(totalMora * 100) / 100,
       collectionRate: totalCharged > 0 ? Math.round((totalCollected / totalCharged) * 10000) / 100 : 0,
       unitsWithDebt,
       unitsFullyPaid,
@@ -1784,6 +1925,7 @@ export class FinanceService {
     period: string | undefined,
     currentUser: JwtAccessPayload,
   ): Promise<UnitAccountStatementResponse> {
+   try {
     await this.complexService.findById(complexId, currentUser);
 
     let periodYear: number | null = null;
@@ -1823,13 +1965,15 @@ export class FinanceService {
 
     const movements: AccountMovement[] = [];
 
+    const toIso = (d: Date | null | undefined): string => (d ? new Date(d) : new Date()).toISOString();
+
     for (const charge of charges) {
       movements.push({
         id: `charge-${charge.id}`,
-        date: charge.createdAt.toISOString(),
+        date: toIso(charge.createdAt),
         type: 'CHARGE',
-        description: charge.description,
-        debit: Number(charge.amount),
+        description: charge.description ?? '',
+        debit: Number(charge.amount) || 0,
         credit: 0,
         balance: 0,
         reference: undefined,
@@ -1840,11 +1984,11 @@ export class FinanceService {
       const methodRef = p.reference ? ` — ${p.reference}` : '';
       movements.push({
         id: `payment-${p.id}`,
-        date: p.paidAt.toISOString(),
+        date: toIso(p.paidAt),
         type: 'PAYMENT',
-        description: `Pago — ${p.method}${methodRef}`,
+        description: `Pago — ${p.method ?? ''}${methodRef}`,
         debit: 0,
-        credit: Number(p.amount),
+        credit: Number(p.amount) || 0,
         balance: 0,
         reference: p.reference ?? undefined,
       });
@@ -1854,21 +1998,21 @@ export class FinanceService {
       if (entry.type === 'CREDIT') {
         movements.push({
           id: `wallet-${entry.id}`,
-          date: entry.createdAt.toISOString(),
+          date: toIso(entry.createdAt),
           type: 'CREDIT',
-          description: entry.description,
+          description: entry.description ?? '',
           debit: 0,
-          credit: Number(entry.amount),
+          credit: Number(entry.amount) || 0,
           balance: 0,
           reference: undefined,
         });
       } else if (entry.type === 'DEBIT') {
         movements.push({
           id: `wallet-${entry.id}`,
-          date: entry.createdAt.toISOString(),
+          date: toIso(entry.createdAt),
           type: 'DEBIT',
           description: 'Aplicación saldo a favor',
-          debit: Number(entry.amount),
+          debit: Number(entry.amount) || 0,
           credit: 0,
           balance: 0,
           reference: undefined,
@@ -1902,7 +2046,7 @@ export class FinanceService {
 
     return {
       unitId,
-      unitNumber: unitInfo.number,
+      unitNumber: unitInfo.number ?? '',
       building: unitInfo.building ?? undefined,
       totalDebits: Math.round(totalDebits * 100) / 100,
       totalCredits: Math.round(totalCredits * 100) / 100,
@@ -1910,6 +2054,13 @@ export class FinanceService {
       walletBalance: Math.round(walletBalance * 100) / 100,
       movements,
     };
+   } catch (err: any) {
+      this.logger.error(
+        `getUnitAccountStatement(unit=${unitId}, complex=${complexId}, period=${period ?? 'null'}): ${err?.message}`,
+        err?.stack,
+      );
+      throw err;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1935,11 +2086,16 @@ export class FinanceService {
             'total_debt',
           )
           .addSelect(
-            `SUM(CASE WHEN c.status = '${ChargeStatus.OVERDUE}' THEN 1 ELSE 0 END)`,
+            `SUM(CASE WHEN c.status = '${ChargeStatus.OVERDUE}'
+                       OR (c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.PARTIALLY_PAID}')
+                           AND c.dueDate < NOW() AND (c.amount - c.paidAmount) > 0)
+                     THEN 1 ELSE 0 END)`,
             'overdue_count',
           )
           .addSelect(
-            `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.PARTIALLY_PAID}') THEN 1 ELSE 0 END)`,
+            `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.OVERDUE}','${ChargeStatus.PARTIALLY_PAID}')
+                       AND (c.amount - c.paidAmount) > 0
+                     THEN 1 ELSE 0 END)`,
             'pending_count',
           )
           .from(FeeCharge, 'c')

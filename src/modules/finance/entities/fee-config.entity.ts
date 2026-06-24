@@ -7,6 +7,7 @@ import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
 import { FeeFrequency }       from '../enums/fee-frequency.enum';
 import { ChargeType }         from '../enums/charge-type.enum';
+import { PrelacionConcept }   from '../enums/prelacion-concept.enum';
 import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
 import { ChargeCategory }     from './charge-category.entity';
@@ -57,6 +58,15 @@ export class FeeConfig {
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   earlyPaymentAmount?: number | null;
 
+  /**
+   * Día del mes en que vence el descuento de pronto pago.
+   * Si es null se usa `dueDayOfMonth`. El cargo generado con descuento almacena
+   * la fecha resultante en `earlyPaymentDueDate`.
+   */
+  @Field(() => Int, { nullable: true })
+  @Column({ type: 'int', nullable: true })
+  earlyPaymentDueDayOfMonth?: number | null;
+
   @Field(() => FeeFrequency)
   @Column({ type: 'enum', enum: FeeFrequency, default: FeeFrequency.MONTHLY })
   frequency: FeeFrequency;
@@ -71,6 +81,11 @@ export class FeeConfig {
   @Field(() => ChargeType)
   @Column({ type: 'enum', enum: ChargeType, default: ChargeType.MONTHLY })
   chargeType: ChargeType;
+
+  /** Concepto de prelación heredado por los cargos generados desde esta config. */
+  @Field(() => PrelacionConcept)
+  @Column({ type: 'enum', enum: PrelacionConcept, default: PrelacionConcept.ORDINARY })
+  prelacionConcept: PrelacionConcept;
 
   /**
    * Solo aplica cuando chargeType = 'LIMITED'.

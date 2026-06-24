@@ -66,6 +66,13 @@ export class CreateUnitInput {
   @MaxLength(500)
   description?: string;
 
+  @Field(() => Float, { description: 'Coeficiente de copropiedad (fracción, suma=1). Ej: 0.012345', nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  coefficient?: number;
+
   @Field(() => String, { description: 'ID del complejo' })
   @IsUUID()
   complexId: string;

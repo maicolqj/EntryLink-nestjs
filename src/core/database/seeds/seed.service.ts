@@ -5,6 +5,7 @@ import { seedPermissions }     from './permissions.seed';
 import { seedRoles }           from './roles.seed';
 import { runUserSeed }         from './users.seed';
 import { seedSpecialNumbers }  from './special-numbers.seed';
+import { seedPucForAllComplexes, seedPucForComplex } from './puc.seed';
 // import { seedRoles } from './seed-roles';
 // import seedSystemCategories from './seed-categories';
 
@@ -66,6 +67,24 @@ export class SeedService {
     console.log('\n🌱 Ejecutando seed de números especiales globales...');
     await seedSpecialNumbers(this.dataSource);
     console.log('✅ Seed de números especiales completado\n');
+  }
+
+  /**
+   * Ejecutar seed del PUC contable para todas las copropiedades existentes
+   */
+  async runPucSeed(): Promise<void> {
+    console.log('\n🌱 Ejecutando seed del PUC contable...');
+    await seedPucForAllComplexes(this.dataSource);
+    console.log('✅ Seed del PUC completado\n');
+  }
+
+  /**
+   * Ejecutar seed del PUC contable para una copropiedad puntual
+   */
+  async runPucSeedForComplex(complexId: string): Promise<void> {
+    console.log(`\n🌱 Ejecutando seed del PUC para complejo ${complexId}...`);
+    await seedPucForComplex(this.dataSource, complexId);
+    console.log('✅ Seed del PUC completado\n');
   }
 
   /**
