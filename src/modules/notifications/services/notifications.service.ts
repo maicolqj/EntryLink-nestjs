@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import * as webpush from 'web-push';
+import { isUUID } from 'class-validator';
 
 import { Notification }                  from '../entities/notification.entity';
 import { PushSubscription }              from '../entities/push-subscription.entity';
@@ -176,10 +177,20 @@ export class NotificationsService implements OnModuleInit {
     const webSubs    = subscriptions.filter(s => s.platform === PushPlatform.WEB);
     const mobileSubs = subscriptions.filter(s => s.platform !== PushPlatform.WEB);
 
+    // Mapa userId → notificationId real para incrustar el id correcto por
+    // destinatario en el data del FCM. En broadcast todos comparten una sola fila.
+    const notifIdByUser = new Map<string, string>();
+    if (params.isBroadcast) {
+      const broadcastId = saved[0]?.id;
+      if (broadcastId) for (const uid of params.userIds) notifIdByUser.set(uid, broadcastId);
+    } else {
+      for (const n of saved) if (n.recipientUserId) notifIdByUser.set(n.recipientUserId, n.id);
+    }
+
     // 3. Despachar en paralelo sin bloquear la respuesta
     await Promise.allSettled([
-      this.dispatchWebPush(webSubs, params),
-      this.dispatchFCM(mobileSubs, params),
+      this.dispatchWebPush(webSubs, params, notifIdByUser),
+      this.dispatchFCM(mobileSubs, params, notifIdByUser),
     ]);
 
     return saved;
@@ -278,6 +289,9 @@ export class NotificationsService implements OnModuleInit {
     notificationId: string,
     currentUser: JwtAccessPayload,
   ): Promise<boolean> {
+    // id no-UUID → nada que borrar (idempotente, evita el error crudo de Postgres)
+    if (!isUUID(notificationId)) return true;
+
     const notif = await this.notifRepo.findOne({ where: { id: notificationId } });
     if (!notif) return true;
 
@@ -613,6 +627,9 @@ export class NotificationsService implements OnModuleInit {
     complexId: string,
     currentUser: JwtAccessPayload,
   ): Promise<NotificationDetailResponse> {
+    this.assertValidUuid(notificationId);
+    this.assertValidUuid(complexId);
+
     const notif = await this.notifRepo.findOne({
       where: { id: notificationId, complexId },
     });
@@ -1087,88 +1104,34 @@ export class NotificationsService implements OnModuleInit {
   private async dispatchFCM(
     subs: PushSubscription[],
     params: NotifyParams,
+    notifIdByUser?: Map<string, string>,
   ): Promise<void> {
     if (!this.fcmEnabled || subs.length === 0) return;
 
-    const tokens = subs.map(s => s.deviceToken).filter(Boolean) as string[];
-    if (tokens.length === 0) return;
+    // Enviamos por token (no multicast) para incrustar el notificationId real
+    // de cada destinatario en el data del mensaje. Conservamos el token en
+    // paralelo para desactivar los inválidos tras el envío.
+    const items = subs
+      .filter(s => !!s.deviceToken)
+      .map(s => ({
+        token:   s.deviceToken as string,
+        message: this.buildFcmMessage(
+          s.deviceToken as string,
+          params,
+          notifIdByUser?.get(s.userId) ?? '',
+        ),
+      }));
+    if (items.length === 0) return;
 
     const BATCH_SIZE = 500;
-    const batches = chunk(tokens, BATCH_SIZE);
+    const batches = chunk(items, BATCH_SIZE);
 
     for (const batch of batches) {
-      const isPanic  = params.type === NotificationType.PANIC_ALERT;
-      const metadata = (params.metadata ?? {}) as Record<string, string>;
-
-      const message: admin.messaging.MulticastMessage = {
-        tokens: batch,
-        // Non-panic: include a notification payload so the Android OS shows it
-        // directly (visits/payments). Panic must be DATA-ONLY: a notification
-        // payload makes Android display it itself and SKIP the JS background
-        // handler when the app is killed, so the app's full-screen panic alarm
-        // would never fire. Data-only + android.priority:'high' wakes the killed
-        // app and runs setBackgroundMessageHandler, which drives the alarm.
-        ...(!isPanic && { notification: { title: params.title, body: params.body } }),
-        data: {
-          type:      params.type,
-          priority:  params.priority,
-          complexId: params.complexId,
-          title:     params.title,
-          body:      params.body,
-          metadata:  JSON.stringify(params.metadata ?? {}),
-          url:       '/dashboard/notificaciones',
-          ...(isPanic && {
-            triggeredBy:      params.createdByUserId ?? '',
-            triggeredByLabel: metadata.triggeredByLabel ?? '',
-          }),
-        },
-        android: {
-          priority: isPanic
-            || params.priority === NotificationPriority.URGENT
-            || params.priority === NotificationPriority.HIGH
-            ? 'high' : 'normal',
-          ...(isPanic && { collapseKey: `panic-${params.complexId}` }),
-          // android.notification only applies to a displayed (non-data-only)
-          // message, so omit it for panic — the app builds its own Notifee
-          // full-screen notification from the data payload.
-          ...(!isPanic && {
-            notification: {
-              channelId: 'entrylink-default',
-              priority:
-                params.priority === NotificationPriority.URGENT ? 'max' :
-                params.priority === NotificationPriority.HIGH ? 'high' :
-                'default',
-              defaultVibrateTimings: true,
-              sound: 'default',
-            },
-          }),
-        },
-        apns: {
-          headers: {
-            'apns-priority':
-              params.priority === NotificationPriority.URGENT || params.priority === NotificationPriority.HIGH ? '10' : '5',
-          },
-          payload: {
-            aps: {
-              // Android goes data-only for panic (handled above), but iOS still
-              // needs a visible alert since it has no JS-driven full-screen path —
-              // the top-level notification was removed, so set the APNS alert here.
-              ...(isPanic && { alert: { title: params.title, body: params.body } }),
-              sound: 'default',
-              badge: 1,
-              'content-available': 1,
-            },
-          },
-        },
-      };
-
       try {
-        const response = await admin.messaging().sendEachForMulticast(message);
+        const response = await admin.messaging().sendEach(batch.map(b => b.message));
 
-        const successCount = response.successCount;
-        const failureCount = response.failureCount;
         this.logger.debug(
-          `[FCM] Lote enviado [${params.type}] → ${successCount} exitosos, ${failureCount} fallidos | complejo ${params.complexId}`,
+          `[FCM] Lote enviado [${params.type}] → ${response.successCount} exitosos, ${response.failureCount} fallidos | complejo ${params.complexId}`,
         );
 
         const invalidTokens: string[] = [];
@@ -1179,7 +1142,7 @@ export class NotificationsService implements OnModuleInit {
               code === 'messaging/registration-token-not-registered' ||
               code === 'messaging/invalid-registration-token'
             ) {
-              invalidTokens.push(batch[idx]);
+              invalidTokens.push(batch[idx].token);
             }
           }
         });
@@ -1197,6 +1160,90 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Construye un mensaje FCM dirigido a un único token.
+   * El bloque `data` incluye notificationId/entityType/entityId para que la app
+   * móvil navegue a la pantalla del recurso al tocar la notificación, sin
+   * depender del messageId de FCM (que NO es un UUID y rompía notificationDetail).
+   */
+  private buildFcmMessage(
+    token: string,
+    params: NotifyParams,
+    notificationId: string,
+  ): admin.messaging.Message {
+    const isPanic  = params.type === NotificationType.PANIC_ALERT;
+    const metadata = (params.metadata ?? {}) as Record<string, string>;
+
+    return {
+      token,
+      // Non-panic: include a notification payload so the Android OS shows it
+      // directly (visits/payments). Panic must be DATA-ONLY: a notification
+      // payload makes Android display it itself and SKIP the JS background
+      // handler when the app is killed, so the app's full-screen panic alarm
+      // would never fire. Data-only + android.priority:'high' wakes the killed
+      // app and runs setBackgroundMessageHandler, which drives the alarm.
+      ...(!isPanic && { notification: { title: params.title, body: params.body } }),
+      data: {
+        type:       params.type,
+        priority:   params.priority,
+        complexId:  params.complexId,
+        title:      params.title,
+        body:       params.body,
+        // FCM exige valores string en data → metadata SIEMPRE serializado.
+        metadata:   JSON.stringify(params.metadata ?? {}),
+        url:        '/dashboard/notificaciones',
+        // notificationId/entityType/entityId solo cuando aplican.
+        // Finanzas NO envía entityType/entityId → el cliente decide pantalla por metadata.
+        // Panic queda sin estos campos (params.entityType undefined) → payload intacto.
+        ...(notificationId    ? { notificationId } : {}),
+        ...(params.entityType ? { entityType: params.entityType } : {}),
+        ...(params.entityId   ? { entityId: params.entityId } : {}),
+        ...(isPanic && {
+          triggeredBy:      params.createdByUserId ?? '',
+          triggeredByLabel: metadata.triggeredByLabel ?? '',
+        }),
+      },
+      android: {
+        priority: isPanic
+          || params.priority === NotificationPriority.URGENT
+          || params.priority === NotificationPriority.HIGH
+          ? 'high' : 'normal',
+        ...(isPanic && { collapseKey: `panic-${params.complexId}` }),
+        // android.notification only applies to a displayed (non-data-only)
+        // message, so omit it for panic — the app builds its own Notifee
+        // full-screen notification from the data payload.
+        ...(!isPanic && {
+          notification: {
+            channelId: 'entrylink-default',
+            priority:
+              params.priority === NotificationPriority.URGENT ? 'max' :
+              params.priority === NotificationPriority.HIGH ? 'high' :
+              'default',
+            defaultVibrateTimings: true,
+            sound: 'default',
+          },
+        }),
+      },
+      apns: {
+        headers: {
+          'apns-priority':
+            params.priority === NotificationPriority.URGENT || params.priority === NotificationPriority.HIGH ? '10' : '5',
+        },
+        payload: {
+          aps: {
+            // Android goes data-only for panic (handled above), but iOS still
+            // needs a visible alert since it has no JS-driven full-screen path —
+            // the top-level notification was removed, so set the APNS alert here.
+            ...(isPanic && { alert: { title: params.title, body: params.body } }),
+            sound: 'default',
+            badge: 1,
+            'content-available': 1,
+          },
+        },
+      },
+    };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // DESPACHO PUSH — Web Push (dashboard web)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1204,12 +1251,15 @@ export class NotificationsService implements OnModuleInit {
   private async dispatchWebPush(
     subs: PushSubscription[],
     params: NotifyParams,
+    notifIdByUser?: Map<string, string>,
   ): Promise<void> {
     if (!this.webPushEnabled || subs.length === 0) return;
 
     await Promise.allSettled(
       subs.map(async (sub) => {
         if (!sub.endpoint || !sub.p256dh || !sub.auth) return;
+
+        const notificationId = notifIdByUser?.get(sub.userId) ?? '';
 
         try {
           await webpush.sendNotification(
@@ -1223,8 +1273,16 @@ export class NotificationsService implements OnModuleInit {
               priority: params.priority,
               tag:      `entrylink-${params.type}`,
               data: {
+                // mismos identificadores que FCM para que el dashboard navegue
+                // al recurso al hacer click. En finanzas se omiten entityType/entityId
+                // (el cliente decide pantalla por metadata). Web push acepta metadata
+                // como objeto: todo el payload se serializa una sola vez.
+                type:     params.type,
                 url:      '/dashboard/notificaciones',
                 metadata: params.metadata,
+                ...(notificationId    ? { notificationId } : {}),
+                ...(params.entityType ? { entityType: params.entityType } : {}),
+                ...(params.entityId   ? { entityId: params.entityId } : {}),
               },
             }),
           );
@@ -1319,6 +1377,14 @@ export class NotificationsService implements OnModuleInit {
    * Resuelve los IDs de usuario destinatarios según los roles y/o unidad solicitados.
    * Si targetRoles está vacío y no hay targetUnitId, retorna todos los usuarios activos del complejo.
    */
+  /**
+   * Devuelve los userId de los usuarios del complejo con alguno de los roles
+   * indicados. Para que otros módulos resuelvan destinatarios sin duplicar la query.
+   */
+  async findUserIdsByRoleInternal(complexId: string, roles: string[]): Promise<string[]> {
+    return this.resolveTargetUserIds(complexId, roles);
+  }
+
   private async resolveTargetUserIds(
     complexId: string,
     targetRoles: string[],
@@ -1355,6 +1421,7 @@ export class NotificationsService implements OnModuleInit {
   }
 
   private async findByIdOrFail(id: string): Promise<Notification> {
+    this.assertValidUuid(id);
     const notif = await this.notifRepo.findOne({ where: { id } });
     if (!notif) {
       throw new CustomError({
@@ -1364,6 +1431,21 @@ export class NotificationsService implements OnModuleInit {
       });
     }
     return notif;
+  }
+
+  /**
+   * Valida que el id sea un UUID antes de consultar Postgres.
+   * Evita el QueryFailedError "invalid input syntax for type uuid" cuando el
+   * cliente envía un id no-UUID (p.ej. el messageId de FCM 0:1781401237663399%...).
+   */
+  private assertValidUuid(id: string): void {
+    if (!id || !isUUID(id)) {
+      throw new CustomError({
+        message: 'Notificación no encontrada',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
   }
 
   private assertRecipient(notif: Notification, currentUser: JwtAccessPayload): void {
