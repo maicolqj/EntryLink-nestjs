@@ -193,14 +193,20 @@ export class FinanceService {
       return existing;
     }
 
-    // Devolver defaults sin guardar
-    return this.financeConfigRepo.create({
+    // No existe config: crear una con valores por defecto y persistirla.
+    // Así createdAt/updatedAt siempre traen valor real (los campos GraphQL son
+    // DateTime! no-nullables) y la pantalla queda lista para editar vía upsert.
+    const created = this.financeConfigRepo.create({
       complexId,
       moraRate: 2.0,
       moraGraceDays: 5,
       autoApplyMora: false,
       autoGenerateCharges: false,
     });
+    const saved = await this.financeConfigRepo.save(created);
+
+    await this.cacheService.set({ key: cacheKey, data: saved, options: { ttl: BK.finance.TTL_CONFIG } });
+    return saved;
   }
 
   async upsertComplexFinanceConfig(
