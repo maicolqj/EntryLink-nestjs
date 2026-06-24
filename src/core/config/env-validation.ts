@@ -37,6 +37,11 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_SECRET: Joi.string().min(32).required(),
   JWT_ISSUER:         Joi.string().required(),
 
+  // Expiración de tokens (formato: número + s|m|h|d, ej. '15m', '7d')
+  JWT_ACCESS_EXPIRY:          Joi.string().pattern(/^\d+[smhd]$/).default('15m'),
+  JWT_REFRESH_EXPIRY:         Joi.string().pattern(/^\d+[smhd]$/).default('7d'),
+  JWT_REFRESH_EXPIRY_REMEMBER: Joi.string().pattern(/^\d+[smhd]$/).default('30d'),
+
   // ── Auth (requerido en todos los entornos) ────────────────────────────────
   FINGERPRINT_SECRET: Joi.string().min(32).required(),
   BCRYPT_ROUNDS:      Joi.number().integer().min(10).max(14).default(12),

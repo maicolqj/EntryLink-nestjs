@@ -26,7 +26,7 @@ export class VisitorsResolver {
    */
   @Mutation(() => Visitor, { name: 'blacklistVisitor' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
     permissions: [ValidPermissions.BLACKLIST_VISITOR],
   })
   blacklist(
@@ -41,7 +41,7 @@ export class VisitorsResolver {
    */
   @Mutation(() => Visitor, { name: 'removeVisitorFromBlacklist' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
     permissions: [ValidPermissions.BLACKLIST_VISITOR],
   })
   removeFromBlacklist(

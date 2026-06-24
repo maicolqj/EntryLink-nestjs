@@ -10,6 +10,7 @@ export enum AuditEntityType {
   Resident           = 'Resident',
   FeeCharge          = 'FeeCharge',
   FeeConfig          = 'FeeConfig',
+  PucAccount         = 'PucAccount',
   Payment            = 'Payment',
   Note               = 'Note',
   ResidentialComplex = 'ResidentialComplex',

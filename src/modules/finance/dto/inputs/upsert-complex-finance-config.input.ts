@@ -41,4 +41,20 @@ export class UpsertComplexFinanceConfigInput {
   @IsOptional()
   @IsBoolean()
   autoGenerateCharges?: boolean;
+
+  /** Descuento por pronto pago en % (0 = sin descuento). */
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  earlyDiscountPct?: number;
+
+  /** Día del mes (1-28) hasta el cual aplica el pronto pago. */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(28)
+  earlyDiscountDay?: number;
 }

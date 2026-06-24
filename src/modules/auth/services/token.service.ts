@@ -92,7 +92,7 @@ export class TokenService {
 
     return this.jwtService.signAsync(payload, {
       secret,
-      expiresIn: AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY,
+      expiresIn: this.getAccessTokenExpiry(),
       issuer,
       algorithm: 'HS256',
 
@@ -139,7 +139,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
   // VULN-12 fix: algoritmo explícito
   return this.jwtService.signAsync(payload, {
     secret,
-    expiresIn: AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY,
+    expiresIn: this.getAccessTokenExpiry(),
     issuer,
     algorithm: 'HS256',
   });
@@ -147,7 +147,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
   private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean, entityType: 'user' | 'complex' = 'user', complexId?: string): Promise<string> {
     const tokenId = this.generateSecureId();
-    const expiresIn = rememberMe ? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER : AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
+    const expiresIn = this.getRefreshTokenExpiry(rememberMe);
 
     const refreshToken = await this.jwtService.signAsync(
       { sub: userId, type: 'refresh', entityType, complexId, sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
@@ -201,9 +201,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
     const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
 
-    const refreshExpiry = storedToken.rememberMe
-      ? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER
-      : AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
+    const refreshExpiry = this.getRefreshTokenExpiry(storedToken.rememberMe);
 
     let accessToken: string;
     let newRefreshToken: string;
@@ -341,8 +339,19 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
     const mult: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
     return new Date(Date.now() + parseInt(match[1]) * mult[match[2]]);
   }
+  private getAccessTokenExpiry(): typeof AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY {
+    return (this.configService.get<string>('JWT_ACCESS_EXPIRY') ?? AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY) as typeof AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY;
+  }
+
+  private getRefreshTokenExpiry(rememberMe: boolean): typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER {
+    const value = rememberMe
+      ? this.configService.get<string>('JWT_REFRESH_EXPIRY_REMEMBER') ?? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER
+      : this.configService.get<string>('JWT_REFRESH_EXPIRY') ?? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
+    return value as typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER;
+  }
+
   private getAccessTokenExpirySeconds(): number {
-    const match = AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY.match(/^(\d+)([smhd])$/);
+    const match = this.getAccessTokenExpiry().match(/^(\d+)([smhd])$/);
     if (!match) return 900;
     const mult: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
     return parseInt(match[1]) * mult[match[2]];

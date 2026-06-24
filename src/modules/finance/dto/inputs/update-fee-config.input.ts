@@ -43,6 +43,14 @@ export class UpdateFeeConfigInput {
   @IsPositive()
   earlyPaymentAmount?: number;
 
+  /** Día del mes en que vence el pronto pago. Si null, usa dueDayOfMonth. */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(28)
+  earlyPaymentDueDayOfMonth?: number;
+
   @Field(() => FeeFrequency, { nullable: true })
   @IsOptional()
   @IsEnum(FeeFrequency)

@@ -15,6 +15,12 @@ export class QrValidationResponse {
   @Field(() => String, { description: 'Mensaje de resultado del escaneo' })
   message: string;
 
+  @Field(() => String, {
+    description: 'Token de acceso de un solo uso. Presente solo cuando isValid === true; debe enviarse a registerVisitorEntry para confirmar el ingreso de una visita programada.',
+    nullable: true,
+  })
+  accessToken?: string;
+
   @Field(() => Visit, { description: 'Datos de la visita si el QR es válido', nullable: true })
   visit?: Visit;
 

@@ -11,6 +11,10 @@ import { CustomError }              from '../../shared/utils/errors.utils';
 import { AccessErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload }         from '../../shared/interfaces/jwt-payload.interface';
 import { VisitorIdentityType }      from '../enums/visitor-identity-type.enum';
+import { NotificationsService }     from '../../notifications/services/notifications.service';
+import { NotificationType }         from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority }     from '../../notifications/enums/notification-priority.enum';
+import { ValidRoles }              from '../../roles/enums/valid-roles';
 
 @Injectable()
 export class VisitorsService {
@@ -19,6 +23,7 @@ export class VisitorsService {
   constructor(
     @InjectRepository(Visitor)
     private readonly visitorRepo: Repository<Visitor>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ================================================================
@@ -111,7 +116,41 @@ export class VisitorsService {
 
     const saved = await this.visitorRepo.save(visitor);
     this.logger.warn(`Visitante bloqueado: ${visitor.id} — ${visitor.fullName} por ${currentUser.sub}`);
+
+    // Avisar a los guardias del complejo para que no permitan el ingreso (fire & forget).
+    this.notifyBlacklisted(saved, currentUser).catch(err =>
+      this.logger.warn(`Error al notificar visitante en lista negra ${saved.id}: ${err?.message}`),
+    );
+
     return saved;
+  }
+
+  /** Notifica a la seguridad del complejo que un visitante entró a lista negra. */
+  private async notifyBlacklisted(
+    visitor: Visitor,
+    currentUser: JwtAccessPayload,
+  ): Promise<void> {
+    const userIds = (
+      await this.notificationsService.findUserIdsByRoleInternal(
+        visitor.complexId,
+        [ValidRoles.SECURITY_ROL],
+      )
+    ).filter(id => id !== currentUser.sub);
+
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId:       visitor.complexId,
+      userIds,
+      type:            NotificationType.VISITOR_BLACKLISTED,
+      priority:        NotificationPriority.HIGH,
+      title:           'Visitante en lista negra',
+      body:            `${visitor.fullName} fue agregado a la lista negra. No permitir su ingreso.`,
+      entityId:        visitor.id,
+      entityType:      'visitor',
+      createdByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
+      metadata:        { visitorId: visitor.id, reason: visitor.blacklistReason },
+    });
   }
 
   // ================================================================

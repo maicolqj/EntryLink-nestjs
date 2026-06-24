@@ -91,23 +91,20 @@ export class PackagesService {
 
   /** Dispara notificaciones a los residentes activos de la unidad (fire & forget) */
   private async notifyResidents(pkg: Package): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(pkg.unitId);
-    for (const resident of residents) {
-      await this.notificationsService.create({
-        type:            NotificationType.PACKAGE_RECEIVED,
-        priority:        NotificationPriority.NORMAL,
-        title:           '📦 Tienes un paquete en portería',
-        body:            `Llegó un paquete de ${pkg.senderName}. Puedes retirarlo en portería.`,
-        complexId:       pkg.complexId,
-        recipientUserId: resident.userId,
-        entityId:        pkg.id,
-        entityType:      'package',
-        metadata:        { packageId: pkg.id, unitId: pkg.unitId, trackingCode: pkg.trackingCode },
-      });
-    }
+    await this.notifyUnitResidents(
+      pkg,
+      NotificationType.PACKAGE_RECEIVED,
+      NotificationPriority.NORMAL,
+      '📦 Tienes un paquete en portería',
+      `Llegó un paquete de ${pkg.senderName}. Puedes retirarlo en portería.`,
+    );
   }
 
-  /** Notifica a los residentes activos de la unidad un cambio de estado del paquete (fire & forget). */
+  /**
+   * Notifica a los residentes activos de la unidad un cambio de estado del paquete.
+   * Usa notificationsService.notify (persiste + despacha FCM/WebPush), igual que
+   * VisitsService. `create` solo emite socket y NO entrega push al móvil.
+   */
   private async notifyUnitResidents(
     pkg: Package,
     type: NotificationType,
@@ -116,20 +113,20 @@ export class PackagesService {
     body: string,
   ): Promise<void> {
     const residents = await this.residentsService.findActiveByUnitInternal(pkg.unitId);
-    for (const resident of residents) {
-      if (!resident.userId) continue;
-      await this.notificationsService.create({
-        type,
-        priority,
-        title,
-        body,
-        complexId:       pkg.complexId,
-        recipientUserId: resident.userId,
-        entityId:        pkg.id,
-        entityType:      'package',
-        metadata:        { packageId: pkg.id, unitId: pkg.unitId, trackingCode: pkg.trackingCode },
-      });
-    }
+    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    if (userIds.length === 0) return;
+
+    await this.notificationsService.notify({
+      complexId:  pkg.complexId,
+      userIds,
+      type,
+      priority,
+      title,
+      body,
+      entityId:   pkg.id,
+      entityType: 'package',
+      metadata:   { packageId: pkg.id, unitId: pkg.unitId, trackingCode: pkg.trackingCode },
+    });
   }
 
   /**
@@ -169,6 +166,46 @@ export class PackagesService {
     ).catch(err => this.logger.warn(`Error al notificar paquete listo ${notified.id}: ${err?.message}`));
 
     return notified;
+  }
+
+  /**
+   * Marca el paquete como READY_FOR_PICKUP (confirmado y disponible para retiro).
+   * Solo aplica si el paquete ya fue recibido o notificado.
+   */
+  async markAsReadyForPickup(
+    packageId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Package> {
+    const pkg = await this.findByIdOrFail(packageId);
+    await this.complexService.findById(pkg.complexId, currentUser);
+
+    const allowedStatuses = [PackageStatus.RECEIVED, PackageStatus.NOTIFIED];
+    if (!allowedStatuses.includes(pkg.status)) {
+      throw new CustomError({
+        message: `No se puede marcar como listo para retirar un paquete en estado ${pkg.status}`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    pkg.status = PackageStatus.READY_FOR_PICKUP;
+
+    const ready = await this.packageRepo.save(pkg);
+    await this.cacheService.deleteByPrefix(BK.pkg.prefix(ready.complexId));
+    this.socketService.emitToComplex(ready.complexId, SocketEvent.PACKAGE_READY, {
+      packageId: ready.id,
+      unitId: ready.unitId,
+    });
+
+    this.notifyUnitResidents(
+      ready,
+      NotificationType.PACKAGE_READY,
+      NotificationPriority.NORMAL,
+      '📦 Paquete listo para retirar',
+      `Tu paquete de ${ready.senderName} está confirmado y listo para retirar en portería.`,
+    ).catch(err => this.logger.warn(`Error al notificar paquete listo para retirar ${ready.id}: ${err?.message}`));
+
+    return ready;
   }
 
   /**
@@ -308,7 +345,35 @@ export class PackagesService {
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedPackagesResponse> {
     await this.complexService.findById(complexId, currentUser);
+    return this.queryPackages(complexId, pagination, filters);
+  }
 
+  /**
+   * Lista paginada de paquetes de la unidad del residente autenticado, con
+   * filtros y todos los estados (incluye historial entregado/devuelto).
+   *
+   * SEGURIDAD: el scope se fuerza a la unidad del residente resuelta desde su
+   * propio perfil — cualquier `unitId` recibido en filters se ignora — para que
+   * un residente solo pueda ver SUS paquetes, nunca los de otra unidad.
+   */
+  async findMyUnitPackages(
+    complexId: string,
+    pagination: PaginationInput,
+    filters: FilterPackagesInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<PaginatedPackagesResponse> {
+    // findMyProfile valida que exista un residente ACTIVO de este usuario en el
+    // complejo (lanza si no) y devuelve su unidad.
+    const resident = await this.residentsService.findMyProfile(currentUser.sub, complexId);
+    return this.queryPackages(complexId, pagination, { ...filters, unitId: resident.unitId });
+  }
+
+  /** Núcleo de la consulta paginada de paquetes (cache + filtros). */
+  private async queryPackages(
+    complexId: string,
+    pagination: PaginationInput,
+    filters: FilterPackagesInput,
+  ): Promise<PaginatedPackagesResponse> {
     const { page, limit } = pagination;
     const cacheKey = BK.pkg.list(complexId, page, limit, filterKey(filters ?? {}));
     const cached = await this.cacheService.get<PaginatedPackagesResponse>({ key: cacheKey });

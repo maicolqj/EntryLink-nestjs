@@ -133,12 +133,13 @@ export class SupervisorAccessRequestService {
       title:            'Nueva solicitud de acceso',
       body:             `${supervisorName} solicita acceso al complejo`,
       entityId:         saved.id,
-      entityType:       'SupervisorAccessRequest',
+      entityType:       'ACCESS_REQUEST',
       createdByUserId:  supervisorId,
       isActionable:     true,
       actionType:       NotificationActionType.ACCESS_REQUEST,
       actionLabel:      'Autorizar acceso',
       metadata:         {
+        complexId,                 // el dashboard lo usa para pendingAccessRequests(complexId)
         requestId:      saved.id,
         supervisorId,
         supervisorName,
@@ -213,7 +214,7 @@ export class SupervisorAccessRequestService {
       entityType:      'ACCESS_REQUEST',
       createdByUserId: resolvedById,
       isActionable:    false,
-      metadata:        { requestId, resolvedAt: new Date().toISOString() },
+      metadata:        { complexId: request.complexId, requestId, resolvedAt: new Date().toISOString() },
     });
 
     return this.loadRequestRelations(requestId);
@@ -266,6 +267,7 @@ export class SupervisorAccessRequestService {
       createdByUserId: resolvedById,
       isActionable:    false,
       metadata:        {
+        complexId: request.complexId,
         requestId,
         resolvedAt: new Date().toISOString(),
         ...(reason ? { rejectionReason: reason } : {}),

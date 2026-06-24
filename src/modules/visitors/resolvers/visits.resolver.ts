@@ -53,11 +53,13 @@ export class VisitsResolver {
     @Args('qrToken') qrToken: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<QrValidationResponse> {
-    return this.visitsService.validateAndUseQr(qrToken, currentUser);
+    return this.visitsService.validateQrAccess(qrToken, currentUser);
   }
 
   /**
-   * El guardia registra la entrada física (cuando ya fue aprobada manualmente).
+   * El guardia registra la entrada física.
+   * Para visitas SCHEDULED exige el accessToken de un solo uso emitido por
+   * validateQrAccess; walk-in/delivery/service-provider lo ignoran.
    */
   @Mutation(() => Visit, { name: 'registerVisitorEntry' })
   @Auth({
@@ -65,10 +67,11 @@ export class VisitsResolver {
     permissions: [ValidPermissions.REGISTER_VISITOR_ENTRY],
   })
   registerEntry(
-    @Args('visitId') visitId: string,
-    @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('visitId')                          visitId: string,
+    @Args('accessToken', { nullable: true })  accessToken?: string,
+    @CurrentUser()                            currentUser?: JwtAccessPayload,
   ): Promise<Visit> {
-    return this.visitsService.registerEntry(visitId, currentUser);
+    return this.visitsService.registerEntry(visitId, currentUser, accessToken);
   }
 
   /**
@@ -158,6 +161,23 @@ export class VisitsResolver {
   // ================================================================
   // QUERIES
   // ================================================================
+
+  /**
+   * El residente lista las visitas que él mismo agendó.
+   * El residente y el complejo se resuelven desde el token.
+   */
+  @Query(() => PaginatedVisitsResponse, { name: 'myVisits' })
+  @Auth({
+    roles: [ValidRoles.RESIDENT_ROL, ValidRoles.SUPER_ADMIN_ROL],
+    permissions: [ValidPermissions.SCHEDULE_VISIT],
+  })
+  findMyVisits(
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters',    { nullable: true }) filters: FilterVisitsInput = {},
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedVisitsResponse> {
+    return this.visitsService.findMyVisits(pagination, filters, currentUser);
+  }
 
   /**
    * Lista de visitas del complejo con filtros y paginación.

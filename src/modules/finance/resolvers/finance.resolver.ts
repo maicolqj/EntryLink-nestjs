@@ -336,6 +336,22 @@ export class FinanceResolver {
     return this.financeService.applyMoraToPeriod(input, currentUser);
   }
 
+  /**
+   * Respaldo manual del cron de mora: aplica mora a todos los períodos vencidos
+   * usando la tasa y días de gracia configurados en la copropiedad.
+   */
+  @Mutation(() => MoraApplicationResult, { name: 'applyMoraAllPeriods' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    permissions: [ValidPermissions.GENERATE_CHARGES],
+  })
+  applyMoraAllPeriods(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MoraApplicationResult> {
+    return this.financeService.applyMoraAllPeriods(complexId, currentUser);
+  }
+
   // ================================================================
   // QUERIES — Cargos
   // ================================================================

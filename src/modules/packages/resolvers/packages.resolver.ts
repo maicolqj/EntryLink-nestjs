@@ -61,6 +61,24 @@ export class PackagesResolver {
   }
 
   /**
+   * Marca el paquete como listo para retirar (READY_FOR_PICKUP).
+   */
+  @Mutation(() => Package, { name: 'markPackageAsReadyForPickup' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+    ],
+    permissions: [ValidPermissions.EDIT_PACKAGE],
+  })
+  markAsReadyForPickup(
+    @Args('packageId') packageId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Package> {
+    return this.packagesService.markAsReadyForPickup(packageId, currentUser);
+  }
+
+  /**
    * Confirma la entrega del paquete al residente (o representante).
    */
   @Mutation(() => Package, { name: 'confirmPackageDelivery' })
@@ -136,6 +154,24 @@ export class PackagesResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedPackagesResponse> {
     return this.packagesService.findByComplex(complexId, pagination, filters, currentUser);
+  }
+
+  /**
+   * Lista paginada de paquetes de la unidad del residente autenticado, con
+   * filtros e historial completo. El scope a la unidad se fuerza en el servicio.
+   */
+  @Query(() => PaginatedPackagesResponse, { name: 'myUnitPackages' })
+  @Auth({
+    roles: [ValidRoles.RESIDENT_ROL],
+    permissions: [ValidPermissions.VIEW_PACKAGES],
+  })
+  findMyUnitPackages(
+    @Args('complexId')                      complexId: string,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters',    { nullable: true }) filters: FilterPackagesInput = {},
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedPackagesResponse> {
+    return this.packagesService.findMyUnitPackages(complexId, pagination, filters, currentUser);
   }
 
   /**

@@ -26,18 +26,20 @@ export class OverdueChargesCron {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Paso 1: Revertir descuento de pronto pago en cargos vencidos sin pagar
-    // Los cargos generados con earlyPaymentAmount tienen normalAmount > amount;
-    // si el dueDate ya pasó y siguen sin pagar, se actualiza amount al valor normal.
+    // Paso 1: Revertir descuento de pronto pago en cargos cuyo pronto pago venció
+    // sin pago total. Los cargos generados con earlyPaymentAmount tienen
+    // normalAmount > amount y earlyPaymentDueDate; pasada esa fecha se restaura
+    // amount al valor normal. Identificadores camelCase citados (sin naming strategy).
     await this.chargeRepo.manager.query(
-      `UPDATE fee_charges
-       SET amount = normal_amount
-       WHERE normal_amount IS NOT NULL
-         AND amount < normal_amount
-         AND status IN ($1, $2)
-         AND due_date < $3
-         AND deleted_at IS NULL`,
-      [ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID, today],
+      `UPDATE "fee_charges"
+       SET "amount" = "normalAmount"
+       WHERE "normalAmount" IS NOT NULL
+         AND "amount" < "normalAmount"
+         AND "earlyPaymentDueDate" IS NOT NULL
+         AND "earlyPaymentDueDate" < $1
+         AND "status" IN ($2, $3)
+         AND "deletedAt" IS NULL`,
+      [today, ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID],
     );
 
     // Paso 2: Marcar como OVERDUE los cargos cuyo vencimiento ya pasó
