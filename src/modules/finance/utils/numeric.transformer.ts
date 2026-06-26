@@ -17,3 +17,6 @@ export class ColumnNumericTransformer implements ValueTransformer {
 }
 
 export const moneyColumn = new ColumnNumericTransformer();
+
+/** Redondea a 2 decimales (centavos). Único punto de redondeo monetario. */
+export const round2 = (n: number): number => Math.round(n * 100) / 100;

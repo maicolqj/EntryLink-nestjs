@@ -39,7 +39,7 @@ export const USER_TO_SEED: UserSeedData[] = [
             flag: '🇨🇴'
         },
         identity: process.env.SEED_ADMIN_IDENTITY ?? '0000000000',
-        email: process.env.SEED_ADMIN_EMAIL ?? 'admin@alternaqj.com',
+        email: process.env.SEED_ADMIN_EMAIL ?? 'soporte@alternaqj.com',
         password: process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!',
         passwordSet: true,
         phoneVerified: true,
@@ -50,7 +50,7 @@ export const USER_TO_SEED: UserSeedData[] = [
         bio: 'Administradir del sistema',
         rating: 5,
         preferredLanguage: 'es-CO',
-        systemCode: 'REs-2026-2620',
+        systemCode: process.env.SEED_ADMIN_CODE ?? 'RES-A0A11',
         acceptsMarketing: true,
         acceptTermsAdnConditions: true,
         userRoles: [

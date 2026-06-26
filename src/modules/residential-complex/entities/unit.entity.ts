@@ -67,6 +67,14 @@ export class Unit {
   @Column({ type: 'smallint', default: 0 })
   storageRooms: number;
 
+  @Field(() => Boolean, { description: 'Si la unidad usa/paga ascensor', nullable: true })
+  @Column({ type: 'boolean', default: false })
+  hasElevator?: boolean;
+
+  @Field(() => Int, { description: 'Número de pisos de la casa (solo HOUSE)', nullable: true })
+  @Column({ type: 'smallint', nullable: true })
+  houseFloors?: number;
+
   @Field(() => String, { description: 'Descripción u observaciones adicionales', nullable: true })
   @Column({ type: 'text', nullable: true })
   description?: string;

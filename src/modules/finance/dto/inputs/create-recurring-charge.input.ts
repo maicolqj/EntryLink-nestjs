@@ -41,11 +41,12 @@ export class CreateRecurringChargeInput {
   @Min(1)
   totalInstallments?: number;
 
-  /** Día del mes en que se causa (1-28). */
+  /** Día del mes en que se causa (1-31). 31 = último día; la causación lo ajusta
+   *  al último día real del mes (28/30/31) vía Math.min en buildPeriodDate. */
   @Field(() => Int, { defaultValue: 1 })
   @IsInt()
   @Min(1)
-  @Max(28)
+  @Max(31)
   billingDay: number;
 
   /**
@@ -115,11 +116,12 @@ export class CreateRecurringChargeInput {
   @Max(100)
   earlyDiscountPct?: number;
 
-  /** Día del mes (1-28) límite del pronto pago. Null/omitido = usar el global. */
+  /** Día del mes (1-31) límite del pronto pago. Null/omitido = usar el global.
+   *  31 = último día; la causación lo ajusta al último día real del mes. */
   @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(28)
+  @Max(31)
   earlyDiscountDay?: number;
 }

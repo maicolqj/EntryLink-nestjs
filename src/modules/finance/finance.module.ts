@@ -8,6 +8,7 @@ import { FeeCharge }            from './entities/fee-charge.entity';
 import { Payment }              from './entities/payment.entity';
 import { WalletEntry }          from './entities/wallet-entry.entity';
 import { ComplexExpense }       from './entities/complex-expense.entity';
+import { ChargeEmission }        from './entities/charge-emission.entity';
 
 // ─── Ledger contable (partida doble) ─────────────────────────────
 import { PucAccount }             from './entities/puc-account.entity';
@@ -22,6 +23,9 @@ import { Vehicle }              from '../vehicles/entities/vehicle.entity';
 
 import { FinanceService }           from './services/finance.service';
 import { FinanceResolver }          from './resolvers/finance.resolver';
+import { ChargeCalculatorService }  from './services/charge-calculator.service';
+import { ChargeEmissionService }    from './services/charge-emission.service';
+import { ChargeEmissionResolver }   from './resolvers/charge-emission.resolver';
 import { AccountingService }        from './services/accounting.service';
 import { AccountingResolver }       from './resolvers/accounting.resolver';
 import { OverdueChargesCron }       from './cron/overdue-charges.cron';
@@ -45,6 +49,7 @@ import { AuditModule }              from '../audit/audit.module';
       WalletEntry,
       Vehicle,
       ComplexExpense,
+      ChargeEmission,
       // Ledger contable
       PucAccount,
       AccountingHeader,
@@ -62,6 +67,9 @@ import { AuditModule }              from '../audit/audit.module';
   providers: [
     FinanceService,
     FinanceResolver,
+    ChargeCalculatorService,
+    ChargeEmissionService,
+    ChargeEmissionResolver,
     AccountingService,
     AccountingResolver,
     OverdueChargesCron,

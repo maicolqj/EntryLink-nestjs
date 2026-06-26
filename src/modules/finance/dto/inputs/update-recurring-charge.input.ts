@@ -47,7 +47,7 @@ export class UpdateRecurringChargeInput {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(28)
+  @Max(31)
   billingDay?: number;
 
   @Field(() => FeeConfigBillingMode, { nullable: true })
@@ -99,7 +99,7 @@ export class UpdateRecurringChargeInput {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(28)
+  @Max(31)
   earlyDiscountDay?: number;
 
   @Field(() => Boolean, { nullable: true })
