@@ -50,11 +50,11 @@ export class UpsertComplexFinanceConfigInput {
   @Max(100)
   earlyDiscountPct?: number;
 
-  /** Día del mes (1-28) hasta el cual aplica el pronto pago. */
+  /** Día del mes (1-31) hasta el cual aplica el pronto pago. 31 = último día. */
   @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(28)
+  @Max(31)
   earlyDiscountDay?: number;
 }

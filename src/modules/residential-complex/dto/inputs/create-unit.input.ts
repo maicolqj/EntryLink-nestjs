@@ -1,7 +1,7 @@
 import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
   IsString, IsOptional, IsUUID, IsEnum,
-  MaxLength, MinLength, IsInt, Min, Max, IsNumber,
+  MaxLength, MinLength, IsInt, Min, Max, IsNumber, IsBoolean,
 } from 'class-validator';
 import { UnitType } from '../../enums/unit-type.enum';
 
@@ -59,6 +59,18 @@ export class CreateUnitInput {
   @Min(0)
   @Max(5)
   storageRooms?: number;
+
+  @Field(() => Boolean, { description: 'Si la unidad usa/paga ascensor', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  hasElevator?: boolean;
+
+  @Field(() => Int, { description: 'Número de pisos de la casa (solo casas)', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  houseFloors?: number;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
