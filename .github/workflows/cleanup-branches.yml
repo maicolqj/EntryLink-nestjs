@@ -1,0 +1,44 @@
+name: Cleanup merged branches
+
+on:
+  schedule:
+    - cron: "0 8 * * 0" # domingos 08:00 UTC = 03:00 Bogotá
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: "Borrar ramas mergeadas más viejas que N días"
+        required: false
+        default: "30"
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete old merged branches
+        env:
+          MAX_AGE_DAYS: ${{ github.event.inputs.max_age_days || '30' }}
+          # Ramas que nunca se deben borrar aunque estén mergeadas
+          PROTECTED: "main develop"
+        run: |
+          now=$(date +%s)
+          git for-each-ref --format='%(refname:short) %(committerdate:unix)' refs/remotes/origin |
+          while read -r ref ts; do
+            branch="${ref#origin/}"
+            case " $PROTECTED " in *" $branch "*) continue ;; esac
+            [ "$branch" = "HEAD" ] && continue
+            # Solo ramas ya integradas en main
+            git merge-base --is-ancestor "origin/$branch" origin/main 2>/dev/null || continue
+            age_days=$(( (now - ts) / 86400 ))
+            if [ "$age_days" -gt "$MAX_AGE_DAYS" ]; then
+              echo "Borrando $branch (mergeada, ${age_days}d)"
+              git push origin --delete "$branch" || echo "  fallo al borrar $branch (ignorado)"
+            fi
+          done
