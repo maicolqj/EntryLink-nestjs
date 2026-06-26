@@ -1,0 +1,43 @@
+version: 2
+updates:
+  # Dependencias npm/yarn
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Agrupa updates menores/parche en un solo PR para reducir ruido
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Acciones de GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    labels: ["ci"]
+    commit-message:
+      prefix: ci
+
+  # Imagen base del Dockerfile
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    labels: ["docker"]
+    commit-message:
+      prefix: chore

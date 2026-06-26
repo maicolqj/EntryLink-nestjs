@@ -1,0 +1,24 @@
+name: Cleanup old GHCR images
+
+on:
+  schedule:
+    - cron: "0 9 * * 0" # domingos 09:00 UTC = 04:00 Bogotá
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete untagged + old sha- versions
+        uses: actions/delete-package-versions@v5
+        with:
+          # GHCR guarda el nombre en minúsculas (Docker lo fuerza al hacer push)
+          package-name: entrylink-nestjs
+          package-type: container
+          # Conserva las 10 versiones más recientes; borra el resto
+          min-versions-to-keep: 10
+          # Nunca borra la imagen 'latest' (producción)
+          ignore-versions: '^latest$'
