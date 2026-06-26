@@ -94,8 +94,10 @@ describe('SupervisorAccessRequestService.requestAccess', () => {
 
     await service.requestAccess({ complexId: 'c1', lat: 4.711, lng: -74.072 }, supervisor);
 
+    // El destinatario es el complexId: COMPLEX_ROL tiene sub = complex.id en el
+    // JWT, por eso el servicio notifica a [complexId] y no al ownerId.
     expect(notificationsService.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ userIds: ['admin-1'], title: 'Nueva solicitud de acceso' }),
+      expect.objectContaining({ userIds: ['c1'], title: 'Nueva solicitud de acceso' }),
     );
   });
 });
