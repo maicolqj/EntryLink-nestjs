@@ -1,12 +1,12 @@
 # ── Stage 1: prod dependencies (build tools para native modules como bcrypt) ──
-FROM node:20-alpine AS prod-deps
+FROM node:22-alpine AS prod-deps
 WORKDIR /app
 RUN apk add --no-cache python3 make g++
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production && yarn cache clean
 
 # ── Stage 2: compile TypeScript ───────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache python3 make g++
 COPY package.json yarn.lock ./
@@ -18,7 +18,7 @@ RUN yarn build
 RUN test -f query-manifest.json || echo '{}' > query-manifest.json
 
 # ── Stage 3: imagen final (sin build tools, sin dev deps) ────────────────────
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 
 # Signal handling correcto (PID 1) para graceful shutdown
