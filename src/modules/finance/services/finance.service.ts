@@ -69,6 +69,7 @@ import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { WalletAppliedMetadata } from '../../notifications/interfaces/notification-metadata.interface';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 import { AuditService } from '../../audit/services/audit.service';
@@ -2717,7 +2718,12 @@ export class FinanceService {
       priority: NotificationPriority.NORMAL,
       title: 'Saldo a favor aplicado',
       body: `Se aplicó ${this.formatCurrency(amount)} de tu saldo a favor al cargo "${charge.description}".`,
-      metadata: { chargeId: charge.id, unitId: charge.unitId, amount },
+      metadata: {
+        unitId: charge.unitId,
+        complexId: charge.complexId,
+        amount,
+        chargeId: charge.id,
+      } satisfies WalletAppliedMetadata,
     });
   }
 
