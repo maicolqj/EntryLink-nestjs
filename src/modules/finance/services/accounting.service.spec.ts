@@ -18,6 +18,8 @@ import { ChargeStatus } from '../enums/charge-status.enum';
 import { RecurringChargeType } from '../enums/recurring-charge-type.enum';
 import { PaymentMethod } from '../enums/payment-method.enum';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { AuditService } from '../../audit/services/audit.service';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode } from '../../shared/constans/error-codes.constants';
@@ -99,6 +101,8 @@ describe('AccountingService', () => {
         { provide: getRepositoryToken(RecurringCharge), useValue: recurringRepo },
         { provide: DataSource, useValue: dataSource },
         { provide: ResidentialComplexService, useValue: { findById: jest.fn() } },
+        { provide: ResidentsService, useValue: { findActiveByUnitInternal: jest.fn(async () => []) } },
+        { provide: NotificationsService, useValue: { notify: jest.fn(async () => []) } },
         { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();

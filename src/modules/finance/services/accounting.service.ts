@@ -41,6 +41,11 @@ import { Unit } from '../../residential-complex/entities/unit.entity';
 import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 import { VehicleStatus } from '../../vehicles/enums/vehicle-status.enum';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { WalletAppliedMetadata } from '../../notifications/interfaces/notification-metadata.interface';
 import { AuditService }    from '../../audit/services/audit.service';
 import { AuditAction }     from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
@@ -77,6 +82,8 @@ export class AccountingService {
     private readonly recurringRepo: Repository<RecurringCharge>,
     private readonly dataSource: DataSource,
     private readonly complexService: ResidentialComplexService,
+    private readonly residentsService: ResidentsService,
+    private readonly notificationsService: NotificationsService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -1092,7 +1099,10 @@ export class AccountingService {
     user: JwtAccessPayload,
   ): Promise<PrepaidApplicationResult> {
 
-    return this.dataSource.transaction(async (em) => {
+    // Notificaciones por unidad a despachar tras el commit (fire-and-forget).
+    const prepaidNotifications: Array<{ unitId: string; amount: number }> = [];
+
+    const result = await this.dataSource.transaction(async (em) => {
 
       // Cuentas de cruce del tenant
       const prepaidAcc    = await this.requireAccount(em, input.complexId, PUC.PREPAID_LIABILITY);
@@ -1203,6 +1213,9 @@ export class AccountingService {
 
           // 5. Recalcular el saldo materializado desde las fuentes de verdad
           await this.recomputeUnitStatus(em, input.complexId, st.unitId);
+
+          // Notificar a la unidad que se aplicó su saldo a favor (tras commit)
+          prepaidNotifications.push({ unitId: st.unitId, amount: round2(appliedToUnit) });
         }
 
         totalApplied += appliedToUnit;
@@ -1221,6 +1234,51 @@ export class AccountingService {
         dryRun: !!input.dryRun,
         items,
       };
+    });
+
+    // Despacho de notificaciones fuera de la TX (no bloquea ni revierte el cruce).
+    for (const n of prepaidNotifications) {
+      this.notifyPrepaidApplied(input.complexId, n.unitId, n.amount).catch(err =>
+        this.logger.warn(`Error al notificar aplicación de anticipo en unidad ${n.unitId}: ${err?.message}`),
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Notifica a los residentes activos de una unidad que se aplicó su saldo a
+   * favor (anticipo) para pagar deuda pendiente.
+   */
+  private async notifyPrepaidApplied(
+    complexId: string,
+    unitId: string,
+    amount: number,
+  ): Promise<void> {
+    const residents = await this.residentsService.findActiveByUnitInternal(unitId);
+    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    if (userIds.length === 0) return;
+
+    const formatted = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+
+    await this.notificationsService.notify({
+      complexId,
+      userIds,
+      type: NotificationType.WALLET_APPLIED,
+      priority: NotificationPriority.NORMAL,
+      title: 'Saldo a favor aplicado',
+      body: `Se aplicaron ${formatted} de tu saldo a favor para pagar cargos pendientes de tu unidad.`,
+      metadata: {
+        unitId,
+        complexId,
+        amount,
+        chargeId: null,
+      } satisfies WalletAppliedMetadata,
     });
   }
 
