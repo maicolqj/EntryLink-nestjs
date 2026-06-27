@@ -4,6 +4,7 @@ import { UseGuards, Logger } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 import { UpdateUserInput } from './dto/update-user.input';
+import { UpdateUserIdentityInput } from './dto/inputs/update-user-identity.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
 import { UserInfoCompleteResponse } from './dto/responses/user-info-complete.response';
@@ -147,6 +148,18 @@ export class UsersResolver {
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
     return this.usersService.updateUser(input, payload.complexId, payload);
+  }
+
+  @Mutation(() => User, {
+    name: 'updateUserIdentity',
+    description: 'Edita el tipo y número de documento de identidad de un usuario',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
+  updateUserIdentity(
+    @Args('input') input: UpdateUserIdentityInput,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<User> {
+    return this.usersService.updateUserIdentity(input, payload.complexId, payload);
   }
 
   @Mutation(() => User, { description: 'Suspende la cuenta de un usuario' })
