@@ -1,5 +1,7 @@
 // modules/auth/services/token.service.ts
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { AuthErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -188,12 +190,20 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
       // Outside grace window → genuine reuse attack or expired token → revoke family
       await this.revokeTokenFamily(payload.tokenFamily, 'token_reuse_detected');
-      throw new UnauthorizedException('Token inválido');
+      throw new CustomError({
+        message: 'Token inválido',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.TOKEN_REUSE_DETECTED,
+      });
     }
 
     if (storedToken.deviceFingerprint !== deviceInfo.fingerprint) {
       await this.revokeTokenFamily(payload.tokenFamily, 'fingerprint_mismatch');
-      throw new UnauthorizedException('Sesión invalidada');
+      throw new CustomError({
+        message: 'Sesión invalidada',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_FINGERPRINT_MISMATCH,
+      });
     }
 
     await this.refreshTokenRepo.update(storedToken.id, { isRevoked: true, revokedReason: 'rotated', lastUsedAt: new Date() });
@@ -218,7 +228,11 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
         .andWhere('complex.deleted_at IS NULL')
         .getOne();
 
-      if (!complex) throw new UnauthorizedException('Complejo no encontrado o eliminado');
+      if (!complex) throw new CustomError({
+        message: 'Complejo no encontrado o eliminado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+      });
 
       accessToken = await this.generateAccessTokenForComplex(complex, storedToken.sessionId);
 
@@ -259,14 +273,26 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
   async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {
     const payload = await this.jwtService.verifyAsync<JwtRefreshPayload>(token, { secret: this.configService.get<string>('JWT_REFRESH_SECRET') });
-    if (payload.type !== 'refresh') throw new UnauthorizedException('Tipo de token inválido');
+    if (payload.type !== 'refresh') throw new CustomError({
+      message: 'Tipo de token inválido',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
+    });
     return payload;
   }
 
   async verifyAccessToken(token: string): Promise<JwtAccessPayload> {
     const payload = await this.jwtService.verifyAsync<JwtAccessPayload>(token, { secret: this.configService.get<string>('JWT_ACCESS_SECRET') });
-    if (payload.type !== 'access') throw new UnauthorizedException('Tipo de token inválido');
-    if (await this.isTokenBlacklisted(token)) throw new UnauthorizedException('Token revocado');
+    if (payload.type !== 'access') throw new CustomError({
+      message: 'Tipo de token inválido',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
+    });
+    if (await this.isTokenBlacklisted(token)) throw new CustomError({
+      message: 'Token revocado',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: AuthErrorCode.TOKEN_REVOKED,
+    });
     return payload;
   }
 
