@@ -37,6 +37,7 @@ import { Role }     from '../../roles/entities/role.entity';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
+import { RequestSecurityCallResult } from '../dto/responses/request-security-call.response';
 import { SocketService }    from '../../../core/infrastructure/socket/socket.service';
 import { SocketEvent }      from '../../../core/infrastructure/socket/socket.events';
 
@@ -1008,6 +1009,101 @@ export class NotificationsService implements OnModuleInit {
     }
 
     this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
+    return { success: true };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SOLICITUD DE LLAMADA A PORTERÍA
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Un residente solicita que portería (rol SECURITY) llame a su unidad.
+   * Resuelve la unidad y el teléfono del residente autenticado y notifica
+   * (persistencia + push FCM + socket `notification:new`) a todos los guardias
+   * del complejo. El teléfono viaja en metadata para que la app de portería
+   * ofrezca el botón "Llamar" sin una búsqueda adicional.
+   */
+  async requestSecurityCall(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<RequestSecurityCallResult> {
+    const resident = await this.residentsService.findActiveResidentByUserIdInternal(
+      currentUser.sub,
+      complexId,
+    );
+
+    if (!resident || !resident.unit) {
+      throw new CustomError({
+        message:    'No se encontró un residente activo para este usuario en el complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode:  GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    const unit         = resident.unit;
+    const buildingName  = unit.building?.name ?? null;
+    const unitLabel     = buildingName
+      ? `Torre ${buildingName} · Unidad ${unit.number}`
+      : `Unidad ${unit.number}`;
+
+    // Nombre + teléfono del residente solicitante (el número que portería marcará).
+    let requestedByName: string | null = null;
+    let phoneNumber:     string | null = null;
+    if (currentUser.entityType === 'user') {
+      const u = await this.userRepo.findOne({
+        where:  { id: currentUser.sub },
+        select: ['id', 'name', 'lastName', 'phoneNumber'],
+      });
+      if (u) {
+        requestedByName = `${u.name} ${u.lastName}`.trim();
+        phoneNumber     = u.phoneNumber ?? null;
+      }
+    }
+
+    const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
+
+    if (securityIds.length === 0) {
+      this.logger.warn(`SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}`);
+      return { success: false, message: 'No hay personal de seguridad disponible en este momento.' };
+    }
+
+    const title = `Solicitud de llamada — ${unitLabel}`;
+    const body  = requestedByName
+      ? `${requestedByName} (${unitLabel}) solicita que portería se comunique con su unidad.`
+      : `${unitLabel} solicita que portería se comunique con su unidad.`;
+
+    void this.notify({
+      complexId,
+      userIds:         securityIds,
+      type:            NotificationType.SECURITY_CALL_REQUEST,
+      priority:        NotificationPriority.HIGH,
+      title,
+      body,
+      entityId:        unit.id,
+      entityType:      'unit',
+      metadata: {
+        unitId:            unit.id,
+        unitNumber:        unit.number,
+        buildingId:        unit.buildingId ?? null,
+        buildingName,
+        unitLabel,
+        phoneNumber,
+        requestedByUserId: currentUser.sub,
+        requestedByName,
+      },
+      createdByUserId: currentUser.sub,
+      isActionable:    true,
+      // No se usa actionType (enum nativo PG) para evitar otra migración; la app de
+      // portería renderiza el botón "Llamar" a partir de type + metadata.phoneNumber.
+      actionLabel:     'Llamar a la unidad',
+      isBroadcast:     false,
+      targetRoles:     [ValidRoles.SECURITY_ROL],
+    }).catch(e => this.logger.error(`requestSecurityCall notify error: ${e?.message}`));
+
+    this.logger.log(
+      `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${securityIds.length} guardia(s)`,
+    );
+
     return { success: true };
   }
 
