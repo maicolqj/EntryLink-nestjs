@@ -19,6 +19,7 @@ import { UserRole } from './user_has_roles.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { hash, compare } from 'bcrypt'
 import { VisitorParkingRate } from '../../visitor-parking/entities/visitor-parking-rate.entity';
+import { generateSystemCode } from '../utils/system-code.util';
 
 @ObjectType({
     description: 'CountryCode'
@@ -228,12 +229,12 @@ export class User {
     // ================== AUTENTICACIÓN POR ROL ==================
 
     /**
-     * Código de acceso para residentes.
-     * Generado automáticamente al registrar el residente.
-     * El residente usa su teléfono + este código para autenticarse.
+     * Código de sistema (formato RES-xxxxx). Se asigna automáticamente a TODO
+     * usuario en @BeforeInsert, sin importar el rol ni el path de creación.
+     * Los residentes lo usan junto a su teléfono para autenticarse.
      */
     @Column({ name: 'system_code', type: 'varchar', length: 20, nullable: true, unique: true })
-    @Field(() => String, { description: 'Código de sistema asignado (solo residentes)', nullable: true })
+    @Field(() => String, { description: 'Código de sistema asignado a todo usuario (formato RES-xxxxx)', nullable: true })
     systemCode?: string;
 
     /**
@@ -308,8 +309,22 @@ export class User {
 
     @BeforeInsert()
     async beforeInsert() {
+        this.ensureSystemCode();
         await this.normalizeFields();
         await this.hashPassword();
+    }
+
+    /**
+     * Garantiza que TODO usuario tenga código de sistema, sin importar el
+     * path de creación (admin, residente, seguridad, import masivo, seeds)
+     * ni si pertenece o no a una unidad. Solo genera si viene vacío, para
+     * respetar códigos asignados explícitamente. La unicidad la asegura el
+     * índice unique de `system_code`.
+     */
+    private ensureSystemCode() {
+        if (!this.systemCode) {
+            this.systemCode = generateSystemCode();
+        }
     }
 
     @BeforeUpdate()

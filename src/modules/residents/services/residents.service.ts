@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { generateSystemCode } from '../../users/utils/system-code.util';
 
 import { Resident } from '../entities/resident.entity';
 import { ResidentStatus } from '../enums/resident-status.enum';
@@ -190,7 +191,7 @@ export class ResidentsService {
         }
 
         const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
-        const systemCode = this.generateSystemCode();
+        const systemCode = generateSystemCode();
         const email = input.email.trim().toLowerCase();
 
         const newUser = queryRunner.manager.create(User, {
@@ -1300,13 +1301,6 @@ export class ResidentsService {
   // ================================================================
   // HELPER INTERNO
   // ================================================================
-
-  /** Genera un código de sistema legible para el residente (ej: RES-A3F9-K2M1) */
-  private generateSystemCode(): string {
-    const p1 = randomBytes(2).toString('hex').toUpperCase();
-    const p2 = randomBytes(2).toString('hex').toUpperCase();
-    return `RES-${p1}-${p2}`;
-  }
 
   /**
    * Verifica que no exista ya un residente principal activo en la unidad.
