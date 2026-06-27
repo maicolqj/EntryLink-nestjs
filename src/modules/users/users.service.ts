@@ -9,6 +9,7 @@ import { generateSystemCode } from './utils/system-code.util';
 import { UserRole } from './entities/user_has_roles.entity';
 import { UserComplexAssignment, AssignmentStatus } from './entities/user-complex-assignment.entity';
 import { UserStatus } from './enums/user.enums';
+import { UpdateUserIdentityInput } from './dto/inputs/update-user-identity.input';
 import { CreateStaffMemberResponse, StaffMemberAction } from './dto/responses/create-staff-member.response';
 import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
@@ -807,6 +808,82 @@ export class UsersService {
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId: user.complexId,
         description: `Usuario actualizado: ${user.email}`,
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Edita el tipo y número de documento de identidad de un usuario.
+   * Valida unicidad del número (índice unique parcial sobre `identity`)
+   * y aislamiento por complejo para los administradores de complejo.
+   */
+  async updateUserIdentity(
+    input: UpdateUserIdentityInput,
+    callerComplexId?: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
+    const user = await this.userRepo.findOne({ where: { id: input.userId } });
+
+    if (!user) {
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    if (user.status === UserStatus.DELETED) {
+      throw new CustomError({
+        message: 'No se puede editar un usuario eliminado',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    if (callerComplexId && user.complexId !== callerComplexId) {
+      throw new CustomError({
+        message: 'No tienes permisos para editar usuarios de otro complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    const newIdentity = input.identity.trim().toUpperCase();
+
+    // Unicidad: ningún otro usuario activo puede tener el mismo número de documento.
+    const duplicate = await this.userRepo.findOne({
+      where: { identity: newIdentity, id: Not(user.id) },
+    });
+    if (duplicate) {
+      throw new CustomError({
+        message: `Ya existe un usuario con el documento ${newIdentity}`,
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const previous = { identityType: user.identityType, identity: user.identity };
+
+    user.identityType = input.identityType;
+    user.identity = newIdentity;
+
+    const updated = await this.userRepo.save(user);
+    this.logger.log(`Documento de identidad actualizado para usuario: ${user.id}`);
+
+    if (currentUser) {
+      void this.auditService.log({
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.UPDATE,
+        previousValue: previous,
+        newValue: { identityType: input.identityType, identity: newIdentity },
+        performedById: currentUser.sub,
+        performedByName: currentUser.email,
+        performedByRole: currentUser.roles?.[0] ?? '',
+        complexId: user.complexId,
+        description: `Documento de identidad actualizado: ${user.email}`,
       });
     }
 

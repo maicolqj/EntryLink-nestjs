@@ -54,6 +54,7 @@ export enum NotificationType {
 
   // ── Seguridad / Emergencias ────────────────────────────────────
   PANIC_ALERT            = 'PANIC_ALERT',            // Alerta de pánico activada por residente o guardia
+  SECURITY_CALL_REQUEST  = 'SECURITY_CALL_REQUEST',  // Residente pide que portería llame a su unidad
 
   // ── Sistema / Complejo ─────────────────────────────────────────
   SYSTEM_ANNOUNCEMENT    = 'SYSTEM_ANNOUNCEMENT',    // Comunicado general del complejo

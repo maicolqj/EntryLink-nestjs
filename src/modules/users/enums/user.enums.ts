@@ -15,6 +15,16 @@ export enum Gender {
     PREFER_NOT_TO_SAY = 'prefer_not_to_say'
 }
 
+export enum UserIdentityType {
+    CC         = 'CC',         // Cédula de Ciudadanía
+    CE         = 'CE',         // Cédula de Extranjería
+    PASSPORT   = 'PASSPORT',   // Pasaporte
+    TI         = 'TI',         // Tarjeta de Identidad
+    NIT        = 'NIT',        // NIT (persona jurídica)
+    FOREIGN_ID = 'FOREIGN_ID', // Documento extranjero
+    OTHER      = 'OTHER',      // Otro
+}
+
 // Registrar enums para GraphQL
 registerEnumType(UserStatus, {
     name: 'UserStatus',
@@ -24,4 +34,9 @@ registerEnumType(UserStatus, {
 registerEnumType(Gender, {
     name: 'Gender',
     description: 'Opciones de género disponibles'
+});
+
+registerEnumType(UserIdentityType, {
+    name: 'UserIdentityType',
+    description: 'Tipo de documento de identidad del usuario'
 });

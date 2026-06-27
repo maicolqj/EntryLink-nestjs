@@ -12,6 +12,7 @@ import { PushSubscriptionResult }              from '../dto/responses/push-subsc
 import { SendNotificationResult }              from '../dto/responses/send-notification.response';
 import { SentNotificationPaginatedResult }     from '../dto/responses/sent-notifications.response';
 import { TriggerPanicAlertResult }             from '../dto/responses/trigger-panic-alert.response';
+import { RequestSecurityCallResult }           from '../dto/responses/request-security-call.response';
 import { NotificationDetailResponse }          from '../dto/responses/notification-detail.response';
 import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
 
@@ -104,6 +105,19 @@ export class NotificationsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<TriggerPanicAlertResult> {
     return this.notificationsService.triggerPanicAlert(complexId, currentUser);
+  }
+
+  /**
+   * Un residente solicita que portería (rol SECURITY) llame a su unidad.
+   * Enruta automáticamente a los guardias del complejo del residente autenticado.
+   */
+  @Mutation(() => RequestSecurityCallResult, { name: 'requestSecurityCall' })
+  @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
+  requestSecurityCall(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<RequestSecurityCallResult> {
+    return this.notificationsService.requestSecurityCall(complexId, currentUser);
   }
 
   /**

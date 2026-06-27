@@ -13,7 +13,7 @@ import {
 import { ObjectType, Field, Float } from '@nestjs/graphql';
 import { IsPhoneNumber, IsEnum } from 'class-validator';
 import { Role } from '../../roles/entities/role.entity';
-import { Gender, UserStatus } from '../enums/user.enums';
+import { Gender, UserStatus, UserIdentityType } from '../enums/user.enums';
 import { Permission } from '../../permissions/entities/permission.entity';
 import { UserRole } from './user_has_roles.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -79,6 +79,10 @@ export class User {
     @Column({ name: 'identity', type: 'varchar', length: 20, nullable: true, unique: true })
     @Field(() => String, { description: 'Identity document number', nullable: true })
     identity?: string;
+
+    @Column({ name: 'identity_type', type: 'enum', enum: UserIdentityType, nullable: true })
+    @Field(() => UserIdentityType, { description: 'Identity document type', nullable: true })
+    identityType?: UserIdentityType;
 
     @Column({ name: 'email', type: 'varchar', length: 100, unique: true })
     @Field(() => String, { description: 'Email address' })
