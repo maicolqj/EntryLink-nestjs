@@ -5,6 +5,7 @@ import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
 
 import { User } from './entities/user.entity';
+import { generateSystemCode } from './utils/system-code.util';
 import { UserRole } from './entities/user_has_roles.entity';
 import { UserComplexAssignment, AssignmentStatus } from './entities/user-complex-assignment.entity';
 import { UserStatus } from './enums/user.enums';
@@ -275,7 +276,7 @@ export class UsersService {
     }
 
     const residentRole = await this.findRoleOrFail(ValidRoles.RESIDENT_ROL);
-    const systemCode = this.generateSystemCode();
+    const systemCode = generateSystemCode();
     const email = input.email?.trim().toLowerCase()
       ?? `resident.${input.phoneNumber}@entrylink.local`;
 
@@ -1165,10 +1166,4 @@ export class UsersService {
     return role;
   }
 
-  /** Genera un código de sistema legible (ej: RES-A3F9-K2M1) */
-  private generateSystemCode(): string {
-    const p1 = randomBytes(2).toString('hex').toUpperCase();
-    const p2 = randomBytes(2).toString('hex').toUpperCase();
-    return `RES-${p1}-${p2}`;
-  }
 }

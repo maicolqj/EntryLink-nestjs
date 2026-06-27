@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { randomBytes } from 'crypto';
+import { generateSystemCode } from '../utils/system-code.util';
 import { hash } from 'bcrypt';
 
 // PREREQUISITO: yarn add exceljs
@@ -182,7 +183,7 @@ export class ExcelImportService {
       }
 
       // 4. Generar código del sistema y contraseña dummy
-      const systemCode = this.generateSystemCode();
+      const systemCode = generateSystemCode();
       const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
 
       // 5. Crear usuario
@@ -246,13 +247,6 @@ export class ExcelImportService {
     }
 
     return errors;
-  }
-
-  /** Genera un código de sistema legible y único (ej: RES-A3F9-K2M1) */
-  private generateSystemCode(): string {
-    const part1 = randomBytes(2).toString('hex').toUpperCase();
-    const part2 = randomBytes(2).toString('hex').toUpperCase();
-    return `RES-${part1}-${part2}`;
   }
 
   private generateDefaultEmail(phone: string): string {

@@ -8,6 +8,7 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import { extname } from 'path';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { generateSystemCode } from '../../users/utils/system-code.util';
 
 import type ExcelJS from 'exceljs';
 
@@ -229,7 +230,7 @@ export class ResidentsImportService {
       } else {
         // Create new user
         const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
-        const systemCode    = this.generateSystemCode();
+        const systemCode    = generateSystemCode();
 
         const newUser = manager.create(User, {
           name:                   row.name.trim().toUpperCase(),
@@ -451,9 +452,4 @@ export class ResidentsImportService {
     return workbook;
   }
 
-  private generateSystemCode(): string {
-    const p1 = randomBytes(2).toString('hex').toUpperCase();
-    const p2 = randomBytes(2).toString('hex').toUpperCase();
-    return `RES-${p1}-${p2}`;
-  }
 }
