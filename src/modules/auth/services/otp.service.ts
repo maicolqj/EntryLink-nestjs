@@ -1,8 +1,6 @@
 import {
   Injectable,
   Logger,
-  BadRequestException,
-  HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +10,8 @@ import { OtpCode } from '../entities/otp-code.entity';
 import { OtpProducer } from '../queues/otp.producer';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
 
 @Injectable()
 export class OtpService {
@@ -78,27 +78,41 @@ export class OtpService {
     });
 
     if (!otp) {
-      throw new BadRequestException('No hay un código OTP pendiente para este número');
+      throw new CustomError({
+        message: 'No hay un código OTP pendiente para este número',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.OTP_NOT_FOUND,
+      });
     }
 
     if (new Date() > otp.expiresAt) {
       await this.otpRepo.update(otp.id, { used: true });
-      throw new BadRequestException('El código OTP ha expirado. Solicita uno nuevo');
+      throw new CustomError({
+        message: 'El código OTP ha expirado. Solicita uno nuevo',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.OTP_EXPIRED,
+      });
     }
 
     if (otp.attempts >= AUTH_CONSTANTS.MAX_OTP_ATTEMPTS) {
       await this.otpRepo.update(otp.id, { used: true });
-      throw new BadRequestException('Se superaron los intentos máximos. Solicita un nuevo código');
+      throw new CustomError({
+        message: 'Se superaron los intentos máximos. Solicita un nuevo código',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.OTP_MAX_ATTEMPTS,
+      });
     }
 
     if (otp.code !== code) {
       await this.otpRepo.increment({ id: otp.id }, 'attempts', 1);
       const remaining = AUTH_CONSTANTS.MAX_OTP_ATTEMPTS - otp.attempts - 1;
-      throw new BadRequestException(
-        remaining > 0
+      throw new CustomError({
+        message: remaining > 0
           ? `Código incorrecto. Te quedan ${remaining} intentos`
           : 'Código incorrecto. Solicita un nuevo código',
-      );
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.OTP_INVALID,
+      });
     }
 
     // Código correcto — marcarlo como usado
@@ -116,17 +130,19 @@ export class OtpService {
     const ipData    = await this.cacheService.get<{ count: number }>({ key: ipKey });
 
     if ((phoneData?.count ?? 0) >= AUTH_CONSTANTS.OTP_RATE_LIMIT_MAX) {
-      throw new HttpException(
-        `Demasiadas solicitudes de OTP. Espera ${AUTH_CONSTANTS.OTP_RATE_LIMIT_WINDOW / 60} minutos`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw new CustomError({
+        message: `Demasiadas solicitudes de OTP. Espera ${AUTH_CONSTANTS.OTP_RATE_LIMIT_WINDOW / 60} minutos`,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.OTP_RATE_LIMIT,
+      });
     }
 
     if ((ipData?.count ?? 0) >= AUTH_CONSTANTS.MAX_IP_ATTEMPTS) {
-      throw new HttpException(
-        'Demasiadas solicitudes desde tu dirección IP',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw new CustomError({
+        message: 'Demasiadas solicitudes desde tu dirección IP',
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.TOO_MANY_IP_ATTEMPTS,
+      });
     }
   }
 

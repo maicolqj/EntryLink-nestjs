@@ -4,9 +4,8 @@ import {
   Param,
   UploadedFile,
   UseInterceptors,
-  BadRequestException,
-  NotFoundException,
   Logger,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +13,8 @@ import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { R2StorageService }        from '../../../core/infrastructure/r2/r2.service';
 import { singleImageInterceptor }  from '../../../core/infrastructure/r2/upload-interceptors';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { AuthErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
 
 @Controller('supervisors')
 export class SupervisorsController {
@@ -46,19 +47,29 @@ export class SupervisorsController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
-      throw new BadRequestException('El campo companyCard es requerido');
+      throw new CustomError({
+        message: 'El campo companyCard es requerido',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.VALIDATION_ERROR,
+      });
     }
 
     const user = await this.userRepo.findOne({ where: { id: supervisorId } });
 
     if (!user) {
-      throw new NotFoundException('Supervisor no encontrado');
+      throw new CustomError({
+        message: 'Supervisor no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
     }
 
     if (user.emailVerified) {
-      throw new BadRequestException(
-        'No se puede modificar la imagen de un supervisor ya verificado',
-      );
+      throw new CustomError({
+        message: 'No se puede modificar la imagen de un supervisor ya verificado',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.ACCOUNT_ALREADY_VERIFIED,
+      });
     }
 
     const result = await this.storageService.uploadBuffer(

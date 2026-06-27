@@ -1,9 +1,6 @@
 import {
   Injectable,
-  UnauthorizedException,
   Logger,
-  NotFoundException,
-  BadRequestException,
   HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -33,7 +30,7 @@ import { SetPasswordResponse } from '../dto/responses/set-password.response';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { Role } from '../../roles/entities/role.entity';
 import { RegisterSupervisorInput } from '../dto/inputs/register-supervisor.input';
-import { UserErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import { UserErrorCode, AuthErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { ResetPasswordInput } from '../dto/inputs/reset-password.input';
 import { RequestPasswordResetResponse } from '../dto/responses/request-password-reset.response';
@@ -97,7 +94,11 @@ export class AuthService {
       );
 
       if (!hasValidRole) {
-        throw new UnauthorizedException('Este usuario no puede iniciar sesión con email y contraseña');
+        throw new CustomError({
+          message: 'Este usuario no puede iniciar sesión con email y contraseña',
+          statusCode: HttpStatus.UNAUTHORIZED,
+          errorCode: AuthErrorCode.LOGIN_METHOD_NOT_ALLOWED,
+        });
       }
       return this.loginUser(input, user, deviceInfo);
     }
@@ -134,7 +135,11 @@ export class AuthService {
 
     if (!user) {
       await this.registerFailedAttempt(identity, deviceInfo.ip);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     // VULN-14 fix: verificar password ANTES de revelar estado de cuenta para evitar user enumeration
@@ -142,7 +147,11 @@ export class AuthService {
     const passwordValid = user.password && await bcrypt.compare(password, user.password);
     if (!passwordValid) {
       await this.registerFailedAttempt(identity, deviceInfo.ip, true, user.email);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     const userRoleNames = (user.userRoles ?? []).map(ur => ur.role?.name as ValidRoles);
@@ -152,7 +161,11 @@ export class AuthService {
 
     if (!hasValidRole) {
       // Password era correcto pero el rol no aplica — mensaje genérico para no revelar info
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     this.assertUserAccountActive(user);
@@ -186,7 +199,11 @@ export class AuthService {
 
     if (!user) {
       await this.registerFailedAttempt(identity, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     const isResident = (user.userRoles ?? []).some(
@@ -195,13 +212,21 @@ export class AuthService {
 
     if (!isResident) {
       await this.registerFailedAttempt(identity, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     // Comparar systemCode antes de revelar estado de cuenta (evita user enumeration)
     if (!user.systemCode || user.systemCode.toUpperCase() !== systemCode.trim().toUpperCase()) {
       await this.registerFailedAttempt(identity, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     this.assertUserAccountActive(user);
@@ -256,7 +281,11 @@ export class AuthService {
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
-    if (!user) throw new UnauthorizedException('Número de celular no registrado');
+    if (!user) throw new CustomError({
+      message: 'Número de celular no registrado',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: UserErrorCode.USER_NOT_FOUND,
+    });
 
     this.assertUserAccountActive(user);
     await this.otpService.validate(phoneNumber, code);
@@ -272,7 +301,11 @@ export class AuthService {
     const complex = await this.complexRepo.findOne({ where: { id: complexId } });
 
     if (!complex) {
-      throw new NotFoundException(`Complejo con ID "${complexId}" no encontrado`);
+      throw new CustomError({
+        message: `Complejo con ID "${complexId}" no encontrado`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+      });
     }
 
     const token = uuidv4();
@@ -282,7 +315,11 @@ export class AuthService {
     // PIN = últimos 4 dígitos del NIT base (antes del dígito de verificación tras "-")
     const nitBase = (complex.nit ?? '').split('-')[0].replace(/\D/g, '');
     if (nitBase.length < 4) {
-      throw new BadRequestException('NIT del complejo no tiene suficientes dígitos para generar el PIN');
+      throw new CustomError({
+        message: 'NIT del complejo no tiene suficientes dígitos para generar el PIN',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.QR_PIN_GENERATION_FAILED,
+      });
     }
     const rawPin = nitBase.slice(-4);
     const hashedPin = await bcrypt.hash(rawPin, 12);
@@ -308,7 +345,11 @@ export class AuthService {
     const normalizedPin = (pin ?? '').trim();
 
     if (!normalizedPin) {
-      throw new BadRequestException('PIN es requerido');
+      throw new CustomError({
+        message: 'PIN es requerido',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.QR_PIN_REQUIRED,
+      });
     }
 
     const complex = await this.complexRepo
@@ -326,19 +367,35 @@ export class AuthService {
 
 
     if (!complex) {
-      throw new NotFoundException('Token QR no válido');
+      throw new CustomError({
+        message: 'Token QR no válido',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: AuthErrorCode.QR_TOKEN_INVALID,
+      });
     }
 
     if (complex.qrLoginTokenUsed) {
-      throw new UnauthorizedException('Este token QR ya fue utilizado');
+      throw new CustomError({
+        message: 'Este token QR ya fue utilizado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.QR_TOKEN_ALREADY_USED,
+      });
     }
 
     if (!complex.qrLoginTokenExp || new Date() > complex.qrLoginTokenExp) {
-      throw new UnauthorizedException('El token QR ha expirado');
+      throw new CustomError({
+        message: 'El token QR ha expirado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.QR_TOKEN_EXPIRED,
+      });
     }
 
     if (!complex.qrLoginPin) {
-      throw new BadRequestException('PIN no configurado para este token QR');
+      throw new CustomError({
+        message: 'PIN no configurado para este token QR',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.QR_PIN_NOT_CONFIGURED,
+      });
     }
 
     this.logger.debug(
@@ -348,7 +405,11 @@ export class AuthService {
     const pinValid = await bcrypt.compare(normalizedPin, complex.qrLoginPin);
     if (!pinValid) {
       this.logger.warn(`PIN incorrecto al canjear QR — complexId: ${complex.id} | pinLen: ${normalizedPin.length} | hashLen: ${complex.qrLoginPin.length} | hashPrefix: ${complex.qrLoginPin.substring(0, 7)}`);
-      throw new UnauthorizedException('PIN incorrecto');
+      throw new CustomError({
+        message: 'PIN incorrecto',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.QR_PIN_INVALID,
+      });
     }
 
     // Marcar como usado antes de crear la sesión (one-time use).
@@ -363,7 +424,11 @@ export class AuthService {
     this.assertComplexAccountActive(complex);
 
     if (!complex.owner) {
-      throw new NotFoundException('No se encontró el propietario del complejo');
+      throw new CustomError({
+        message: 'No se encontró el propietario del complejo',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: AuthErrorCode.COMPLEX_OWNER_NOT_FOUND,
+      });
     }
 
     this.assertUserAccountActive(complex.owner);
@@ -443,7 +508,11 @@ export class AuthService {
     }
 
     const supervisorRole = await this.roleRepo.findOne({ where: { name: ValidRoles.SUPERVISOR_ROL } });
-    if (!supervisorRole) throw new BadRequestException('Rol de supervisor no configurado');
+    if (!supervisorRole) throw new CustomError({
+      message: 'Rol de supervisor no configurado',
+      statusCode: HttpStatus.BAD_REQUEST,
+      errorCode: AuthErrorCode.ROLE_NOT_CONFIGURED,
+    });
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -506,7 +575,11 @@ export class AuthService {
       key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
     });
 
-    if (!cached?.userId) throw new UnauthorizedException('Token de verificación inválido o expirado');
+    if (!cached?.userId) throw new CustomError({
+      message: 'Token de verificación inválido o expirado',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: UserErrorCode.INVALID_TOKEN,
+    });
 
     const user = await this.userRepo
       .createQueryBuilder('user')
@@ -517,8 +590,16 @@ export class AuthService {
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
-    if (user.status !== UserStatus.PENDING_VERIFICATION) throw new BadRequestException('La cuenta ya fue verificada');
+    if (!user) throw new CustomError({
+      message: 'Usuario no encontrado',
+      statusCode: HttpStatus.UNAUTHORIZED,
+      errorCode: UserErrorCode.USER_NOT_FOUND,
+    });
+    if (user.status !== UserStatus.PENDING_VERIFICATION) throw new CustomError({
+      message: 'La cuenta ya fue verificada',
+      statusCode: HttpStatus.BAD_REQUEST,
+      errorCode: AuthErrorCode.ACCOUNT_ALREADY_VERIFIED,
+    });
 
     await this.userRepo.update(user.id, { emailVerified: true, status: UserStatus.ACTIVE });
     await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token } });
@@ -578,10 +659,18 @@ export class AuthService {
       key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: input.token },
     });
 
-    if (!cached?.userId) throw new BadRequestException('Token inválido o expirado');
+    if (!cached?.userId) throw new CustomError({
+      message: 'Token inválido o expirado',
+      statusCode: HttpStatus.BAD_REQUEST,
+      errorCode: UserErrorCode.INVALID_TOKEN,
+    });
 
     const user = await this.userRepo.findOne({ where: { id: cached.userId } });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user) throw new CustomError({
+      message: 'Usuario no encontrado',
+      statusCode: HttpStatus.NOT_FOUND,
+      errorCode: UserErrorCode.USER_NOT_FOUND,
+    });
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(input.newPassword, saltRounds);
@@ -618,7 +707,11 @@ export class AuthService {
     const passwordValid = await bcrypt.compare(input.password, user.password);
     if (!passwordValid) {
       await this.registerFailedAttempt(input.email, deviceInfo.ip);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     await this.clearFailedAttempts(input.email);
@@ -650,19 +743,31 @@ export class AuthService {
 
     if (!complex || !complex.password || !complex.passwordSet) {
       await this.registerFailedAttempt(email, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     const passwordValid = await bcrypt.compare(password, complex.password);
     if (!passwordValid) {
       await this.registerFailedAttempt(email, deviceInfo.ip, false);
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new CustomError({
+        message: 'Credenciales inválidas',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     this.assertComplexAccountActive(complex);
 
     if (!complex.owner) {
-      throw new UnauthorizedException('No se encontró el propietario del complejo');
+      throw new CustomError({
+        message: 'No se encontró el propietario del complejo',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.COMPLEX_OWNER_NOT_FOUND,
+      });
     }
 
     this.assertUserAccountActive(complex.owner);
@@ -733,22 +838,38 @@ export class AuthService {
   /** Valida que el complejo esté activo. Bloquea INACTIVE y SUSPENDED. */
   private assertComplexAccountActive(complex: ResidentialComplex): void {
     if (complex.status === ComplexStatus.INACTIVE) {
-      throw new UnauthorizedException('El complejo residencial está inactivo. Contacta al administrador');
+      throw new CustomError({
+        message: 'El complejo residencial está inactivo. Contacta al administrador',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.COMPLEX_INACTIVE,
+      });
     }
     if (complex.status === ComplexStatus.SUSPENDED) {
-      throw new UnauthorizedException('El complejo residencial está suspendido. Contacta al administrador');
+      throw new CustomError({
+        message: 'El complejo residencial está suspendido. Contacta al administrador',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.COMPLEX_SUSPENDED,
+      });
     }
   }
 
   /** Valida que la cuenta User esté activa (no eliminada, no bloqueada, no suspendida). */
   private assertUserAccountActive(user: User): void {
     if (user.deletedAt) {
-      throw new UnauthorizedException('La cuenta ha sido eliminada');
+      throw new CustomError({
+        message: 'La cuenta ha sido eliminada',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.USER_DELETED,
+      });
     }
 
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {
       const unlockIn = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / 60_000);
-      throw new UnauthorizedException(`Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`);
+      throw new CustomError({
+        message: `Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`,
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.ACCOUNT_LOCKED,
+      });
     }
 
 
@@ -761,11 +882,15 @@ export class AuthService {
 
     if (blockedStatuses.includes(user.status)) {
       const isPending = user.status === UserStatus.PENDING_VERIFICATION;
-      throw new UnauthorizedException(
-        isPending
+      throw new CustomError({
+        message: isPending
           ? 'Debes verificar tu correo electrónico antes de iniciar sesión'
           : 'Tu cuenta está suspendida o inactiva. Contacta al administrador',
-      );
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: isPending
+          ? AuthErrorCode.EMAIL_VERIFICATION_REQUIRED
+          : UserErrorCode.USER_SUSPENDED,
+      });
     }
   }
 
@@ -809,7 +934,11 @@ export class AuthService {
     const data = await this.cacheService.get<{ count: number }>({ key });
 
     if ((data?.count ?? 0) >= AUTH_CONSTANTS.MAX_IP_ATTEMPTS) {
-      throw new UnauthorizedException('Demasiados intentos desde tu dirección IP. Intenta más tarde');
+      throw new CustomError({
+        message: 'Demasiados intentos desde tu dirección IP. Intenta más tarde',
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.TOO_MANY_IP_ATTEMPTS,
+      });
     }
 
     await this.cacheService.set({
