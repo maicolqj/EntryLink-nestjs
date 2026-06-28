@@ -3002,6 +3002,8 @@ type UnitAccountStatementResponse {
   currentBalance: Float!
   walletBalance: Float!
   movements: [AccountMovement!]!
+  totalMovements: Int!
+  hasMore: Boolean!
 }
 
 type UnitFinancialStatusItem {
@@ -3492,7 +3494,7 @@ type Query {
   complexFinancialSummary(complexId: String!, period: String!): ComplexFinancialSummaryResponse!
   unitWallet(unitId: String!, complexId: String!): UnitWalletResponse!
   walletsSummary(complexId: String!, pagination: PaginationInput): WalletSummaryPaginated!
-  unitAccountStatement(unitId: String!, complexId: String!, period: String): UnitAccountStatementResponse!
+  unitAccountStatement(unitId: String!, complexId: String!, period: String, limit: Int, offset: Int): UnitAccountStatementResponse!
   unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
   complexExpenses(complexId: String!, pagination: PaginationInput, filters: FilterExpensesInput): PaginatedExpensesResponse!
   chargeEmissions(complexId: String!, status: ChargeEmissionStatus, period: String): [ChargeEmission!]!
