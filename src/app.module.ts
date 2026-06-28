@@ -115,25 +115,32 @@ import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.
             const gqlError = error as {
               extensions?: {
                 code?: string;
+                statusCode?: number;
+                details?: unknown;
                 originalError?: {
                   errorCode?: string;
                   statusCode?: number;
-                  details?: string;
+                  details?: unknown;
                 };
               };
               originalError?: { stack?: string };
               stack?: string;
             };
-            const originalError = gqlError?.extensions?.originalError;
+            const ext = gqlError?.extensions;
+            const originalError = ext?.originalError;
+            // El UniversalExceptionFilter escribe code/statusCode/details directo en
+            // extensions; Apollo en otros casos los anida en extensions.originalError.
+            // Se leen ambas ubicaciones para no perder el status real (antes caía a 500).
             const code =
               originalError?.errorCode ||
-              gqlError?.extensions?.code ||
+              ext?.code ||
               'INTERNAL_SERVER_ERROR';
+            const statusCode = originalError?.statusCode ?? ext?.statusCode ?? 500;
+            const details = originalError?.details ?? ext?.details ?? '';
 
             // Observabilidad: loguear server-side el stack real de errores no esperados
             // (Apollo enmascara el mensaje como "Internal server error" hacia el cliente).
-            const statusCode = originalError?.statusCode ?? 500;
-            if (!originalError?.errorCode || statusCode >= 500) {
+            if (!code || statusCode >= 500) {
               const stack = gqlError?.originalError?.stack || gqlError?.stack;
               new Logger('GraphQL').error(
                 `${code} en ${JSON.stringify(formattedError.path)}: ${formattedError.message}`,
@@ -146,8 +153,8 @@ import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.
               path: formattedError.path,
               extensions: {
                 code,
-                statusCode: originalError?.statusCode || 500,
-                detail: isProd ? '' : originalError?.details || '',
+                statusCode,
+                detail: isProd ? '' : details,
                 timestamp: new Date().toISOString(),
               },
             };
