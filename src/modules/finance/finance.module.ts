@@ -1,5 +1,7 @@
 import { Module }        from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join }          from 'path';
+import { mkdirSync }     from 'fs';
 
 import { ComplexFinanceConfig } from './entities/complex-finance-config.entity';
 import { ChargeCategory }       from './entities/charge-category.entity';
@@ -20,9 +22,13 @@ import { TenantFinancialConfig }  from './entities/tenant-financial-config.entit
 import { DocumentSequence }       from './entities/document-sequence.entity';
 
 import { Vehicle }              from '../vehicles/entities/vehicle.entity';
+import { Unit }                 from '../residential-complex/entities/unit.entity';
+import { Building }             from '../residential-complex/entities/building.entity';
 
 import { FinanceService }           from './services/finance.service';
 import { FinanceResolver }          from './resolvers/finance.resolver';
+import { FinanceController }        from './finance.controller';
+import { OpeningBalancesImportService } from './import/opening-balances-import.service';
 import { ChargeCalculatorService }  from './services/charge-calculator.service';
 import { ChargeEmissionService }    from './services/charge-emission.service';
 import { ChargeEmissionResolver }   from './resolvers/charge-emission.resolver';
@@ -38,6 +44,10 @@ import { ResidentsModule }          from '../residents/residents.module';
 import { NotificationsModule }      from '../notifications/notifications.module';
 import { AuditModule }              from '../audit/audit.module';
 
+// Directorio temporal para archivos de import de finanzas (saldos de apertura).
+const tmpDir = join(process.cwd(), 'tmp', 'finance-imports');
+try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -48,6 +58,8 @@ import { AuditModule }              from '../audit/audit.module';
       Payment,
       WalletEntry,
       Vehicle,
+      Unit,
+      Building,
       ComplexExpense,
       ChargeEmission,
       // Ledger contable
@@ -64,9 +76,13 @@ import { AuditModule }              from '../audit/audit.module';
     NotificationsModule,      // NotificationsService.create
     AuditModule,
   ],
+  controllers: [
+    FinanceController,
+  ],
   providers: [
     FinanceService,
     FinanceResolver,
+    OpeningBalancesImportService,
     ChargeCalculatorService,
     ChargeEmissionService,
     ChargeEmissionResolver,
