@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
 import { ChargeCategory }                              from '../entities/charge-category.entity';
 import { ComplexFinanceConfig }                        from '../entities/complex-finance-config.entity';
@@ -469,12 +469,14 @@ export class FinanceResolver {
     permissions: [ValidPermissions.VIEW_ACCOUNT_BALANCE],
   })
   getUnitAccountStatement(
-    @Args('unitId')                      unitId: string,
-    @Args('complexId')                   complexId: string,
-    @Args('period', { nullable: true })  period: string,
+    @Args('unitId')                                   unitId: string,
+    @Args('complexId')                                complexId: string,
+    @Args('period', { nullable: true })               period: string,
+    @Args('limit',  { type: () => Int, nullable: true })  limit: number,
+    @Args('offset', { type: () => Int, nullable: true })  offset: number,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitAccountStatementResponse> {
-    return this.financeService.getUnitAccountStatement(unitId, complexId, period, currentUser);
+    return this.financeService.getUnitAccountStatement(unitId, complexId, period, currentUser, limit, offset);
   }
 
   @Query(() => UnitFinancialStatusPaginated, { name: 'unitsFinancialStatus' })

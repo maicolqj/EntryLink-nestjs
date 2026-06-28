@@ -1931,6 +1931,8 @@ export class FinanceService {
     complexId: string,
     period: string | undefined,
     currentUser: JwtAccessPayload,
+    limit?: number | null,
+    offset?: number | null,
   ): Promise<UnitAccountStatementResponse> {
    try {
     await this.complexService.findById(complexId, currentUser);
@@ -2027,7 +2029,12 @@ export class FinanceService {
       }
     }
 
-    movements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Orden cronológico ascendente (antiguo→nuevo) con desempate estable por id,
+    // para acumular el balance corriente correctamente sobre todo el período.
+    movements.sort((a, b) => {
+      const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
+    });
 
     let runningBalance = 0;
     for (const mov of movements) {
@@ -2035,8 +2042,25 @@ export class FinanceService {
       mov.balance = Math.round(runningBalance * 100) / 100;
     }
 
+    // Los agregados se calculan sobre TODO el período, nunca sobre la página.
     const totalDebits = movements.reduce((s, m) => s + m.debit, 0);
     const totalCredits = movements.reduce((s, m) => s + m.credit, 0);
+    const totalMovements = movements.length;
+
+    // Vista para el front: más reciente → más antiguo (desempate estable por id).
+    // El snapshot de balance por fila ya quedó fijado arriba; aquí solo reordenamos.
+    const orderedDesc = [...movements].sort((a, b) => {
+      const diff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      return diff !== 0 ? diff : b.id.localeCompare(a.id);
+    });
+
+    // Paginación offset-based opcional: si limit/offset vienen null/ausentes, devolver todo.
+    const safeOffset = offset != null && offset > 0 ? offset : 0;
+    const pagedMovements =
+      limit != null
+        ? orderedDesc.slice(safeOffset, safeOffset + limit)
+        : orderedDesc.slice(safeOffset);
+    const hasMore = safeOffset + pagedMovements.length < totalMovements;
 
     const activeCharges = charges.filter(c =>
       [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID].includes(c.status),
@@ -2059,7 +2083,9 @@ export class FinanceService {
       totalCredits: Math.round(totalCredits * 100) / 100,
       currentBalance: Math.round(currentBalance * 100) / 100,
       walletBalance: Math.round(walletBalance * 100) / 100,
-      movements,
+      movements: pagedMovements,
+      totalMovements,
+      hasMore,
     };
    } catch (err: any) {
       this.logger.error(

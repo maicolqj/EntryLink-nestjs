@@ -1,4 +1,4 @@
-import { ObjectType, Field, Float } from '@nestjs/graphql';
+import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class AccountMovement {
@@ -60,4 +60,12 @@ export class UnitAccountStatementResponse {
 
   @Field(() => [AccountMovement])
   movements: AccountMovement[];
+
+  /** Conteo total de movimientos del período, independiente de limit/offset */
+  @Field(() => Int)
+  totalMovements: number;
+
+  /** true cuando quedan más páginas: offset + movimientos devueltos < totalMovements */
+  @Field(() => Boolean)
+  hasMore: boolean;
 }
