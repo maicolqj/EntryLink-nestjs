@@ -1,11 +1,50 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { GqlExceptionFilter } from "@nestjs/graphql";
 import { CustomError } from "../utils/errors.utils";
+import { GeneralErrorCode } from "../constans/error-codes.constants";
 import { GraphQLError } from "graphql";
 
 @Catch()
 export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFilter {
     private readonly logger = new Logger(UniversalExceptionFilter.name);
+
+    /** Mapea un status HTTP a un errorCode de negocio para HttpException nativas
+     *  (las que no son CustomError, ej. las que lanza el ValidationPipe). */
+    private httpStatusToErrorCode(status: number): GeneralErrorCode {
+        switch (status) {
+            case HttpStatus.BAD_REQUEST:        return GeneralErrorCode.BAD_REQUEST;
+            case HttpStatus.UNAUTHORIZED:       return GeneralErrorCode.UNAUTHORIZED;
+            case HttpStatus.FORBIDDEN:          return GeneralErrorCode.FORBIDDEN;
+            case HttpStatus.NOT_FOUND:          return GeneralErrorCode.NOT_FOUND;
+            case HttpStatus.CONFLICT:           return GeneralErrorCode.CONFLICT;
+            case HttpStatus.METHOD_NOT_ALLOWED: return GeneralErrorCode.METHOD_NOT_ALLOWED;
+            case HttpStatus.TOO_MANY_REQUESTS:  return GeneralErrorCode.TOO_MANY_REQUESTS;
+            case HttpStatus.SERVICE_UNAVAILABLE: return GeneralErrorCode.SERVICE_UNAVAILABLE;
+            default:                            return GeneralErrorCode.INTERNAL_SERVER_ERROR;
+        }
+    }
+
+    /** Extrae mensaje y errorCode de una HttpException nativa. El ValidationPipe
+     *  de class-validator devuelve `message` como array de mensajes; se unifica
+     *  a string y se conserva la lista en `details`. */
+    private describeHttpException(exception: HttpException, status: number): { message: string; errorCode: GeneralErrorCode; details: string[] | null } {
+        const res = exception.getResponse();
+        const raw = typeof res === 'string' ? res : (res as { message?: unknown }).message ?? exception.message;
+
+        if (Array.isArray(raw)) {
+            return {
+                message: raw.join('; '),
+                errorCode: status === HttpStatus.BAD_REQUEST ? GeneralErrorCode.VALIDATION_ERROR : this.httpStatusToErrorCode(status),
+                details: raw as string[],
+            };
+        }
+
+        return {
+            message: String(raw),
+            errorCode: this.httpStatusToErrorCode(status),
+            details: null,
+        };
+    }
 
     catch(exception: unknown, host: ArgumentsHost) {
         const type = host.getType();
@@ -50,10 +89,10 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
 
             } else if (exception instanceof HttpException) {
                 status = exception.getStatus();
-                const exceptionResponse = exception.getResponse();
-                message = typeof exceptionResponse === 'string'
-                    ? exceptionResponse
-                    : (exceptionResponse as any).message || exception.message;
+                const described = this.describeHttpException(exception, status);
+                message = described.message;
+                errorCode = described.errorCode;
+                details = described.details;
             } else if (exception instanceof Error) {
                 // VULN-13 fix: log interno completo, cliente solo ve mensaje genérico
                 this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
@@ -112,10 +151,10 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
                 throw exception;
             } else if (exception instanceof HttpException) {
                 statusCode = exception.getStatus();
-                const exceptionResponse = exception.getResponse();
-                message = typeof exceptionResponse === 'string'
-                    ? exceptionResponse
-                    : (exceptionResponse as any).message || exception.message;
+                const described = this.describeHttpException(exception, statusCode);
+                message = described.message;
+                errorCode = described.errorCode;
+                details = described.details;
             } else if (exception instanceof Error) {
                 // VULN-04 fix: no exponer exception.message al cliente GraphQL
                 this.logger.error(`Unhandled GraphQL error: ${exception.message}`, exception.stack);
