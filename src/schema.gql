@@ -4556,6 +4556,9 @@ input CreateStaffMemberInput {
   phoneNumber: String!
   identity: String!
   identityNumber: String
+
+  """Tipo de documento de identidad"""
+  identityType: UserIdentityType
   email: String!
   password: String
 

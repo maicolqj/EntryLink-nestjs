@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 
 import { ValidRoles } from '../../../roles/enums/valid-roles';
+import { UserIdentityType } from '../../enums/user.enums';
 
 /** Roles que el administrador del complejo puede crear */
 export const STAFF_ROLES = [
@@ -52,6 +53,14 @@ export class CreateStaffMemberInput {
   @IsString()
   @MaxLength(20)
   identityNumber?: string;
+
+  @Field(() => UserIdentityType, {
+    nullable: true,
+    description: 'Tipo de documento de identidad',
+  })
+  @IsOptional()
+  @IsEnum(UserIdentityType)
+  identityType?: UserIdentityType;
 
   @Field(() => String)
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })

@@ -392,6 +392,7 @@ export class UsersService {
           password:                 input.password,
           phoneNumber:              input.phoneNumber,
           identity:                 input.identityNumber,
+          identityType:             input.identityType,
           complexId:                input.complexId,
           status:                   UserStatus.ACTIVE,
           phoneVerified:            false,
@@ -474,6 +475,7 @@ export class UsersService {
       }
       if (input.phoneNumber && !existingUser.phoneNumber) updates.phoneNumber = input.phoneNumber;
       if (input.identityNumber && !existingUser.identity) updates.identity = input.identityNumber;
+      if (input.identityType && !existingUser.identityType) updates.identityType = input.identityType;
 
 
       await this.dataSource.transaction(async (manager) => {
