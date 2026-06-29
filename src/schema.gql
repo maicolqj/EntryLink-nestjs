@@ -1561,6 +1561,150 @@ enum AuditAction {
   CALL_REJECTED
 }
 
+type Notification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  complexId: String!
+  entityId: String
+  entityType: String
+  createdByUserId: String
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionResult: NotificationActionResult
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de evento que originó la notificación"""
+enum NotificationType {
+  PACKAGE_RECEIVED
+  PACKAGE_READY
+  PACKAGE_DELIVERED
+  PACKAGE_RETURNED
+  PACKAGE_LOST
+  VISITOR_WALK_IN
+  VISIT_APPROVED
+  VISIT_DENIED
+  VISIT_REMINDER
+  VISITOR_ARRIVED
+  VISITOR_BLACKLISTED
+  RESIDENT_APPROVED
+  RESIDENT_REJECTED
+  RESIDENT_PENDING
+  PARKING_ASSIGNED
+  VEHICLE_REGISTERED
+  VEHICLE_APPROVED
+  VEHICLE_REJECTED
+  VEHICLE_SUSPENDED
+  VEHICLE_REACTIVATED
+  VEHICLE_REMOVED
+  VEHICLE_PENDING
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  PAYMENT_RECEIVED
+  PAYMENT_CONFIRMED
+  PAYMENT_REVERSED
+  CHARGE_ADDED
+  DIRECT_CHARGE
+  CHARGE_WAIVED
+  MORA_APPLIED
+  WALLET_CREDIT
+  WALLET_APPLIED
+  PANIC_ALERT
+  SECURITY_CALL_REQUEST
+  SYSTEM_ANNOUNCEMENT
+  COMPLEX_ALERT
+  AMENITY_REMINDER
+  PROFILE_UPDATED
+  ACCESS_REQUEST_APPROVED
+  ACCESS_REQUEST_REJECTED
+  ACCESS_REVOKED_INACTIVITY
+}
+
+"""Prioridad de entrega de la notificación"""
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+"""
+Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
+"""
+enum NotificationActionType {
+  """Nueva solicitud de residencia — [Aprobar] [Rechazar]"""
+  RESIDENT_APPROVAL
+
+  """Nuevo vehículo pendiente — [Aprobar] [Rechazar]"""
+  VEHICLE_APPROVAL
+
+  """Visita walk-in esperando entrada — [Autorizar] [Denegar]"""
+  VISIT_APPROVAL
+
+  """Solicitud de acceso de supervisor — [Aprobar acceso] [Rechazar]"""
+  ACCESS_REQUEST
+
+  """Alerta que requiere confirmación — [Reconocer]"""
+  ACKNOWLEDGE
+}
+
+"""Resultado de la acción tomada sobre la notificación"""
+enum NotificationActionResult {
+  """Acción aprobada"""
+  APPROVED
+
+  """Acción rechazada"""
+  REJECTED
+
+  """Alerta reconocida"""
+  ACKNOWLEDGED
+}
+
+"""Registro de visita de supervisor a un complejo residencial"""
+type SupervisorVisit {
+  id: String!
+  supervisorId: String!
+  complexId: String!
+
+  """Fecha y hora de check-in"""
+  checkInAt: DateTime!
+
+  """Latitud GPS al momento del check-in"""
+  checkInLat: Float!
+
+  """Longitud GPS al momento del check-in"""
+  checkInLng: Float!
+
+  """Fecha y hora de check-out (null si visita activa)"""
+  checkOutAt: DateTime
+
+  """Estado de la visita: ACTIVE o CLOSED"""
+  status: SupervisorVisitStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  supervisor: User
+  complex: ResidentialComplex
+}
+
+"""Estado de la visita del supervisor al complejo residencial"""
+enum SupervisorVisitStatus {
+  ACTIVE
+  CLOSED
+}
+
 type ChangePasswordResponse {
   success: Boolean!
   message: String!
@@ -1694,271 +1838,6 @@ type AuditLogDetailResponse {
   revertedByName: String
 }
 
-type DeviceInfo {
-  userAgent: String!
-  ip: String!
-  platform: String!
-  deviceId: String
-  appVersion: String
-}
-
-"""Respuesta de autenticación exitosa con tokens JWT"""
-type AuthResponse {
-  """Access token JWT (15 min de vigencia)"""
-  accessToken: String!
-
-  """Refresh token para renovar el access token"""
-  refreshToken: String!
-
-  """Segundos hasta que expire el access token"""
-  expiresIn: Int!
-
-  """ID de la sesión activa"""
-  sessionId: String!
-}
-
-"""Respuesta al solicitar OTP"""
-type OtpRequestResponse {
-  success: Boolean!
-  message: String!
-  debugCode: String
-}
-
-"""Respuesta al auto-registro de supervisor"""
-type RegisterSupervisorResponse {
-  success: Boolean!
-  message: String!
-
-  """ID del supervisor creado; null si hubo error o el correo ya existe"""
-  supervisorId: String
-}
-
-type RequestPasswordResetResponse {
-  success: Boolean!
-  message: String!
-}
-
-"""Respuesta con el token QR generado y su fecha de expiración"""
-type QrLoginTokenResponse {
-  """Token UUID de un solo uso para el login por QR"""
-  token: String!
-
-  """Fecha y hora de expiración del token (72 horas)"""
-  expiresAt: DateTime!
-
-  """
-  PIN: últimos 4 dígitos del NIT base (antes del guion). El complejo ya lo conoce.
-  """
-  pin: String!
-}
-
-type SetPasswordResponse {
-  success: Boolean!
-}
-
-"""Pesos para derivar el coeficiente de copropiedad por características"""
-type CoefficientWeighting {
-  id: ID!
-  complexId: String!
-
-  """Base del score: 'AREA' | 'UNIT'"""
-  base: String!
-
-  """Multiplicador por tipo de unidad (clave = UnitType)"""
-  typeMultipliers: JSON!
-
-  """Puntos por alcoba"""
-  perBedroom: Float!
-
-  """Puntos por baño"""
-  perBathroom: Float!
-
-  """Puntos por cada parqueadero"""
-  perParking: Float!
-
-  """Puntos por cada depósito"""
-  perStorage: Float!
-
-  """Puntos si la unidad usa/paga ascensor"""
-  elevatorPoints: Float!
-
-  """Puntos por cada piso de la casa"""
-  houseFloorPoints: Float!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""Registro de visita de supervisor a un complejo residencial"""
-type SupervisorVisit {
-  id: String!
-  supervisorId: String!
-  complexId: String!
-
-  """Fecha y hora de check-in"""
-  checkInAt: DateTime!
-
-  """Latitud GPS al momento del check-in"""
-  checkInLat: Float!
-
-  """Longitud GPS al momento del check-in"""
-  checkInLng: Float!
-
-  """Fecha y hora de check-out (null si visita activa)"""
-  checkOutAt: DateTime
-
-  """Estado de la visita: ACTIVE o CLOSED"""
-  status: SupervisorVisitStatus!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  supervisor: User
-  complex: ResidentialComplex
-}
-
-"""Estado de la visita del supervisor al complejo residencial"""
-enum SupervisorVisitStatus {
-  ACTIVE
-  CLOSED
-}
-
-type PaginatedComplexesResponse {
-  items: [ResidentialComplex!]!
-  pagination: PaginationReponse!
-}
-
-type NearbyComplexResponse {
-  id: String!
-  name: String!
-  address: String!
-  city: String!
-
-  """Distancia en metros desde la posición del supervisor"""
-  distanceMeters: Int!
-
-  """Radio GPS configurado en el complejo (metros)"""
-  gpsRadius: Int
-}
-
-type PaginatedBuildingsResponse {
-  items: [Building!]!
-  pagination: PaginationReponse!
-}
-
-type PaginatedUnitsResponse {
-  items: [Unit!]!
-  pagination: PaginationReponse!
-}
-
-type Notification {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-  metadata: JSON
-  isBroadcast: Boolean!
-  targetRoles: [String!]
-  isRead: Boolean!
-  readAt: DateTime
-  recipientUserId: String
-  complexId: String!
-  entityId: String
-  entityType: String
-  createdByUserId: String
-  isActionable: Boolean!
-  actionType: NotificationActionType
-  actionLabel: String
-  actionTakenAt: DateTime
-  actionTakenByUserId: String
-  actionResult: NotificationActionResult
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""Tipo de evento que originó la notificación"""
-enum NotificationType {
-  PACKAGE_RECEIVED
-  PACKAGE_READY
-  PACKAGE_DELIVERED
-  PACKAGE_RETURNED
-  PACKAGE_LOST
-  VISITOR_WALK_IN
-  VISIT_APPROVED
-  VISIT_DENIED
-  VISIT_REMINDER
-  VISITOR_ARRIVED
-  VISITOR_BLACKLISTED
-  RESIDENT_APPROVED
-  RESIDENT_REJECTED
-  RESIDENT_PENDING
-  PARKING_ASSIGNED
-  VEHICLE_REGISTERED
-  VEHICLE_APPROVED
-  VEHICLE_REJECTED
-  VEHICLE_SUSPENDED
-  VEHICLE_REACTIVATED
-  VEHICLE_REMOVED
-  VEHICLE_PENDING
-  PAYMENT_DUE
-  PAYMENT_OVERDUE
-  PAYMENT_RECEIVED
-  PAYMENT_CONFIRMED
-  PAYMENT_REVERSED
-  CHARGE_ADDED
-  DIRECT_CHARGE
-  CHARGE_WAIVED
-  MORA_APPLIED
-  WALLET_CREDIT
-  WALLET_APPLIED
-  PANIC_ALERT
-  SECURITY_CALL_REQUEST
-  SYSTEM_ANNOUNCEMENT
-  COMPLEX_ALERT
-  AMENITY_REMINDER
-  ACCESS_REQUEST_APPROVED
-  ACCESS_REQUEST_REJECTED
-  ACCESS_REVOKED_INACTIVITY
-}
-
-"""Prioridad de entrega de la notificación"""
-enum NotificationPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-"""
-Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
-"""
-enum NotificationActionType {
-  """Nueva solicitud de residencia — [Aprobar] [Rechazar]"""
-  RESIDENT_APPROVAL
-
-  """Nuevo vehículo pendiente — [Aprobar] [Rechazar]"""
-  VEHICLE_APPROVAL
-
-  """Visita walk-in esperando entrada — [Autorizar] [Denegar]"""
-  VISIT_APPROVAL
-
-  """Solicitud de acceso de supervisor — [Aprobar acceso] [Rechazar]"""
-  ACCESS_REQUEST
-
-  """Alerta que requiere confirmación — [Reconocer]"""
-  ACKNOWLEDGE
-}
-
-"""Resultado de la acción tomada sobre la notificación"""
-enum NotificationActionResult {
-  """Acción aprobada"""
-  APPROVED
-
-  """Acción rechazada"""
-  REJECTED
-
-  """Alerta reconocida"""
-  ACKNOWLEDGED
-}
-
 type PaginatedResidentsResponse {
   items: [Resident!]!
   pagination: PaginationReponse!
@@ -1996,6 +1875,66 @@ type ResidentStatsResponse {
 
   """Desglose por tipo de residente (solo activos)"""
   byType: ResidentTypeBreakdown!
+}
+
+"""Pesos para derivar el coeficiente de copropiedad por características"""
+type CoefficientWeighting {
+  id: ID!
+  complexId: String!
+
+  """Base del score: 'AREA' | 'UNIT'"""
+  base: String!
+
+  """Multiplicador por tipo de unidad (clave = UnitType)"""
+  typeMultipliers: JSON!
+
+  """Puntos por alcoba"""
+  perBedroom: Float!
+
+  """Puntos por baño"""
+  perBathroom: Float!
+
+  """Puntos por cada parqueadero"""
+  perParking: Float!
+
+  """Puntos por cada depósito"""
+  perStorage: Float!
+
+  """Puntos si la unidad usa/paga ascensor"""
+  elevatorPoints: Float!
+
+  """Puntos por cada piso de la casa"""
+  houseFloorPoints: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PaginatedComplexesResponse {
+  items: [ResidentialComplex!]!
+  pagination: PaginationReponse!
+}
+
+type NearbyComplexResponse {
+  id: String!
+  name: String!
+  address: String!
+  city: String!
+
+  """Distancia en metros desde la posición del supervisor"""
+  distanceMeters: Int!
+
+  """Radio GPS configurado en el complejo (metros)"""
+  gpsRadius: Int
+}
+
+type PaginatedBuildingsResponse {
+  items: [Building!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedUnitsResponse {
+  items: [Unit!]!
+  pagination: PaginationReponse!
 }
 
 type PaginatedNotificationsResponse {
@@ -2087,6 +2026,68 @@ type NotificationDetailResponse {
   actionResult: NotificationActionResult
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type DeviceInfo {
+  userAgent: String!
+  ip: String!
+  platform: String!
+  deviceId: String
+  appVersion: String
+}
+
+"""Respuesta de autenticación exitosa con tokens JWT"""
+type AuthResponse {
+  """Access token JWT (15 min de vigencia)"""
+  accessToken: String!
+
+  """Refresh token para renovar el access token"""
+  refreshToken: String!
+
+  """Segundos hasta que expire el access token"""
+  expiresIn: Int!
+
+  """ID de la sesión activa"""
+  sessionId: String!
+}
+
+"""Respuesta al solicitar OTP"""
+type OtpRequestResponse {
+  success: Boolean!
+  message: String!
+  debugCode: String
+}
+
+"""Respuesta al auto-registro de supervisor"""
+type RegisterSupervisorResponse {
+  success: Boolean!
+  message: String!
+
+  """ID del supervisor creado; null si hubo error o el correo ya existe"""
+  supervisorId: String
+}
+
+type RequestPasswordResetResponse {
+  success: Boolean!
+  message: String!
+}
+
+"""Respuesta con el token QR generado y su fecha de expiración"""
+type QrLoginTokenResponse {
+  """Token UUID de un solo uso para el login por QR"""
+  token: String!
+
+  """Fecha y hora de expiración del token (72 horas)"""
+  expiresAt: DateTime!
+
+  """
+  PIN: últimos 4 dígitos del NIT base (antes del guion). El complejo ya lo conoce.
+  """
+  pin: String!
+}
+
+type SetPasswordResponse {
+  success: Boolean!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -3459,12 +3460,6 @@ type Query {
   Perfil completo del usuario autenticado (usuario o complejo residencial)
   """
   me: MeResponse!
-  myResidentProfile: Resident!
-  residentStats(complexId: String!): ResidentStatsResponse!
-  residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
-  pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
-  resident(id: String!): Resident!
-  residentHistoryByUnit(unitId: String!): [Resident!]!
   myNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   notificationDetail(notificationId: String!, complexId: String!): NotificationDetailResponse!
@@ -3472,6 +3467,12 @@ type Query {
   sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!
+  myResidentProfile: Resident!
+  residentStats(complexId: String!): ResidentStatsResponse!
+  residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
+  pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
+  resident(id: String!): Resident!
+  residentHistoryByUnit(unitId: String!): [Resident!]!
   visitors(complexId: String!, pagination: PaginationInput, search: String, onlyBlacklisted: Boolean): PaginatedVisitorsResponse!
   visitor(id: String!): Visitor!
   myVisits(pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
@@ -3680,6 +3681,12 @@ input UsersFilterInput {
 
 union MeResponse = User | ResidentialComplex
 
+input FilterNotificationsInput {
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: Boolean
+}
+
 input FilterResidentsInput {
   """Buscar por nombre, apellido o email del usuario"""
   search: String
@@ -3700,12 +3707,6 @@ input FilterResidentsInput {
 
   """Nombre de torre/edificio (ej: "5", "TORRE A"). Búsqueda exacta."""
   buildingName: String
-}
-
-input FilterNotificationsInput {
-  type: NotificationType
-  priority: NotificationPriority
-  isRead: Boolean
 }
 
 input FilterVisitsInput {
@@ -3975,6 +3976,15 @@ type Mutation {
   Restaura un usuario previamente eliminado (soft delete), dejándolo activo
   """
   restoreUser(userId: String!): User!
+  markNotificationAsRead(notificationId: String!): Notification!
+  markAllNotificationsAsRead(complexId: String!): Int!
+  sendNotification(input: SendNotificationInput!): SendNotificationResult!
+  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
+  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  requestSecurityCall(complexId: String!): RequestSecurityCallResult!
+  acknowledgePanicAlert(notificationId: String!): Notification!
+  deleteNotification(notificationId: String!): Boolean!
+  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   createResident(input: CreateResidentInput!): Resident!
   updateResident(input: UpdateResidentInput!): Resident!
   suspendResident(residentId: String!, reason: String!): Resident!
@@ -3986,15 +3996,6 @@ type Mutation {
   bulkMoveOutResidents(input: BulkMoveOutResidentsInput!): [Resident!]!
   approveResident(input: ApproveResidentInput!): Resident!
   rejectResident(input: RejectResidentInput!): Resident!
-  markNotificationAsRead(notificationId: String!): Notification!
-  markAllNotificationsAsRead(complexId: String!): Int!
-  sendNotification(input: SendNotificationInput!): SendNotificationResult!
-  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
-  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
-  requestSecurityCall(complexId: String!): RequestSecurityCallResult!
-  acknowledgePanicAlert(notificationId: String!): Notification!
-  deleteNotification(notificationId: String!): Boolean!
-  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   blacklistVisitor(input: BlacklistVisitorInput!): Visitor!
   removeVisitorFromBlacklist(visitorId: String!): Visitor!
   registerWalkIn(input: RegisterWalkInInput!): Visit!
@@ -4619,6 +4620,37 @@ input UpdateUserIdentityInput {
   identity: String!
 }
 
+input SendNotificationInput {
+  complexId: String!
+  title: String!
+  body: String!
+  type: NotificationType
+  priority: NotificationPriority
+  targetRoles: [String!]
+  targetUnitId: String
+  metadata: JSON
+}
+
+input SavePushSubscriptionInput {
+  complexId: String!
+  endpoint: String!
+  p256dh: String!
+  auth: String!
+}
+
+input SaveMobileTokenInput {
+  complexId: String!
+  deviceToken: String!
+  platform: PushPlatform!
+}
+
+"""Plataforma de destino para notificaciones push"""
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
 input CreateResidentInput {
   """Nombre del residente"""
   name: String!
@@ -4718,37 +4750,6 @@ input RejectResidentInput {
 
   """Razón del rechazo (obligatoria)"""
   rejectionReason: String!
-}
-
-input SendNotificationInput {
-  complexId: String!
-  title: String!
-  body: String!
-  type: NotificationType
-  priority: NotificationPriority
-  targetRoles: [String!]
-  targetUnitId: String
-  metadata: JSON
-}
-
-input SavePushSubscriptionInput {
-  complexId: String!
-  endpoint: String!
-  p256dh: String!
-  auth: String!
-}
-
-input SaveMobileTokenInput {
-  complexId: String!
-  deviceToken: String!
-  platform: PushPlatform!
-}
-
-"""Plataforma de destino para notificaciones push"""
-enum PushPlatform {
-  WEB
-  ANDROID
-  IOS
 }
 
 input BlacklistVisitorInput {

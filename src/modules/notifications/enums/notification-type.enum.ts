@@ -61,6 +61,9 @@ export enum NotificationType {
   COMPLEX_ALERT          = 'COMPLEX_ALERT',          // Alerta de emergencia / corte de servicios
   AMENITY_REMINDER       = 'AMENITY_REMINDER',       // Recordatorio de reserva de zona común
 
+  // ── Cuenta / Perfil ────────────────────────────────────────────
+  PROFILE_UPDATED        = 'PROFILE_UPDATED',        // Datos personales del usuario modificados
+
   // ── Supervisores / Solicitudes de acceso ───────────────────────
   ACCESS_REQUEST_APPROVED    = 'ACCESS_REQUEST_APPROVED',    // Solicitud de acceso aprobada por el admin
   ACCESS_REQUEST_REJECTED    = 'ACCESS_REQUEST_REJECTED',    // Solicitud de acceso rechazada por el admin
