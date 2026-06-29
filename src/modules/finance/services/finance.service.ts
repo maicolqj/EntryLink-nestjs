@@ -1805,6 +1805,25 @@ export class FinanceService {
     );
     const totalExpenses = Number(ledgerExp?.[0]?.total ?? 0);
 
+    // directIncome: ingresos cobrados DIRECTO por caja/banco que NO pasan por la
+    // cartera (CxC). Son los recibos de caja (CASH_RECEIPT) del período que
+    // acreditan una cuenta de ingreso (clase 4), ej. parqueadero de visitantes
+    // pagado en efectivo/transferencia. No solapa con totalCollected: los pagos
+    // de CxC acreditan la cuenta por cobrar (1311), nunca una cuenta de ingreso.
+    const ledgerDirectIncome = await this.dataSource.query(
+      `SELECT COALESCE(SUM(l.credit), 0) AS total
+         FROM accounting_lines l
+         JOIN accounting_headers h ON h.id = l."headerId"
+         JOIN puc_accounts p ON p.id = l."pucAccountId"
+        WHERE h."complexId" = $1 AND h.period = $2
+          AND h."documentType" = 'CASH_RECEIPT'
+          AND h."reversedByHeaderId" IS NULL
+          AND p."accountClass" = '4'
+          AND l.credit > 0`,
+      [complexId, period],
+    );
+    const directIncome = Number(ledgerDirectIncome?.[0]?.total ?? 0);
+
     return {
       complexId,
       period,
@@ -1817,7 +1836,8 @@ export class FinanceService {
       unitsWithDebt,
       unitsFullyPaid,
       totalExpenses: Math.round(totalExpenses * 100) / 100,
-      netCashFlow: Math.round((totalCollected - totalExpenses) * 100) / 100,
+      directIncome: Math.round(directIncome * 100) / 100,
+      netCashFlow: Math.round((totalCollected + directIncome - totalExpenses) * 100) / 100,
     };
   }
 

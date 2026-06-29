@@ -2938,6 +2938,7 @@ type ComplexFinancialSummaryResponse {
   unitsWithDebt: Int!
   unitsFullyPaid: Int!
   totalExpenses: Float!
+  directIncome: Float!
   netCashFlow: Float!
 }
 
