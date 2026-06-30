@@ -10,6 +10,7 @@ import { FeeCharge }            from './entities/fee-charge.entity';
 import { Payment }              from './entities/payment.entity';
 import { WalletEntry }          from './entities/wallet-entry.entity';
 import { ComplexExpense }       from './entities/complex-expense.entity';
+import { DirectIncome }          from './entities/direct-income.entity';
 import { ChargeEmission }        from './entities/charge-emission.entity';
 
 // ─── Ledger contable (partida doble) ─────────────────────────────
@@ -61,6 +62,7 @@ try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
       Unit,
       Building,
       ComplexExpense,
+      DirectIncome,
       ChargeEmission,
       // Ledger contable
       PucAccount,
