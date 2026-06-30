@@ -48,6 +48,7 @@ export const PUC_PH_SEED: PucSeedRow[] = [
   { code: '42',   name: 'Ingresos operacionales',             accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT, isPostable: false, level: 2, parentCode: '4' },
   { code: '4225', name: 'Cuotas de administración',           accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT, isPostable: true,  level: 3, parentCode: '42' },
   { code: '4210', name: 'Intereses de mora',                  accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT, isPostable: true,  level: 3, parentCode: '42' },
+  { code: '4220', name: 'Parqueaderos de visitantes',         accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT, isPostable: true,  level: 3, parentCode: '42' },
   { code: '4295', name: 'Otros ingresos (multas, zonas comunes)', accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT, isPostable: true, level: 3, parentCode: '42' },
 
   // ─── 5. GASTOS ────────────────────────────────────────────────
