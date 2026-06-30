@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, Repository } from 'typeorm';
+import { Between, DataSource, IsNull, Repository } from 'typeorm';
 
 import { VisitorVehicle } from '../entities/visitor-vehicle.entity';
 import { VisitorParkingConfig } from '../entities/visitor-parking-config.entity';
@@ -34,6 +34,7 @@ import { ParkingPaymentMethod } from '../enums/parking-payment-method.enum';
 import { ResgiterExitVehicle } from '../dto/inputs/register-exit-vehicle.input';
 import { FeeCharge } from '../../finance/entities/fee-charge.entity';
 import { ChargeStatus } from '../../finance/enums/charge-status.enum';
+import { AccountingService } from '../../finance/services/accounting.service';
 
 @Injectable()
 export class VisitorParkingService {
@@ -67,6 +68,8 @@ export class VisitorParkingService {
     private readonly residentsService: ResidentsService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly accountingService: AccountingService,
+    private readonly dataSource: DataSource,
 
   ) { }
 
@@ -192,7 +195,10 @@ export class VisitorParkingService {
     input: RegisterVisitorVehicleInput,
     currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-    await this.complexService.findById(input.complexId, currentUser);
+    const complex = await this.complexService.findById(input.complexId, currentUser);
+    // En sesiones de tipo 'complex' el sub del JWT es el id del complejo, no un user.
+    // Para los FK hacia `users` usamos el owner del complejo (un user real).
+    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
 
     // Validar que el residente anfitrión existe y está activo
     const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
@@ -242,7 +248,7 @@ export class VisitorParkingService {
       entityId: saved.id,
       action: AuditAction.CREATE,
       newValue: { id: saved.id, plate: saved.plate, vehicleType: saved.vehicleType, status: saved.status, entryTime: saved.entryDate },
-      performedById: currentUser.sub,
+      performedById: actingUserId,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
       complexId: input.complexId,
@@ -272,11 +278,18 @@ export class VisitorParkingService {
       });
     }
 
+    // Verifica acceso al complejo y resuelve el user que registra la salida.
+    // En sesiones 'complex' el sub del JWT es el complejo → usamos su owner (user real).
+    const complex = await this.complexService.findById(record.complexId, currentUser);
+    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
+
     // 2. Obtener la tarifa activa para este registro
-    // configId == complexId porque VisitorParkingConfig usa complexId como PK
+    // Las tarifas se filtran por complexId (multi-tenant); configId es el id
+    // autogenerado del VisitorParkingConfig, no el complexId.
     const activeRate = await this.rateRepo.findOne({
       where: {
-        configId: record.complexId,
+        complexId: record.complexId,
+        vehicleType: record.vehicleType,
         isActive: true,
       }
     });
@@ -330,35 +343,55 @@ export class VisitorParkingService {
 
     total = Number(total.toFixed(2));
 
-    // 5. Procesar Pago o Cargo a Unidad
-    let newStatus: ParkingRecordStatus = ParkingRecordStatus.PAID;
+    const period = `${exitDate.getFullYear()}-${String(exitDate.getMonth() + 1).padStart(2, '0')}`;
+    const chargeToUnit = input.paymentMethod === ParkingPaymentMethod.CHARGE_TO_UNIT;
 
-    if (input.paymentMethod === ParkingPaymentMethod.CHARGE_TO_UNIT) {
-      if (!record.hostResident.unitId) throw new CustomError({ message: 'Registro sin unidad asignada.', statusCode: 400 });
-
-      const period = `${exitDate.getFullYear()}-${String(exitDate.getMonth() + 1).padStart(2, '0')}`;
-      await this.chargeRepo.save(
-        this.chargeRepo.create({
-          complexId: record.complexId,
-          unitId: record.hostResident.unitId,
-          period,
-          amount: total,
-          description: `Parqueadero: ${record.plate} (${durationMinutes} min)`,
-          status: ChargeStatus.PENDING,
-        }),
-      );
-      newStatus = ParkingRecordStatus.CHARGED_TO_UNIT;
+    if (chargeToUnit && !record.hostResident?.unitId) {
+      throw new CustomError({ message: 'Registro sin unidad asignada.', statusCode: 400 });
     }
 
-    // 6. Guardar y Auditar
-    record.exitDate = exitDate;
-    record.duration = durationMinutes;
-    record.parkingCost = total;
-    record.paymentMethod = input.paymentMethod;
-    record.status = newStatus;
+    // 5-6. Registrar salida + reflejar el dinero en finanzas (mismo TX):
+    //   - CASH/TRANSFER → recibo de caja (ingreso inmediato, cuenta 4220).
+    //   - CHARGE_TO_UNIT → factura a la CxC de la unidad visitada (causa ingreso).
+    const saved = await this.dataSource.transaction(async (em) => {
+      let newStatus: ParkingRecordStatus = ParkingRecordStatus.PAID;
 
+      if (chargeToUnit) {
+        const dueDate = new Date(exitDate.getFullYear(), exitDate.getMonth() + 1, 0); // fin de mes
+        if (total > 0) {
+          await this.accountingService.emitVisitorParkingUnitCharge(em, {
+            complexId: record.complexId,
+            unitId: record.hostResident.unitId!,
+            amount: total,
+            period,
+            dueDate,
+            documentDate: exitDate,
+            description: `Parqueadero: ${record.plate} (${durationMinutes} min)`,
+            createdByUserId: actingUserId,
+          });
+        }
+        newStatus = ParkingRecordStatus.CHARGED_TO_UNIT;
+      } else if (total > 0) {
+        await this.accountingService.emitVisitorParkingCashReceipt(em, {
+          complexId: record.complexId,
+          amount: total,
+          isCash: input.paymentMethod === ParkingPaymentMethod.CASH,
+          documentDate: exitDate,
+          period,
+          createdByUserId: actingUserId,
+          memo: `Parqueadero visitante: ${record.plate} (${durationMinutes} min)`,
+        });
+      }
 
-    const saved = await this.vehicleRepo.save(record);
+      record.exitDate = exitDate;
+      record.duration = durationMinutes;
+      record.parkingCost = total;
+      record.paymentMethod = input.paymentMethod;
+      record.status = newStatus;
+      record.exitRegisteredByUserId = actingUserId;
+
+      return em.save(VisitorVehicle, record);
+    });
 
     this.logger.log(`Salida Exitosa: ${saved.plate} - Cobrado: $${total} (${durationMinutes} min)`);
 
@@ -394,7 +427,8 @@ export class VisitorParkingService {
       });
     }
 
-    await this.complexService.findById(vehicle.complexId, currentUser);
+    const complex = await this.complexService.findById(vehicle.complexId, currentUser);
+    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
 
     vehicle.status = ParkingRecordStatus.CANCELLED;
     vehicle.cancellationReason = cancellationReason;
@@ -409,7 +443,7 @@ export class VisitorParkingService {
       action: AuditAction.DELETE,
       previousValue: { status: ParkingRecordStatus.OPEN },
       newValue: { status: ParkingRecordStatus.CANCELLED, cancellationReason },
-      performedById: currentUser.sub,
+      performedById: actingUserId,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
       complexId: vehicle.complexId,
