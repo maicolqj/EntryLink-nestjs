@@ -21,7 +21,7 @@ import { ResidentStatsResponse } from '../dto/responses/resident-stats.response'
 
 import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
-import { UserStatus } from '../../users/enums/user.enums';
+import { UserStatus, UserIdentityType } from '../../users/enums/user.enums';
 import { Role } from '../../roles/entities/role.entity';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
@@ -201,6 +201,7 @@ export class ResidentsService {
           password: dummyPassword,
           phoneNumber: input.phoneNumber,
           identity: input.identityNumber,
+          identityType: input.identityType ?? UserIdentityType.CC,
           systemCode,
           complexId: input.complexId,
           status: UserStatus.ACTIVE,
