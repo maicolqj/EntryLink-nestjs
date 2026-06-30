@@ -3204,7 +3204,7 @@ type VisitorVehicle {
   complexId: String!
 
   """Usuario que registró el ingreso"""
-  registeredByUserId: String!
+  registeredByUserId: String
 
   """Usuario que registró la salida"""
   exitRegisteredByUserId: String

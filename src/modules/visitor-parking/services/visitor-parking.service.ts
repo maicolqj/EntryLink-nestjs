@@ -225,7 +225,10 @@ export class VisitorParkingService {
       hostResidentId: input.hostResidentId,
       complexId: input.complexId,
       notes: input.notes,
-      registeredByUserId: currentUser.sub,
+      // Solo asignar si quien registra es un usuario real.
+      // Cuando entityType === 'complex', sub es el UUID del complejo (no existe en users)
+      // y causaría una FK violation en registered_by_user_id.
+      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
       invoiceNumber,
     });
 
@@ -395,7 +398,8 @@ export class VisitorParkingService {
 
     vehicle.status = ParkingRecordStatus.CANCELLED;
     vehicle.cancellationReason = cancellationReason;
-    vehicle.cancelledByUserId = currentUser.sub;
+    // Solo asignar si quien cancela es un usuario real (ver registerEntry).
+    vehicle.cancelledByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
 
     const saved = await this.vehicleRepo.save(vehicle);
 
