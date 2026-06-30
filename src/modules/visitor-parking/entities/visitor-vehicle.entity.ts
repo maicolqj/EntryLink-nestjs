@@ -109,9 +109,9 @@ export class VisitorVehicle {
 
   // ==================== AUDITORÍA ====================
 
-  @Field(() => String, { description: 'Usuario que registró el ingreso' })
-  @Column({ name: 'registered_by_user_id', type: 'uuid' })
-  registeredByUserId: string;
+  @Field(() => String, { description: 'Usuario que registró el ingreso', nullable: true })
+  @Column({ name: 'registered_by_user_id', type: 'uuid', nullable: true })
+  registeredByUserId?: string;
 
   @Field(() => String, { description: 'Usuario que registró la salida', nullable: true })
   @Column({ name: 'exit_registered_by_user_id', type: 'uuid', nullable: true })
@@ -139,7 +139,7 @@ export class VisitorVehicle {
   complex?: ResidentialComplex;
 
   @Field(() => User, { description: 'Usuario que registró el ingreso', nullable: true })
-  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'registered_by_user_id' })
   registeredByUser?: User;
 
