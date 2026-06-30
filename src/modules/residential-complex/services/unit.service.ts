@@ -92,11 +92,13 @@ export class UnitService {
     currentUser: JwtAccessPayload,
     buildingId?: string,
     status?: UnitStatus,
+    search?: string,
   ): Promise<PaginatedUnitsResponse> {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
-    const cacheKey = BK.unit.list(complexId, page, limit, buildingId, status);
+    const term = search?.trim();
+    const cacheKey = BK.unit.list(complexId, page, limit, buildingId, status, term || undefined);
     const cached = await this.cacheService.get<PaginatedUnitsResponse>({ key: cacheKey });
     if (cached) return cached;
 
@@ -110,6 +112,12 @@ export class UnitService {
 
     if (buildingId) qb.andWhere('unit.building_id = :buildingId', { buildingId });
     if (status)     qb.andWhere('unit.status = :status',          { status });
+    if (term) {
+      qb.andWhere(
+        '(unit.number ILIKE :term OR building.name ILIKE :term)',
+        { term: `%${term}%` },
+      );
+    }
 
     qb.orderBy('unit.floor', 'ASC')
       .addOrderBy('unit.number', 'ASC')

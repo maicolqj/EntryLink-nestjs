@@ -3432,7 +3432,7 @@ type Query {
   nearbyComplexes(lat: Float!, lng: Float!, radiusMeters: Float = 200): [NearbyComplexResponse!]!
   buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
   building(id: String!): Building!
-  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus): PaginatedUnitsResponse!
+  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus, search: String): PaginatedUnitsResponse!
   unit(id: String!): Unit!
   coefficientWeighting(complexId: String!): CoefficientWeighting
 

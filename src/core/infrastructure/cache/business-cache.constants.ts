@@ -28,8 +28,8 @@ export const BK = {
 
   /** Unidades (apartamentos / casas) */
   unit: {
-    list:   (complexId: string, page: number, limit: number, buildingId = 'all', status = 'all') =>
-              ({ prefix: 'unit', key: `${complexId}:${buildingId}:${status}:${page}:${limit}` }),
+    list:   (complexId: string, page: number, limit: number, buildingId = 'all', status = 'all', search = 'all') =>
+              ({ prefix: 'unit', key: `${complexId}:${buildingId}:${status}:${search}:${page}:${limit}` }),
     all:    (complexId: string) => ({ prefix: 'unit', key: `${complexId}:all` }),
     prefix: (complexId: string) => `unit:${complexId}:`,
     TTL: 300,   // 5 min
