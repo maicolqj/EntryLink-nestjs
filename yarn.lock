@@ -1050,21 +1050,28 @@
   resolved "https://registry.npmjs.org/@borewit/text-codec/-/text-codec-0.2.1.tgz"
   integrity sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw==
 
-"@bull-board/api@6.20.6", "@bull-board/api@^6.20.6":
+"@bull-board/api@8.0.1":
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/@bull-board/api/-/api-8.0.1.tgz#70d90f1cc59da20e167fff2ae9c27e129a37aaa3"
+  integrity sha512-7FELJHRQPtjH9+r/DUArr4pDVU8r1yeDS9azQUzFtIbsUT5xGjyg5R1RB0I/RfwFfK5bqho/4cpzxJ/UnQjSKA==
+  dependencies:
+    redis-info "^3.1.0"
+
+"@bull-board/api@^6.20.6":
   version "6.20.6"
   resolved "https://registry.npmjs.org/@bull-board/api/-/api-6.20.6.tgz"
   integrity sha512-B/9OlKWJ/He421Lyuc7htMpKN4R8hcNu5uoIRiyh9y9J0kMOfxfs82GKXdfR9R0595LvAcCOSvjn8EtWHXesTA==
   dependencies:
     redis-info "^3.1.0"
 
-"@bull-board/express@^6.20.6":
-  version "6.20.6"
-  resolved "https://registry.npmjs.org/@bull-board/express/-/express-6.20.6.tgz"
-  integrity sha512-QBOjhi3jR4qIJvLCo++DdL0CyG4umiFXBCPJYr74DmRN41m27rDS3NSf7ceHdbQr9Ol8mw3xbVqGLn50x3QdWQ==
+"@bull-board/express@^8.0.1":
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/@bull-board/express/-/express-8.0.1.tgz#d451de8edced65e6eb10d74538221ecb59980b6d"
+  integrity sha512-VOEhLNlaaVk3mBBoREXO/Dopzr9rKK5TpOGyaCbcnpzLKlrlwhj6BAeWWreB7/3Wu+pNnbKmrAhK8OOnYdzxLg==
   dependencies:
-    "@bull-board/api" "6.20.6"
-    "@bull-board/ui" "6.20.6"
-    ejs "^3.1.10"
+    "@bull-board/api" "8.0.1"
+    "@bull-board/ui" "8.0.1"
+    ejs "^6.0.1"
     express "^5.2.1"
 
 "@bull-board/nestjs@^6.20.6":
@@ -1072,12 +1079,12 @@
   resolved "https://registry.npmjs.org/@bull-board/nestjs/-/nestjs-6.20.6.tgz"
   integrity sha512-jWXvn4cbRwlLlp4/+PIXJniP/blK0Dt8EphmN3k7SPwWG1yQiDGxLVA2ZbynjfwGE/weN73+i4WVR+7IuvK7WA==
 
-"@bull-board/ui@6.20.6":
-  version "6.20.6"
-  resolved "https://registry.npmjs.org/@bull-board/ui/-/ui-6.20.6.tgz"
-  integrity sha512-nEXRgMHHd48ssINgvDqT7b4p/+57XRf3CUcTGQ7UIJb4F7n/kRRj8+ZQvQmMFsYGdNmbNU2eNheQ05vXSYiqdQ==
+"@bull-board/ui@8.0.1":
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/@bull-board/ui/-/ui-8.0.1.tgz#a10d289edf6c93f08e9b6dab166b2a3dc9c89725"
+  integrity sha512-gKEGSD8dlUoWFGJJ4I4Q5bDtfB7yJwGfpgA2DVn1G1TzlUSN5n4fzzcGpLf5fS+QhR7tB/niydUiFRQ2zrjVrQ==
   dependencies:
-    "@bull-board/api" "6.20.6"
+    "@bull-board/api" "8.0.1"
 
 "@colors/colors@1.5.0":
   version "1.5.0"
@@ -4866,6 +4873,11 @@ ejs@^3.1.10:
   integrity sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==
   dependencies:
     jake "^10.8.5"
+
+ejs@^6.0.1:
+  version "6.0.1"
+  resolved "https://registry.yarnpkg.com/ejs/-/ejs-6.0.1.tgz#88ea8ce00335c3575d7c3602dd76e84b0bd60f43"
+  integrity sha512-UaaM14yby8U3k02ihS1Bmj5Kz2d7CCQM1scxpgs4Mhkq8F1wR2gl3+Ts4h5Ne4Mnt7M9m4Dw7jsuMr3+xO4vZA==
 
 electron-to-chromium@^1.5.263:
   version "1.5.286"
