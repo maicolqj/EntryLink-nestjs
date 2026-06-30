@@ -9,6 +9,7 @@ import { FeeCharge } from '../entities/fee-charge.entity';
 import { Payment } from '../entities/payment.entity';
 import { WalletEntry } from '../entities/wallet-entry.entity';
 import { ComplexExpense } from '../entities/complex-expense.entity';
+import { DirectIncome } from '../entities/direct-income.entity';
 import { RecurringCharge } from '../entities/recurring-charge.entity';
 import { UpsertComplexFinanceConfigInput } from '../dto/inputs/upsert-complex-finance-config.input';
 import { ChargeStatus } from '../enums/charge-status.enum';
@@ -31,6 +32,9 @@ import { CreateDirectChargesResponse } from '../dto/responses/create-direct-char
 import { RegisterExpenseInput } from '../dto/inputs/register-expense.input';
 import { FilterExpensesInput } from '../dto/inputs/filter-expenses.input';
 import { PaginatedExpensesResponse, ExpenseCategoryBreakdown } from '../dto/responses/paginated-expenses.response';
+import { RegisterDirectIncomeInput } from '../dto/inputs/register-direct-income.input';
+import { FilterIncomesInput } from '../dto/inputs/filter-incomes.input';
+import { PaginatedIncomesResponse, IncomeCategoryBreakdown } from '../dto/responses/paginated-incomes.response';
 import { RegisterBulkPaymentInput } from '../dto/inputs/register-bulk-payment.input';
 import { RegisterBulkPaymentResponse } from '../dto/responses/register-bulk-payment.response';
 import { PaginatedChargesResponse } from '../dto/responses/paginated-charges.response';
@@ -60,6 +64,7 @@ import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode, ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { ExpenseCategory } from '../enums/expense-category.enum';
+import { IncomeCategory } from '../enums/income-category.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
@@ -104,6 +109,8 @@ export class FinanceService {
     private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(ComplexExpense)
     private readonly expenseRepo: Repository<ComplexExpense>,
+    @InjectRepository(DirectIncome)
+    private readonly incomeRepo: Repository<DirectIncome>,
     private readonly accountingService: AccountingService,
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
@@ -1805,6 +1812,17 @@ export class FinanceService {
     );
     const totalExpenses = Number(ledgerExp?.[0]?.total ?? 0);
 
+    // directIncome: ingresos directos caja/banco (no-cuota) del período, no revertidos
+    const incomeRow = await this.incomeRepo
+      .createQueryBuilder('i')
+      .select('COALESCE(SUM(i.amount), 0)', 'total')
+      .where('i.complexId = :complexId', { complexId })
+      .andWhere('i.period = :period', { period })
+      .andWhere('i.isReversed = false')
+      .andWhere('i.deletedAt IS NULL')
+      .getRawOne<{ total: string }>();
+    const directIncome = Number(incomeRow?.total ?? 0);
+
     return {
       complexId,
       period,
@@ -1817,7 +1835,8 @@ export class FinanceService {
       unitsWithDebt,
       unitsFullyPaid,
       totalExpenses: Math.round(totalExpenses * 100) / 100,
-      netCashFlow: Math.round((totalCollected - totalExpenses) * 100) / 100,
+      directIncome: Math.round(directIncome * 100) / 100,
+      netCashFlow: Math.round((totalCollected + directIncome - totalExpenses) * 100) / 100,
     };
   }
 
@@ -2374,6 +2393,150 @@ export class FinanceService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // INGRESOS DIRECTOS (caja/banco no originados en cuotas)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async registerDirectIncome(
+    input: RegisterDirectIncomeInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<DirectIncome> {
+    await this.complexService.findById(input.complexId, currentUser);
+    this.assertValidPeriod(input.period);
+
+    const income = await this.incomeRepo.save(
+      this.incomeRepo.create({
+        complexId: input.complexId,
+        amount: input.amount,
+        description: input.description,
+        category: input.category,
+        period: input.period,
+        incomeDate: new Date(input.incomeDate),
+        receiptUrl: input.receiptUrl ?? null,
+        notes: input.notes ?? null,
+        isReversed: false,
+        registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+      }),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.FeeCharge,
+      entityId: income.id,
+      action: AuditAction.CREATE,
+      newValue: { id: income.id, amount: income.amount, category: income.category, period: income.period, complexId: input.complexId },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: input.complexId,
+      description: `Ingreso directo registrado: "${income.description}" $${income.amount} — categoría: ${income.category} — período: ${income.period}`,
+    });
+
+    return income;
+  }
+
+  async reverseDirectIncome(
+    incomeId: string,
+    reason: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<DirectIncome> {
+    const income = await this.findIncomeOrFail(incomeId);
+    await this.complexService.findById(income.complexId, currentUser);
+
+    if (income.isReversed) {
+      throw new CustomError({
+        message: 'El ingreso ya fue revertido',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: FinanceErrorCode.INCOME_ALREADY_REVERSED,
+      });
+    }
+
+    income.isReversed = true;
+    income.reversalReason = reason;
+    income.reversedByUserId = currentUser.sub;
+    income.reversedAt = new Date();
+
+    const saved = await this.incomeRepo.save(income);
+
+    void this.auditService.log({
+      entityType: AuditEntityType.FeeCharge,
+      entityId: incomeId,
+      action: AuditAction.UPDATE,
+      previousValue: { isReversed: false },
+      newValue: { isReversed: true, reason, reversedAt: income.reversedAt },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: income.complexId,
+      description: `Ingreso directo revertido: "${income.description}" $${income.amount} — razón: ${reason}`,
+    });
+
+    return saved;
+  }
+
+  async getComplexIncomes(
+    complexId: string,
+    pagination: PaginationInput,
+    filters: FilterIncomesInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<PaginatedIncomesResponse> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const { page, limit } = pagination;
+
+    const qb = this.incomeRepo
+      .createQueryBuilder('i')
+      .where('i.complexId = :complexId', { complexId })
+      .andWhere('i.deletedAt IS NULL');
+
+    if (!filters.includeReversed) {
+      qb.andWhere('i.isReversed = false');
+    }
+    if (filters.category) {
+      qb.andWhere('i.category = :category', { category: filters.category });
+    }
+    if (filters.period) {
+      qb.andWhere('i.period = :period', { period: filters.period });
+    } else {
+      if (filters.startDate) qb.andWhere('i.incomeDate >= :startDate', { startDate: filters.startDate });
+      if (filters.endDate)   qb.andWhere('i.incomeDate <= :endDate',   { endDate: filters.endDate });
+    }
+
+    qb.orderBy('i.incomeDate', 'DESC').addOrderBy('i.createdAt', 'DESC');
+
+    const totalItems = await qb.getCount();
+    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const totalPages = Math.ceil(totalItems / limit);
+
+    const activeItems = items.filter(i => !i.isReversed);
+    const totalAmount = activeItems.reduce((s, i) => s + Number(i.amount), 0);
+
+    const categoryMap = new Map<IncomeCategory, { total: number; count: number }>();
+    for (const i of activeItems) {
+      const entry = categoryMap.get(i.category) ?? { total: 0, count: 0 };
+      entry.total += Number(i.amount);
+      entry.count += 1;
+      categoryMap.set(i.category, entry);
+    }
+
+    const byCategory: IncomeCategoryBreakdown[] = Array.from(categoryMap.entries())
+      .map(([category, { total, count }]) => ({
+        category,
+        total: Math.round(total * 100) / 100,
+        count,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      items,
+      pagination: {
+        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
+        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+      },
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      byCategory,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // HELPERS PRIVADOS
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2435,6 +2598,18 @@ export class FinanceService {
       });
     }
     return expense;
+  }
+
+  private async findIncomeOrFail(id: string): Promise<DirectIncome> {
+    const income = await this.incomeRepo.findOne({ where: { id, deletedAt: null as any } });
+    if (!income) {
+      throw new CustomError({
+        message: 'Ingreso no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: FinanceErrorCode.INCOME_NOT_FOUND,
+      });
+    }
+    return income;
   }
 
   /**

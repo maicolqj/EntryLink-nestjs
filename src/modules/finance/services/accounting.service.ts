@@ -38,6 +38,8 @@ import { FinanceErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 import { Vehicle } from '../../vehicles/entities/vehicle.entity';
 import { VehicleStatus } from '../../vehicles/enums/vehicle-status.enum';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
@@ -63,6 +65,7 @@ const PUC = {
   RECEIVABLE:          '1311', // Cuotas de administración por cobrar (CxC)
   INTEREST_RECEIVABLE: '1345', // Multas e intereses por cobrar (CxC interés mora)
   MORA_INCOME:         '4210', // Intereses de mora (ingreso)
+  VISITOR_PARKING_INCOME: '4220', // Parqueaderos de visitantes (ingreso)
 } as const;
 
 /** Convierte a centavos enteros para comparar sin error de coma flotante. */
@@ -994,6 +997,217 @@ export class AccountingService {
       ] as AccountingLine[],
     });
     return (await em.save(AccountingHeader, header)).id;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PARQUEADERO DE VISITANTES → INGRESO
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Garantiza la cuenta de ingreso `4220` (Parqueaderos de visitantes) para un
+   * complejo, pero SOLO si tiene el módulo FINANZAS activo. La cuenta se crea
+   * automáticamente bajo el grupo `42` (Ingresos operacionales) si aún no existe.
+   *
+   * Devuelve `null` cuando:
+   *   - el complejo NO tiene FINANZAS activo → el cobro continúa como antes (sin asiento), o
+   *   - no existe el PUC base (grupo 42) → complejo no migrado al ledger (best-effort).
+   *
+   * Regla de habilitación: `enabledModules` null/vacío ⇒ todos los módulos activos.
+   */
+  private async ensureVisitorParkingIncomeAccount(
+    em: EntityManager,
+    complexId: string,
+  ): Promise<PucAccount | null> {
+    const complex = await em.findOne(ResidentialComplex, {
+      where: { id: complexId },
+      select: ['id', 'enabledModules'],
+    });
+    const mods = complex?.enabledModules;
+    const financeEnabled = !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
+    if (!financeEnabled) return null;
+
+    const existing = await em.findOne(PucAccount, {
+      where: { complexId, code: PUC.VISITOR_PARKING_INCOME },
+    });
+    if (existing) {
+      return existing.isPostable && existing.isActive ? existing : null;
+    }
+
+    // Crear 4220 bajo el grupo 42; si no hay PUC base, no forzar (best-effort).
+    const parent = await em.findOne(PucAccount, { where: { complexId, code: '42' } });
+    if (!parent) return null;
+
+    const created = await em.save(PucAccount, em.create(PucAccount, {
+      complexId,
+      code: PUC.VISITOR_PARKING_INCOME,
+      name: 'Parqueaderos de visitantes',
+      accountClass: parent.accountClass,
+      nature: parent.nature,
+      isPostable: true,
+      isActive: true,
+      level: parent.level + 1,
+      parentId: parent.id,
+    }));
+    this.logger.log(`Cuenta PUC ${PUC.VISITOR_PARKING_INCOME} creada automáticamente para complejo ${complexId}`);
+    return created;
+  }
+
+  /**
+   * Emite el RECIBO DE CAJA por el cobro INMEDIATO de un parqueadero de visitante
+   * (efectivo o transferencia). El visitante no es una unidad, así que el asiento
+   * no lleva unitId y reconoce el ingreso de inmediato:
+   *
+   *   Débito Caja(1105, efectivo) / Banco(1110, transferencia) = total
+   *   Crédito 4220 (parqueaderos de visitantes)                = total
+   *
+   * Best-effort: si la copropiedad aún no tiene PUC configurado, registra
+   * advertencia y devuelve null SIN romper la salida del vehículo.
+   * Debe llamarse dentro de la transacción del evento (mismo `em`).
+   */
+  async emitVisitorParkingCashReceipt(
+    em: EntityManager,
+    params: {
+      complexId: string;
+      amount: number;
+      isCash: boolean;
+      documentDate: Date;
+      period: string;
+      createdByUserId: string;
+      memo: string;
+    },
+  ): Promise<string | null> {
+    const total = round2(params.amount);
+    if (total <= 0) return null;
+
+    // Gate por módulo FINANZAS + autoaprovisiona la cuenta 4220.
+    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(em, params.complexId);
+    if (!incomeAcc) return null; // sin FINANZAS o sin PUC base → continúa como antes
+
+    let cashAcc: PucAccount;
+    try {
+      cashAcc = await this.requireAccount(em, params.complexId, params.isCash ? PUC.CASH : PUC.BANK);
+    } catch (e) {
+      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
+        this.logger.warn(`[parkingReceipt] PUC no configurado para complejo ${params.complexId}; recibo omitido`);
+        return null;
+      }
+      throw e;
+    }
+
+    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.CASH_RECEIPT);
+    const header = em.create(AccountingHeader, {
+      documentType: AccountingDocumentType.CASH_RECEIPT,
+      consecutive,
+      documentDate: params.documentDate,
+      period: params.period,
+      memo: params.memo,
+      totalDebit: total,
+      totalCredit: total,
+      createdByUserId: params.createdByUserId,
+      complexId: params.complexId,
+      unitId: null,
+      lines: [
+        {
+          pucAccountId: cashAcc.id, debit: total, credit: 0,
+          memo: params.memo, complexId: params.complexId,
+        },
+        {
+          pucAccountId: incomeAcc.id, debit: 0, credit: total,
+          memo: params.memo, complexId: params.complexId,
+        },
+      ] as AccountingLine[],
+    });
+    return (await em.save(AccountingHeader, header)).id;
+  }
+
+  /**
+   * Causa un cargo de parqueadero de visitante a la CUENTA DE LA UNIDAD visitada
+   * (método "cargar a la unidad"). Crea el `FeeCharge` operativo (CxC) y, si la
+   * copropiedad tiene PUC, la FACTURA que reconoce el ingreso por causación:
+   *
+   *   Débito 1311 (CxC) = Crédito 4220 (parqueaderos de visitantes)
+   *
+   * El `FeeCharge` queda etiquetado con `incomeAccountId=4220`, de modo que al
+   * pagarse (vía registerPayment → emitCashReceipt) el ledger cuadre. Recalcula
+   * el saldo materializado de la unidad. Best-effort en la parte contable: si no
+   * hay PUC, igual crea el cargo (la deuda se rastrea) y omite la factura.
+   * Debe correr dentro de la transacción del evento (mismo `em`).
+   */
+  async emitVisitorParkingUnitCharge(
+    em: EntityManager,
+    params: {
+      complexId: string;
+      unitId: string;
+      amount: number;
+      period: string;
+      dueDate: Date;
+      documentDate: Date;
+      description: string;
+      createdByUserId: string;
+    },
+  ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
+    const amount = round2(params.amount);
+
+    // Gate por módulo FINANZAS + autoaprovisiona 4220. Sin FINANZAS/PUC base se
+    // omite la factura pero igual se crea la CxC (la deuda se rastrea como antes).
+    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(em, params.complexId);
+    let receivableAcc: PucAccount | null = null;
+    if (incomeAcc) {
+      try {
+        receivableAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
+      } catch (e) {
+        if (!(e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND)) throw e;
+        this.logger.warn(`[parkingUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`);
+      }
+    }
+
+    const now = new Date();
+    const charge = await em.save(FeeCharge, em.create(FeeCharge, {
+      complexId: params.complexId,
+      unitId: params.unitId,
+      feeConfigId: null as any,
+      period: params.period,
+      dueDate: params.dueDate,
+      amount,
+      paidAmount: 0,
+      description: params.description,
+      status: params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
+      prelacionConcept: PrelacionConcept.ORDINARY,
+      incomeAccountId: incomeAcc?.id ?? null,
+    }));
+
+    let accountingHeaderId: string | null = null;
+    if (receivableAcc && incomeAcc && amount > 0) {
+      const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.INVOICE);
+      const header = em.create(AccountingHeader, {
+        documentType: AccountingDocumentType.INVOICE,
+        consecutive,
+        documentDate: params.documentDate,
+        period: params.period,
+        memo: `Factura parqueadero visitante — ${params.description}`,
+        totalDebit: amount,
+        totalCredit: amount,
+        createdByUserId: params.createdByUserId,
+        complexId: params.complexId,
+        unitId: params.unitId,
+        lines: [
+          {
+            pucAccountId: receivableAcc.id, debit: amount, credit: 0,
+            memo: `Causación parqueadero visitante — ${params.description}`,
+            unitId: params.unitId, complexId: params.complexId,
+          },
+          {
+            pucAccountId: incomeAcc.id, debit: 0, credit: amount,
+            memo: `Ingreso parqueadero visitante — ${params.description}`,
+            unitId: params.unitId, complexId: params.complexId,
+          },
+        ] as AccountingLine[],
+      });
+      accountingHeaderId = (await em.save(AccountingHeader, header)).id;
+    }
+
+    await this.recomputeUnitStatus(em, params.complexId, params.unitId);
+    return { chargeId: charge.id, accountingHeaderId };
   }
 
   // ───────────────────────────────────────────────────────────────────────────

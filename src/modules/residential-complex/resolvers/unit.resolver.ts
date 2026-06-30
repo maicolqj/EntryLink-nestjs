@@ -70,9 +70,10 @@ export class UnitResolver {
     @Args('pagination', { nullable: true })  pagination: PaginationInput = { page: 1, limit: 20 },
     @Args('buildingId', { nullable: true })  buildingId?: string,
     @Args('status',     { nullable: true, type: () => UnitStatus }) status?: UnitStatus,
+    @Args('search',     { nullable: true })  search?: string,
     @CurrentUser() currentUser?: JwtAccessPayload,
   ): Promise<PaginatedUnitsResponse> {
-    return this.unitService.findByComplex(complexId, pagination, currentUser, buildingId, status);
+    return this.unitService.findByComplex(complexId, pagination, currentUser, buildingId, status, search);
   }
 
   @Query(() => Unit, { name: 'unit' })
