@@ -75,13 +75,7 @@ export class ComplexFinancialSummaryResponse {
   @Field(() => Float)
   totalExpenses: number;
 
-  /**
-   * Ingresos cobrados DIRECTO por caja/banco que NO pasan por la cartera (CxC):
-   * recibos de caja que acreditan una cuenta de ingreso (clase 4) en el período,
-   * ej. parqueadero de visitantes pagado en efectivo/transferencia. No solapa con
-   * `totalCollected` porque los pagos de CxC acreditan la cuenta por cobrar (1311),
-   * no la de ingreso.
-   */
+  /** Suma de ingresos directos caja/banco (no-cuota) registrados en el período */
   @Field(() => Float)
   directIncome: number;
 
