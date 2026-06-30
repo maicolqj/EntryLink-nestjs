@@ -4705,6 +4705,9 @@ input CreateResidentInput {
   """Número de documento de identidad del residente"""
   identityNumber: String!
 
+  """Tipo de documento de identidad del residente"""
+  identityType: UserIdentityType! = CC
+
   """ID de la unidad a la que se asignará"""
   unitId: String!
 
