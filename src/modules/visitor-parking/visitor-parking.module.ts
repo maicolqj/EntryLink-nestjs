@@ -16,6 +16,7 @@ import { AuditModule }              from '../audit/audit.module';
 import { NotificationsModule }      from '../notifications/notifications.module';
 import { ParkingRecord } from '../vehicles/entities/parking-record.entity';
 import { FeeCharge } from '../finance/entities/fee-charge.entity';
+import { FinanceModule } from '../finance/finance.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { FeeCharge } from '../finance/entities/fee-charge.entity';
     ResidentsModule,
     AuditModule,
     NotificationsModule,   // expone NotificationsService
+    FinanceModule,         // expone AccountingService (ingreso por parqueadero)
   ],
   providers: [
     VisitorParkingService,

@@ -75,7 +75,17 @@ export class ComplexFinancialSummaryResponse {
   @Field(() => Float)
   totalExpenses: number;
 
-  /** Flujo neto = totalCollected - totalExpenses */
+  /**
+   * Ingresos cobrados DIRECTO por caja/banco que NO pasan por la cartera (CxC):
+   * recibos de caja que acreditan una cuenta de ingreso (clase 4) en el período,
+   * ej. parqueadero de visitantes pagado en efectivo/transferencia. No solapa con
+   * `totalCollected` porque los pagos de CxC acreditan la cuenta por cobrar (1311),
+   * no la de ingreso.
+   */
+  @Field(() => Float)
+  directIncome: number;
+
+  /** Flujo neto = totalCollected + directIncome - totalExpenses */
   @Field(() => Float)
   netCashFlow: number;
 }
