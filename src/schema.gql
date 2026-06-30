@@ -526,8 +526,8 @@ enum VehicleType {
   """Camioneta o camión"""
   TRUCK
 
-  """Van o furgoneta"""
-  VAN
+  """CAMIONETA o furgoneta"""
+  CAMIONETA
 
   """Bicicleta (no ocupa parqueadero vehicular)"""
   BICYCLE
