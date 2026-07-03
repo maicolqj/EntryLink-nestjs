@@ -526,8 +526,8 @@ enum VehicleType {
   """Camioneta o camión"""
   TRUCK
 
-  """Van o furgoneta"""
-  VAN
+  """CAMIONETA o furgoneta"""
+  CAMIONETA
 
   """Bicicleta (no ocupa parqueadero vehicular)"""
   BICYCLE
@@ -2679,6 +2679,51 @@ enum ExpenseCategory {
   OTHER
 }
 
+type DirectIncome {
+  id: ID!
+  description: String!
+  amount: Float!
+  category: IncomeCategory!
+  period: String!
+  incomeDate: DateTime!
+  receiptUrl: String
+  notes: String
+  isReversed: Boolean!
+  reversalReason: String
+  reversedByUserId: String
+  reversedAt: DateTime
+  complexId: String!
+  registeredByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  complex: ResidentialComplex!
+}
+
+"""Categoría de ingreso directo (caja/banco) del complejo"""
+enum IncomeCategory {
+  """Parqueadero de visitantes"""
+  PARKING
+
+  """Alquiler de salón / zonas comunes"""
+  HALL_RENTAL
+
+  """Multas y sanciones"""
+  FINES
+
+  """Rendimientos financieros"""
+  INTEREST
+
+  """Venta de activos"""
+  SALE
+
+  """Donaciones y aportes"""
+  DONATION
+
+  """Otros ingresos"""
+  OTHER
+}
+
 type RecurringCharge {
   id: ID!
   concept: String!
@@ -2939,6 +2984,7 @@ type ComplexFinancialSummaryResponse {
   unitsWithDebt: Int!
   unitsFullyPaid: Int!
   totalExpenses: Float!
+  directIncome: Float!
   netCashFlow: Float!
 }
 
@@ -3041,6 +3087,19 @@ type PaginatedExpensesResponse {
   pagination: PaginationReponse!
   totalAmount: Float!
   byCategory: [ExpenseCategoryBreakdown!]!
+}
+
+type IncomeCategoryBreakdown {
+  category: IncomeCategory!
+  total: Float!
+  count: Float!
+}
+
+type PaginatedIncomesResponse {
+  items: [DirectIncome!]!
+  pagination: PaginationReponse!
+  totalAmount: Float!
+  byCategory: [IncomeCategoryBreakdown!]!
 }
 
 type ChargeEmissionPreviewLine {
@@ -3205,7 +3264,7 @@ type VisitorVehicle {
   complexId: String!
 
   """Usuario que registró el ingreso"""
-  registeredByUserId: String!
+  registeredByUserId: String
 
   """Usuario que registró la salida"""
   exitRegisteredByUserId: String
@@ -3433,7 +3492,7 @@ type Query {
   nearbyComplexes(lat: Float!, lng: Float!, radiusMeters: Float = 200): [NearbyComplexResponse!]!
   buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
   building(id: String!): Building!
-  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus): PaginatedUnitsResponse!
+  units(complexId: String!, pagination: PaginationInput, buildingId: String, status: UnitStatus, search: String): PaginatedUnitsResponse!
   unit(id: String!): Unit!
   coefficientWeighting(complexId: String!): CoefficientWeighting
 
@@ -3498,6 +3557,7 @@ type Query {
   unitAccountStatement(unitId: String!, complexId: String!, period: String, limit: Int, offset: Int): UnitAccountStatementResponse!
   unitsFinancialStatus(complexId: String!, status: String, pagination: PaginationInput): UnitFinancialStatusPaginated!
   complexExpenses(complexId: String!, pagination: PaginationInput, filters: FilterExpensesInput): PaginatedExpensesResponse!
+  complexIncomes(complexId: String!, pagination: PaginationInput, filters: FilterIncomesInput): PaginatedIncomesResponse!
   chargeEmissions(complexId: String!, status: ChargeEmissionStatus, period: String): [ChargeEmission!]!
   chargeEmission(emissionId: String!): ChargeEmission!
   previewChargeEmission(emissionId: String!): ChargeEmissionPreviewResponse!
@@ -3749,6 +3809,14 @@ input FilterChargesInput {
 
 input FilterExpensesInput {
   category: ExpenseCategory
+  period: String
+  startDate: DateTime
+  endDate: DateTime
+  includeReversed: Boolean
+}
+
+input FilterIncomesInput {
+  category: IncomeCategory
   period: String
   startDate: DateTime
   endDate: DateTime
@@ -4033,6 +4101,8 @@ type Mutation {
   applyMoraAllPeriods(complexId: String!): MoraApplicationResult!
   registerExpense(input: RegisterExpenseInput!): ComplexExpense!
   reverseExpense(expenseId: String!, reason: String!): ComplexExpense!
+  registerDirectIncome(input: RegisterDirectIncomeInput!): DirectIncome!
+  reverseDirectIncome(incomeId: String!, reason: String!): DirectIncome!
   createChargeEmission(input: CreateChargeEmissionInput!): ChargeEmission!
   confirmChargeEmission(emissionId: String!): ChargeEmission!
   cancelChargeEmission(emissionId: String!, reason: String): ChargeEmission!
@@ -4667,6 +4737,9 @@ input CreateResidentInput {
   """Número de documento de identidad del residente"""
   identityNumber: String!
 
+  """Tipo de documento de identidad del residente"""
+  identityType: UserIdentityType! = CC
+
   """ID de la unidad a la que se asignará"""
   unitId: String!
 
@@ -5056,6 +5129,17 @@ input RegisterExpenseInput {
   category: ExpenseCategory!
   period: String!
   expenseDate: DateTime!
+  receiptUrl: String
+  notes: String
+}
+
+input RegisterDirectIncomeInput {
+  complexId: String!
+  amount: Float!
+  description: String!
+  category: IncomeCategory!
+  period: String!
+  incomeDate: DateTime!
   receiptUrl: String
   notes: String
 }

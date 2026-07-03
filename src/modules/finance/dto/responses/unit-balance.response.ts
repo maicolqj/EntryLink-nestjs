@@ -75,7 +75,11 @@ export class ComplexFinancialSummaryResponse {
   @Field(() => Float)
   totalExpenses: number;
 
-  /** Flujo neto = totalCollected - totalExpenses */
+  /** Suma de ingresos directos caja/banco (no-cuota) registrados en el período */
+  @Field(() => Float)
+  directIncome: number;
+
+  /** Flujo neto = totalCollected + directIncome - totalExpenses */
   @Field(() => Float)
   netCashFlow: number;
 }

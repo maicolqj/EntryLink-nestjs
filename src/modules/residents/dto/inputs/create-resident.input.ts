@@ -4,6 +4,7 @@ import {
   IsString, IsDateString, MaxLength, IsEmail, IsPhoneNumber,
 } from 'class-validator';
 import { ResidentType } from '../../enums/resident-type.enum';
+import { UserIdentityType } from '../../../users/enums/user.enums';
 
 @InputType()
 export class CreateResidentInput {
@@ -33,6 +34,14 @@ export class CreateResidentInput {
   @IsString()
   @MaxLength(20)
   identityNumber: string;
+
+  @Field(() => UserIdentityType, {
+    defaultValue: UserIdentityType.CC,
+    description: 'Tipo de documento de identidad del residente',
+  })
+  @IsOptional()
+  @IsEnum(UserIdentityType)
+  identityType?: UserIdentityType;
 
   // ── Asignación ────────────────────────────────────────────────────────
 

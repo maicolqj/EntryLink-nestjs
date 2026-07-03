@@ -43,6 +43,10 @@ import { ComplexExpense }                                from '../entities/compl
 import { RegisterExpenseInput }                          from '../dto/inputs/register-expense.input';
 import { FilterExpensesInput }                           from '../dto/inputs/filter-expenses.input';
 import { PaginatedExpensesResponse }                     from '../dto/responses/paginated-expenses.response';
+import { DirectIncome }                                  from '../entities/direct-income.entity';
+import { RegisterDirectIncomeInput }                     from '../dto/inputs/register-direct-income.input';
+import { FilterIncomesInput }                            from '../dto/inputs/filter-incomes.input';
+import { PaginatedIncomesResponse }                      from '../dto/responses/paginated-incomes.response';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
 import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
@@ -540,5 +544,49 @@ export class FinanceResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedExpensesResponse> {
     return this.financeService.getComplexExpenses(complexId, pagination, filters, currentUser);
+  }
+
+  // ── Ingresos directos (caja/banco) ──────────────────────────────────────────
+
+  @Mutation(() => DirectIncome, { name: 'registerDirectIncome' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    permissions: [ValidPermissions.MANAGE_EXPENSES],
+  })
+  registerDirectIncome(
+    @Args('input') input: RegisterDirectIncomeInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<DirectIncome> {
+    return this.financeService.registerDirectIncome(input, currentUser);
+  }
+
+  @Mutation(() => DirectIncome, { name: 'reverseDirectIncome' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    permissions: [ValidPermissions.MANAGE_EXPENSES],
+  })
+  reverseDirectIncome(
+    @Args('incomeId') incomeId: string,
+    @Args('reason')   reason: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<DirectIncome> {
+    return this.financeService.reverseDirectIncome(incomeId, reason, currentUser);
+  }
+
+  @Query(() => PaginatedIncomesResponse, { name: 'complexIncomes' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+    permissions: [ValidPermissions.VIEW_EXPENSES],
+  })
+  getComplexIncomes(
+    @Args('complexId')                      complexId: string,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters',    { nullable: true }) filters: FilterIncomesInput = {},
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedIncomesResponse> {
+    return this.financeService.getComplexIncomes(complexId, pagination, filters, currentUser);
   }
 }

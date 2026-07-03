@@ -4,14 +4,15 @@ import { Type } from 'class-transformer';
 import GraphQLJSON from 'graphql-type-json';
 
 import { RotationIntervalUnit } from '../../enums/rotation-interval-unit.enum';
+import { VehicleType } from '../../enums/vehicle-type.enum';
 
 @InputType({ description: 'Cupos de parqueadero disponibles para un tipo de vehículo' })
 export class ParkingSlotByTypeInput {
   @Field(() => String, {
     description: 'Tipo de vehículo (ej: "CAR", "MOTORCYCLE", "TRUCK", "VAN")',
   })
-  @IsString()
-  vehicleType: string;
+  @IsEnum(VehicleType)
+  vehicleType: VehicleType;
 
   @Field(() => Int, { description: 'Cantidad de cupos disponibles para ese tipo' })
   @IsInt()
