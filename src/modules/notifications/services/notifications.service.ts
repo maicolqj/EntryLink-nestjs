@@ -197,6 +197,47 @@ export class NotificationsService implements OnModuleInit {
     return saved;
   }
 
+  /**
+   * Notifica al PROPIO usuario que su información personal fue modificada,
+   * detallando qué campos cambiaron (nombre, documento, contacto de emergencia,
+   * teléfono, etc.). Pensado como aviso de seguridad: el usuario se entera de
+   * cualquier cambio sobre sus datos, lo haga él o un administrador.
+   *
+   * No-op si no hay campos cambiados o el usuario no pertenece a un complejo.
+   * Best-effort: nunca interrumpe la actualización que la origina.
+   */
+  async notifyProfileUpdated(params: {
+    userId: string;
+    complexId?: string | null;
+    changedFields: string[];
+    actorUserId?: string;
+  }): Promise<void> {
+    const { userId, complexId, changedFields, actorUserId } = params;
+    if (!complexId || changedFields.length === 0) return;
+
+    const body =
+      changedFields.length === 1
+        ? `Se actualizó tu ${changedFields[0]}.`
+        : `Se actualizaron estos datos: ${changedFields.join(', ')}.`;
+
+    try {
+      await this.notify({
+        complexId,
+        userIds: [userId],
+        type: NotificationType.PROFILE_UPDATED,
+        priority: NotificationPriority.NORMAL,
+        title: 'Tu información fue actualizada',
+        body,
+        entityId: userId,
+        entityType: 'User',
+        createdByUserId: actorUserId,
+        metadata: { userId, fields: changedFields },
+      });
+    } catch (err: any) {
+      this.logger.warn(`No se pudo notificar actualización de perfil a ${userId}: ${err?.message}`);
+    }
+  }
+
   private async dispatchPushOnly(userIds: string[], params: NotifyParams): Promise<void> {
     if (userIds.length === 0) return;
     const subscriptions = await this.pushSubRepo.find({

@@ -23,6 +23,7 @@ import { ResidentialComplex } from '../residential-complex/entities/residential-
 import { Resident } from '../residents/entities/resident.entity';
 import { RolesService } from '../roles/roles.service';
 import { AuditModule }  from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 // Crear directorio temporal si no existe
 const tmpDir = join(process.cwd(), 'tmp', 'excel-imports');
@@ -34,6 +35,7 @@ try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
     BullModule.registerQueue({ name: EXCEL_IMPORT_QUEUE }),
     MulterModule.register({ dest: tmpDir }),
     AuditModule,
+    NotificationsModule,   // expone NotificationsService (aviso de cambios de perfil)
   ],
   controllers: [UsersController],
   providers: [

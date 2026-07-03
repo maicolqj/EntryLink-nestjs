@@ -669,6 +669,17 @@ export class ResidentsService {
     const { name, lastName, phoneNumber, ...residentFields } = input;
     const hasUserFields = name !== undefined || lastName !== undefined || phoneNumber !== undefined;
 
+    // Detecta cambios reales (antes de mutar) para avisar al residente.
+    const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
+    const trimEq = (a?: string | null, b?: string | null) => (a ?? '').trim() === (b ?? '').trim();
+    const changedSet = new Set<string>();
+    if (name !== undefined && norm(name) !== norm(resident.user?.name)) changedSet.add('nombre');
+    if (lastName !== undefined && norm(lastName) !== norm(resident.user?.lastName)) changedSet.add('apellido');
+    if (phoneNumber !== undefined && !trimEq(phoneNumber, resident.user?.phoneNumber)) changedSet.add('teléfono');
+    if (input.emergencyContactName !== undefined && norm(input.emergencyContactName) !== norm(resident.emergencyContactName)) changedSet.add('contacto de emergencia');
+    if (input.emergencyContactLastName !== undefined && norm(input.emergencyContactLastName) !== norm(resident.emergencyContactLastName)) changedSet.add('contacto de emergencia');
+    if (input.emergencyContactPhone !== undefined && !trimEq(input.emergencyContactPhone, resident.emergencyContactPhone)) changedSet.add('teléfono del contacto de emergencia');
+
     const savedUpdate = await this.dataSource.transaction(async (manager) => {
       if (input.isMainResident === true) {
         await manager.update(
@@ -697,6 +708,15 @@ export class ResidentsService {
     });
 
     await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+
+    // Aviso de seguridad al residente de los cambios sobre sus datos.
+    void this.notificationsService.notifyProfileUpdated({
+      userId: resident.userId,
+      complexId: resident.complexId,
+      changedFields: [...changedSet],
+      actorUserId: currentUser?.sub,
+    });
+
     return savedUpdate;
   }
 

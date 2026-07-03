@@ -38,6 +38,7 @@ import { GraphQLError } from 'graphql/error';
 import { AuditService } from '../audit/services/audit.service';
 import { AuditAction } from '../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
+import { NotificationsService } from '../notifications/services/notifications.service';
 
 /** Roles que inician sesión con email + contraseña */
 const PASSWORD_BASED_ROLES = [
@@ -79,6 +80,7 @@ export class UsersService {
     private readonly dataSource: DataSource,
     private readonly excelImportProducer: ExcelImportProducer,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
 
@@ -770,10 +772,21 @@ export class UsersService {
       });
     }
 
-    if (input.name !== undefined) user.name = input.name;
-    if (input.lastName !== undefined) user.lastName = input.lastName;
+    // Detecta los campos que realmente cambian para avisar al usuario.
+    const changedFields: string[] = [];
 
-    if (input.phoneNumber !== undefined) user.phoneNumber = input.phoneNumber;
+    if (input.name !== undefined && input.name !== user.name) {
+      user.name = input.name;
+      changedFields.push('nombre');
+    }
+    if (input.lastName !== undefined && input.lastName !== user.lastName) {
+      user.lastName = input.lastName;
+      changedFields.push('apellido');
+    }
+    if (input.phoneNumber !== undefined && input.phoneNumber !== user.phoneNumber) {
+      user.phoneNumber = input.phoneNumber;
+      changedFields.push('teléfono');
+    }
 
     if (input.role !== undefined) {
       const role = await this.roleRepo.findOne({ where: { name: input.role as any } });
@@ -787,17 +800,27 @@ export class UsersService {
       }
 
       const existing = user.userRoles?.find(ur => ur.isPrimary);
-      if (existing) {
+      if (existing && existing.role?.name !== role.name) {
         await this.userRoleRepo.update(existing.id, { role });
-      } else {
+        changedFields.push('rol');
+      } else if (!existing) {
         await this.userRoleRepo.save(
           this.userRoleRepo.create({ user: { id: user.id }, role, isPrimary: true }),
         );
+        changedFields.push('rol');
       }
     }
 
     const updated = await this.userRepo.save(user);
     this.logger.log(`Usuario actualizado: ${user.id}`);
+
+    // Aviso de seguridad al propio usuario de los cambios sobre sus datos.
+    void this.notificationsService.notifyProfileUpdated({
+      userId: user.id,
+      complexId: user.complexId,
+      changedFields,
+      actorUserId: currentUser?.sub,
+    });
 
     if (currentUser) {
       void this.auditService.log({
@@ -868,11 +891,22 @@ export class UsersService {
 
     const previous = { identityType: user.identityType, identity: user.identity };
 
+    const changedFields: string[] = [];
+    if (user.identityType !== input.identityType) changedFields.push('tipo de documento');
+    if (user.identity !== newIdentity) changedFields.push('número de documento');
+
     user.identityType = input.identityType;
     user.identity = newIdentity;
 
     const updated = await this.userRepo.save(user);
     this.logger.log(`Documento de identidad actualizado para usuario: ${user.id}`);
+
+    void this.notificationsService.notifyProfileUpdated({
+      userId: user.id,
+      complexId: user.complexId,
+      changedFields,
+      actorUserId: currentUser?.sub,
+    });
 
     if (currentUser) {
       void this.auditService.log({
