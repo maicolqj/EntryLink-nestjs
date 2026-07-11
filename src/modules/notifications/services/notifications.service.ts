@@ -957,7 +957,7 @@ export class NotificationsService implements OnModuleInit {
       complexId,
     );
 
-    if (!resident) {
+    if (!resident || !resident.unit) {
       throw new CustomError({
         message:    'No se encontró un residente activo para este usuario en el complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -965,7 +965,7 @@ export class NotificationsService implements OnModuleInit {
       });
     }
 
-    const unit        = resident.unit!;
+    const unit        = resident.unit;
     const unitNumber  = unit.number;
     const title       = `Alerta de pánico — Unidad ${unitNumber}`;
     const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
