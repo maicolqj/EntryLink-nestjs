@@ -952,105 +952,135 @@ export class NotificationsService implements OnModuleInit {
     }
 
     // ── Casos 1 y 2: residente ──────────────────────────────────────────────
-    const resident = await this.residentsService.findActiveResidentByUserIdInternal(
-      currentUser.sub,
-      complexId,
-    );
+    // TODO(debug-panic): logging puntual temporal para aislar el 500 en prod/staging.
+    // Quitar este bloque de logs una vez identificada y corregida la causa raíz.
+    this.logger.warn(`[PANIC][resident] START userId=${currentUser.sub} complexId=${complexId} entityType=${currentUser.entityType} roles=${JSON.stringify(currentUser.roles)}`);
 
-    if (!resident || !resident.unit) {
-      throw new CustomError({
-        message:    'No se encontró un residente activo para este usuario en el complejo',
-        statusCode: HttpStatus.FORBIDDEN,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
-      });
-    }
-
-    const unit        = resident.unit;
-    const unitNumber  = unit.number;
-    const title       = `Alerta de pánico — Unidad ${unitNumber}`;
-    const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
-
-    let triggeredByLabel: string;
-
-    if (unit.buildingId) {
-      // ── Caso 1: edificio/torre ──────────────────────────────────────────
-      const buildingName = unit.building?.name ?? unit.buildingId;
-      triggeredByLabel   = `Residente – Unidad ${unitNumber}, ${buildingName}`;
-      const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
-      const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
-
-      const buildingIds = (
-        await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
-      ).filter(id => id !== currentUser.sub);   // excluir al propio activador
-
-      const residentPanicBase = {
+    try {
+      const resident = await this.residentsService.findActiveResidentByUserIdInternal(
+        currentUser.sub,
         complexId,
-        type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.URGENT,
-        title,
-        isBroadcast:     true,
-        createdByUserId: currentUser.sub,
-        isActionable:    true,
-        actionType:      NotificationActionType.ACKNOWLEDGE,
-        actionLabel:     'Reconocer alerta',
-        metadata:        { triggeredByLabel },
-      };
+      );
+      this.logger.warn(`[PANIC][resident] findActiveResidentByUserIdInternal → residentId=${resident?.id} unitId=${resident?.unitId} hasUnitRelation=${!!resident?.unit} buildingId=${resident?.unit?.buildingId ?? 'null'}`);
 
-      const allIds = [...buildingIds, ...securityIds];
-      if (allIds.length > 0) {
-        await this.persistBulk({
-          ...residentPanicBase,
-          userIds:     allIds,
-          body:        buildingBody,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+      if (!resident || !resident.unit) {
+        throw new CustomError({
+          message:    'No se encontró un residente activo para este usuario en el complejo',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode:  GeneralErrorCode.FORBIDDEN,
         });
       }
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
-      void Promise.allSettled([
-        this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
-        this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
-      ]);
-    } else {
-      // ── Caso 2: casa individual ─────────────────────────────────────────
-      triggeredByLabel   = `Residente – Unidad ${unitNumber}`;
-      const complexBody  = `Alerta de pánico activada. ${triggeredByLabel}.`;
-      const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
 
-      const residentIds = (
-        await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
-      ).filter(id => id !== currentUser.sub);
+      const unit        = resident.unit;
+      const unitNumber  = unit.number;
+      const title       = `Alerta de pánico — Unidad ${unitNumber}`;
 
-      const residentPanicBase = {
-        complexId,
-        type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.URGENT,
-        title,
-        isBroadcast:     true,
-        createdByUserId: currentUser.sub,
-        isActionable:    true,
-        actionType:      NotificationActionType.ACKNOWLEDGE,
-        actionLabel:     'Reconocer alerta',
-        metadata:        { triggeredByLabel },
-      };
+      const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
+      this.logger.warn(`[PANIC][resident] resolveTargetUserIds(SECURITY) → ${securityIds.length} ids`);
 
-      const allIds = [...residentIds, ...securityIds];
-      if (allIds.length > 0) {
-        await this.persistBulk({
-          ...residentPanicBase,
-          userIds:     allIds,
-          body:        complexBody,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+      let triggeredByLabel: string;
+
+      if (unit.buildingId) {
+        // ── Caso 1: edificio/torre ──────────────────────────────────────────
+        const buildingName = unit.building?.name ?? unit.buildingId;
+        triggeredByLabel   = `Residente – Unidad ${unitNumber}, ${buildingName}`;
+        const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
+        const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
+        this.logger.warn(`[PANIC][resident] Caso 1 (torre) buildingId=${unit.buildingId} buildingName=${buildingName}`);
+
+        const buildingIds = (
+          await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
+        ).filter(id => id !== currentUser.sub);   // excluir al propio activador
+        this.logger.warn(`[PANIC][resident] findActiveUserIdsByBuildingInternal → ${buildingIds.length} ids`);
+
+        const residentPanicBase = {
+          complexId,
+          type:            NotificationType.PANIC_ALERT,
+          priority:        NotificationPriority.URGENT,
+          title,
+          isBroadcast:     true,
+          createdByUserId: currentUser.sub,
+          isActionable:    true,
+          actionType:      NotificationActionType.ACKNOWLEDGE,
+          actionLabel:     'Reconocer alerta',
+          metadata:        { triggeredByLabel },
+        };
+
+        const allIds = [...buildingIds, ...securityIds];
+        this.logger.warn(`[PANIC][resident] antes de persistBulk (torre) → allIds=${allIds.length}`);
+        if (allIds.length > 0) {
+          await this.persistBulk({
+            ...residentPanicBase,
+            userIds:     allIds,
+            body:        buildingBody,
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+          });
+        }
+        this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
+        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        void Promise.allSettled([
+          this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
+          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+        ]).then(results => {
+          const failed = results.filter(r => r.status === 'rejected');
+          if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (torre) falló: ${JSON.stringify(failed)}`);
+        });
+      } else {
+        // ── Caso 2: casa individual ─────────────────────────────────────────
+        triggeredByLabel   = `Residente – Unidad ${unitNumber}`;
+        const complexBody  = `Alerta de pánico activada. ${triggeredByLabel}.`;
+        const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
+        this.logger.warn(`[PANIC][resident] Caso 2 (casa individual)`);
+
+        const residentIds = (
+          await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
+        ).filter(id => id !== currentUser.sub);
+        this.logger.warn(`[PANIC][resident] resolveTargetUserIds(RESIDENT) → ${residentIds.length} ids`);
+
+        const residentPanicBase = {
+          complexId,
+          type:            NotificationType.PANIC_ALERT,
+          priority:        NotificationPriority.URGENT,
+          title,
+          isBroadcast:     true,
+          createdByUserId: currentUser.sub,
+          isActionable:    true,
+          actionType:      NotificationActionType.ACKNOWLEDGE,
+          actionLabel:     'Reconocer alerta',
+          metadata:        { triggeredByLabel },
+        };
+
+        const allIds = [...residentIds, ...securityIds];
+        this.logger.warn(`[PANIC][resident] antes de persistBulk (casa) → allIds=${allIds.length}`);
+        if (allIds.length > 0) {
+          await this.persistBulk({
+            ...residentPanicBase,
+            userIds:     allIds,
+            body:        complexBody,
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+          });
+        }
+        this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
+        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        void Promise.allSettled([
+          this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
+          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+        ]).then(results => {
+          const failed = results.filter(r => r.status === 'rejected');
+          if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (casa) falló: ${JSON.stringify(failed)}`);
         });
       }
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
-      void Promise.allSettled([
-        this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
-        this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
-      ]);
-    }
 
-    this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
-    return { success: true };
+      this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
+      return { success: true };
+    } catch (err) {
+      const e = err as Error & { code?: string; detail?: string; query?: string };
+      this.logger.error(
+        `[PANIC][resident] FALLÓ — userId=${currentUser.sub} complexId=${complexId} name=${e?.constructor?.name} message=${e?.message} pgCode=${e?.code ?? 'n/a'} pgDetail=${e?.detail ?? 'n/a'}`,
+        e?.stack,
+      );
+      throw err;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
