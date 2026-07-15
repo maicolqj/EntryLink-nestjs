@@ -110,7 +110,7 @@ export class UnitService {
       .where('unit.complexId = :complexId', { complexId })
       .andWhere('unit.deleted_at IS NULL');
 
-    if (buildingId) qb.andWhere('unit.building_id = :buildingId', { buildingId });
+    if (buildingId) qb.andWhere('unit.buildingId = :buildingId', { buildingId });
     if (status)     qb.andWhere('unit.status = :status',          { status });
     if (term) {
       qb.andWhere(

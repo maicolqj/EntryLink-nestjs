@@ -1036,7 +1036,7 @@ export class ResidentsService {
     if (filters?.status)       qb.andWhere('r.status = :status', { status: filters.status });
     if (filters?.type)         qb.andWhere('r.type = :type', { type: filters.type });
     if (filters?.unitId)       qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
-    if (filters?.buildingId)   qb.andWhere('unit.building_id = :bid', { bid: filters.buildingId });
+    if (filters?.buildingId)   qb.andWhere('unit.buildingId = :bid', { bid: filters.buildingId });
     if (filters?.unitType)     qb.andWhere('unit.type = :unitType', { unitType: filters.unitType });
     if (filters?.unitNumber)   qb.andWhere('UPPER(unit.number) = UPPER(:unitNumber)', { unitNumber: filters.unitNumber.trim() });
     if (filters?.buildingName) qb.andWhere('UPPER(building.name) = UPPER(:buildingName)', { buildingName: filters.buildingName.trim() });
@@ -1311,7 +1311,7 @@ export class ResidentsService {
     const residents = await this.residentRepo
       .createQueryBuilder('r')
       .innerJoin('r.unit', 'u')
-      .where('u.building_id = :buildingId', { buildingId })
+      .where('u.buildingId = :buildingId', { buildingId })
       .andWhere('r.status = :status', { status: ResidentStatus.ACTIVE })
       .andWhere('r.deleted_at IS NULL')
       .select('r.user_id', 'userId')
