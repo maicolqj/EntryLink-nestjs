@@ -1705,10 +1705,22 @@ enum SupervisorVisitStatus {
   CLOSED
 }
 
+type DeviceInfo {
+  userAgent: String!
+  ip: String!
+  platform: String!
+  deviceId: String
+  appVersion: String
+}
+
 type ChangePasswordResponse {
   success: Boolean!
   message: String!
   changedAt: DateTime
+}
+
+type SetPasswordResponse {
+  success: Boolean!
 }
 
 """Información completa del perfil del usuario autenticado"""
@@ -2028,14 +2040,6 @@ type NotificationDetailResponse {
   updatedAt: DateTime!
 }
 
-type DeviceInfo {
-  userAgent: String!
-  ip: String!
-  platform: String!
-  deviceId: String
-  appVersion: String
-}
-
 """Respuesta de autenticación exitosa con tokens JWT"""
 type AuthResponse {
   """Access token JWT (15 min de vigencia)"""
@@ -2084,10 +2088,6 @@ type QrLoginTokenResponse {
   PIN: últimos 4 dígitos del NIT base (antes del guion). El complejo ya lo conoce.
   """
   pin: String!
-}
-
-type SetPasswordResponse {
-  success: Boolean!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -4026,6 +4026,11 @@ type Mutation {
 
   """Cambiar la contraseña del usuario autenticado"""
   changePassword(input: ChangePasswordInput!): ChangePasswordResponse!
+
+  """
+  Permite al administrador del complejo (o SUPER_ADMIN) restablecer directamente la contraseña de un miembro de su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). Uso: el empleado olvidó su contraseña y no tiene forma de solicitar el reset por email/OTP.
+  """
+  adminResetUserPassword(input: AdminResetUserPasswordInput!): SetPasswordResponse!
   updateUser(updateUserInput: UpdateUserInput!): User!
 
   """Edita el tipo y número de documento de identidad de un usuario"""
@@ -4666,6 +4671,17 @@ input ChangePasswordInput {
 
   """Confirmación de la nueva contraseña"""
   confirmPassword: String!
+}
+
+"""
+Datos para que un administrador restablezca la contraseña de un miembro del personal
+"""
+input AdminResetUserPasswordInput {
+  """ID del usuario (personal) al que se le restablece la contraseña"""
+  userId: String!
+
+  """Nueva contraseña asignada por el administrador"""
+  newPassword: String!
 }
 
 input UpdateUserInput {
