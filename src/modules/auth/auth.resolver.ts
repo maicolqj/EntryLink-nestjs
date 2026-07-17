@@ -130,6 +130,23 @@ export class AuthResolver {
     return this.authService.resetPassword(input);
   }
 
+  // ── Reenvío del código de sistema por WhatsApp (RESIDENT_ROL) ────────────
+
+  @Public()
+  @Mutation(() => OtpRequestResponse, {
+    name: 'resendResidentSystemCode',
+    description:
+      'Reenvía el código de sistema del residente (RES-xxxxx) por WhatsApp al teléfono registrado. ' +
+      'Respuesta genérica: no revela si la identidad existe. Rate limit por identidad e IP.',
+  })
+  async resendResidentSystemCode(
+    @Args('identity', { type: () => String }) identity: string,
+    @Context() context: any,
+  ): Promise<OtpRequestResponse> {
+    const ip = this.extractIp(context);
+    return this.authService.resendResidentSystemCode(identity, ip);
+  }
+
   // ── OTP: Solicitar código (RESIDENT_ROL) ─────────────────────────────────
 
   @Public()

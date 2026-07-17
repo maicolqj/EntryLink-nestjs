@@ -12,6 +12,10 @@ export const AUTH_CONSTANTS = {
   OTP_RATE_LIMIT_WINDOW: 10 * 60,    // ventana de rate-limit: 10 minutos (en segundos)
   OTP_BLOCK_DURATION: 30 * 60,       // bloqueo por abuso: 30 minutos (en segundos)
 
+  // ── Reenvío de código de sistema (RES-xxxxx) ─────────────────────────────
+  SYSTEM_CODE_RATE_LIMIT_MAX: 3,       // máx. reenvíos por identidad por ventana
+  SYSTEM_CODE_RATE_LIMIT_WINDOW: 10 * 60, // ventana: 10 minutos (en segundos)
+
   // ── Login por email ──────────────────────────────────────────────────────
   MAX_LOGIN_ATTEMPTS: 5,
   LOGIN_BLOCK_DURATION: 15 * 60,     // 15 minutos en segundos
@@ -36,6 +40,7 @@ export const AUTH_CONSTANTS = {
     IP_RATE_LIMIT: 'ip-rl',
     OTP_CODE: 'otp',
     OTP_RATE_LIMIT: 'otp-rl',
+    SYSTEM_CODE_RATE_LIMIT: 'sc-rl',
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
@@ -52,6 +57,7 @@ export const AUTH_CONSTANTS = {
     FAILED_ATTEMPTS: 900,      // 15 min
     OTP_ATTEMPTS: 1_800,       // 30 min
     OTP_RATE_LIMIT: 600,       // 10 min
+    SYSTEM_CODE_RATE_LIMIT: 600, // 10 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
     GRACE_WINDOW: 5,           // 5 s (same as GRACE_WINDOW_MS / 1000)
   },
