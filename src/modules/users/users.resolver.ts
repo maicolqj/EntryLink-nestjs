@@ -7,6 +7,8 @@ import { UpdateUserInput } from './dto/update-user.input';
 import { UpdateUserIdentityInput } from './dto/inputs/update-user-identity.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
+import { AdminResetUserPasswordInput } from './dto/inputs/admin-reset-user-password.input';
+import { SetPasswordResponse } from '../auth/dto/responses/set-password.response';
 import { UserInfoCompleteResponse } from './dto/responses/user-info-complete.response';
 import { MeResponse } from './dto/responses/me.response';
 import { UsersFilterInput } from './dto/inputs/users-filter.input';
@@ -137,6 +139,21 @@ export class UsersResolver {
     @Args('input') input: ChangePasswordInput,
   ): Promise<ChangePasswordResponse> {
     return this.usersService.changePassword(userId, input);
+  }
+
+  @Mutation(() => SetPasswordResponse, {
+    name: 'adminResetUserPassword',
+    description:
+      'Permite al administrador del complejo (o SUPER_ADMIN) restablecer directamente la contraseña ' +
+      'de un miembro de su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). ' +
+      'Uso: el empleado olvidó su contraseña y no tiene forma de solicitar el reset por email/OTP.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
+  async adminResetUserPassword(
+    @Args('input') input: AdminResetUserPasswordInput,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<SetPasswordResponse> {
+    return this.usersService.adminResetUserPassword(input, payload.complexId, payload);
   }
 
   // ── Otras mutaciones ──────────────────────────────────────────────────────
