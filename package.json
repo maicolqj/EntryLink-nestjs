@@ -35,7 +35,9 @@
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/core/database/data-source.ts",
     "migration:run": "yarn typeorm migration:run",
     "migration:revert": "yarn typeorm migration:revert",
-    "migration:show": "yarn typeorm migration:show"
+    "migration:show": "yarn typeorm migration:show",
+    "whatsapp:templates": "ts-node -r tsconfig-paths/register scripts/whatsapp-templates.ts",
+    "whatsapp:send-test": "ts-node -r tsconfig-paths/register scripts/whatsapp-send-test.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.4.0",
