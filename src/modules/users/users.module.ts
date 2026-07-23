@@ -24,6 +24,7 @@ import { Resident } from '../residents/entities/resident.entity';
 import { RolesService } from '../roles/roles.service';
 import { AuditModule }  from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuthModule } from '../auth/auth.module';
 
 // Crear directorio temporal si no existe
 const tmpDir = join(process.cwd(), 'tmp', 'excel-imports');
@@ -36,6 +37,7 @@ try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
     MulterModule.register({ dest: tmpDir }),
     AuditModule,
     NotificationsModule,   // expone NotificationsService (aviso de cambios de perfil)
+    AuthModule,             // expone TokenService (invalidación de tokens en adminResetUserPassword)
   ],
   controllers: [UsersController],
   providers: [

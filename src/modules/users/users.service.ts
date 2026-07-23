@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Logger, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -22,6 +23,7 @@ import { CreateResidentUserInput } from './dto/inputs/create-resident-user.input
 import { CreateStaffMemberInput, STAFF_ROLES } from './dto/inputs/create-staff-member.input';
 import { RemoveStaffMemberInput } from './dto/inputs/remove-staff-member.input';
 import { RemoveStaffMemberResponse, RemoveStaffAction } from './dto/responses/remove-staff-member.response';
+import { AdminResetUserPasswordInput } from './dto/inputs/admin-reset-user-password.input';
 import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
 import { Role } from '../roles/entities/role.entity';
@@ -39,6 +41,8 @@ import { AuditService } from '../audit/services/audit.service';
 import { AuditAction } from '../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
 import { NotificationsService } from '../notifications/services/notifications.service';
+import { TokenService } from '../auth/services/token.service';
+import { SetPasswordResponse } from '../auth/dto/responses/set-password.response';
 
 /** Roles que inician sesión con email + contraseña */
 const PASSWORD_BASED_ROLES = [
@@ -48,6 +52,13 @@ const PASSWORD_BASED_ROLES = [
   ValidRoles.ACCOUNTANT_ROL,
   ValidRoles.SUPERVISOR_ROL,
   ValidRoles.SECURITY_ROL,
+];
+
+/** Roles de personal cuya contraseña puede restablecer directamente el administrador del complejo */
+const STAFF_RESETTABLE_ROLES = [
+  ValidRoles.SECURITY_ROL,
+  ValidRoles.SUPERVISOR_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
 ];
 
 @Injectable()
@@ -81,6 +92,8 @@ export class UsersService {
     private readonly excelImportProducer: ExcelImportProducer,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly tokenService: TokenService,
+    private readonly configService: ConfigService,
   ) { }
 
 
@@ -1207,6 +1220,79 @@ export class UsersService {
       message: 'Contraseña cambiada exitosamente',
       changedAt: new Date(),
     };
+  }
+
+  /**
+   * Permite al administrador de un complejo (o SUPER_ADMIN) restablecer directamente
+   * la contraseña de un miembro de su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL),
+   * para el caso en que el empleado la olvidó y no tiene forma de solicitar el reset por email/OTP.
+   */
+  async adminResetUserPassword(
+    input: AdminResetUserPasswordInput,
+    callerComplexId?: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<SetPasswordResponse> {
+    const user = await this.userRepo.findOne({
+      where: { id: input.userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user) {
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    if (callerComplexId && user.complexId !== callerComplexId) {
+      throw new CustomError({
+        message: 'No tienes permisos para restablecer la contraseña de usuarios de otro complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    const isResettableStaff = (user.userRoles ?? []).some(
+      ur => STAFF_RESETTABLE_ROLES.includes(ur.role?.name as ValidRoles),
+    );
+
+    if (!isResettableStaff) {
+      throw new CustomError({
+        message: 'Solo se puede restablecer la contraseña de personal del complejo (guardia, supervisor o contador)',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    const hashedPassword = await hash(input.newPassword, saltRounds);
+
+    await this.userRepo.update(user.id, {
+      password: hashedPassword,
+      lastPasswordChange: new Date(),
+      tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
+    });
+
+    await this.tokenService.clearUserTokenVersionCache(user.id);
+
+    this.logger.warn(`Contraseña restablecida por administrador: usuario ${user.id} | por: ${currentUser?.sub}`);
+
+    if (currentUser) {
+      void this.auditService.log({
+        entityType: AuditEntityType.User,
+        entityId: user.id,
+        action: AuditAction.UPDATE,
+        newValue: { passwordReset: true },
+        performedById: currentUser.sub,
+        performedByName: currentUser.email,
+        performedByRole: currentUser.roles?.[0] ?? '',
+        complexId: user.complexId,
+        description: `Contraseña restablecida por administrador para el usuario: ${user.email}`,
+      });
+    }
+
+    return { success: true };
   }
 
   // ── Helpers públicos ─────────────────────────────────────────────────────

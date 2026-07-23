@@ -16,6 +16,7 @@ import { ComplexStatus } from '../../residential-complex/enums/complex-status.en
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { OtpService } from './otp.service';
+import { OtpProducer } from '../queues/otp.producer';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { LoginEmailInput, EMAIL_PASSWORD_USER_ROLES } from '../dto/inputs/login-email.input';
@@ -55,6 +56,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     private readonly otpService: OtpService,
+    private readonly otpProducer: OtpProducer,
     private readonly cacheService: CacheService,
     private readonly dataSource: DataSource,
     private readonly mailService: MailService,
@@ -234,6 +236,79 @@ export class AuthService {
     await this.clearFailedAttempts(identity);
     this.logger.log(`Login exitoso (resident identity+systemCode): userId=${user.id}`);
     return this.createUserSession(user, deviceInfo, false);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Reenvío del código de sistema por WhatsApp (RESIDENT_ROL)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reenvía el systemCode (RES-xxxxx) del residente al teléfono registrado
+   * vía WhatsApp. Respuesta siempre genérica para no revelar si la identidad
+   * existe (anti user-enumeration): los casos inválidos solo se loguean.
+   */
+  async resendResidentSystemCode(identity: string, ip: string): Promise<OtpRequestResponse> {
+    await this.checkIpRateLimit(ip);
+
+    const genericMessage =
+      'Si la identidad está registrada, recibirás tu código por WhatsApp en los próximos segundos';
+
+    const identityKey = identity.trim().toLowerCase();
+    const rateKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SYSTEM_CODE_RATE_LIMIT, key: identityKey };
+    const rateData = await this.cacheService.get<{ count: number }>({ key: rateKey });
+
+    if ((rateData?.count ?? 0) >= AUTH_CONSTANTS.SYSTEM_CODE_RATE_LIMIT_MAX) {
+      throw new CustomError({
+        message: `Demasiadas solicitudes. Espera ${AUTH_CONSTANTS.SYSTEM_CODE_RATE_LIMIT_WINDOW / 60} minutos`,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.OTP_RATE_LIMIT,
+      });
+    }
+
+    await this.cacheService.set({
+      key: rateKey,
+      data: { count: (rateData?.count ?? 0) + 1 },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.SYSTEM_CODE_RATE_LIMIT },
+    });
+
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.systemCode')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .where('LOWER(user.identity) = LOWER(:identity)', { identity: identity.trim() })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) {
+      this.logger.warn(`Reenvío de systemCode para identidad no registrada`);
+      return { success: true, message: genericMessage };
+    }
+
+    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    if (!isResident) {
+      this.logger.warn(`Reenvío de systemCode para usuario no-residente: ${user.id}`);
+      return { success: true, message: genericMessage };
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      this.logger.warn(`Reenvío de systemCode para cuenta no activa: ${user.id} (${user.status})`);
+      return { success: true, message: genericMessage };
+    }
+
+    if (!user.systemCode || !user.phoneNumber) {
+      this.logger.warn(`Reenvío de systemCode sin código o teléfono registrado: ${user.id}`);
+      return { success: true, message: genericMessage };
+    }
+
+    await this.otpProducer.sendSystemCode({
+      userId: user.id,
+      phoneNumber: user.phoneNumber,
+      systemCode: user.systemCode,
+    });
+
+    this.logger.log(`Reenvío de systemCode encolado: userId=${user.id}`);
+    return { success: true, message: genericMessage };
   }
 
   // ═══════════════════════════════════════════════════════════════
