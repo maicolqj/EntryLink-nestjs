@@ -49,6 +49,7 @@ import { BullBoardAppModule } from './core/infrastructure/bull-board/bull-board.
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './core/infrastructure/socket/socket.module';
 import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.module';
+import { LegalModule } from './modules/legal/legal.module';
 
 @Module({
   imports: [
@@ -213,6 +214,7 @@ import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.
     AuditModule,
     SupervisorVisitsModule,
     SpecialNumbersModule,
+    LegalModule,
     MailModule,
     BullBoardAppModule,
     HealthModule,

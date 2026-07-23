@@ -1,6 +1,9 @@
 import {
+  BadRequestException,
   ConflictException,
+  forwardRef,
   HttpStatus,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -19,6 +22,7 @@ import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexType } from '../enums/complex-type.enum';
+import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { ComplexErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
 import { ComplexModule } from '../enums/complex-module.enum';
@@ -42,6 +46,7 @@ import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -70,6 +75,8 @@ export class ResidentialComplexService {
     private readonly geocodingService: GeocodingService,
     private readonly storageService: R2StorageService,
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   // ================================================================
@@ -653,6 +660,12 @@ export class ResidentialComplexService {
     email: string;
     createdAt: Date;
   }> {
+    if (!dto.acceptedTerms) {
+      throw new BadRequestException(
+        'Debes aceptar los Términos y Condiciones, la Política de Privacidad y el Acuerdo de Tratamiento de Datos (DPA) para registrar el complejo.',
+      );
+    }
+
     const slug = this.generateSlug(dto.name);
 
     const [existingSlug, existingEmail] = await Promise.all([
@@ -715,6 +728,7 @@ export class ResidentialComplexService {
         phoneNumber: dto.phone,
         rutFileUrl,
         legalRepDocumentUrl,
+        acceptedTermsAt: new Date(),
         status: ComplexStatus.PENDING_REVIEW,
       });
 
@@ -737,6 +751,138 @@ export class ResidentialComplexService {
       this.logger.error(`Error guardando complejo en BD: ${err.message}`);
       throw new InternalServerErrorException('Error al registrar el complejo. Intenta de nuevo.');
     }
+  }
+
+  /**
+   * Adjunta el DPA (Anexo B2B) firmado a los documentos del complejo.
+   * Lo sube el propio complejo autenticado; el PDF se guarda en R2 y se
+   * referencia en el registro del complejo (signedDpaUrl).
+   */
+  async attachSignedDpa(
+    complexId: string,
+    pdfBase64: string,
+    fileName?: string,
+  ): Promise<ResidentialComplex> {
+    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    if (!complex) throw new NotFoundException('Complejo no encontrado');
+
+    const clean = pdfBase64.includes(',') ? pdfBase64.slice(pdfBase64.indexOf(',') + 1) : pdfBase64;
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(clean, 'base64');
+    } catch {
+      throw new BadRequestException('El PDF no es un base64 válido.');
+    }
+    if (!buffer.length) throw new BadRequestException('El PDF está vacío.');
+    if (buffer.subarray(0, 4).toString('ascii') !== '%PDF') {
+      throw new BadRequestException('El documento firmado debe ser un PDF.');
+    }
+
+    const folder = this.storageService.buildFolder('documents', complex.slug, 'signed-dpa');
+    const oldPublicId = complex.signedDpaPublicId;
+
+    const uploaded = await this.storageService.uploadBuffer(
+      buffer,
+      folder,
+      fileName ?? `dpa-firmado-${complex.slug}.pdf`,
+      'raw',
+    );
+
+    complex.signedDpaUrl = uploaded.url;
+    complex.signedDpaPublicId = uploaded.publicId;
+    complex.signedDpaFileName = fileName ?? `dpa-firmado-${complex.slug}.pdf`;
+    complex.signedDpaUploadedAt = new Date();
+    // (Re)subida → vuelve a estado pendiente de revisión y limpia el veredicto anterior.
+    complex.signedDpaStatus = DpaValidationStatus.PENDING;
+    complex.signedDpaRejectionReason = null as unknown as undefined;
+    complex.signedDpaReviewedAt = null as unknown as undefined;
+    complex.signedDpaReviewedById = null as unknown as undefined;
+
+    const saved = await this.complexRepo.save(complex);
+
+    if (oldPublicId && oldPublicId !== saved.signedDpaPublicId) {
+      await this.storageService.deleteByPublicId(oldPublicId, 'raw').catch(() => {});
+    }
+
+    // Avisar a los SUPER_ADMIN (best-effort, no bloquea la subida)
+    await this.notificationsService.notifyDpaSigned({
+      id: saved.id,
+      name: saved.name,
+      ownerId: saved.ownerId,
+      fileUrl: saved.signedDpaUrl,
+    });
+
+    this.logger.log(`DPA firmado adjuntado al complejo ${complex.slug} (${complex.id})`);
+    return saved;
+  }
+
+  /**
+   * El SUPER_ADMIN revisa el DPA firmado subido por un complejo y lo aprueba o
+   * rechaza. Al aprobar, el complejo deja de verlo como pendiente. Al rechazar,
+   * se exige un motivo y se notifica al complejo para que suba uno nuevo.
+   */
+  async reviewSignedDpa(
+    complexId: string,
+    status: DpaValidationStatus,
+    reason: string | undefined,
+    currentUser: JwtAccessPayload,
+  ): Promise<ResidentialComplex> {
+    if (status !== DpaValidationStatus.APPROVED && status !== DpaValidationStatus.REJECTED) {
+      throw new BadRequestException('El estado debe ser APPROVED o REJECTED.');
+    }
+
+    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    if (!complex) throw new NotFoundException('Complejo no encontrado');
+    if (!complex.signedDpaUrl) {
+      throw new BadRequestException('Este complejo no tiene un DPA firmado por revisar.');
+    }
+
+    const trimmedReason = reason?.trim();
+    if (status === DpaValidationStatus.REJECTED && !trimmedReason) {
+      throw new BadRequestException('Debes indicar el motivo del rechazo.');
+    }
+
+    complex.signedDpaStatus = status;
+    complex.signedDpaRejectionReason =
+      status === DpaValidationStatus.REJECTED ? trimmedReason : (null as unknown as undefined);
+    complex.signedDpaReviewedAt = new Date();
+    complex.signedDpaReviewedById = currentUser.sub;
+
+    const saved = await this.complexRepo.save(complex);
+
+    // Avisar al complejo del veredicto (best-effort, no bloquea la revisión).
+    await this.notificationsService.notifyDpaReviewed({
+      id: saved.id,
+      name: saved.name,
+      status,
+      reason: trimmedReason,
+      reviewerId: currentUser.sub,
+    });
+
+    this.logger.log(`DPA del complejo ${complex.slug} (${complex.id}) marcado como ${status}`);
+
+    // Activación automática: si el complejo está en onboarding (PENDING_SETUP) y
+    // ya tiene aprobados TODOS los documentos que debe firmar, se activa solo.
+    if (
+      status === DpaValidationStatus.APPROVED &&
+      saved.status === ComplexStatus.PENDING_SETUP &&
+      this.areRequiredSignedDocsApproved(saved)
+    ) {
+      const activated = await this.changeStatus(saved.id, ComplexStatus.ACTIVE, currentUser);
+      this.logger.log(`Complejo ${saved.slug} activado automáticamente: documentos firmados aprobados`);
+      return activated;
+    }
+
+    return saved;
+  }
+
+  /**
+   * ¿Están aprobados todos los documentos que el complejo debe firmar?
+   * Hoy el único documento firmable es el DPA (Anexo B2B). Si en el futuro se
+   * agregan más documentos firmables por complejo, extender esta comprobación.
+   */
+  private areRequiredSignedDocsApproved(complex: ResidentialComplex): boolean {
+    return complex.signedDpaStatus === DpaValidationStatus.APPROVED;
   }
 
   private generateSlug(name: string): string {

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsEmail,
   IsInt,
@@ -40,4 +41,9 @@ export class RegisterComplexDto {
   @IsString()
   @Matches(/^\d{7,15}$/, { message: 'El teléfono debe tener entre 7 y 15 dígitos' })
   phone: string;
+
+  /** Aceptación de Términos, Privacidad y DPA. Enviado como string en multipart. */
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  acceptedTerms: boolean;
 }

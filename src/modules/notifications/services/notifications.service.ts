@@ -197,6 +197,84 @@ export class NotificationsService implements OnModuleInit {
     return saved;
   }
 
+  /** IDs de todos los usuarios SUPER_ADMIN activos (no scoped a complejo). */
+  private async findSuperAdminUserIds(): Promise<string[]> {
+    const rows = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.user', 'u')
+      .innerJoin('ur.role', 'r')
+      .where('r.name = :role', { role: ValidRoles.SUPER_ADMIN_ROL })
+      .andWhere('u.deleted_at IS NULL')
+      .select('u.id', 'userId')
+      .distinct(true)
+      .getRawMany<{ userId: string }>();
+    return rows.map((x) => x.userId);
+  }
+
+  /**
+   * Avisa a los SUPER_ADMIN que un complejo subió su DPA (Anexo B2B) firmado.
+   * Best-effort: nunca interrumpe el flujo que la origina.
+   */
+  async notifyDpaSigned(complex: {
+    id: string;
+    name: string;
+    ownerId?: string | null;
+    fileUrl?: string | null;
+  }): Promise<void> {
+    try {
+      const superAdminIds = await this.findSuperAdminUserIds();
+      if (superAdminIds.length === 0) return;
+
+      await this.notify({
+        complexId: complex.id,
+        userIds: superAdminIds,
+        type: NotificationType.DPA_SIGNED,
+        priority: NotificationPriority.NORMAL,
+        title: 'DPA firmado recibido',
+        body: `El complejo "${complex.name}" subió su Anexo B2B (DPA) firmado.`,
+        entityId: complex.id,
+        entityType: 'ResidentialComplex',
+        metadata: { complexId: complex.id, complexName: complex.name, fileUrl: complex.fileUrl ?? null },
+        createdByUserId: complex.ownerId ?? undefined,
+      });
+    } catch (err: any) {
+      this.logger.warn(`No se pudo notificar DPA firmado del complejo ${complex.id}: ${err?.message}`);
+    }
+  }
+
+  /**
+   * Avisa al complejo del veredicto del SUPER_ADMIN sobre su DPA firmado.
+   * El destinatario es el propio complejo (recipientUserId = complex.id, que es
+   * el `sub` con el que inicia sesión la cuenta del complejo). Best-effort.
+   */
+  async notifyDpaReviewed(params: {
+    id: string;
+    name: string;
+    status: 'APPROVED' | 'REJECTED' | string;
+    reason?: string | null;
+    reviewerId?: string | null;
+  }): Promise<void> {
+    const isRejected = params.status === 'REJECTED';
+    try {
+      await this.notify({
+        complexId: params.id,
+        userIds: [params.id],
+        type: isRejected ? NotificationType.DPA_REJECTED : NotificationType.DPA_APPROVED,
+        priority: isRejected ? NotificationPriority.HIGH : NotificationPriority.NORMAL,
+        title: isRejected ? 'DPA firmado rechazado' : 'DPA firmado validado',
+        body: isRejected
+          ? `Tu Anexo B2B (DPA) firmado fue rechazado. Motivo: ${params.reason ?? 'sin especificar'}. Por favor sube uno nuevo corregido.`
+          : 'Tu Anexo B2B (DPA) firmado fue validado. No necesitas hacer nada más.',
+        entityId: params.id,
+        entityType: 'ResidentialComplex',
+        metadata: { complexId: params.id, status: params.status, reason: params.reason ?? null },
+        createdByUserId: params.reviewerId ?? undefined,
+      });
+    } catch (err: any) {
+      this.logger.warn(`No se pudo notificar veredicto de DPA al complejo ${params.id}: ${err?.message}`);
+    }
+  }
+
   /**
    * Notifica al PROPIO usuario que su información personal fue modificada,
    * detallando qué campos cambiaron (nombre, documento, contacto de emergencia,
@@ -391,25 +469,23 @@ export class NotificationsService implements OnModuleInit {
     return this.notifRepo.save(notif);
   }
 
-  /** Marca todas las notificaciones no leídas como leídas según el alcance del rol */
+  /** Marca como leídas todas las notificaciones no leídas dirigidas al usuario autenticado */
   async markAllAsRead(
-    complexId: string,
+    complexId: string | null,
     currentUser: JwtAccessPayload,
   ): Promise<number> {
-    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isComplexAdmin = currentUser.roles.some(r =>
-      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
-    );
-
+    // Siempre acotado al destinatario: un admin no debe marcar como leídas
+    // las notificaciones de residentes u otros roles del complejo.
+    // SUPER_ADMIN marca las suyas de todos los complejos.
     const qb = this.notifRepo
       .createQueryBuilder()
       .update(Notification)
       .set({ isRead: true, readAt: new Date() })
-      .where('complexId = :complexId', { complexId })
-      .andWhere('isRead = false');
+      .where('isRead = false')
+      .andWhere('recipientUserId = :userId', { userId: currentUser.sub });
 
-    if (!isSuperAdmin && !isComplexAdmin) {
-      qb.andWhere('recipientUserId = :userId', { userId: currentUser.sub });
+    if (!currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+      qb.andWhere('complexId = :complexId', { complexId: complexId ?? currentUser.complexId });
     }
 
     const result = await qb.execute();
@@ -578,20 +654,26 @@ export class NotificationsService implements OnModuleInit {
 
   /** Lista las notificaciones del usuario con paginación y filtros */
   async findByUser(
-    complexId: string,
+    complexId: string | null,
     pagination: PaginationInput,
     filters: FilterNotificationsInput,
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedNotificationsResponse> {
     const { page, limit } = pagination;
 
-    const qb = this.notifRepo
-      .createQueryBuilder('n')
-      .where('n.complexId = :complexId', { complexId })
-      .andWhere(
-        '(n.recipientUserId = :userId OR n.isBroadcast = true)',
-        { userId: currentUser.sub },
-      );
+    const qb = this.notifRepo.createQueryBuilder('n');
+
+    // SUPER_ADMIN ve TODAS sus notificaciones (dirigidas a él) de cualquier
+    // complejo, sin depender del complejo activo. El resto queda acotado al complejo.
+    if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+      qb.where('n.recipientUserId = :userId', { userId: currentUser.sub });
+    } else {
+      qb.where('n.complexId = :complexId', { complexId: complexId ?? currentUser.complexId })
+        .andWhere(
+          '(n.recipientUserId = :userId OR n.isBroadcast = true)',
+          { userId: currentUser.sub },
+        );
+    }
 
     if (filters.type)     qb.andWhere('n.type = :type',         { type:     filters.type });
     if (filters.priority) qb.andWhere('n.priority = :priority', { priority: filters.priority });
@@ -666,15 +748,23 @@ export class NotificationsService implements OnModuleInit {
    */
   async findOneDetail(
     notificationId: string,
-    complexId: string,
+    complexId: string | null,
     currentUser: JwtAccessPayload,
   ): Promise<NotificationDetailResponse> {
     this.assertValidUuid(notificationId);
-    this.assertValidUuid(complexId);
 
-    const notif = await this.notifRepo.findOne({
-      where: { id: notificationId, complexId },
-    });
+    // SUPER_ADMIN puede abrir el detalle de cualquier complejo (busca solo por id).
+    const isSuperAdmin = currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+    let where: { id: string; complexId?: string };
+    if (isSuperAdmin) {
+      where = { id: notificationId };
+    } else {
+      const scopedComplexId = complexId ?? currentUser.complexId ?? '';
+      this.assertValidUuid(scopedComplexId);
+      where = { id: notificationId, complexId: scopedComplexId };
+    }
+
+    const notif = await this.notifRepo.findOne({ where });
 
     if (!notif) {
       throw new CustomError({
@@ -779,26 +869,25 @@ export class NotificationsService implements OnModuleInit {
     };
   }
 
-  /** Número de notificaciones no leídas en el complejo según el alcance del rol */
+  /** Número de notificaciones no leídas dirigidas al usuario autenticado */
   async getUnreadCount(
-    complexId: string,
+    complexId: string | null,
     currentUser: JwtAccessPayload,
   ): Promise<UnreadCountResponse> {
-    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isComplexAdmin = currentUser.roles.some(r =>
-      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
-    );
-
+    // Siempre acotado al destinatario: cada cuenta cuenta solo sus propias
+    // notificaciones. SUPER_ADMIN cuenta las de todos los complejos.
     const qb = this.notifRepo
       .createQueryBuilder('n')
-      .where('n.complexId = :complexId', { complexId })
-      .andWhere('n.isRead = false');
+      .where('n.isRead = false');
 
-    if (!isSuperAdmin && !isComplexAdmin) {
-      qb.andWhere(
-        '(n.recipientUserId = :userId OR n.isBroadcast = true)',
-        { userId: currentUser.sub },
-      );
+    if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+      qb.andWhere('n.recipientUserId = :userId', { userId: currentUser.sub });
+    } else {
+      qb.andWhere('n.complexId = :complexId', { complexId: complexId ?? currentUser.complexId })
+        .andWhere(
+          '(n.recipientUserId = :userId OR n.isBroadcast = true)',
+          { userId: currentUser.sub },
+        );
     }
 
     const count = await qb.getCount();
