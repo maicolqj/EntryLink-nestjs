@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -11,6 +12,7 @@ import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { OtpService } from './services/otp.service';
+import { WhatsAppService } from './services/whatsapp.service';
 
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -39,6 +41,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     JwtModule.register({}), // Configurado sin secret fijo; cada llamada usa su propio secret
     TypeOrmModule.forFeature([User, ResidentialComplex, OtpCode, RefreshToken, UserSession, Role, UserRole]),
     BullModule.registerQueue({ name: OTP_QUEUE_NAME }),
+    HttpModule,
     CacheModule,
   ],
   providers: [
@@ -50,6 +53,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     TokenService,
     SessionService,
     OtpService,
+    WhatsAppService,
 
     // Strategies (Passport)
     JwtAccessStrategy,

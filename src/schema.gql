@@ -3926,6 +3926,11 @@ type Mutation {
   resetPassword(input: ResetPasswordInput!): SetPasswordResponse!
 
   """
+  Reenvía el código de sistema del residente (RES-xxxxx) por WhatsApp al teléfono registrado. Respuesta genérica: no revela si la identidad existe. Rate limit por identidad e IP.
+  """
+  resendResidentSystemCode(identity: String!): OtpRequestResponse!
+
+  """
   Solicita un código OTP al número de celular. Exclusivo para residentes (RESIDENT_ROL). El código se envía por SMS y tiene validez de 5 minutos.
   """
   requestOtp(input: RequestOtpInput!): OtpRequestResponse!
