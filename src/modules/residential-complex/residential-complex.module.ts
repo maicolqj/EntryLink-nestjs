@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 import { ResidentialComplex }           from './entities/residential-complex.entity';
 import { Building }                     from './entities/building.entity';
@@ -26,6 +27,7 @@ import { AuditModule } from '../audit/audit.module';
   imports: [
     TypeOrmModule.forFeature([ResidentialComplex, Building, Unit, CoefficientWeighting, User, SupervisorVisit]),
     AuditModule,
+    forwardRef(() => NotificationsModule),
     HttpModule.register({
       timeout: 5000,
       headers: { 'User-Agent': 'entrylink/1.0' },

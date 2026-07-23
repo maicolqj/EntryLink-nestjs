@@ -50,8 +50,8 @@ export class NotificationsResolver {
   @Mutation(() => Int, { name: 'markAllNotificationsAsRead' })
   @Auth()
   markAllAsRead(
-    @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('complexId', { nullable: true }) complexId: string | null = null,
   ): Promise<number> {
     return this.notificationsService.markAllAsRead(complexId, currentUser);
   }
@@ -177,10 +177,10 @@ export class NotificationsResolver {
   @Query(() => PaginatedNotificationsResponse, { name: 'myNotifications' })
   @Auth()
   findByUser(
-    @Args('complexId')                      complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('complexId', { nullable: true }) complexId: string | null = null,
     @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
     @Args('filters',    { nullable: true }) filters: FilterNotificationsInput = {},
-    @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedNotificationsResponse> {
     return this.notificationsService.findByUser(complexId, pagination, filters, currentUser);
   }
@@ -218,8 +218,8 @@ export class NotificationsResolver {
   @Auth()
   notificationDetail(
     @Args('notificationId') notificationId: string,
-    @Args('complexId')      complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('complexId', { nullable: true }) complexId: string | null = null,
   ): Promise<NotificationDetailResponse> {
     return this.notificationsService.findOneDetail(notificationId, complexId, currentUser);
   }
@@ -231,8 +231,8 @@ export class NotificationsResolver {
   @Query(() => UnreadCountResponse, { name: 'unreadNotificationsCount' })
   @Auth()
   getUnreadCount(
-    @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('complexId', { nullable: true }) complexId: string | null = null,
   ): Promise<UnreadCountResponse> {
     return this.notificationsService.getUnreadCount(complexId, currentUser);
   }

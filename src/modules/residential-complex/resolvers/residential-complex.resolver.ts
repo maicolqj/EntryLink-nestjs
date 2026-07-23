@@ -11,6 +11,7 @@ import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
+import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
 import { Auth } from '../../shared/decorators/auth.decorator';
 import { CurrentUser, CurrentUserId } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
@@ -51,6 +52,36 @@ export class ResidentialComplexResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     return this.complexService.update(input, currentUser);
+  }
+
+  /**
+   * El complejo autenticado sube su DPA (Anexo B2B) firmado.
+   * Se adjunta a los documentos del propio complejo (signedDpaUrl).
+   */
+  @Mutation(() => ResidentialComplex, { name: 'uploadSignedDpa' })
+  @Auth({ roles: [ValidRoles.COMPLEX_ROL] })
+  uploadSignedDpa(
+    @Args('pdfBase64') pdfBase64: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('fileName', { nullable: true }) fileName?: string,
+  ): Promise<ResidentialComplex> {
+    const complexId = currentUser.complexId ?? currentUser.sub;
+    return this.complexService.attachSignedDpa(complexId, pdfBase64, fileName);
+  }
+
+  /**
+   * El SUPER_ADMIN revisa el DPA firmado de un complejo: lo aprueba o lo rechaza.
+   * Al rechazar se exige un motivo y se notifica al complejo.
+   */
+  @Mutation(() => ResidentialComplex, { name: 'reviewSignedDpa' })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  reviewSignedDpa(
+    @Args('complexId') complexId: string,
+    @Args('status', { type: () => DpaValidationStatus }) status: DpaValidationStatus,
+    @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('reason', { nullable: true }) reason?: string,
+  ): Promise<ResidentialComplex> {
+    return this.complexService.reviewSignedDpa(complexId, status, reason, currentUser);
   }
 
   /**

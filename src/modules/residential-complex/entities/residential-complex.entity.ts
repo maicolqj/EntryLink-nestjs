@@ -18,6 +18,7 @@ import GraphQLJSON from 'graphql-type-json';
 import { ComplexType } from '../enums/complex-type.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexStatus } from '../enums/complex-status.enum';
+import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
 import { Country, User } from '../../users/entities/user.entity';
 import { Building } from './building.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -203,6 +204,42 @@ export class ResidentialComplex {
   @Field(() => String, { description: 'URL del documento del representante legal (R2)', nullable: true })
   @Column({ name: 'legal_rep_document_url', type: 'text', nullable: true })
   legalRepDocumentUrl?: string;
+
+  @Field(() => Date, { description: 'Fecha/hora en que se aceptaron Términos, Privacidad y DPA durante el registro', nullable: true })
+  @Column({ name: 'accepted_terms_at', type: 'timestamptz', nullable: true })
+  acceptedTermsAt?: Date;
+
+  @Field(() => String, { description: 'URL del DPA (Anexo B2B) firmado, subido por el complejo (R2)', nullable: true })
+  @Column({ name: 'signed_dpa_url', type: 'text', nullable: true })
+  signedDpaUrl?: string;
+
+  @Field(() => String, { description: 'Nombre del archivo del DPA firmado', nullable: true })
+  @Column({ name: 'signed_dpa_file_name', type: 'varchar', length: 255, nullable: true })
+  signedDpaFileName?: string;
+
+  @Field(() => Date, { description: 'Fecha de subida del DPA firmado', nullable: true })
+  @Column({ name: 'signed_dpa_uploaded_at', type: 'timestamptz', nullable: true })
+  signedDpaUploadedAt?: Date;
+
+  /** Key de R2 del DPA firmado, para reemplazo. Sin @Field = oculto en GraphQL. */
+  @Column({ name: 'signed_dpa_public_id', type: 'text', nullable: true })
+  signedDpaPublicId?: string;
+
+  @Field(() => DpaValidationStatus, { description: 'Estado de validación del DPA firmado (revisión del SUPER_ADMIN)', nullable: true })
+  @Column({ name: 'signed_dpa_status', type: 'enum', enum: DpaValidationStatus, nullable: true })
+  signedDpaStatus?: DpaValidationStatus;
+
+  @Field(() => String, { description: 'Motivo del rechazo del DPA firmado (si fue rechazado)', nullable: true })
+  @Column({ name: 'signed_dpa_rejection_reason', type: 'text', nullable: true })
+  signedDpaRejectionReason?: string;
+
+  @Field(() => Date, { description: 'Fecha en que el SUPER_ADMIN revisó (aprobó/rechazó) el DPA firmado', nullable: true })
+  @Column({ name: 'signed_dpa_reviewed_at', type: 'timestamptz', nullable: true })
+  signedDpaReviewedAt?: Date;
+
+  /** Usuario SUPER_ADMIN que revisó el DPA. Sin @Field = oculto en GraphQL. */
+  @Column({ name: 'signed_dpa_reviewed_by_id', type: 'text', nullable: true })
+  signedDpaReviewedById?: string;
 
   // ==================== IMÁGENES ====================
 
