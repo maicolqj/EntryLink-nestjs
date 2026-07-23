@@ -717,21 +717,28 @@
   resolved "https://registry.npmjs.org/@borewit/text-codec/-/text-codec-0.2.1.tgz"
   integrity sha512-k7vvKPbf7J2fZ5klGRD9AeKfUvojuZIQ3BT5u7Jfv+puwXkUBUT5PVyMDfJZpy30CBDXGMgw7fguK/lpOMBvgw==
 
-"@bull-board/api@6.20.6", "@bull-board/api@^6.20.6":
+"@bull-board/api@8.3.0":
+  version "8.3.0"
+  resolved "https://registry.yarnpkg.com/@bull-board/api/-/api-8.3.0.tgz#635acf182a4a99496f27d6bc28bb93a3c44990b1"
+  integrity sha512-5ti+DROXnlZeQYnOiapUc2t4JFWO2rCPMxzZZbG15e8Nn2sX4gU0x09WqLfDU19RjYWDnNa1FtJm1DdQEC6Z0Q==
+  dependencies:
+    redis-info "^3.1.0"
+
+"@bull-board/api@^6.20.6":
   version "6.20.6"
   resolved "https://registry.npmjs.org/@bull-board/api/-/api-6.20.6.tgz"
   integrity sha512-B/9OlKWJ/He421Lyuc7htMpKN4R8hcNu5uoIRiyh9y9J0kMOfxfs82GKXdfR9R0595LvAcCOSvjn8EtWHXesTA==
   dependencies:
     redis-info "^3.1.0"
 
-"@bull-board/express@^6.20.6":
-  version "6.20.6"
-  resolved "https://registry.npmjs.org/@bull-board/express/-/express-6.20.6.tgz"
-  integrity sha512-QBOjhi3jR4qIJvLCo++DdL0CyG4umiFXBCPJYr74DmRN41m27rDS3NSf7ceHdbQr9Ol8mw3xbVqGLn50x3QdWQ==
+"@bull-board/express@^8.3.0":
+  version "8.3.0"
+  resolved "https://registry.yarnpkg.com/@bull-board/express/-/express-8.3.0.tgz#79b9744ef673cb8c2002d3e9a7669ae23a01bbcc"
+  integrity sha512-WtS2c58zkIqHHDFuw6UqOHQ/Efu3/KEFeOk5s7WtyluRylYR+OckpPeQPZ3ANsW9r82PSw/+b6QyGi+MWkFagQ==
   dependencies:
-    "@bull-board/api" "6.20.6"
-    "@bull-board/ui" "6.20.6"
-    ejs "^3.1.10"
+    "@bull-board/api" "8.3.0"
+    "@bull-board/ui" "8.3.0"
+    ejs "^6.0.1"
     express "^5.2.1"
 
 "@bull-board/nestjs@^6.20.6":
@@ -739,12 +746,12 @@
   resolved "https://registry.npmjs.org/@bull-board/nestjs/-/nestjs-6.20.6.tgz"
   integrity sha512-jWXvn4cbRwlLlp4/+PIXJniP/blK0Dt8EphmN3k7SPwWG1yQiDGxLVA2ZbynjfwGE/weN73+i4WVR+7IuvK7WA==
 
-"@bull-board/ui@6.20.6":
-  version "6.20.6"
-  resolved "https://registry.npmjs.org/@bull-board/ui/-/ui-6.20.6.tgz"
-  integrity sha512-nEXRgMHHd48ssINgvDqT7b4p/+57XRf3CUcTGQ7UIJb4F7n/kRRj8+ZQvQmMFsYGdNmbNU2eNheQ05vXSYiqdQ==
+"@bull-board/ui@8.3.0":
+  version "8.3.0"
+  resolved "https://registry.yarnpkg.com/@bull-board/ui/-/ui-8.3.0.tgz#aa7d390180ee1dcb876c62f3b66af8a1ae11fd11"
+  integrity sha512-ZKHvHEzLekyDqSQEECOJZ0gP2wcba0Jdm+0dl7SXu82qfp03HIxrvmsKZJzG9bLVSI3GitLgcIaYHWsjDjHFZQ==
   dependencies:
-    "@bull-board/api" "6.20.6"
+    "@bull-board/api" "8.3.0"
 
 "@colordx/core@^5.4.3":
   version "5.5.0"
@@ -3242,7 +3249,7 @@ async-retry@^1.2.1, async-retry@^1.3.3:
   dependencies:
     retry "0.13.1"
 
-async@^3.2.4, async@^3.2.6:
+async@^3.2.4:
   version "3.2.6"
   resolved "https://registry.npmjs.org/async/-/async-3.2.6.tgz"
   integrity sha512-htCUDlxyyCLMgaM3xXg0C0LW2xqfuQ6p05pCEIsXuyQ+a1koYKTuBMzRNwmybfLgvJDMd0r1LTn4+E0Ti6C2AA==
@@ -4452,17 +4459,15 @@ ee-first@1.1.1:
   resolved "https://registry.npmjs.org/ee-first/-/ee-first-1.1.1.tgz"
   integrity sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==
 
-ejs@^3.1.10:
-  version "3.1.10"
-  resolved "https://registry.npmjs.org/ejs/-/ejs-3.1.10.tgz"
-  integrity sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==
-  dependencies:
-    jake "^10.8.5"
-
 ejs@^5.0.1:
   version "5.0.2"
   resolved "https://registry.yarnpkg.com/ejs/-/ejs-5.0.2.tgz#cb8a7922ec1e71193b2507942250e230e200de79"
   integrity sha512-IpbUaI/CAW86l3f+T8zN0iggSc0LmMZLcIW5eRVStLVNCoTXkE0YlncbbH50fp8Cl6zHIky0sW2uUbhBqGw0Jw==
+
+ejs@^6.0.1:
+  version "6.0.1"
+  resolved "https://registry.yarnpkg.com/ejs/-/ejs-6.0.1.tgz#88ea8ce00335c3575d7c3602dd76e84b0bd60f43"
+  integrity sha512-UaaM14yby8U3k02ihS1Bmj5Kz2d7CCQM1scxpgs4Mhkq8F1wR2gl3+Ts4h5Ne4Mnt7M9m4Dw7jsuMr3+xO4vZA==
 
 electron-to-chromium@^1.5.263:
   version "1.5.286"
@@ -5037,13 +5042,6 @@ file-type@21.3.4:
     strtok3 "^10.3.4"
     token-types "^6.1.1"
     uint8array-extras "^1.4.0"
-
-filelist@^1.0.4:
-  version "1.0.6"
-  resolved "https://registry.npmjs.org/filelist/-/filelist-1.0.6.tgz"
-  integrity sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==
-  dependencies:
-    minimatch "^5.0.1"
 
 fill-range@^7.1.1:
   version "7.1.1"
@@ -6014,15 +6012,6 @@ jackspeak@^4.1.1, jackspeak@^4.2.3:
   integrity sha512-ykkVRwrYvFm1nb2AJfKKYPr0emF6IiXDYUaFx4Zn9ZuIH7MrzEZ3sD5RlqGXNRpHtvUHJyOnCEFxOlNDtGo7wg==
   dependencies:
     "@isaacs/cliui" "^9.0.0"
-
-jake@^10.8.5:
-  version "10.9.4"
-  resolved "https://registry.npmjs.org/jake/-/jake-10.9.4.tgz"
-  integrity sha512-wpHYzhxiVQL+IV05BLE2Xn34zW1S223hvjtqk0+gsPrwd/8JNLXJgZZM/iPFsYc1xyphF+6M6EvdE5E9MBGkDA==
-  dependencies:
-    async "^3.2.6"
-    filelist "^1.0.4"
-    picocolors "^1.1.1"
 
 jest-changed-files@30.4.1:
   version "30.4.1"
@@ -7158,7 +7147,7 @@ minimatch@^3.0.4, minimatch@^3.1.1, minimatch@^3.1.2, minimatch@^3.1.5:
   dependencies:
     brace-expansion "^1.1.7"
 
-minimatch@^5.0.1, minimatch@^5.1.0:
+minimatch@^5.1.0:
   version "5.1.9"
   resolved "https://registry.npmjs.org/minimatch/-/minimatch-5.1.9.tgz"
   integrity sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==
