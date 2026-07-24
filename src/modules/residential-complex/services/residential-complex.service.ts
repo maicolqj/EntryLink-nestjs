@@ -763,9 +763,6 @@ export class ResidentialComplexService {
     pdfBase64: string,
     fileName?: string,
   ): Promise<ResidentialComplex> {
-    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
-    if (!complex) throw new NotFoundException('Complejo no encontrado');
-
     const clean = pdfBase64.includes(',') ? pdfBase64.slice(pdfBase64.indexOf(',') + 1) : pdfBase64;
     let buffer: Buffer;
     try {
@@ -773,7 +770,23 @@ export class ResidentialComplexService {
     } catch {
       throw new BadRequestException('El PDF no es un base64 válido.');
     }
-    if (!buffer.length) throw new BadRequestException('El PDF está vacío.');
+    return this.attachSignedDpaFile(complexId, buffer, fileName);
+  }
+
+  /**
+   * Misma operación que attachSignedDpa pero recibiendo el PDF ya en binario,
+   * como llega desde la subida multipart. Es la vía preferida: el base64
+   * engorda el cuerpo un 33 % y choca contra el límite de express.json.
+   */
+  async attachSignedDpaFile(
+    complexId: string,
+    buffer: Buffer,
+    fileName?: string,
+  ): Promise<ResidentialComplex> {
+    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    if (!complex) throw new NotFoundException('Complejo no encontrado');
+
+    if (!buffer?.length) throw new BadRequestException('El PDF está vacío.');
     if (buffer.subarray(0, 4).toString('ascii') !== '%PDF') {
       throw new BadRequestException('El documento firmado debe ser un PDF.');
     }
