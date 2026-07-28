@@ -2,7 +2,8 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
-import * as admin from 'firebase-admin';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getMessaging, type Message } from 'firebase-admin/messaging';
 import * as webpush from 'web-push';
 import { isUUID } from 'class-validator';
 
@@ -122,9 +123,9 @@ export class NotificationsService implements OnModuleInit {
       return;
     }
 
-    if (admin.apps.length === 0) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
+    if (getApps().length === 0) {
+      initializeApp({
+        credential: cert({
           projectId,
           clientEmail,
           privateKey: privateKey.replace(/\\n/g, '\n'),
@@ -1384,7 +1385,7 @@ export class NotificationsService implements OnModuleInit {
 
     for (const batch of batches) {
       try {
-        const response = await admin.messaging().sendEach(batch.map(b => b.message));
+        const response = await getMessaging().sendEach(batch.map(b => b.message));
 
         this.logger.debug(
           `[FCM] Lote enviado [${params.type}] → ${response.successCount} exitosos, ${response.failureCount} fallidos | complejo ${params.complexId}`,
@@ -1426,7 +1427,7 @@ export class NotificationsService implements OnModuleInit {
     token: string,
     params: NotifyParams,
     notificationId: string,
-  ): admin.messaging.Message {
+  ): Message {
     const isPanic  = params.type === NotificationType.PANIC_ALERT;
     const metadata = (params.metadata ?? {}) as Record<string, string>;
 
