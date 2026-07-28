@@ -19,6 +19,7 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
             case HttpStatus.CONFLICT:           return GeneralErrorCode.CONFLICT;
             case HttpStatus.METHOD_NOT_ALLOWED: return GeneralErrorCode.METHOD_NOT_ALLOWED;
             case HttpStatus.TOO_MANY_REQUESTS:  return GeneralErrorCode.TOO_MANY_REQUESTS;
+            case HttpStatus.PAYLOAD_TOO_LARGE:  return GeneralErrorCode.PAYLOAD_TOO_LARGE;
             case HttpStatus.SERVICE_UNAVAILABLE: return GeneralErrorCode.SERVICE_UNAVAILABLE;
             default:                            return GeneralErrorCode.INTERNAL_SERVER_ERROR;
         }
@@ -44,6 +45,30 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
             errorCode: this.httpStatusToErrorCode(status),
             details: null,
         };
+    }
+
+    /** body-parser lanza errores planos (PayloadTooLargeError, SyntaxError de JSON) que no
+     *  son HttpException: sin este mapeo se reportaban como 500 genérico. */
+    private describeBodyParserError(exception: unknown): { status: number; message: string; errorCode: GeneralErrorCode } | null {
+        const err = exception as { type?: unknown } | null;
+        if (!err || typeof err.type !== 'string') return null;
+
+        switch (err.type) {
+            case 'entity.too.large':
+                return {
+                    status: HttpStatus.PAYLOAD_TOO_LARGE,
+                    message: 'El contenido enviado supera el tamaño máximo permitido. Sube un archivo más liviano.',
+                    errorCode: GeneralErrorCode.PAYLOAD_TOO_LARGE,
+                };
+            case 'entity.parse.failed':
+                return {
+                    status: HttpStatus.BAD_REQUEST,
+                    message: 'El cuerpo de la petición no es un JSON válido.',
+                    errorCode: GeneralErrorCode.BAD_REQUEST,
+                };
+            default:
+                return null;
+        }
     }
 
     catch(exception: unknown, host: ArgumentsHost) {
@@ -80,7 +105,14 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
         let details = null;
 
         try {
-            if (exception instanceof CustomError) {
+            const bodyParserError = this.describeBodyParserError(exception);
+
+            if (bodyParserError) {
+                status = bodyParserError.status;
+                message = bodyParserError.message;
+                errorCode = bodyParserError.errorCode;
+
+            } else if (exception instanceof CustomError) {
                 status = exception.getStatus();
                 const errorResponse = exception.getResponse();
                 message = errorResponse['message'] || exception.message;
@@ -138,7 +170,14 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
         let details = null;
 
         try {
-            if (exception instanceof CustomError) {
+            const bodyParserError = this.describeBodyParserError(exception);
+
+            if (bodyParserError) {
+                statusCode = bodyParserError.status;
+                message = bodyParserError.message;
+                errorCode = bodyParserError.errorCode;
+
+            } else if (exception instanceof CustomError) {
                 const errorResponse = exception.getResponse();
                 message = errorResponse['message'] || exception.message;
                 statusCode = exception.getStatus();

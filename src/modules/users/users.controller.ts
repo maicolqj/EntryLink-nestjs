@@ -19,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { Request as ExpressRequest } from 'express';
+import { unlink } from 'fs/promises';
 import { Auth } from '../shared/decorators/auth.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { UsersService } from './users.service';
@@ -50,8 +51,11 @@ export class UsersController {
     private readonly storageService: R2StorageService,
   ) {}
 
-  // VULN-16 fix: throttle específico para bulk-import — máx 5 uploads por minuto por IP
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  // VULN-16 fix: throttle específico para bulk-import — máx 5 uploads por minuto por IP.
+  // El nombre debe coincidir con un throttler declarado en ThrottlerModule.forRoot
+  // ('short' | 'medium' | 'long'): el guard solo lee metadata de los configurados,
+  // por lo que un `default` inexistente se ignoraba en silencio.
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @Post('bulk-import')
   @HttpCode(HttpStatus.ACCEPTED)
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
@@ -100,16 +104,25 @@ export class UsersController {
     const isSuperAdmin = callerRoles.includes(ValidRoles.SUPER_ADMIN_ROL);
 
     if (!isSuperAdmin && callerComplexId !== complexId) {
+      await unlink(file.path).catch(() => {});
       throw new ForbiddenException('No tienes permisos para importar residentes en este complejo');
     }
 
     const adminUserId: string = req.user?.sub;
 
-    const importId = await this.usersService.bulkImportResidents(
-      file.path,
-      complexId,
-      adminUserId,
-    );
+    let importId: string;
+    try {
+      importId = await this.usersService.bulkImportResidents(
+        file.path,
+        complexId,
+        adminUserId,
+      );
+    } catch (err) {
+      // Si no se pudo encolar (ej. Redis caído) nadie borrará el temporal:
+      // el unlink del processor solo corre cuando el job existe.
+      await unlink(file.path).catch(() => {});
+      throw err;
+    }
 
     return {
       importId,

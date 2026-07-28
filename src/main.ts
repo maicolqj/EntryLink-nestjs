@@ -57,10 +57,21 @@ async function bootstrap() {
     helmet.default()(req, res, next);
   });
 
-  // VULN-06 fix: 10 MB era innecesario para GraphQL/REST — 1 MB es suficiente
-  app.use(express.json({ limit: '1mb' }));
+  // VULN-06 fix: 1 MB es suficiente para el tráfico REST/GraphQL normal.
+  // Excepción: /graphql recibe archivos en base64 (docx/PDF de documentos legales,
+  // DPA firmado), y base64 infla el tamaño ~33%. Se aplica un límite mayor solo a
+  // esa ruta; el resto de la API se mantiene en 1 MB.
+  const REST_BODY_LIMIT = process.env.REST_BODY_LIMIT || '1mb';
+  const GRAPHQL_BODY_LIMIT = process.env.GRAPHQL_BODY_LIMIT || '15mb';
+
+  const restJson = express.json({ limit: REST_BODY_LIMIT });
+  const graphqlJson = express.json({ limit: GRAPHQL_BODY_LIMIT });
+  app.use((req: any, res: any, next: any) =>
+    req.path === '/graphql' ? graphqlJson(req, res, next) : restJson(req, res, next),
+  );
+
   // urlencoded solo para metadata de formularios REST (no afecta multipart/form-data de Multer)
-  app.use(express.urlencoded({ limit: '1mb', extended: true }));
+  app.use(express.urlencoded({ limit: REST_BODY_LIMIT, extended: true }));
 
   const prefix = 'api/v1';
   app.useGlobalFilters(new UniversalExceptionFilter());
