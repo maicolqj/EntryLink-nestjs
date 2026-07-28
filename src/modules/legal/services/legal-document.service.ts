@@ -15,6 +15,7 @@ import { LegalAudience } from '../enums/legal-audience.enum';
 import { CreateLegalDocumentInput } from '../dto/inputs/create-legal-document.input';
 import { UpdateLegalDocumentInput } from '../dto/inputs/update-legal-document.input';
 import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { decodeBase64File } from '../../shared/utils/base64-file.utils';
 
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
@@ -45,14 +46,7 @@ export class LegalDocumentService {
 
   /** Sube un PDF (base64) a R2 y devuelve {url, publicId}. */
   private async uploadPdf(base64: string, slug: string, fileName?: string): Promise<{ url: string; publicId: string }> {
-    const clean = base64.includes(',') ? base64.slice(base64.indexOf(',') + 1) : base64;
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(clean, 'base64');
-    } catch {
-      throw new BadRequestException('El PDF no es un base64 válido.');
-    }
-    if (!buffer.length) throw new BadRequestException('El PDF está vacío.');
+    const buffer = decodeBase64File(base64, 'El PDF');
     // Firma de PDF: "%PDF"
     if (buffer.subarray(0, 4).toString('ascii') !== '%PDF') {
       throw new BadRequestException('El archivo descargable debe ser un PDF.');
@@ -64,16 +58,7 @@ export class LegalDocumentService {
 
   /** Convierte un .docx (base64) a HTML sanitizado. */
   private async docxToHtml(base64: string): Promise<string> {
-    const clean = base64.includes(',') ? base64.slice(base64.indexOf(',') + 1) : base64;
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(clean, 'base64');
-    } catch {
-      throw new BadRequestException('El archivo no es un base64 válido.');
-    }
-    if (!buffer.length) {
-      throw new BadRequestException('El archivo está vacío.');
-    }
+    const buffer = decodeBase64File(base64, 'El archivo .docx');
 
     let rawHtml: string;
     try {

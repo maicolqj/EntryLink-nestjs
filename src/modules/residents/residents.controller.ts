@@ -35,7 +35,9 @@ export class ResidentsController {
     private readonly importProducer: ResidentsImportProducer,
   ) {}
 
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  // 'short' (no 'default'): el guard solo lee metadata de los throttlers declarados
+  // en ThrottlerModule.forRoot, así que un nombre inexistente se ignora.
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @Post('import')
   @HttpCode(HttpStatus.ACCEPTED)
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })

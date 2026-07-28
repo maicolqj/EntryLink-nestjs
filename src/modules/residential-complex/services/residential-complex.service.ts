@@ -29,6 +29,7 @@ import { ComplexModule } from '../enums/complex-module.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
 import { calculateHaversineDistance } from '../../shared/utils/gps.utils';
+import { decodeBase64File } from '../../shared/utils/base64-file.utils';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { User } from '../../users/entities/user.entity';
@@ -763,14 +764,7 @@ export class ResidentialComplexService {
     pdfBase64: string,
     fileName?: string,
   ): Promise<ResidentialComplex> {
-    const clean = pdfBase64.includes(',') ? pdfBase64.slice(pdfBase64.indexOf(',') + 1) : pdfBase64;
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(clean, 'base64');
-    } catch {
-      throw new BadRequestException('El PDF no es un base64 válido.');
-    }
-    return this.attachSignedDpaFile(complexId, buffer, fileName);
+    return this.attachSignedDpaFile(complexId, decodeBase64File(pdfBase64, 'El PDF'), fileName);
   }
 
   /**

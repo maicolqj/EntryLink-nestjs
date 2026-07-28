@@ -48,7 +48,9 @@ export class FinanceController {
    * totales y errores; si el usuario confirma, llamar de nuevo con dryRun=false.
    * La operación es idempotente: re-ejecutar no duplica saldos.
    */
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // 'short' (no 'default'): el guard solo lee metadata de los throttlers declarados
+  // en ThrottlerModule.forRoot, así que un nombre inexistente se ignora.
+  @Throttle({ short: { limit: 10, ttl: 60_000 } })
   @Post('import-opening-balances')
   @HttpCode(HttpStatus.OK)
   @Auth({
