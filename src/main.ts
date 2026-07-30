@@ -64,7 +64,18 @@ async function bootstrap() {
   const REST_BODY_LIMIT = process.env.REST_BODY_LIMIT || '1mb';
   const GRAPHQL_BODY_LIMIT = process.env.GRAPHQL_BODY_LIMIT || '15mb';
 
-  const restJson = express.json({ limit: REST_BODY_LIMIT });
+  // Meta firma los callbacks de WhatsApp (X-Hub-Signature-256) sobre el body
+  // crudo, así que hay que guardarlo antes de que express.json lo consuma.
+  // Se guarda solo para esa ruta para no duplicar en memoria el body de todo
+  // el tráfico REST.
+  const WHATSAPP_WEBHOOK_PATH = '/api/v1/whatsapp/webhook';
+  const saveRawBody = (req: any, _res: any, buf: Buffer) => {
+    if (req.originalUrl?.split('?')[0] === WHATSAPP_WEBHOOK_PATH) {
+      req.rawBody = buf;
+    }
+  };
+
+  const restJson = express.json({ limit: REST_BODY_LIMIT, verify: saveRawBody });
   const graphqlJson = express.json({ limit: GRAPHQL_BODY_LIMIT });
   app.use((req: any, res: any, next: any) =>
     req.path === '/graphql' ? graphqlJson(req, res, next) : restJson(req, res, next),

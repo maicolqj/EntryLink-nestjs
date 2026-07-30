@@ -38,7 +38,9 @@ export class WhatsAppService {
 
     this.otpTemplate = this.config.get<string>('WHATSAPP_OTP_TEMPLATE_NAME', 'remotelink_otp');
     this.systemCodeTemplate = this.config.get<string>('WHATSAPP_CODE_TEMPLATE_NAME', 'remotelink_access_code');
-    this.templateLang = this.config.get<string>('WHATSAPP_TEMPLATE_LANG', 'es');
+    // Default es_CO, no es: las plantillas están aprobadas en "Español (Colombia)"
+    // y un idioma que no coincide EXACTO da error 132001 en Meta.
+    this.templateLang = this.config.get<string>('WHATSAPP_TEMPLATE_LANG', 'es_CO');
 
     if (phoneNumberId && accessToken) {
       this.accessToken = accessToken;
@@ -115,9 +117,19 @@ export class WhatsAppService {
       }
 
       const msgId = data?.messages?.[0]?.id ?? 'unknown';
-      this.logger.log(`WhatsApp "${templateName}" enviado → ${this.maskPhone(to)} | msgId: ${msgId}`);
+      // "accepted" solo significa encolado en Meta; la entrega real la confirma
+      // el webhook de statuses (WhatsAppWebhookController).
+      this.logger.log(`WhatsApp "${templateName}" aceptado → ${this.maskPhone(to)} | msgId: ${msgId}`);
     } catch (err: any) {
-      const detail = err?.response?.data?.error?.message ?? err?.message ?? String(err);
+      const metaError = err?.response?.data?.error;
+      const detail = metaError
+        ? `code ${metaError.code}` +
+          (metaError.error_subcode ? `/${metaError.error_subcode}` : '') +
+          `: ${metaError.message}` +
+          (metaError.error_data?.details ? ` — ${metaError.error_data.details}` : '') +
+          (metaError.fbtrace_id ? ` [trace: ${metaError.fbtrace_id}]` : '')
+        : err?.message ?? String(err);
+
       this.logger.error(`Error enviando WhatsApp "${templateName}" a ${this.maskPhone(to)}: ${detail}`);
       throw err;
     }
