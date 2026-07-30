@@ -16,6 +16,10 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().integer().min(1).max(65535).default(3001),
   TZ: Joi.string().default('America/Bogota'),
 
+  // Nivel de log de los 404. 'warn' deja visible el escaneo de bots para rastrear su origen;
+  // 'debug' lo oculta en producción; 'silent' lo omite. Ver UniversalExceptionFilter.
+  HTTP_404_LOG_LEVEL: Joi.string().valid('warn', 'debug', 'silent').default('warn'),
+
   // ── Base de datos (requerido en todos los entornos) ────────────────────────
   DB_HOST:         Joi.string().required(),
   DB_PORT:         Joi.number().integer().default(5432),

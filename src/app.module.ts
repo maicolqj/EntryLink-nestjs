@@ -51,6 +51,22 @@ import { SocketModule } from './core/infrastructure/socket/socket.module';
 import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.module';
 import { LegalModule } from './modules/legal/legal.module';
 
+/** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
+ *  `code` pero no `statusCode`. Sin este mapeo caían al default 500 y se reportaban como
+ *  caídas del servidor, cuando en realidad son peticiones mal formadas del cliente. */
+const APOLLO_CODE_STATUS: Record<string, number> = {
+  BAD_REQUEST: 400,
+  BAD_USER_INPUT: 400,
+  GRAPHQL_PARSE_FAILED: 400,
+  GRAPHQL_VALIDATION_FAILED: 400,
+  PERSISTED_QUERY_NOT_FOUND: 400,
+  PERSISTED_QUERY_NOT_SUPPORTED: 400,
+  UNAUTHENTICATED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  TOO_MANY_REQUESTS: 429,
+};
+
 @Module({
   imports: [
     // ── Configuración global ─────────────────────────────────────────────
@@ -136,16 +152,26 @@ import { LegalModule } from './modules/legal/legal.module';
               originalError?.errorCode ||
               ext?.code ||
               'INTERNAL_SERVER_ERROR';
-            const statusCode = originalError?.statusCode ?? ext?.statusCode ?? 500;
+            const statusCode =
+              originalError?.statusCode ??
+              ext?.statusCode ??
+              APOLLO_CODE_STATUS[code] ??
+              500;
             const details = originalError?.details ?? ext?.details ?? '';
 
             // Observabilidad: loguear server-side el stack real de errores no esperados
             // (Apollo enmascara el mensaje como "Internal server error" hacia el cliente).
-            if (!code || statusCode >= 500) {
+            // Los 4xx los provoca el cliente —incluidos los bots que pegan a /graphql sin
+            // headers y caen en la protección CSRF—, así que van a warn y sin stack.
+            if (statusCode >= 500) {
               const stack = gqlError?.originalError?.stack || gqlError?.stack;
               new Logger('GraphQL').error(
                 `${code} en ${JSON.stringify(formattedError.path)}: ${formattedError.message}`,
                 stack,
+              );
+            } else {
+              new Logger('GraphQL').warn(
+                `${code} en ${JSON.stringify(formattedError.path)}: ${formattedError.message}`,
               );
             }
 

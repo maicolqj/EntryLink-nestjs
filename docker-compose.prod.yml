@@ -70,6 +70,7 @@ services:
       NODE_ENV: production
       TZ: America/Bogota
       PORT: 3001
+      HTTP_404_LOG_LEVEL: ${HTTP_404_LOG_LEVEL:-warn}
       # Database
       DB_HOST: postgres
       DB_PORT: 5432

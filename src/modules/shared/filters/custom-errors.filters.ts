@@ -8,6 +8,59 @@ import { GraphQLError } from "graphql";
 export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFilter {
     private readonly logger = new Logger(UniversalExceptionFilter.name);
 
+    /** Nivel al que se registran los 404. Los escáneres automatizados barren decenas de rutas
+     *  de otros frameworks (/phpinfo.php, /actuator, /telescope/...) en cada pasada. Con 'warn'
+     *  quedan visibles para rastrear el origen; con 'debug' desaparecen del log de producción
+     *  una vez identificado el patrón; 'silent' los omite del todo. */
+    private readonly notFoundLogLevel = process.env.HTTP_404_LOG_LEVEL ?? 'warn';
+
+    /** Los valores vienen del cliente y terminan en el log: un salto de línea permitiría
+     *  inyectar líneas falsas que imiten el formato de Nest. Se neutralizan y se truncan. */
+    private sanitizeForLog(value: unknown, maxLength: number): string {
+        return String(value ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, maxLength);
+    }
+
+    /** Identifica al emisor para poder correlacionar escaneos automatizados sin depender del
+     *  access log del proxy. `trust proxy = 1` (main.ts) hace que req.ip sea la IP real del
+     *  cliente y no la de Traefik; cf-ipcountry solo llega si Cloudflare está delante. */
+    private describeClient(request: any): string {
+        const ip = request.ip || request.socket?.remoteAddress || 'unknown';
+        const country = request.headers?.['cf-ipcountry'] || '-';
+        const userAgent = this.sanitizeForLog(request.headers?.['user-agent'] || 'none', 120);
+        // El frontend Next.js reescribe /graphql y /api/v1/* hacia este backend, así que un
+        // request puede llegar por el dominio de la API o rebotado desde el de la web. El
+        // Host distingue ambos casos y evita atribuir a la API un escaneo dirigido a la web.
+        const host = this.sanitizeForLog(request.headers?.['host'] || '-', 80);
+        return `ip=${ip} host=${host} country=${country} ua="${userAgent}"`;
+    }
+
+    /** Un 4xx lo causa el cliente (ruta inexistente, token vencido, escaneo de bots) y no
+     *  implica una falla del servidor: mandarlo a ERROR ahoga las caídas reales que sí exigen
+     *  intervención. Solo los 5xx conservan ese nivel, junto con el stack. */
+    private logHttpFailure(status: number, request: any, payload: string) {
+        const route = this.sanitizeForLog(request.url, 200);
+        const summary = `HTTP ${status} — ${request.method} ${route} | ${this.describeClient(request)}`;
+
+        if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+            this.logger.error(summary, payload);
+            return;
+        }
+
+        if (status !== HttpStatus.NOT_FOUND) {
+            this.logger.warn(`${summary} ${payload}`);
+            return;
+        }
+
+        // Cualquier valor distinto de 'silent'/'debug' cae en warn: ante una var mal escrita
+        // es preferible ruido a perder la traza del escaneo en silencio.
+        if (this.notFoundLogLevel === 'silent') return;
+        if (this.notFoundLogLevel === 'debug') {
+            this.logger.debug(`${summary} ${payload}`);
+        } else {
+            this.logger.warn(`${summary} ${payload}`);
+        }
+    }
+
     /** Mapea un status HTTP a un errorCode de negocio para HttpException nativas
      *  (las que no son CustomError, ej. las que lanza el ValidationPipe). */
     private httpStatusToErrorCode(status: number): GeneralErrorCode {
@@ -146,7 +199,7 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
             };
 
             // VULN-13 fix: usar Logger de NestJS en lugar de console.error
-            this.logger.error(`HTTP ${status} — ${request.method} ${request.url}`, JSON.stringify({ message, errorCode }));
+            this.logHttpFailure(status, request, JSON.stringify({ message, errorCode }));
 
             response.status(status).json(errorResponse);
 
@@ -201,7 +254,13 @@ export class UniversalExceptionFilter implements ExceptionFilter, GqlExceptionFi
             }
 
             // VULN-13 fix: usar Logger de NestJS en lugar de console.error
-            this.logger.error(`GraphQL error`, JSON.stringify({ message, errorCode, statusCode }));
+            // Mismo criterio que en REST: un 4xx es del cliente, no una caída del servidor.
+            const gqlPayload = JSON.stringify({ message, errorCode, statusCode });
+            if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+                this.logger.error(`GraphQL error`, gqlPayload);
+            } else {
+                this.logger.warn(`GraphQL error ${gqlPayload}`);
+            }
 
             // Lanzar GraphQLError con la información formateada
             throw new GraphQLError(message, {
