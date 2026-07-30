@@ -8,11 +8,13 @@ import { ConfigModule } from '@nestjs/config';
 
 import { AuthResolver } from './auth.resolver';
 import { SupervisorsController } from './controllers/supervisors.controller';
+import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.controller';
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { OtpService } from './services/otp.service';
 import { WhatsAppService } from './services/whatsapp.service';
+import { WhatsAppWebhookService } from './services/whatsapp-webhook.service';
 
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -34,7 +36,7 @@ import { UserRole } from '../users/entities/user_has_roles.entity';
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 
 @Module({
-  controllers: [SupervisorsController],
+  controllers: [SupervisorsController, WhatsAppWebhookController],
   imports: [
     ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -54,6 +56,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     SessionService,
     OtpService,
     WhatsAppService,
+    WhatsAppWebhookService,
 
     // Strategies (Passport)
     JwtAccessStrategy,
