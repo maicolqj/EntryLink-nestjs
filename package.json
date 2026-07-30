@@ -38,7 +38,8 @@
     "migration:show": "yarn typeorm migration:show",
     "whatsapp:templates": "ts-node -r tsconfig-paths/register scripts/whatsapp-templates.ts",
     "whatsapp:send-test": "ts-node -r tsconfig-paths/register scripts/whatsapp-send-test.ts",
-    "whatsapp:token-check": "node scripts/whatsapp-token-check.js"
+    "whatsapp:token-check": "node scripts/whatsapp-token-check.js",
+    "whatsapp:subscribed-apps": "node scripts/whatsapp-subscribed-apps.js"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
