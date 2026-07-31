@@ -61,6 +61,7 @@ export class WhatsAppWebhookService {
   private readonly logger = new Logger(WhatsAppWebhookService.name);
   private readonly verifyToken: string | undefined;
   private readonly appSecret: string | undefined;
+  private readonly isProduction: boolean;
 
   constructor(
     private readonly config: ConfigService,
@@ -68,6 +69,7 @@ export class WhatsAppWebhookService {
   ) {
     this.verifyToken = this.config.get<string>('WHATSAPP_WEBHOOK_VERIFY_TOKEN');
     this.appSecret = this.config.get<string>('WHATSAPP_APP_SECRET');
+    this.isProduction = (this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV) === 'production';
 
     if (!this.verifyToken) {
       this.logger.warn(
@@ -76,9 +78,14 @@ export class WhatsAppWebhookService {
     }
 
     if (!this.appSecret) {
-      this.logger.warn(
-        'WHATSAPP_APP_SECRET sin configurar: no se valida la firma X-Hub-Signature-256 de los callbacks.',
-      );
+      const message =
+        'WHATSAPP_APP_SECRET sin configurar: no se puede validar la firma X-Hub-Signature-256 de los callbacks.';
+
+      if (this.isProduction) {
+        this.logger.error(`${message} En producción TODOS los callbacks serán rechazados.`);
+      } else {
+        this.logger.warn(`${message} Los callbacks se aceptan sin verificar (solo fuera de producción).`);
+      }
     }
   }
 
@@ -96,13 +103,20 @@ export class WhatsAppWebhookService {
   /**
    * Valida la firma HMAC-SHA256 del body crudo.
    *
-   * Devuelve true cuando no hay `WHATSAPP_APP_SECRET` configurado: así el
-   * webhook sigue reportando statuses durante el montaje inicial en vez de
-   * devolver 401 y provocar que Meta deshabilite la suscripción. Configurar
-   * el secret es obligatorio para producción.
+   * Sin `WHATSAPP_APP_SECRET` el comportamiento depende del entorno:
+   *   - fuera de producción se acepta, para poder montar el webhook contra un
+   *     túnel local sin tener el secret a mano;
+   *   - en producción se rechaza. Desde que el webhook procesa mensajes
+   *     entrantes, un callback sin firma ya no solo ensucia logs: puede
+   *     confirmar un intento de login. Aceptarlo permitiría a cualquiera que
+   *     conozca la URL iniciar sesión como un residente.
+   *
+   * Rechazar hace que Meta reintente y termine deshabilitando la suscripción;
+   * es preferible a dejar la autenticación abierta, y el log de arranque dice
+   * exactamente qué falta configurar.
    */
   isSignatureValid(signatureHeader: string | undefined, rawBody: Buffer | undefined): boolean {
-    if (!this.appSecret) return true;
+    if (!this.appSecret) return !this.isProduction;
 
     if (!signatureHeader?.startsWith('sha256=') || !rawBody) return false;
 
