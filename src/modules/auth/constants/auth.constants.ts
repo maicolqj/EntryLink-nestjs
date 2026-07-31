@@ -21,8 +21,20 @@ export const AUTH_CONSTANTS = {
   LOGIN_BLOCK_DURATION: 15 * 60,     // 15 minutos en segundos
   MAX_IP_ATTEMPTS: 60 /* //?20 */,
 
+  // ── Dispositivo + PIN (residentes) ───────────────────────────────────────
+  // Sesión larga para que el residente no vuelva a pasar por el canal pago
+  // (WhatsApp). La seguridad la sostienen el PIN, el fingerprint y la
+  // posibilidad de revocar el dispositivo, no la caducidad del token.
+  RESIDENT_DEVICE_REFRESH_EXPIRY: '180d',
+  DEVICE_PIN_LENGTH: 6,
+  DEVICE_PIN_BCRYPT_ROUNDS: 12,
+  MAX_DEVICES_PER_RESIDENT: 5,
+  MAX_DEVICE_PIN_ATTEMPTS: 5,        // fallos consecutivos → bloqueo temporal
+  DEVICE_PIN_LOCK_DURATION: 15 * 60, // 15 minutos en segundos
+  MAX_DEVICE_PIN_LOCKOUTS: 2,        // bloqueos acumulados → se revoca el dispositivo
+
   // ── Sesiones ─────────────────────────────────────────────────────────────
-  MAX_SESSIONS_PER_USER: 5, 
+  MAX_SESSIONS_PER_USER: 5,
 
   // ── Refresh token race-condition grace window ────────────────────────────
   // Concurrent requests arriving with the same RT within this window are served
@@ -69,3 +81,15 @@ export const AUTH_CONSTANTS = {
   // ── Verificación de email (registro de supervisor) ───────────────────────
   EMAIL_VERIFICATION_EXPIRY_MINUTES: 24,  // 24 horas
 } as const;
+
+/**
+ * Vigencias admitidas para un refresh token.
+ *
+ * Es una unión de literales a propósito: `jsonwebtoken` tipa `expiresIn` como
+ * `StringValue`, así que un `string` genérico no compila. Toda vigencia nueva
+ * debe declararse en AUTH_CONSTANTS y sumarse aquí.
+ */
+export type RefreshExpiry =
+  | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY
+  | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER
+  | typeof AUTH_CONSTANTS.RESIDENT_DEVICE_REFRESH_EXPIRY;

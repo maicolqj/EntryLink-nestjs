@@ -2123,6 +2123,27 @@ type QrLoginTokenResponse {
   pin: String!
 }
 
+"""Dispositivo vinculado a un residente para login por PIN"""
+type ResidentDevice {
+  id: ID!
+  userId: String!
+
+  """Identificador del dispositivo (header x-device-id)"""
+  deviceId: String!
+
+  """Nombre legible del dispositivo"""
+  label: String
+  platform: String
+
+  """Bloqueo temporal por intentos fallidos"""
+  lockedUntil: DateTime
+  isRevoked: Boolean!
+  revokedReason: String
+  lastUsedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 """Evento de visita: entrada, salida, estado y QR de acceso"""
 type Visit {
   id: String!
@@ -3564,6 +3585,9 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 scalar JSON
 
 type Query {
+  """Lista los dispositivos vinculados del residente autenticado."""
+  myResidentDevices: [ResidentDevice!]!
+
   """Retorna todos los módulos disponibles en el sistema"""
   availableModules: [ComplexModule!]!
   complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
@@ -4051,6 +4075,21 @@ type Mutation {
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
+
+  """
+  Vincula el dispositivo actual (header x-device-id) al residente autenticado y fija su PIN de 6 dígitos. A partir de aquí el residente inicia sesión con loginWithDevicePin, sin consumir mensajes de WhatsApp.
+  """
+  setResidentDevicePin(input: SetDevicePinInput!): ResidentDevice!
+
+  """
+  Inicia sesión con el PIN del dispositivo vinculado (header x-device-id). Exclusivo para RESIDENT_ROL. No envía ningún mensaje.
+  """
+  loginWithDevicePin(input: LoginDevicePinInput!): AuthResponse!
+
+  """
+  Desvincula un dispositivo (ej. celular perdido) y cierra su sesión. Las sesiones de los demás dispositivos del residente no se ven afectadas.
+  """
+  revokeResidentDevice(deviceId: ID!): Boolean!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
@@ -4347,6 +4386,21 @@ input VerifyOtpInput {
 
   """Código OTP de 6 dígitos recibido por SMS"""
   code: String!
+}
+
+"""Fija el PIN del dispositivo actual para el residente autenticado"""
+input SetDevicePinInput {
+  """PIN de 6 dígitos"""
+  pin: String!
+
+  """Nombre del dispositivo (ej. "iPhone de Juan")"""
+  label: String
+}
+
+"""Credenciales de login por dispositivo vinculado + PIN (residentes)"""
+input LoginDevicePinInput {
+  """PIN de 6 dígitos del dispositivo vinculado"""
+  pin: String!
 }
 
 input CreateComplexInput {

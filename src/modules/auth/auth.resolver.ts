@@ -1,8 +1,8 @@
 import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
 import { AuthService } from './services/auth.service';
+import { buildDeviceInfo, extractIp } from './utils/device-info.util';
 import { LoginEmailInput } from './dto/inputs/login-email.input';
 import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { LoginResidentInput } from './dto/inputs/login-resident.input';
@@ -263,35 +263,11 @@ export class AuthResolver {
   // ── Helpers privados ─────────────────────────────────────────────────────
 
   private extractDeviceInfo(context: any): DeviceInfo {
-    const req = context?.req ?? {};
-    const ua = req.headers?.['user-agent'] ?? 'unknown';
-    const ip = this.extractIp(context);
-    const platform = this.detectPlatform(ua);
-    const deviceId = req.headers?.['x-device-id'] as string | undefined;
-    const appVersion = req.headers?.['x-app-version'] as string | undefined;
-
     // VULN-11 fix: HMAC-SHA256 del fingerprint para que no sea falsificable por el cliente
-    const secret = this.configService.getOrThrow<string>('FINGERPRINT_SECRET');
-    const fingerprint = createHmac('sha256', secret)
-      .update(`${ua}|${deviceId ?? 'web'}`)
-      .digest('hex');
-
-    return { fingerprint, userAgent: ua, ip, platform, deviceId, appVersion };
+    return buildDeviceInfo(context, this.configService.getOrThrow<string>('FINGERPRINT_SECRET'));
   }
 
   private extractIp(context: any): string {
-    const req = context?.req ?? {};
-    return (
-      (req.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
-      req.socket?.remoteAddress ??
-      '0.0.0.0'
-    );
-  }
-
-  private detectPlatform(userAgent: string): 'ios' | 'android' | 'web' {
-    const ua = userAgent.toLowerCase();
-    if (ua.includes('iphone') || ua.includes('ipad')) return 'ios';
-    if (ua.includes('android')) return 'android';
-    return 'web';
+    return extractIp(context);
   }
 }

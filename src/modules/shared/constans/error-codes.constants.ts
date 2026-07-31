@@ -85,6 +85,15 @@ export enum AuthErrorCode {
   OTP_MAX_ATTEMPTS            = 'OTP_MAX_ATTEMPTS',
   OTP_INVALID                 = 'OTP_INVALID',
   OTP_RATE_LIMIT              = 'OTP_RATE_LIMIT',
+  // Dispositivo + PIN (residentes)
+  DEVICE_ID_REQUIRED          = 'DEVICE_ID_REQUIRED',
+  DEVICE_NOT_LINKED           = 'DEVICE_NOT_LINKED',
+  DEVICE_REVOKED              = 'DEVICE_REVOKED',
+  DEVICE_LOCKED               = 'DEVICE_LOCKED',
+  DEVICE_PIN_INVALID          = 'DEVICE_PIN_INVALID',
+  DEVICE_PIN_TOO_WEAK         = 'DEVICE_PIN_TOO_WEAK',
+  DEVICE_NOT_FOUND            = 'DEVICE_NOT_FOUND',
+  DEVICE_PIN_NOT_ALLOWED      = 'DEVICE_PIN_NOT_ALLOWED',
 }
 
 export enum RolesErrorCode {
