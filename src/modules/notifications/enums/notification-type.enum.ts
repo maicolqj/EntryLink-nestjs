@@ -63,6 +63,7 @@ export enum NotificationType {
 
   // ── Cuenta / Perfil ────────────────────────────────────────────
   PROFILE_UPDATED        = 'PROFILE_UPDATED',        // Datos personales del usuario modificados
+  LOGIN_APPROVAL_REQUEST = 'LOGIN_APPROVAL_REQUEST', // Alguien pide entrar a la cuenta: aprobar desde un dispositivo confiable
 
   // ── Supervisores / Solicitudes de acceso ───────────────────────
   ACCESS_REQUEST_APPROVED    = 'ACCESS_REQUEST_APPROVED',    // Solicitud de acceso aprobada por el admin

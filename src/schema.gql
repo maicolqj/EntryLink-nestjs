@@ -1658,6 +1658,7 @@ enum NotificationType {
   COMPLEX_ALERT
   AMENITY_REMINDER
   PROFILE_UPDATED
+  LOGIN_APPROVAL_REQUEST
   ACCESS_REQUEST_APPROVED
   ACCESS_REQUEST_REJECTED
   ACCESS_REVOKED_INACTIVITY
@@ -2142,6 +2143,94 @@ type ResidentDevice {
   lastUsedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+"""
+Datos para que el residente inicie sesión enviando un mensaje de WhatsApp
+"""
+type WhatsAppLoginChallengeResponse {
+  """Identificador del intento. Requerido para consultar estado y canjear"""
+  challengeId: ID!
+
+  """Código que viaja en el mensaje. Público: solo identifica el intento"""
+  nonce: String!
+
+  """Link wa.me con el mensaje prellenado. Abrirlo en el mismo dispositivo"""
+  whatsappUrl: String!
+
+  """Texto exacto que debe enviarse, por si el link no abre"""
+  messageText: String!
+
+  """Vencimiento del intento"""
+  expiresAt: DateTime!
+
+  """Advertencia a mostrar al usuario antes de que envíe el mensaje"""
+  warning: String!
+}
+
+"""Estado de un intento de login por WhatsApp entrante"""
+type WhatsAppLoginStatusResponse {
+  """PENDING mientras no llega el mensaje; CONFIRMED habilita el canje"""
+  status: WhatsAppLoginStatus!
+  expiresAt: DateTime!
+}
+
+"""Estado de un intento de login por mensaje entrante de WhatsApp"""
+enum WhatsAppLoginStatus {
+  PENDING
+  CONFIRMED
+  CONSUMED
+  EXPIRED
+}
+
+"""
+Solicitud de ingreso pendiente de aprobación desde un dispositivo confiable
+"""
+type DeviceApprovalResponse {
+  """Identificador del intento. Requerido para consultar estado y canjear"""
+  challengeId: ID!
+
+  """
+  Código a MOSTRAR en pantalla. El residente debe verificar que coincida con el del push antes de aprobar
+  """
+  approvalCode: String!
+  expiresAt: DateTime!
+
+  """Texto a mostrar al usuario mientras espera la aprobación"""
+  instructions: String!
+}
+
+"""Estado de una solicitud de ingreso por aprobación push"""
+type DeviceApprovalStatusResponse {
+  """PENDING mientras el residente no responde; APPROVED habilita el canje"""
+  status: DeviceApprovalStatus!
+  expiresAt: DateTime!
+}
+
+"""Estado de una solicitud de ingreso pendiente de aprobación por push"""
+enum DeviceApprovalStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CONSUMED
+  EXPIRED
+}
+
+"""Solicitud de ingreso esperando que el residente la apruebe o rechace"""
+type PendingDeviceApproval {
+  """Identificador para aprobar o rechazar"""
+  approvalId: ID!
+
+  """Código a comparar con el mostrado en el dispositivo que pide entrar"""
+  approvalCode: String!
+
+  """Equipo desde el que se pide el ingreso"""
+  requestedFromLabel: String
+
+  """IP de origen de la solicitud"""
+  requestedFromIp: String
+  expiresAt: DateTime!
+  createdAt: DateTime!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -3588,6 +3677,34 @@ type Query {
   """Lista los dispositivos vinculados del residente autenticado."""
   myResidentDevices: [ResidentDevice!]!
 
+  """
+  Consulta si ya llegó el mensaje del residente. El cliente hace polling hasta CONFIRMED. Solo responde al mismo dispositivo que pidió el challenge.
+  """
+  whatsAppLoginChallengeStatus(challengeId: ID!): WhatsAppLoginStatusResponse!
+
+  """
+  Consulta si el residente ya aprobó. El cliente hace polling hasta APPROVED. Solo responde al mismo dispositivo que pidió la autorización.
+  """
+  deviceApprovalStatus(challengeId: ID!): DeviceApprovalStatusResponse!
+
+  """
+  Solicitudes de ingreso esperando respuesta. Sirve de respaldo cuando el push no llegó.
+  """
+  pendingDeviceApprovals: [PendingDeviceApproval!]!
+  myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  notificationDetail(notificationId: String!, complexId: String): NotificationDetailResponse!
+  unreadNotificationsCount(complexId: String): UnreadCountResponse!
+  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
+  vapidPublicKey: String!
+  activePanicAlerts(complexId: String!): [Notification!]!
+  myResidentProfile: Resident!
+  residentStats(complexId: String!): ResidentStatsResponse!
+  residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
+  pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
+  resident(id: String!): Resident!
+  residentHistoryByUnit(unitId: String!): [Resident!]!
+
   """Retorna todos los módulos disponibles en el sistema"""
   availableModules: [ComplexModule!]!
   complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
@@ -3608,19 +3725,6 @@ type Query {
   Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX) con labels enriquecidos.
   """
   auditLog(referenceNumber: String!): AuditLogDetailResponse!
-  myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
-  complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
-  notificationDetail(notificationId: String!, complexId: String): NotificationDetailResponse!
-  unreadNotificationsCount(complexId: String): UnreadCountResponse!
-  sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
-  vapidPublicKey: String!
-  activePanicAlerts(complexId: String!): [Notification!]!
-  myResidentProfile: Resident!
-  residentStats(complexId: String!): ResidentStatsResponse!
-  residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
-  pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
-  resident(id: String!): Resident!
-  residentHistoryByUnit(unitId: String!): [Resident!]!
   permissions(input: SearchPermissionsInput!): PaginatedPermissionsResponse!
   permission(id: String!): Permission!
   roles(input: SearchRolesInput!): PaginatedRolesResponse!
@@ -3726,6 +3830,39 @@ type Query {
   ping: String!
 }
 
+input PaginationInput {
+  page: Int! = 1
+  limit: Int! = 10
+}
+
+input FilterNotificationsInput {
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: Boolean
+}
+
+input FilterResidentsInput {
+  """Buscar por nombre, apellido o email del usuario"""
+  search: String
+  status: ResidentStatus
+  type: ResidentType
+
+  """Filtrar por edificio/torre (UUID)"""
+  buildingId: String
+
+  """Filtrar por unidad específica (UUID)"""
+  unitId: String
+
+  """Tipo de unidad: HOUSE, APARTMENT, OFFICE..."""
+  unitType: UnitType
+
+  """Número/identificador de la unidad (ej: "39", "601")"""
+  unitNumber: String
+
+  """Nombre de torre/edificio (ej: "5", "TORRE A"). Búsqueda exacta."""
+  buildingName: String
+}
+
 """Módulos funcionales disponibles para un complejo residencial"""
 enum ComplexModule {
   EDIFICIOS
@@ -3742,11 +3879,6 @@ enum ComplexModule {
   NOTIFICACIONES
   PARKING_ROTATION
   PARKING_BILLING
-}
-
-input PaginationInput {
-  page: Int! = 1
-  limit: Int! = 10
 }
 
 input FilterComplexInput {
@@ -3790,34 +3922,6 @@ input FilterAuditLogsInput {
   to: String
   limit: Int = 20
   offset: Int = 0
-}
-
-input FilterNotificationsInput {
-  type: NotificationType
-  priority: NotificationPriority
-  isRead: Boolean
-}
-
-input FilterResidentsInput {
-  """Buscar por nombre, apellido o email del usuario"""
-  search: String
-  status: ResidentStatus
-  type: ResidentType
-
-  """Filtrar por edificio/torre (UUID)"""
-  buildingId: String
-
-  """Filtrar por unidad específica (UUID)"""
-  unitId: String
-
-  """Tipo de unidad: HOUSE, APARTMENT, OFFICE..."""
-  unitType: UnitType
-
-  """Número/identificador de la unidad (ej: "39", "601")"""
-  unitNumber: String
-
-  """Nombre de torre/edificio (ej: "5", "TORRE A"). Búsqueda exacta."""
-  buildingName: String
 }
 
 input SearchPermissionsInput {
@@ -4090,6 +4194,56 @@ type Mutation {
   Desvincula un dispositivo (ej. celular perdido) y cierra su sesión. Las sesiones de los demás dispositivos del residente no se ven afectadas.
   """
   revokeResidentDevice(deviceId: ID!): Boolean!
+
+  """
+  Genera un link wa.me con un código que el residente debe ENVIAR desde su WhatsApp. No consume mensajes de plantilla: los mensajes entrantes no tienen costo. Responde igual exista o no la identidad, para no revelar qué documentos están registrados.
+  """
+  requestWhatsAppLoginChallenge(identity: String!): WhatsAppLoginChallengeResponse!
+
+  """
+  Canjea un challenge CONFIRMED por los tokens de sesión. Un solo uso, y solo desde el dispositivo donde se inició el flujo.
+  """
+  redeemWhatsAppLoginChallenge(challengeId: ID!): AuthResponse!
+
+  """
+  Pide autorización de ingreso y avisa por push a los dispositivos vinculados del residente. No consume mensajes de WhatsApp. Responde igual exista o no la identidad, y no revela cuántos dispositivos se notificaron.
+  """
+  requestDeviceApproval(identity: String!): DeviceApprovalResponse!
+
+  """
+  Canjea una solicitud APPROVED por los tokens de sesión. Un solo uso, y solo desde el dispositivo donde se inició el flujo.
+  """
+  redeemDeviceApproval(challengeId: ID!): AuthResponse!
+
+  """
+  Autoriza el ingreso. Antes de llamarla, la interfaz DEBE hacer que el residente compare el código de esta pantalla con el del dispositivo que pide entrar.
+  """
+  approveDeviceApproval(approvalId: ID!): Boolean!
+
+  """
+  Rechaza el ingreso. Es terminal: el solicitante debe pedir una nueva autorización.
+  """
+  denyDeviceApproval(approvalId: ID!): Boolean!
+  markNotificationAsRead(notificationId: String!): Notification!
+  markAllNotificationsAsRead(complexId: String): Int!
+  sendNotification(input: SendNotificationInput!): SendNotificationResult!
+  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
+  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  requestSecurityCall(complexId: String!): RequestSecurityCallResult!
+  acknowledgePanicAlert(notificationId: String!): Notification!
+  deleteNotification(notificationId: String!): Boolean!
+  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
+  createResident(input: CreateResidentInput!): Resident!
+  updateResident(input: UpdateResidentInput!): Resident!
+  suspendResident(residentId: String!, reason: String!): Resident!
+  reactivateResident(residentId: String!): Resident!
+  moveOutResident(input: MoveOutResidentInput!): Resident!
+  undoMoveOutResident(residentId: String!): Resident!
+  removeResident(id: String!): Boolean!
+  moveResidentsToUnit(input: MoveResidentsToUnitInput!): [Resident!]!
+  bulkMoveOutResidents(input: BulkMoveOutResidentsInput!): [Resident!]!
+  approveResident(input: ApproveResidentInput!): Resident!
+  rejectResident(input: RejectResidentInput!): Resident!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
@@ -4111,26 +4265,6 @@ type Mutation {
   Revierte una acción registrada en el historial a su estado anterior. Solo disponible para SUPER_ADMIN_ROL. Una acción solo puede revertirse una vez.
   """
   revertAudit(referenceNumber: String!): RevertAuditResponse!
-  markNotificationAsRead(notificationId: String!): Notification!
-  markAllNotificationsAsRead(complexId: String): Int!
-  sendNotification(input: SendNotificationInput!): SendNotificationResult!
-  savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
-  triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
-  requestSecurityCall(complexId: String!): RequestSecurityCallResult!
-  acknowledgePanicAlert(notificationId: String!): Notification!
-  deleteNotification(notificationId: String!): Boolean!
-  saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
-  createResident(input: CreateResidentInput!): Resident!
-  updateResident(input: UpdateResidentInput!): Resident!
-  suspendResident(residentId: String!, reason: String!): Resident!
-  reactivateResident(residentId: String!): Resident!
-  moveOutResident(input: MoveOutResidentInput!): Resident!
-  undoMoveOutResident(residentId: String!): Resident!
-  removeResident(id: String!): Boolean!
-  moveResidentsToUnit(input: MoveResidentsToUnitInput!): [Resident!]!
-  bulkMoveOutResidents(input: BulkMoveOutResidentsInput!): [Resident!]!
-  approveResident(input: ApproveResidentInput!): Resident!
-  rejectResident(input: RejectResidentInput!): Resident!
   createPermission(input: CreatePermissionInput!): CreatePermissionResponse!
 
   """Update an existing permission"""
@@ -4403,6 +4537,141 @@ input LoginDevicePinInput {
   pin: String!
 }
 
+input SendNotificationInput {
+  complexId: String!
+  title: String!
+  body: String!
+  type: NotificationType
+  priority: NotificationPriority
+  targetRoles: [String!]
+  targetUnitId: String
+  metadata: JSON
+}
+
+input SavePushSubscriptionInput {
+  complexId: String!
+  endpoint: String!
+  p256dh: String!
+  auth: String!
+}
+
+input SaveMobileTokenInput {
+  complexId: String!
+  deviceToken: String!
+  platform: PushPlatform!
+}
+
+"""Plataforma de destino para notificaciones push"""
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
+input CreateResidentInput {
+  """Nombre del residente"""
+  name: String!
+
+  """Apellido del residente"""
+  lastName: String!
+
+  """Correo electrónico del residente"""
+  email: String!
+
+  """Número de teléfono del residente"""
+  phoneNumber: String!
+
+  """Número de documento de identidad del residente"""
+  identityNumber: String!
+
+  """Tipo de documento de identidad del residente"""
+  identityType: UserIdentityType! = CC
+
+  """ID de la unidad a la que se asignará"""
+  unitId: String!
+
+  """ID del complejo residencial"""
+  complexId: String!
+  type: ResidentType! = OWNER
+  isMainResident: Boolean! = false
+
+  """Nombre del contacto de emergencia"""
+  emergencyContactName: String!
+
+  """Apellido del contacto de emergencia"""
+  emergencyContactLastName: String!
+
+  """Teléfono del contacto de emergencia"""
+  emergencyContactPhone: String!
+  startDate: String
+  endDate: String
+  notes: String
+}
+
+input UpdateResidentInput {
+  """ID del registro de residente a actualizar"""
+  id: String!
+  type: ResidentType
+  isMainResident: Boolean
+  emergencyContactName: String
+  emergencyContactLastName: String
+  emergencyContactPhone: String
+  startDate: String
+  endDate: String
+  notes: String
+
+  """ID de la unidad a la que se asignará"""
+  unitId: String!
+
+  """Nombre del usuario residente"""
+  name: String
+
+  """Apellido del usuario residente"""
+  lastName: String
+
+  """Teléfono del usuario residente"""
+  phoneNumber: String
+}
+
+input MoveOutResidentInput {
+  """ID del registro de residente"""
+  residentId: String!
+
+  """Fecha de mudanza (YYYY-MM-DD)"""
+  moveOutDate: String
+
+  """Razón de la salida"""
+  moveOutReason: String
+}
+
+input MoveResidentsToUnitInput {
+  residentIds: [String!]!
+  newUnitId: String!
+  newMainResidentId: String
+}
+
+input BulkMoveOutResidentsInput {
+  residentIds: [String!]!
+  moveOutDate: String!
+  moveOutReason: String!
+}
+
+input ApproveResidentInput {
+  """ID del registro de residente a aprobar"""
+  residentId: String!
+
+  """Notas opcionales del Compliance Officer"""
+  notes: String
+}
+
+input RejectResidentInput {
+  """ID del registro de residente a rechazar"""
+  residentId: String!
+
+  """Razón del rechazo (obligatoria)"""
+  rejectionReason: String!
+}
+
 input CreateComplexInput {
   name: String!
   description: String
@@ -4632,141 +4901,6 @@ input UpsertCoefficientWeightingInput {
 
   """Puntos por piso de la casa"""
   houseFloorPoints: Float
-}
-
-input SendNotificationInput {
-  complexId: String!
-  title: String!
-  body: String!
-  type: NotificationType
-  priority: NotificationPriority
-  targetRoles: [String!]
-  targetUnitId: String
-  metadata: JSON
-}
-
-input SavePushSubscriptionInput {
-  complexId: String!
-  endpoint: String!
-  p256dh: String!
-  auth: String!
-}
-
-input SaveMobileTokenInput {
-  complexId: String!
-  deviceToken: String!
-  platform: PushPlatform!
-}
-
-"""Plataforma de destino para notificaciones push"""
-enum PushPlatform {
-  WEB
-  ANDROID
-  IOS
-}
-
-input CreateResidentInput {
-  """Nombre del residente"""
-  name: String!
-
-  """Apellido del residente"""
-  lastName: String!
-
-  """Correo electrónico del residente"""
-  email: String!
-
-  """Número de teléfono del residente"""
-  phoneNumber: String!
-
-  """Número de documento de identidad del residente"""
-  identityNumber: String!
-
-  """Tipo de documento de identidad del residente"""
-  identityType: UserIdentityType! = CC
-
-  """ID de la unidad a la que se asignará"""
-  unitId: String!
-
-  """ID del complejo residencial"""
-  complexId: String!
-  type: ResidentType! = OWNER
-  isMainResident: Boolean! = false
-
-  """Nombre del contacto de emergencia"""
-  emergencyContactName: String!
-
-  """Apellido del contacto de emergencia"""
-  emergencyContactLastName: String!
-
-  """Teléfono del contacto de emergencia"""
-  emergencyContactPhone: String!
-  startDate: String
-  endDate: String
-  notes: String
-}
-
-input UpdateResidentInput {
-  """ID del registro de residente a actualizar"""
-  id: String!
-  type: ResidentType
-  isMainResident: Boolean
-  emergencyContactName: String
-  emergencyContactLastName: String
-  emergencyContactPhone: String
-  startDate: String
-  endDate: String
-  notes: String
-
-  """ID de la unidad a la que se asignará"""
-  unitId: String!
-
-  """Nombre del usuario residente"""
-  name: String
-
-  """Apellido del usuario residente"""
-  lastName: String
-
-  """Teléfono del usuario residente"""
-  phoneNumber: String
-}
-
-input MoveOutResidentInput {
-  """ID del registro de residente"""
-  residentId: String!
-
-  """Fecha de mudanza (YYYY-MM-DD)"""
-  moveOutDate: String
-
-  """Razón de la salida"""
-  moveOutReason: String
-}
-
-input MoveResidentsToUnitInput {
-  residentIds: [String!]!
-  newUnitId: String!
-  newMainResidentId: String
-}
-
-input BulkMoveOutResidentsInput {
-  residentIds: [String!]!
-  moveOutDate: String!
-  moveOutReason: String!
-}
-
-input ApproveResidentInput {
-  """ID del registro de residente a aprobar"""
-  residentId: String!
-
-  """Notas opcionales del Compliance Officer"""
-  notes: String
-}
-
-input RejectResidentInput {
-  """ID del registro de residente a rechazar"""
-  residentId: String!
-
-  """Razón del rechazo (obligatoria)"""
-  rejectionReason: String!
 }
 
 """Datos requeridos para crear un nuevo permiso"""

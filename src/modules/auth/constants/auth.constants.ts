@@ -41,6 +41,14 @@ export const AUTH_CONSTANTS = {
   WA_LOGIN_RATE_LIMIT_MAX: 3,          // challenges por identidad por ventana
   WA_LOGIN_RATE_LIMIT_WINDOW: 10 * 60, // 10 minutos en segundos
 
+  // ── Aprobación de ingreso por push ───────────────────────────────────────
+  // Ventana más amplia que el reverse-OTP: el residente tiene que ver la
+  // notificación, abrir la app y comparar el código.
+  DEVICE_APPROVAL_EXPIRY_SECONDS: 5 * 60,
+  DEVICE_APPROVAL_CODE_LENGTH: 4,
+  DEVICE_APPROVAL_RATE_LIMIT_MAX: 3,          // solicitudes por identidad por ventana
+  DEVICE_APPROVAL_RATE_LIMIT_WINDOW: 10 * 60, // 10 minutos en segundos
+
   // ── Sesiones ─────────────────────────────────────────────────────────────
   MAX_SESSIONS_PER_USER: 5,
 
@@ -62,6 +70,7 @@ export const AUTH_CONSTANTS = {
     OTP_RATE_LIMIT: 'otp-rl',
     SYSTEM_CODE_RATE_LIMIT: 'sc-rl',
     WA_LOGIN_RATE_LIMIT: 'wa-login-rl',
+    DEVICE_APPROVAL_RATE_LIMIT: 'dev-appr-rl',
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
@@ -79,7 +88,8 @@ export const AUTH_CONSTANTS = {
     OTP_ATTEMPTS: 1_800,       // 30 min
     OTP_RATE_LIMIT: 600,       // 10 min
     SYSTEM_CODE_RATE_LIMIT: 600, // 10 min
-    WA_LOGIN_RATE_LIMIT: 600,    // 10 min
+    WA_LOGIN_RATE_LIMIT: 600,       // 10 min
+    DEVICE_APPROVAL_RATE_LIMIT: 600, // 10 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
     GRACE_WINDOW: 5,           // 5 s (same as GRACE_WINDOW_MS / 1000)
   },
