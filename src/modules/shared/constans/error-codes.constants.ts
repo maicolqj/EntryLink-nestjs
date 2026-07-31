@@ -99,8 +99,9 @@ export enum AuthErrorCode {
   WA_LOGIN_CHALLENGE_NOT_FOUND = 'WA_LOGIN_CHALLENGE_NOT_FOUND',
   WA_LOGIN_CHALLENGE_EXPIRED  = 'WA_LOGIN_CHALLENGE_EXPIRED',
   WA_LOGIN_CHALLENGE_PENDING  = 'WA_LOGIN_CHALLENGE_PENDING',
+  // El canje desde otro dispositivo devuelve CHALLENGE_NOT_FOUND a propósito:
+  // distinguirlo revelaría que el challenge existe.
   WA_LOGIN_CHALLENGE_CONSUMED = 'WA_LOGIN_CHALLENGE_CONSUMED',
-  WA_LOGIN_DEVICE_MISMATCH    = 'WA_LOGIN_DEVICE_MISMATCH',
   WA_LOGIN_RATE_LIMIT         = 'WA_LOGIN_RATE_LIMIT',
   // Aprobación de ingreso por push
   APPROVAL_NOT_FOUND          = 'APPROVAL_NOT_FOUND',
