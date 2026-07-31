@@ -33,6 +33,14 @@ export const AUTH_CONSTANTS = {
   DEVICE_PIN_LOCK_DURATION: 15 * 60, // 15 minutos en segundos
   MAX_DEVICE_PIN_LOCKOUTS: 2,        // bloqueos acumulados → se revoca el dispositivo
 
+  // ── Login por WhatsApp entrante (reverse-OTP) ────────────────────────────
+  // Ventana corta: el residente pulsa "enviar" en el momento. Alargarla solo
+  // ampliaría el margen para que le hagan enviar un nonce ajeno.
+  WA_LOGIN_CHALLENGE_EXPIRY_SECONDS: 2 * 60,
+  WA_LOGIN_NONCE_LENGTH: 8,
+  WA_LOGIN_RATE_LIMIT_MAX: 3,          // challenges por identidad por ventana
+  WA_LOGIN_RATE_LIMIT_WINDOW: 10 * 60, // 10 minutos en segundos
+
   // ── Sesiones ─────────────────────────────────────────────────────────────
   MAX_SESSIONS_PER_USER: 5,
 
@@ -53,6 +61,7 @@ export const AUTH_CONSTANTS = {
     OTP_CODE: 'otp',
     OTP_RATE_LIMIT: 'otp-rl',
     SYSTEM_CODE_RATE_LIMIT: 'sc-rl',
+    WA_LOGIN_RATE_LIMIT: 'wa-login-rl',
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
@@ -70,6 +79,7 @@ export const AUTH_CONSTANTS = {
     OTP_ATTEMPTS: 1_800,       // 30 min
     OTP_RATE_LIMIT: 600,       // 10 min
     SYSTEM_CODE_RATE_LIMIT: 600, // 10 min
+    WA_LOGIN_RATE_LIMIT: 600,    // 10 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
     GRACE_WINDOW: 5,           // 5 s (same as GRACE_WINDOW_MS / 1000)
   },

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { WhatsAppLoginService } from './whatsapp-login.service';
 
 /** Error que Meta adjunta a un status `failed`. */
 interface MetaStatusError {
@@ -20,9 +21,19 @@ interface MetaMessageStatus {
   errors?: MetaStatusError[];
 }
 
+/** Un mensaje entrante dentro de `value.messages`. */
+interface MetaInboundMessage {
+  id?: string;
+  from?: string;
+  type?: string;
+  timestamp?: string;
+  text?: { body?: string };
+  button?: { text?: string };
+}
+
 interface MetaWebhookValue {
   statuses?: MetaMessageStatus[];
-  messages?: unknown[];
+  messages?: MetaInboundMessage[];
   metadata?: { display_phone_number?: string; phone_number_id?: string };
 }
 
@@ -51,7 +62,10 @@ export class WhatsAppWebhookService {
   private readonly verifyToken: string | undefined;
   private readonly appSecret: string | undefined;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly whatsAppLoginService: WhatsAppLoginService,
+  ) {
     this.verifyToken = this.config.get<string>('WHATSAPP_WEBHOOK_VERIFY_TOKEN');
     this.appSecret = this.config.get<string>('WHATSAPP_APP_SECRET');
 
@@ -97,19 +111,43 @@ export class WhatsAppWebhookService {
     return this.safeCompare(signatureHeader.slice('sha256='.length), expected);
   }
 
-  /** Recorre el payload y loguea cada status; los `failed` con su código Meta. */
-  processPayload(payload: MetaWebhookPayload): void {
-    const statuses = (payload?.entry ?? [])
+  /**
+   * Despacha el callback: statuses de entrega a logs, mensajes entrantes al
+   * flujo de login por WhatsApp.
+   */
+  async processPayload(payload: MetaWebhookPayload): Promise<void> {
+    const values = (payload?.entry ?? [])
       .flatMap((entry) => entry?.changes ?? [])
-      .flatMap((change) => change?.value?.statuses ?? []);
+      .map((change) => change?.value)
+      .filter((value): value is MetaWebhookValue => !!value);
 
-    if (statuses.length === 0) {
-      // Los callbacks de mensajes entrantes (`value.messages`) también llegan
-      // aquí; no se procesan todavía, solo se anotan.
-      this.logger.debug('[WA-STATUS] Callback sin statuses de entrega (probable mensaje entrante)');
-      return;
+    await this.processInboundMessages(values.flatMap((value) => value.messages ?? []));
+
+    this.processStatuses(values.flatMap((value) => value.statuses ?? []));
+  }
+
+  /**
+   * Mensajes que el residente nos envía. Es el canal del login reverse-OTP:
+   * a diferencia de las plantillas salientes, recibir no tiene costo.
+   */
+  private async processInboundMessages(messages: MetaInboundMessage[]): Promise<void> {
+    for (const message of messages) {
+      const from = message.from;
+      const text = message.text?.body ?? message.button?.text;
+
+      if (!from || !text) continue;
+
+      try {
+        await this.whatsAppLoginService.confirmFromInboundMessage(from, text);
+      } catch (err: any) {
+        // Nunca propagar: el webhook debe responder 200 a Meta pase lo que pase.
+        this.logger.error(`[WA-LOGIN] Error procesando mensaje entrante: ${err?.message ?? String(err)}`);
+      }
     }
+  }
 
+  /** Loguea cada status; los `failed` con su código Meta. */
+  private processStatuses(statuses: MetaMessageStatus[]): void {
     for (const status of statuses) {
       const to = this.maskPhone(status.recipient_id ?? 'desconocido');
       const base = `[WA-STATUS] ${status.status.toUpperCase()} → ${to} | msgId: ${status.id}`;

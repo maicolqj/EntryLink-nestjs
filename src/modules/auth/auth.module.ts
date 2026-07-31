@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { AuthResolver } from './auth.resolver';
 import { ResidentDeviceResolver } from './resident-device.resolver';
+import { WhatsAppLoginResolver } from './whatsapp-login.resolver';
 import { SupervisorsController } from './controllers/supervisors.controller';
 import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.controller';
 import { AuthService } from './services/auth.service';
@@ -17,6 +18,7 @@ import { OtpService } from './services/otp.service';
 import { ResidentDeviceService } from './services/resident-device.service';
 import { WhatsAppService } from './services/whatsapp.service';
 import { WhatsAppWebhookService } from './services/whatsapp-webhook.service';
+import { WhatsAppLoginService } from './services/whatsapp-login.service';
 
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -28,6 +30,7 @@ import { OTP_QUEUE_NAME } from './queues/otp.queue.constants';
 import { OtpCode } from './entities/otp-code.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { ResidentDevice } from './entities/resident-device.entity';
+import { WhatsAppLoginChallenge } from './entities/whatsapp-login-challenge.entity';
 import { UserSession } from './entities/user-session.entity';
 import { User } from '../users/entities/user.entity';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
@@ -44,7 +47,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}), // Configurado sin secret fijo; cada llamada usa su propio secret
-    TypeOrmModule.forFeature([User, ResidentialComplex, OtpCode, RefreshToken, ResidentDevice, UserSession, Role, UserRole]),
+    TypeOrmModule.forFeature([User, ResidentialComplex, OtpCode, RefreshToken, ResidentDevice, WhatsAppLoginChallenge, UserSession, Role, UserRole]),
     BullModule.registerQueue({ name: OTP_QUEUE_NAME }),
     HttpModule,
     CacheModule,
@@ -53,6 +56,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     // Resolvers
     AuthResolver,
     ResidentDeviceResolver,
+    WhatsAppLoginResolver,
 
     // Services
     AuthService,
@@ -62,6 +66,7 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     ResidentDeviceService,
     WhatsAppService,
     WhatsAppWebhookService,
+    WhatsAppLoginService,
 
     // Strategies (Passport)
     JwtAccessStrategy,

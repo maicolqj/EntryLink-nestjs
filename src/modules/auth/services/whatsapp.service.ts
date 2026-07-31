@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { normalizeColombianPhone, maskPhone } from '../utils/phone.util';
 
 interface MetaApiResponse {
   messages?: { id: string }[];
@@ -73,7 +74,7 @@ export class WhatsAppService {
       throw new Error('WhatsApp Cloud API no está configurado (faltan variables WHATSAPP_*)');
     }
 
-    const to = this.normalizePhone(phoneNumber);
+    const to = normalizeColombianPhone(phoneNumber);
 
     const payload = {
       messaging_product: 'whatsapp',
@@ -119,7 +120,7 @@ export class WhatsAppService {
       const msgId = data?.messages?.[0]?.id ?? 'unknown';
       // "accepted" solo significa encolado en Meta; la entrega real la confirma
       // el webhook de statuses (WhatsAppWebhookController).
-      this.logger.log(`WhatsApp "${templateName}" aceptado → ${this.maskPhone(to)} | msgId: ${msgId}`);
+      this.logger.log(`WhatsApp "${templateName}" aceptado → ${maskPhone(to)} | msgId: ${msgId}`);
     } catch (err: any) {
       const metaError = err?.response?.data?.error;
       const detail = metaError
@@ -130,18 +131,9 @@ export class WhatsAppService {
           (metaError.fbtrace_id ? ` [trace: ${metaError.fbtrace_id}]` : '')
         : err?.message ?? String(err);
 
-      this.logger.error(`Error enviando WhatsApp "${templateName}" a ${this.maskPhone(to)}: ${detail}`);
+      this.logger.error(`Error enviando WhatsApp "${templateName}" a ${maskPhone(to)}: ${detail}`);
       throw err;
     }
   }
 
-  private normalizePhone(phone: string): string {
-    const cleaned = phone.replace(/[\s\-().+]/g, '');
-    if (cleaned.startsWith('57') && cleaned.length >= 11) return cleaned;
-    return `57${cleaned}`;
-  }
-
-  private maskPhone(phone: string): string {
-    return phone.replace(/\d{6}$/, '******');
-  }
 }
