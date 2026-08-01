@@ -3678,6 +3678,11 @@ type Query {
   myResidentDevices: [ResidentDevice!]!
 
   """
+  Indica si el canal de login por WhatsApp entrante está habilitado en el servidor. El cliente la consulta antes de ofrecer la opción, en vez de descubrirlo fallando con WA_LOGIN_NOT_CONFIGURED. No revela nada del residente: solo refleja la configuración.
+  """
+  whatsAppLoginAvailable: Boolean!
+
+  """
   Consulta si ya llegó el mensaje del residente. El cliente hace polling hasta CONFIRMED. Solo responde al mismo dispositivo que pidió el challenge.
   """
   whatsAppLoginChallengeStatus(challengeId: ID!): WhatsAppLoginStatusResponse!

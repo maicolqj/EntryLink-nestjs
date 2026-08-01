@@ -119,6 +119,18 @@ Revocar cierra únicamente la sesión de ese equipo. Los demás dispositivos sig
 
 El residente **envía** un mensaje desde su WhatsApp en lugar de recibir un código. Recuperación de acceso sin costo.
 
+### 2.0 Disponibilidad del canal
+
+```graphql
+query WaLoginAvailable {
+  whatsAppLoginAvailable
+}
+```
+
+Pública, sin argumentos. Devuelve `false` cuando el servidor no tiene configurado `WHATSAPP_BUSINESS_NUMBER`.
+
+Consultarla antes de ofrecer la opción, en vez de deducir la disponibilidad de un `WA_LOGIN_NOT_CONFIGURED` anterior. **No persistir un `false` en disco**: cuando el servidor habilita el canal, una marca guardada deja el método de recuperación oculto justo para el usuario que ya perdió el acceso. Si la consulta falla por red, mostrar la opción — es preferible un intento fallido con mensaje claro que un camino invisible.
+
 ### 2.1 Solicitar
 
 ```graphql
@@ -354,6 +366,6 @@ El `message` está redactado en español y es apto para mostrar al usuario. Rami
 Estos flujos requieren configuración en el backend antes de poder probarse contra producción:
 
 - `WHATSAPP_APP_SECRET` y suscripción al campo `messages` en el panel de Meta → login por WhatsApp entrante.
-- `WHATSAPP_BUSINESS_NUMBER` → sin esta variable, `requestWhatsAppLoginChallenge` responde `WA_LOGIN_NOT_CONFIGURED`.
+- `WHATSAPP_BUSINESS_NUMBER` → sin esta variable, `whatsAppLoginAvailable` devuelve `false` y `requestWhatsAppLoginChallenge` responde `WA_LOGIN_NOT_CONFIGURED`. El valor va en formato Meta: solo dígitos con indicativo país y sin `+` (ej. `573001234567`); es el número visible del negocio, no el `WHATSAPP_PHONE_NUMBER_ID`.
 - FCM y VAPID configurados → aprobación por push.
 - Migraciones ejecutadas (`resident_devices`, `whatsapp_login_challenges`, `device_approval_requests`).

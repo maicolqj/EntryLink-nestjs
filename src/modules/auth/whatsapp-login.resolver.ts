@@ -39,6 +39,18 @@ export class WhatsAppLoginResolver {
   }
 
   @Public()
+  @Query(() => Boolean, {
+    name: 'whatsAppLoginAvailable',
+    description:
+      'Indica si el canal de login por WhatsApp entrante está habilitado en el servidor. ' +
+      'El cliente la consulta antes de ofrecer la opción, en vez de descubrirlo fallando ' +
+      'con WA_LOGIN_NOT_CONFIGURED. No revela nada del residente: solo refleja la configuración.',
+  })
+  whatsAppLoginAvailable(): boolean {
+    return this.whatsAppLoginService.isEnabled;
+  }
+
+  @Public()
   @Query(() => WhatsAppLoginStatusResponse, {
     name: 'whatsAppLoginChallengeStatus',
     description:
