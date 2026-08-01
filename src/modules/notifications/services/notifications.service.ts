@@ -317,7 +317,15 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  private async dispatchPushOnly(userIds: string[], params: NotifyParams): Promise<void> {
+  /**
+   * Entrega push sin persistir la notificación en BD.
+   *
+   * Público para los avisos efímeros que no pertenecen al buzón del usuario:
+   * el caso que lo motivó es la aprobación de ingreso desde otro dispositivo
+   * (AuthModule), donde el payload lleva un código de un solo uso que no debe
+   * quedar guardado ni volver a mostrarse una vez resuelto el intento.
+   */
+  async dispatchPushOnly(userIds: string[], params: NotifyParams): Promise<void> {
     if (userIds.length === 0) return;
     const subscriptions = await this.pushSubRepo.find({
       where: { userId: In(userIds), isActive: true },

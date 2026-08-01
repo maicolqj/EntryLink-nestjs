@@ -43,11 +43,9 @@ export class R2StorageService implements OnModuleInit {
       : rawPublicUrl;
 
 
-    this.logger.warn(`accountId ${accountId}`);
-    this.logger.warn(`accessKeyId ${accessKeyId}`);
-    this.logger.warn(`secretAccessKey ${secretAccessKey}`);
-    this.logger.warn(`bucketName ${this.bucketName}`);
-    this.logger.warn(`bucketName ${this.publicUrl}`);
+    // Nunca registrar las credenciales de R2 en logs: quedan en archivos de log,
+    // en la consola del contenedor y en cualquier agregador que los recoja.
+    this.logger.debug(`R2 bucket ${this.bucketName} — url pública ${this.publicUrl}`);
 
     const httpsAgent = new https.Agent({
       keepAlive: true,

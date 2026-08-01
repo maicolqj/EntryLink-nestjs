@@ -67,7 +67,8 @@ export class WhatsAppWebhookController {
   /**
    * POST /api/v1/whatsapp/webhook
    *
-   * Recibe los statuses de entrega. Siempre responde 200: un no-2xx repetido
+   * Recibe los statuses de entrega y los mensajes entrantes (estos últimos son
+   * el canal del login reverse-OTP). Siempre responde 200: un no-2xx repetido
    * hace que Meta reintente en ráfaga y termine deshabilitando la suscripción,
    * así que los fallos de procesamiento se registran pero no se propagan.
    *
@@ -78,7 +79,7 @@ export class WhatsAppWebhookController {
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  receive(@Req() req: RawBodyRequest, @Body() payload: MetaWebhookPayload): string {
+  async receive(@Req() req: RawBodyRequest, @Body() payload: MetaWebhookPayload): Promise<string> {
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
     if (!this.webhookService.isSignatureValid(signature, req.rawBody)) {
@@ -87,7 +88,7 @@ export class WhatsAppWebhookController {
     }
 
     try {
-      this.webhookService.processPayload(payload);
+      await this.webhookService.processPayload(payload);
     } catch (err: any) {
       this.logger.error(`Error procesando callback de WhatsApp: ${err?.message ?? String(err)}`);
     }

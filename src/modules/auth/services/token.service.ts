@@ -12,7 +12,7 @@ import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Role } from '../../roles/entities/role.entity';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
-import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { AUTH_CONSTANTS, RefreshExpiry } from '../constants/auth.constants';
 import { JwtAccessPayload, JwtRefreshPayload, DeviceInfo, TokenPair } from '../interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
@@ -34,11 +34,16 @@ export class TokenService {
     private readonly roleRepo: Repository<Role>,
   ) { }
 
-  async generateTokenPair(user: User, deviceInfo: DeviceInfo, rememberMe = false, entityType: 'user' | 'complex' = 'user'): Promise<TokenPair> {
+  /**
+   * @param refreshExpiryOverride vigencia explícita del refresh token (ej. '180d').
+   *   Se persiste en la fila para que la rotación la conserve. Sin este parámetro
+   *   la vigencia sale de `rememberMe`.
+   */
+  async generateTokenPair(user: User, deviceInfo: DeviceInfo, rememberMe = false, entityType: 'user' | 'complex' = 'user', refreshExpiryOverride?: RefreshExpiry): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
     const accessToken = await this.generateAccessToken(user, sessionId, entityType);
-    const refreshToken = await this.generateRefreshToken(user.id, sessionId, tokenFamily, deviceInfo, rememberMe, entityType);
+    const refreshToken = await this.generateRefreshToken(user.id, sessionId, tokenFamily, deviceInfo, rememberMe, entityType, undefined, refreshExpiryOverride);
     return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId };
   }
 
@@ -147,9 +152,9 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
   });
 }
 
-  private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean, entityType: 'user' | 'complex' = 'user', complexId?: string): Promise<string> {
+  private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean, entityType: 'user' | 'complex' = 'user', complexId?: string, refreshExpiryOverride?: RefreshExpiry): Promise<string> {
     const tokenId = this.generateSecureId();
-    const expiresIn = this.getRefreshTokenExpiry(rememberMe);
+    const expiresIn = refreshExpiryOverride ?? this.getRefreshTokenExpiry(rememberMe);
 
     const refreshToken = await this.jwtService.signAsync(
       { sub: userId, type: 'refresh', entityType, complexId, sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
@@ -163,7 +168,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       deviceFingerprint: deviceInfo.fingerprint,
       deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform, deviceId: deviceInfo.deviceId, appVersion: deviceInfo.appVersion },
       expiresAt: this.calculateExpiry(expiresIn), lastUsedAt: new Date(),
-      rememberMe,
+      rememberMe, refreshExpiry: expiresIn,
     });
     return refreshToken;
   }
@@ -211,7 +216,11 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
     const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
 
-    const refreshExpiry = this.getRefreshTokenExpiry(storedToken.rememberMe);
+    // La vigencia con la que nació la sesión manda sobre el default: rotar no
+    // debe convertir una sesión de residente de 180d en una de 7d.
+    // El cast es seguro: esta columna solo la escribe generateRefreshToken con
+    // un valor de RefreshExpiry, y calculateExpiry rechaza cualquier formato raro.
+    const refreshExpiry = (storedToken.refreshExpiry as RefreshExpiry) ?? this.getRefreshTokenExpiry(storedToken.rememberMe);
 
     let accessToken: string;
     let newRefreshToken: string;
@@ -257,7 +266,7 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       sessionId: storedToken.sessionId, deviceFingerprint: deviceInfo.fingerprint,
       deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform },
       expiresAt: this.calculateExpiry(refreshExpiry), lastUsedAt: new Date(),
-      rememberMe: storedToken.rememberMe,
+      rememberMe: storedToken.rememberMe, refreshExpiry,
     });
 
     // Cache the result so concurrent requests with the old token are served idempotently

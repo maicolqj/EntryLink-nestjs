@@ -85,4 +85,14 @@ export class RefreshToken {
   @Field()
   @Column({ type: 'boolean', default: false })
   rememberMe: boolean;
+
+  /**
+   * Vigencia con la que se emitió este refresh token (ej. '7d', '30d', '180d').
+   * La rotación la reutiliza para no degradar sesiones de vigencia especial
+   * —como las de residente vinculado por dispositivo— al valor por defecto.
+   * Nula en tokens emitidos antes de esta columna: se cae a rememberMe.
+   */
+  @Field({ nullable: true })
+  @Column({ name: 'refresh_expiry', type: 'varchar', length: 10, nullable: true })
+  refreshExpiry?: string;
 }
