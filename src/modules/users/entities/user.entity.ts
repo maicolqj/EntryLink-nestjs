@@ -10,7 +10,7 @@ import {
     Index,
     Check,
 } from 'typeorm';
-import { ObjectType, Field, Float } from '@nestjs/graphql';
+import { ObjectType, Field, Float, HideField } from '@nestjs/graphql';
 import { IsPhoneNumber, IsEnum } from 'class-validator';
 import { Role } from '../../roles/entities/role.entity';
 import { Gender, UserStatus, UserIdentityType } from '../enums/user.enums';
@@ -203,6 +203,30 @@ export class User {
     @Field(() => Date, { description: 'Date until which the account is blocked due to failed attempts', nullable: true })
     accountLockedUntil?: Date;
 
+    /**
+     * bcrypt de la clave de acceso del residente: alfanumérica de 6, elegida por
+     * él en su primer ingreso. Es UNA por cuenta y sirve en todos los
+     * dispositivos ya vinculados — no reemplaza al vínculo, lo complementa.
+     *
+     * `select: false` y @HideField: nunca sale en una consulta ni en el esquema.
+     * Es exactamente el error del `systemCode`, que era credencial de login y
+     * viajaba visible en las respuestas de usuario.
+     */
+    @HideField()
+    @Column({ name: 'access_code_hash', type: 'text', nullable: true, select: false })
+    accessCodeHash?: string;
+
+    /** Intentos fallidos de clave. Se cuentan por CUENTA, no por dispositivo:
+     *  contarlos por equipo permitiría multiplicar los intentos cambiando de
+     *  aparato, que es justo lo que el límite intenta impedir. */
+    @HideField()
+    @Column({ name: 'access_code_failed_attempts', type: 'smallint', default: 0 })
+    accessCodeFailedAttempts: number;
+
+    @Field(() => Date, { description: 'Bloqueo temporal por intentos fallidos de clave de acceso', nullable: true })
+    @Column({ name: 'access_code_locked_until', type: 'timestamptz', nullable: true })
+    accessCodeLockedUntil?: Date;
+
     // ================== ESTADO Y AUDITORÍA ==================
 
     @Column({ name: 'status', type: 'enum', enum: UserStatus, default: UserStatus.PENDING_VERIFICATION })
@@ -235,10 +259,17 @@ export class User {
     /**
      * Código de sistema (formato RES-xxxxx). Se asigna automáticamente a TODO
      * usuario en @BeforeInsert, sin importar el rol ni el path de creación.
-     * Los residentes lo usan junto a su teléfono para autenticarse.
+     *
+     * Ya NO es credencial de login para residentes: lo reemplazó
+     * `accessCodeHash`, que elige el propio residente y solo vale desde un
+     * dispositivo vinculado. Queda como identificador legible para soporte.
+     *
+     * Deja de exponerse en el esquema GraphQL a propósito: mientras servía para
+     * iniciar sesión, cualquiera con permiso de consultar residentes podía leer
+     * la credencial de todos y entrar como ellos.
      */
+    @HideField()
     @Column({ name: 'system_code', type: 'varchar', length: 20, nullable: true, unique: true })
-    @Field(() => String, { description: 'Código de sistema asignado a todo usuario (formato RES-xxxxx)', nullable: true })
     systemCode?: string;
 
     /**

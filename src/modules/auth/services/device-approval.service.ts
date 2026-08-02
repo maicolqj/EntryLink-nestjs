@@ -11,6 +11,7 @@ import { UserStatus } from '../../users/enums/user.enums';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
+import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
@@ -56,6 +57,7 @@ export class DeviceApprovalService {
     private readonly userRepo: Repository<User>,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly residentDeviceService: ResidentDeviceService,
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
@@ -192,7 +194,11 @@ export class DeviceApprovalService {
   }
 
   /** Canjea una solicitud aprobada por una sesión. Un solo uso. */
-  async redeem(challengeId: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async redeem(
+    challengeId: string,
+    deviceInfo: DeviceInfo,
+    accessCode?: string,
+  ): Promise<AuthResponse> {
     const request = await this.findRequestForDevice(challengeId, deviceInfo);
 
     this.assertRedeemable(request);
@@ -214,6 +220,23 @@ export class DeviceApprovalService {
 
     const user = await this.loadResidentWithRoles(request.userId);
     this.assertUserActive(user);
+
+    // Igual que en el WhatsApp entrante: si la cuenta ya tiene clave, aprobar
+    // desde el otro equipo no alcanza para vincular este. Hacen falta las dos
+    // cosas, la aprobación y el conocimiento de la clave.
+    const hasCode = await this.residentDeviceService.hasAccessCode(user.id);
+    if (hasCode) {
+      if (!accessCode?.trim()) {
+        throw new CustomError({
+          message: 'Ingresa tu clave de acceso para autorizar este dispositivo',
+          statusCode: HttpStatus.UNAUTHORIZED,
+          errorCode: AuthErrorCode.ACCESS_CODE_REQUIRED,
+        });
+      }
+      await this.residentDeviceService.verifyAccessCode(user.id, accessCode);
+    }
+
+    await this.residentDeviceService.linkDevice(user.id, deviceInfo);
 
     await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
 

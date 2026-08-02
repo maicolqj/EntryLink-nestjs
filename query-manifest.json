@@ -516,5 +516,12 @@
   "e6ef42941dffef45334907cc0f54cb0c66ece106": "mutation RegisterVisitorEntry($visitId: String!) { __typename registerVisitorEntry(visitId: $visitId) { __typename entryTime id status } }",
   "ea5e693a5082941819aed04fc57b5bcd74301a6d": "mutation RegisterVisitorExit($notes: String, $visitId: String!) { __typename registerVisitorExit(visitId: $visitId, notes: $notes) { __typename exitTime id status } }",
   "4695f1ea719a4f2c8bff99521c96f3d1ea7317e3": "mutation ValidateQrAccess($qrToken: String!) { __typename validateQrAccess(qrToken: $qrToken) { __typename isValid message visit { __typename id status type unit { __typename building { __typename id name } number } visitor { __typename identity lastName name } } } }",
-  "adf4794cd933507c78ac5fadcb10c4b828bfbf9d": "mutation ScheduleVisit($input: ScheduleVisitInput!) { __typename scheduleVisit(input: $input) { __typename expectedArrivalAt id qrToken status } }"
+  "adf4794cd933507c78ac5fadcb10c4b828bfbf9d": "mutation ScheduleVisit($input: ScheduleVisitInput!) { __typename scheduleVisit(input: $input) { __typename expectedArrivalAt id qrToken status } }",
+  "8def4618aff1531ab989f99a0c00efc3f66bf5d940bfa6be314320bfb1b319bc": "mutation SetAccessCode($input: SetAccessCodeInput!) { setResidentAccessCode(input: $input) { createdAt deviceId id label platform } }",
+  "ebe62a2e72089b7661140e986baf764b7c1037655db68034e5a1b518678f66ee": "mutation LoginWithAccessCode($input: LoginAccessCodeInput!) { loginWithAccessCode(input: $input) { accessToken expiresIn refreshToken sessionId } }",
+  "daff72effedb9a568174d81f8dcc1ca3de1c6aac085a62ceaaaecb561d9ca2bd": "query ResidentHasAccessCode { residentHasAccessCode }",
+  "2b6312238043c65a6adc3dd215a0e8734418400cec68458a312e593213813b58": "query MyDevices { myResidentDevices { createdAt deviceId id label lastUsedAt platform } }",
+  "39c2c6e0602b15e8a0fc19f6b041972667bfe155ab4d20739c79b0b106631999": "mutation RevokeMyOtherDevices { revokeMyOtherDevices }",
+  "a48059f3f24a9d01fcb5af096d863137323e633a36e8591ec71ee7a1232ffe6d": "mutation RedeemWaLogin($accessCode: String, $challengeId: ID!) { redeemWhatsAppLoginChallenge(challengeId: $challengeId, accessCode: $accessCode) { accessToken expiresIn refreshToken sessionId } }",
+  "a8709ac52195e8cb872eb49a58cf90200e2339cb086fd31bb689f841bd5c983d": "mutation RedeemApproval($accessCode: String, $challengeId: ID!) { redeemDeviceApproval(challengeId: $challengeId, accessCode: $accessCode) { accessToken expiresIn refreshToken sessionId } }"
 }

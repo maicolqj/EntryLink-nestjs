@@ -103,10 +103,11 @@ export class UserInfoCompleteResponse {
 
     @Field(() => String, { description: 'Zona horaria preferida', nullable: true })
     timezone?: string;
-  
-  
-    @Field(() => String, { description: 'Zona horaria preferida', nullable: true })
-    systemCode?: string;
+
+    // `systemCode` se quitó a propósito: mientras fue credencial de login,
+    // exponerlo aquí permitía a cualquiera con permiso de consultar usuarios
+    // iniciar sesión como cualquier residente. Hoy lo reemplaza la clave de
+    // acceso, que solo el residente conoce y solo vale desde un equipo suyo.
     @Field(() => String, { description: 'Zona horaria preferida', nullable: true })
     complexId?: string;
     @Field(() => [UserRole], { description: 'Zona horaria preferida', nullable: true })
