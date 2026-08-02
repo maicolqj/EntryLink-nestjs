@@ -236,6 +236,26 @@ describe('DeviceApprovalService', () => {
     });
   });
 
+  it('pedir la clave no consume la solicitud: el reintento con la clave entra', async () => {
+    // Regresión: se marcaba CONSUMED antes de exigir la clave, así que el primer
+    // canje quemaba la solicitud y el reintento chocaba con "ya fue usada".
+    residentDeviceService.hasAccessCode.mockResolvedValue(true);
+
+    const res = await request();
+    await service.approve(rows[0].approvalId, 'user-1', 'sess-confiable');
+
+    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_REQUIRED',
+    });
+
+    const auth = await service.redeem(res.challengeId, requester, 'K7M2Q4');
+    expect(auth.accessToken).toBe('at');
+
+    // clearAllMocks no borra las implementaciones: sin esto, el `true` se
+    // filtraría a las pruebas siguientes según el orden de ejecución.
+    residentDeviceService.hasAccessCode.mockResolvedValue(false);
+  });
+
   it('canjear sin aprobar falla', async () => {
     const res = await request();
 
