@@ -284,9 +284,13 @@ export class WhatsAppLoginService {
     const user = await this.loadResidentWithRoles(challenge.userId);
     this.assertUserActive(user);
 
-    await this.assertAccessCodeWhenRequired(user.id, accessCode);
+    await this.assertAccessCodeWhenRequired(user.id, deviceInfo, accessCode);
 
     await this.residentDeviceService.linkDevice(user.id, deviceInfo);
+
+    // Este ingreso probó identidad por un canal externo: habilita fijar una
+    // clave nueva sin conocer la anterior durante los próximos minutos.
+    await this.residentDeviceService.grantResetPermission(user.id);
 
     await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
 
@@ -308,9 +312,18 @@ export class WhatsAppLoginService {
    * Exige la clave de la cuenta cuando ya existe. Se resuelve acá y no en el
    * resolver para que valga igual desde cualquier entrada.
    */
-  private async assertAccessCodeWhenRequired(userId: string, accessCode?: string): Promise<void> {
+  private async assertAccessCodeWhenRequired(
+    userId: string,
+    deviceInfo: DeviceInfo,
+    accessCode?: string,
+  ): Promise<void> {
     const hasCode = await this.residentDeviceService.hasAccessCode(userId);
     if (!hasCode) return;
+
+    // El segundo factor protege el alta de un equipo NUEVO. Si este ya está
+    // vinculado, exigirlo dejaría sin salida a quien olvidó la clave: es
+    // justamente el camino por el que vuelve a entrar para cambiarla.
+    if (await this.residentDeviceService.isDeviceLinked(userId, deviceInfo)) return;
 
     if (!accessCode?.trim()) {
       throw new CustomError({

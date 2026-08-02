@@ -224,7 +224,11 @@ export class DeviceApprovalService {
     // Igual que en el WhatsApp entrante: si la cuenta ya tiene clave, aprobar
     // desde el otro equipo no alcanza para vincular este. Hacen falta las dos
     // cosas, la aprobación y el conocimiento de la clave.
-    const hasCode = await this.residentDeviceService.hasAccessCode(user.id);
+    // Igual que en el WhatsApp entrante: el segundo factor protege el alta de un
+    // equipo nuevo, no el reingreso desde uno ya vinculado.
+    const hasCode =
+      (await this.residentDeviceService.hasAccessCode(user.id)) &&
+      !(await this.residentDeviceService.isDeviceLinked(user.id, deviceInfo));
     if (hasCode) {
       if (!accessCode?.trim()) {
         throw new CustomError({
@@ -237,6 +241,10 @@ export class DeviceApprovalService {
     }
 
     await this.residentDeviceService.linkDevice(user.id, deviceInfo);
+
+    // Ingreso verificado por un canal externo: habilita fijar clave nueva sin
+    // la anterior durante los próximos minutos.
+    await this.residentDeviceService.grantResetPermission(user.id);
 
     await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
 

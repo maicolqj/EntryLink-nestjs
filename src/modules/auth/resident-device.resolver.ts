@@ -36,7 +36,9 @@ export class ResidentDeviceResolver {
     name: 'setResidentAccessCode',
     description:
       'Fija o cambia la clave de acceso del residente autenticado y vincula el dispositivo actual ' +
-      '(header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados.',
+      '(header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados. ' +
+      'Cambiarla exige enviar `currentCode`, salvo que el ingreso reciente haya sido por WhatsApp ' +
+      'entrante o por aprobación desde otro equipo, que es el camino del olvido.',
   })
   async setResidentAccessCode(
     @Args('input') input: SetAccessCodeInput,
@@ -44,7 +46,13 @@ export class ResidentDeviceResolver {
     @Context() context: any,
   ): Promise<ResidentDevice> {
     const deviceInfo = this.deviceInfo(context);
-    return this.residentDeviceService.setAccessCode(payload.sub, input.code, deviceInfo, input.label);
+    return this.residentDeviceService.setAccessCode(
+      payload.sub,
+      input.code,
+      deviceInfo,
+      input.label,
+      input.currentCode,
+    );
   }
 
   @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
