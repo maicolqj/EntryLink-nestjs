@@ -75,6 +75,10 @@ export const AUTH_CONSTANTS = {
     SYSTEM_CODE_RATE_LIMIT: 'sc-rl',
     WA_LOGIN_RATE_LIMIT: 'wa-login-rl',
     DEVICE_APPROVAL_RATE_LIMIT: 'dev-appr-rl',
+    // Permiso temporal para fijar una clave nueva sin conocer la anterior. Lo
+    // otorga un ingreso por un canal que ya probó identidad (WhatsApp entrante
+    // o aprobación desde otro equipo) y es el camino del "olvidé mi clave".
+    ACCESS_CODE_RESET: 'ac-reset',
     OTP_FAILED_ATTEMPTS: 'otp-fa',
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
@@ -94,6 +98,8 @@ export const AUTH_CONSTANTS = {
     SYSTEM_CODE_RATE_LIMIT: 600, // 10 min
     WA_LOGIN_RATE_LIMIT: 600,       // 10 min
     DEVICE_APPROVAL_RATE_LIMIT: 600, // 10 min
+    // Ventana corta: el permiso se usa en la pantalla siguiente al ingreso.
+    ACCESS_CODE_RESET: 900,          // 15 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
     GRACE_WINDOW: 5,           // 5 s (same as GRACE_WINDOW_MS / 1000)
   },

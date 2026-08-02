@@ -4185,7 +4185,7 @@ type Mutation {
   logout: Boolean!
 
   """
-  Fija o cambia la clave de acceso del residente autenticado y vincula el dispositivo actual (header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados.
+  Fija o cambia la clave de acceso del residente autenticado y vincula el dispositivo actual (header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados. Cambiarla exige enviar `currentCode`, salvo que el ingreso reciente haya sido por WhatsApp entrante o por aprobación desde otro equipo, que es el camino del olvido.
   """
   setResidentAccessCode(input: SetAccessCodeInput!): ResidentDevice!
 
@@ -4535,6 +4535,9 @@ input VerifyOtpInput {
 input SetAccessCodeInput {
   """Clave alfanumérica de 6 caracteres"""
   code: String!
+
+  """Clave actual, requerida al cambiarla"""
+  currentCode: String
 
   """Nombre del dispositivo (ej. "iPhone de Juan")"""
   label: String

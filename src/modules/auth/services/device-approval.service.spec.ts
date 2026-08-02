@@ -99,8 +99,10 @@ describe('DeviceApprovalService', () => {
   // ingreso, el único que puede vincular un equipo sin segundo factor.
   const residentDeviceService = {
     hasAccessCode: jest.fn(async () => false),
+    isDeviceLinked: jest.fn(async () => false),
     verifyAccessCode: jest.fn(async () => undefined),
     linkDevice: jest.fn(async () => ({ id: 'dev-row-1' })),
+    grantResetPermission: jest.fn(async () => undefined),
   };
 
   beforeEach(async () => {

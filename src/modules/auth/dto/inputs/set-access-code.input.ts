@@ -17,6 +17,17 @@ export class SetAccessCodeInput {
   @Matches(/^[a-zA-Z0-9]{6}$/, { message: 'La clave debe ser de 6 caracteres alfanuméricos' })
   code: string;
 
+  /**
+   * Obligatorio para CAMBIAR una clave existente; se omite al crearla por
+   * primera vez o cuando el ingreso reciente ya probó identidad por WhatsApp
+   * entrante o aprobación. El servidor decide cuál de los dos casos aplica.
+   */
+  @Field(() => String, { nullable: true, description: 'Clave actual, requerida al cambiarla' })
+  @Transform(normalizeText)
+  @IsOptional()
+  @IsString()
+  currentCode?: string;
+
   @Field(() => String, { nullable: true, description: 'Nombre del dispositivo (ej. "iPhone de Juan")' })
   @Transform(normalizeText)
   @IsOptional()

@@ -8,6 +8,7 @@ import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 
@@ -92,6 +93,16 @@ describe('ResidentDeviceService', () => {
     revokeSession: jest.fn(async () => undefined),
   };
 
+  // Sin permiso de restablecimiento: el caso normal es que cambiar la clave
+  // exija la anterior. Las pruebas que necesitan lo contrario lo activan.
+  let resetPermission: { granted: boolean } | null;
+
+  const cacheService = {
+    get: jest.fn(async () => resetPermission),
+    set: jest.fn(async () => { resetPermission = { granted: true }; }),
+    delete: jest.fn(async () => { resetPermission = null; }),
+  };
+
   const sessionService = {
     enforceSessionLimit: jest.fn(async () => undefined),
     createOrUpdateSession: jest.fn(async () => undefined),
@@ -101,6 +112,7 @@ describe('ResidentDeviceService', () => {
   beforeEach(async () => {
     rows = [];
     queriedDeviceId = undefined;
+    resetPermission = null;
     user = {
       id: 'user-1',
       status: UserStatus.ACTIVE,
@@ -118,14 +130,15 @@ describe('ResidentDeviceService', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
         { provide: SessionService, useValue: sessionService },
+        { provide: CacheService, useValue: cacheService },
       ],
     }).compile();
 
     service = module.get(ResidentDeviceService);
   });
 
-  const link = async (code = VALID_CODE, info: DeviceInfo = device) =>
-    service.setAccessCode('user-1', code, info);
+  const link = async (code = VALID_CODE, info: DeviceInfo = device, currentCode?: string) =>
+    service.setAccessCode('user-1', code, info, undefined, currentCode);
 
   // ── Fortaleza de la clave ────────────────────────────────────────────────
 
@@ -259,15 +272,55 @@ describe('ResidentDeviceService', () => {
     expect(rows[0].isRevoked).toBe(false);
   }, 30_000);
 
-  it('cambiar la clave limpia el bloqueo (el residente ya probó identidad con sesión válida)', async () => {
+  it('con la cuenta bloqueada, la clave actual no alcanza para cambiarla', async () => {
+    await link();
+    user.accessCodeLockedUntil = new Date(Date.now() + 60_000);
+
+    // Verificar la clave actual ES un intento: respetar el bloqueo acá evita
+    // que se lo esquive martillando el cambio en vez del login.
+    await expect(
+      service.setAccessCode('user-1', 'R3T8W1', device, undefined, VALID_CODE),
+    ).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_LOCKED' });
+  });
+
+  it('el permiso de restablecimiento salta el bloqueo y limpia los intentos', async () => {
     await link();
     user.accessCodeFailedAttempts = 4;
     user.accessCodeLockedUntil = new Date(Date.now() + 60_000);
 
+    // Lo otorga un ingreso por WhatsApp o por aprobación: identidad ya probada
+    // por un canal externo, que es la salida de quien olvidó la clave.
+    await service.grantResetPermission('user-1');
     await service.setAccessCode('user-1', 'R3T8W1', device);
 
     expect(user.accessCodeFailedAttempts).toBe(0);
     expect(user.accessCodeLockedUntil).toBeNull();
+  });
+
+  it('sin clave actual ni permiso, el cambio se rechaza', async () => {
+    await link();
+
+    await expect(service.setAccessCode('user-1', 'R3T8W1', device)).rejects.toMatchObject({
+      errorCode: 'CURRENT_ACCESS_CODE_REQUIRED',
+    });
+  });
+
+  it('la clave actual incorrecta no permite el cambio', async () => {
+    await link();
+
+    await expect(
+      service.setAccessCode('user-1', 'R3T8W1', device, undefined, 'Z9Z9Z9'),
+    ).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_INVALID' });
+  });
+
+  it('el permiso de restablecimiento es de un solo uso', async () => {
+    await link();
+    await service.grantResetPermission('user-1');
+    await service.setAccessCode('user-1', 'R3T8W1', device);
+
+    await expect(service.setAccessCode('user-1', 'W8N4X2', device)).rejects.toMatchObject({
+      errorCode: 'CURRENT_ACCESS_CODE_REQUIRED',
+    });
   });
 
   // ── Verificación como segundo factor ─────────────────────────────────────

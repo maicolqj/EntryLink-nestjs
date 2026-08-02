@@ -9,6 +9,7 @@ import { UserStatus } from '../../users/enums/user.enums';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AuthResponse } from '../dto/responses/auth-response';
@@ -49,6 +50,7 @@ export class ResidentDeviceService {
     private readonly userRepo: Repository<User>,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ── Clave de acceso ───────────────────────────────────────────────────────
@@ -67,9 +69,15 @@ export class ResidentDeviceService {
     code: string,
     deviceInfo: DeviceInfo,
     label?: string,
+    currentCode?: string,
   ): Promise<ResidentDevice> {
-    const deviceId = this.requireDeviceId(deviceInfo);
+    this.requireDeviceId(deviceInfo);
     const user = await this.findResident(userId);
+
+    // Cambiar la clave exige conocer la anterior. Sin esto, una sesión abierta
+    // en un teléfono desbloqueado y ajeno alcanzaría para apropiarse de la
+    // cuenta: la sesión del residente dura 180 días.
+    await this.assertMayChangeCode(user.id, currentCode);
 
     const normalized = this.normalizeCode(code);
     this.assertCodeIsAcceptable(normalized);
@@ -83,6 +91,81 @@ export class ResidentDeviceService {
     this.logger.log(`Clave de acceso actualizada — userId: ${user.id}`);
 
     return this.linkDevice(user.id, deviceInfo, label);
+  }
+
+  /**
+   * Autoriza el cambio de clave.
+   *
+   * Si la cuenta todavía no tiene, no hay nada que confirmar. Si ya tiene, hay
+   * dos caminos: conocer la clave actual, o traer un permiso de restablecimiento
+   * vigente —que solo otorga un ingreso por WhatsApp entrante o por aprobación
+   * desde otro equipo—. Ese segundo camino es el "olvidé mi clave": pedir la
+   * anterior ahí dejaría al residente sin salida.
+   */
+  private async assertMayChangeCode(userId: string, currentCode?: string): Promise<void> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.accessCodeHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user?.accessCodeHash) return;
+
+    if (await this.consumeResetPermission(userId)) return;
+
+    if (!currentCode?.trim()) {
+      throw new CustomError({
+        message: 'Ingresa tu clave actual para cambiarla',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.CURRENT_ACCESS_CODE_REQUIRED,
+      });
+    }
+
+    this.assertAccountNotLocked(user);
+
+    const isValid = await bcrypt.compare(this.normalizeCode(currentCode), user.accessCodeHash);
+    if (!isValid) await this.registerFailedAttempt(user);
+  }
+
+  /**
+   * Otorga permiso temporal para fijar una clave nueva sin la anterior. Lo
+   * llaman los flujos que ya probaron identidad por un canal externo.
+   */
+  async grantResetPermission(userId: string): Promise<void> {
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET, key: userId },
+      data: { granted: true },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.ACCESS_CODE_RESET },
+    });
+  }
+
+  /** Un solo uso: se borra al consumirlo para que no quede vivo 15 minutos. */
+  private async consumeResetPermission(userId: string): Promise<boolean> {
+    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET, key: userId };
+    const permission = await this.cacheService.get<{ granted: boolean }>({ key });
+
+    if (!permission?.granted) return false;
+
+    await this.cacheService.delete({ key });
+    return true;
+  }
+
+  /**
+   * ¿El equipo que hace la petición ya está vinculado a esta cuenta?
+   *
+   * Los flujos de arranque lo usan para decidir si exigir la clave: el segundo
+   * factor protege el alta de un equipo NUEVO. Pedirlo en uno ya vinculado
+   * rompería la recuperación de quien justamente olvidó la clave.
+   */
+  async isDeviceLinked(userId: string, deviceInfo: DeviceInfo): Promise<boolean> {
+    const deviceId = deviceInfo.deviceId?.trim();
+    if (!deviceId) return false;
+
+    const device = await this.deviceRepo.findOne({
+      where: { userId, deviceId, isRevoked: false },
+    });
+
+    return !!device && device.deviceFingerprint === deviceInfo.fingerprint;
   }
 
   /** ¿La cuenta ya tiene clave? El cliente lo usa para exigir su creación. */
