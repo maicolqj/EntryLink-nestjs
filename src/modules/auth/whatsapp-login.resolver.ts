@@ -73,9 +73,10 @@ export class WhatsAppLoginResolver {
   })
   async redeemWhatsAppLoginChallenge(
     @Args('challengeId', { type: () => ID }) challengeId: string,
+    @Args('accessCode', { type: () => String, nullable: true }) accessCode: string | undefined,
     @Context() context: any,
   ): Promise<AuthResponse> {
-    return this.whatsAppLoginService.redeem(challengeId, this.deviceInfo(context));
+    return this.whatsAppLoginService.redeem(challengeId, this.deviceInfo(context), accessCode);
   }
 
   private deviceInfo(context: any) {

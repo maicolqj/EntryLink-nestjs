@@ -30,17 +30,32 @@ Debe sobrevivir a cierres de sesión. Solo cambia si el usuario reinstala o borr
 
 ---
 
-## 1. Login por PIN de dispositivo
+## 1. Clave de acceso del residente
 
-El residente autentica una vez con documento + código, vincula el dispositivo, y a partir de ahí entra con un PIN de 6 dígitos.
+Una sola clave por **cuenta**, alfanumérica de 6 caracteres, elegida por el residente. Reemplaza al código `RES-xxxxx` que antes emitía el sistema.
 
-### 1.1 Vincular el dispositivo y fijar el PIN
+Dos reglas gobiernan todo lo demás:
 
-Requiere sesión activa (`RESIDENT_ROL`).
+1. **La clave no basta sola.** Solo abre sesión desde un dispositivo ya vinculado. Entrar en un equipo prestado exige pasar antes por WhatsApp entrante (§2) o por la aprobación desde otro equipo del residente (§3).
+2. **La clave no se pide de nuevo por cada equipo.** Al vincular un dispositivo nuevo, este hereda la clave que la cuenta ya tenía.
+
+### 1.1 Saber si la cuenta ya tiene clave
+
+Requiere sesión activa. Se consulta apenas se abre sesión: si devuelve `false`, hay que exigir su creación antes de dejar usar la app.
 
 ```graphql
-mutation SetDevicePin($input: SetDevicePinInput!) {
-  setResidentDevicePin(input: $input) {
+query ResidentHasAccessCode {
+  residentHasAccessCode
+}
+```
+
+### 1.2 Crear o cambiar la clave
+
+Requiere sesión activa (`RESIDENT_ROL`). Vincula además el dispositivo actual.
+
+```graphql
+mutation SetAccessCode($input: SetAccessCodeInput!) {
+  setResidentAccessCode(input: $input) {
     id
     deviceId
     label
@@ -51,20 +66,22 @@ mutation SetDevicePin($input: SetDevicePinInput!) {
 ```
 
 ```json
-{ "input": { "pin": "482913", "label": "iPhone de Juan" } }
+{ "input": { "code": "K7M2Q4", "label": "iPhone de Juan" } }
 ```
 
-`pin`: exactamente 6 dígitos. `label`: opcional, máx. 120 caracteres.
+`code`: 6 caracteres alfanuméricos, con al menos una letra y un número. Se normaliza a mayúsculas, así que `k7m2q4` y `K7M2Q4` son la misma clave. `label`: opcional, máx. 120 caracteres.
 
-El servidor rechaza PINs con patrones obvios (`000000`, `123456`, `121212`, `123123`, secuencias ascendentes y descendentes). Conviene validar lo mismo en el cliente para dar retroalimentación inmediata, pero **la validación del servidor es la que manda**.
+El servidor rechaza claves obvias (`AAAAAA`, `123456`, `ABCDEF`, secuencias ascendentes y descendentes, y las que son solo letras o solo números). Conviene validar lo mismo en el cliente para dar retroalimentación inmediata, pero **la validación del servidor es la que manda**.
 
-### 1.2 Iniciar sesión con el PIN
+Cambiar la clave limpia el bloqueo por intentos fallidos: quien llega hasta aquí ya probó su identidad con una sesión válida.
 
-Público. Requiere `x-device-id`.
+### 1.3 Iniciar sesión con la clave
+
+Público. Requiere `x-device-id` de un equipo ya vinculado.
 
 ```graphql
-mutation LoginWithDevicePin($input: LoginDevicePinInput!) {
-  loginWithDevicePin(input: $input) {
+mutation LoginWithAccessCode($input: LoginAccessCodeInput!) {
+  loginWithAccessCode(input: $input) {
     accessToken
     refreshToken
     expiresIn
@@ -74,12 +91,12 @@ mutation LoginWithDevicePin($input: LoginDevicePinInput!) {
 ```
 
 ```json
-{ "input": { "pin": "482913" } }
+{ "input": { "code": "K7M2Q4" } }
 ```
 
 El dispositivo **no viaja en el input**: se toma del header.
 
-### 1.3 Gestionar dispositivos
+### 1.4 Gestionar dispositivos
 
 ```graphql
 query MyDevices {
@@ -89,7 +106,6 @@ query MyDevices {
     label
     platform
     lastUsedAt
-    lockedUntil
     createdAt
   }
 }
@@ -97,21 +113,30 @@ query MyDevices {
 mutation RevokeDevice($deviceId: ID!) {
   revokeResidentDevice(deviceId: $deviceId)   # usa el campo `id`, no `deviceId`
 }
+
+mutation RevokeMyOtherDevices {
+  revokeMyOtherDevices   # devuelve cuántos equipos se desvincularon
+}
 ```
 
-Revocar cierra únicamente la sesión de ese equipo. Los demás dispositivos siguen operando.
+`revokeMyOtherDevices` es la respuesta al celular perdido: se entra desde el equipo nuevo y se corta el acceso de todos los demás sin tener que identificarlos uno por uno. Ofrecerlo justo después de vincular un dispositivo en un flujo de recuperación.
 
-### 1.4 Errores
+Revocar un equipo puntual cierra únicamente la sesión de ese equipo.
+
+### 1.5 Errores
 
 | `extensions.code` | Significado | Qué hacer en la UI |
 | --- | --- | --- |
 | `DEVICE_ID_REQUIRED` | Falta el header | Bug del cliente: revisar el interceptor |
-| `DEVICE_PIN_INVALID` | PIN incorrecto | Mostrar intentos restantes (vienen en `message`) |
-| `DEVICE_LOCKED` | Bloqueado 15 min | Cuenta regresiva; ofrecer login con documento |
-| `DEVICE_NOT_LINKED` | Dispositivo sin vincular o navegador distinto | Enviar al login con documento + código |
-| `DEVICE_REVOKED` | Desvinculado por fuerza bruta | Igual que el anterior, con aviso de seguridad |
-| `DEVICE_PIN_TOO_WEAK` | PIN obvio | Mostrar al crear el PIN |
+| `ACCESS_CODE_INVALID` | Clave incorrecta | Mostrar intentos restantes (vienen en `message`) |
+| `ACCESS_CODE_LOCKED` | Cuenta bloqueada 15 min | Cuenta regresiva; ofrecer ingreso por WhatsApp |
+| `ACCESS_CODE_NOT_SET` | La cuenta todavía no tiene clave | Enviar al ingreso por WhatsApp para crearla |
+| `ACCESS_CODE_TOO_WEAK` | Clave obvia o mal formada | Mostrar al crearla |
+| `ACCESS_CODE_REQUIRED` | Falta la clave al vincular un equipo nuevo | Pedirla en el canje (§2.3 y §3.1) |
+| `DEVICE_NOT_LINKED` | Equipo sin vincular o navegador distinto | Enviar a WhatsApp entrante o a la aprobación |
 | `USER_SUSPENDED` / `ACCOUNT_LOCKED` | Cuenta no activa | Mensaje de contactar al administrador |
+
+El bloqueo por intentos es **de la cuenta**, no del dispositivo: cambiar de equipo no regala intentos nuevos. Y agotar los intentos ya no desvincula nada — antes lo hacía, y eso permitía a un tercero dejar al residente sin acceso rápido solo tecleando mal.
 
 ---
 
@@ -180,8 +205,8 @@ Polling cada 2–3 s. Cortar a los **2 minutos** (vigencia del intento).
 ### 2.3 Canjear
 
 ```graphql
-mutation RedeemWaLogin($challengeId: ID!) {
-  redeemWhatsAppLoginChallenge(challengeId: $challengeId) {
+mutation RedeemWaLogin($challengeId: ID!, $accessCode: String) {
+  redeemWhatsAppLoginChallenge(challengeId: $challengeId, accessCode: $accessCode) {
     accessToken
     refreshToken
     expiresIn
@@ -191,6 +216,12 @@ mutation RedeemWaLogin($challengeId: ID!) {
 ```
 
 Solo funciona desde el mismo dispositivo que solicitó el intento, y una sola vez.
+
+**`accessCode` es obligatorio cuando la cuenta ya tiene clave.** Si se omite, el servidor responde `ACCESS_CODE_REQUIRED` y la UI debe pedirla ahí mismo, sin reiniciar el flujo.
+
+La razón: quien roba el teléfono se lleva también la línea de WhatsApp, así que podría enviarse el mensaje a sí mismo desde el equipo robado. Exigir además la clave convierte el vínculo en dos factores —posesión y conocimiento— y el ladrón solo tiene el primero.
+
+En el **primer ingreso** no aplica: la cuenta todavía no tiene clave, y es justo el momento en que se crea (§1.2).
 
 ### 2.4 Errores
 
@@ -202,6 +233,8 @@ Solo funciona desde el mismo dispositivo que solicitó el intento, y una sola ve
 | `WA_LOGIN_CHALLENGE_NOT_FOUND` | No existe o es otro dispositivo; volver al inicio |
 | `WA_LOGIN_RATE_LIMIT` | 3 intentos por documento cada 10 min |
 | `WA_LOGIN_NOT_CONFIGURED` | Canal deshabilitado en el servidor; ocultar la opción |
+| `ACCESS_CODE_REQUIRED` | Falta la clave de la cuenta; pedirla sin reiniciar el flujo |
+| `ACCESS_CODE_INVALID` | Clave incorrecta; reintentar en la misma pantalla |
 
 ---
 
@@ -244,8 +277,8 @@ query ApprovalStatus($challengeId: ID!) {
   }
 }
 
-mutation RedeemApproval($challengeId: ID!) {
-  redeemDeviceApproval(challengeId: $challengeId) {
+mutation RedeemApproval($challengeId: ID!, $accessCode: String) {
+  redeemDeviceApproval(challengeId: $challengeId, accessCode: $accessCode) {
     accessToken
     refreshToken
     expiresIn
@@ -255,6 +288,8 @@ mutation RedeemApproval($challengeId: ID!) {
 ```
 
 Mostrar `approvalCode` en grande. Polling cada 2–3 s, con corte a los **5 minutos**.
+
+Igual que en el canje por WhatsApp (§2.3), **`accessCode` es obligatorio cuando la cuenta ya tiene clave**: aprobar desde el otro equipo no alcanza por sí solo para vincular este. Si falta, llega `ACCESS_CODE_REQUIRED` y hay que pedirla en la misma pantalla.
 
 ### 3.2 Dispositivo confiable
 

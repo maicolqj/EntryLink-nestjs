@@ -16,21 +16,27 @@ import { CustomError } from '../../shared/utils/errors.utils';
 import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
 
 /**
- * Login de residentes por dispositivo vinculado + PIN.
+ * Clave de acceso del residente y dispositivos vinculados.
  *
- * Motivación: cada login por WhatsApp cuesta un mensaje de plantilla en Meta.
- * Con este flujo el canal pago se usa UNA vez (al vincular) y los inicios de
- * sesión posteriores no generan ningún envío.
+ * La clave es UNA por cuenta —no una por equipo— y reemplaza al `systemCode`
+ * que antes emitía el sistema y enviaba por WhatsApp. La elige el residente en
+ * su primer ingreso y le sirve en todos los dispositivos que ya haya vinculado.
  *
- * Modelo de seguridad — el PIN nunca es credencial suficiente por sí solo:
- *   1. `deviceId` (header x-device-id) identifica el equipo.
+ * Modelo de seguridad — la clave NUNCA alcanza por sí sola:
+ *   1. `deviceId` (header x-device-id) identifica el equipo y, con él, al dueño.
+ *      Un equipo desconocido no llega siquiera a comparar la clave.
  *   2. `deviceFingerprint` (HMAC con llave del servidor) ata ese equipo al
  *      user-agent con el que se vinculó; no es falsificable desde el cliente.
- *   3. El PIN se valida SIEMPRE en el servidor contra bcrypt. El cliente puede
- *      usar biometría del SO para desbloquearlo localmente, pero eso nunca
+ *   3. La clave se valida SIEMPRE contra bcrypt en el servidor. El cliente puede
+ *      usar biometría del SO para desbloquearla localmente, pero eso no
  *      reemplaza esta verificación.
- *   4. Bloqueo temporal por intentos y revocación definitiva por reincidencia:
- *      un PIN de 6 dígitos solo es seguro si no se puede fuerza-brutear.
+ *   4. Bloqueo temporal por intentos fallidos, contados en la CUENTA. Contarlos
+ *      por dispositivo permitiría multiplicar los intentos con solo cambiar de
+ *      equipo, que es justo lo que el límite intenta impedir.
+ *
+ * Vincular un equipo nuevo exige pasar antes por WhatsApp entrante o por la
+ * aprobación desde un equipo confiable. Entrar en el teléfono de un tercero
+ * "solo con usuario y clave" no es posible por diseño.
  */
 @Injectable()
 export class ResidentDeviceService {
@@ -45,108 +51,176 @@ export class ResidentDeviceService {
     private readonly sessionService: SessionService,
   ) {}
 
-  // ── Vinculación ───────────────────────────────────────────────────────────
+  // ── Clave de acceso ───────────────────────────────────────────────────────
 
   /**
-   * Vincula el dispositivo actual al residente autenticado y fija su PIN.
-   * Se invoca DESPUÉS de un login válido por documento + systemCode, así que
-   * la posesión del dispositivo ya está probada por la sesión en curso.
+   * Fija o cambia la clave de la cuenta y vincula el dispositivo actual.
+   *
+   * Se invoca con sesión activa, así que la identidad ya está probada por el
+   * flujo que la abrió (WhatsApp entrante o aprobación desde otro equipo).
+   *
+   * Cambiar la clave limpia el estado punitivo de la cuenta: quien llega hasta
+   * aquí demostró quién es, no tiene sentido dejarlo bloqueado.
    */
-  async setDevicePin(
+  async setAccessCode(
     userId: string,
-    pin: string,
+    code: string,
     deviceInfo: DeviceInfo,
     label?: string,
   ): Promise<ResidentDevice> {
     const deviceId = this.requireDeviceId(deviceInfo);
     const user = await this.findResident(userId);
 
-    this.assertPinIsAcceptable(pin);
+    const normalized = this.normalizeCode(code);
+    this.assertCodeIsAcceptable(normalized);
 
-    const pinHash = await bcrypt.hash(pin, AUTH_CONSTANTS.DEVICE_PIN_BCRYPT_ROUNDS);
+    await this.userRepo.update(user.id, {
+      accessCodeHash: await bcrypt.hash(normalized, AUTH_CONSTANTS.ACCESS_CODE_BCRYPT_ROUNDS),
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: null,
+    });
 
-    const existing = await this.deviceRepo.findOne({ where: { userId: user.id, deviceId } });
+    this.logger.log(`Clave de acceso actualizada — userId: ${user.id}`);
+
+    return this.linkDevice(user.id, deviceInfo, label);
+  }
+
+  /** ¿La cuenta ya tiene clave? El cliente lo usa para exigir su creación. */
+  async hasAccessCode(userId: string): Promise<boolean> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.accessCodeHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    return !!user?.accessCodeHash;
+  }
+
+  /**
+   * Vincula el dispositivo actual sin tocar la clave. Lo llaman los flujos de
+   * arranque (WhatsApp entrante y aprobación) una vez que probaron identidad:
+   * el equipo nuevo hereda la clave que la cuenta ya tenía, en vez de pedir una
+   * distinta por dispositivo.
+   */
+  async linkDevice(
+    userId: string,
+    deviceInfo: DeviceInfo,
+    label?: string,
+  ): Promise<ResidentDevice> {
+    const deviceId = this.requireDeviceId(deviceInfo);
+
+    const existing = await this.deviceRepo.findOne({ where: { userId, deviceId } });
 
     if (existing) {
-      // Re-vincular limpia el estado punitivo: quien llega aquí ya probó su
-      // identidad con una sesión válida, no tiene sentido dejarlo bloqueado.
       await this.deviceRepo.update(existing.id, {
-        pinHash,
         deviceFingerprint: deviceInfo.fingerprint,
         platform: deviceInfo.platform,
         label: label ?? existing.label,
-        failedAttempts: 0,
-        lockedUntil: null,
         isRevoked: false,
         revokedReason: null,
       });
-      this.logger.log(`PIN actualizado — userId: ${user.id} | deviceId: ${this.maskDeviceId(deviceId)}`);
       return this.deviceRepo.findOne({ where: { id: existing.id } });
     }
 
-    await this.enforceDeviceLimit(user.id);
+    await this.enforceDeviceLimit(userId);
 
     const device = await this.deviceRepo.save(
       this.deviceRepo.create({
-        userId: user.id,
+        userId,
         deviceId,
         deviceFingerprint: deviceInfo.fingerprint,
-        pinHash,
         platform: deviceInfo.platform,
         label,
       }),
     );
 
-    this.logger.log(`Dispositivo vinculado — userId: ${user.id} | deviceId: ${this.maskDeviceId(deviceId)}`);
+    this.logger.log(`Dispositivo vinculado — userId: ${userId} | deviceId: ${this.maskDeviceId(deviceId)}`);
     return device;
+  }
+
+  /**
+   * Verifica la clave de una cuenta sin abrir sesión.
+   *
+   * Lo usan los flujos de arranque para exigir el segundo factor al vincular un
+   * equipo nuevo: quien roba el teléfono se lleva también la línea de WhatsApp,
+   * así que la posesión sola no debe alcanzar cuando la cuenta ya tiene clave.
+   */
+  async verifyAccessCode(userId: string, code: string): Promise<void> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.accessCodeHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+
+    if (!user?.accessCodeHash) {
+      throw new CustomError({
+        message: 'Esta cuenta todavía no tiene clave de acceso',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.ACCESS_CODE_NOT_SET,
+      });
+    }
+
+    this.assertAccountNotLocked(user);
+
+    const isValid = await bcrypt.compare(this.normalizeCode(code), user.accessCodeHash);
+    if (!isValid) await this.registerFailedAttempt(user);
+
+    await this.userRepo.update(user.id, {
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: null,
+    });
   }
 
   // ── Login ─────────────────────────────────────────────────────────────────
 
   /**
-   * Inicia sesión con el PIN del dispositivo vinculado. Cero mensajes salientes.
+   * Inicia sesión con la clave de la cuenta desde un dispositivo ya vinculado.
+   * Cero mensajes salientes.
    *
-   * Los errores de "dispositivo no vinculado" y "PIN incorrecto" son
+   * Los errores de "dispositivo no vinculado" y "clave incorrecta" son
    * deliberadamente distintos: el atacante ya necesita el deviceId exacto para
-   * llegar hasta aquí, y el residente necesita saber si debe re-vincular.
+   * llegar hasta aquí, y el residente necesita saber si debe volver a vincular.
    */
-  async loginWithDevicePin(pin: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async loginWithAccessCode(code: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
     const deviceId = this.requireDeviceId(deviceInfo);
 
     const device = await this.deviceRepo
       .createQueryBuilder('device')
-      .addSelect('device.pinHash')
       .where('device.device_id = :deviceId', { deviceId })
       .andWhere('device.is_revoked = false')
       .getOne();
 
-    if (!device) {
+    if (!device || device.deviceFingerprint !== deviceInfo.fingerprint) {
+      if (device) {
+        this.logger.warn(`Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`);
+      }
       throw new CustomError({
-        message: 'Este dispositivo no está vinculado. Inicia sesión con tu documento y código',
+        message: 'Este dispositivo no está vinculado. Ingresa con WhatsApp o pide aprobación desde otro equipo',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.DEVICE_NOT_LINKED,
       });
-    }
-
-    // Mismo deviceId pero otro navegador/app: el vínculo no aplica.
-    if (device.deviceFingerprint !== deviceInfo.fingerprint) {
-      this.logger.warn(`Fingerprint no coincide en login por PIN — deviceId: ${this.maskDeviceId(deviceId)}`);
-      throw new CustomError({
-        message: 'Este dispositivo no está vinculado. Inicia sesión con tu documento y código',
-        statusCode: HttpStatus.UNAUTHORIZED,
-        errorCode: AuthErrorCode.DEVICE_NOT_LINKED,
-      });
-    }
-
-    this.assertDeviceNotLocked(device);
-
-    const isValid = await bcrypt.compare(pin, device.pinHash);
-    if (!isValid) {
-      await this.registerFailedPinAttempt(device);
     }
 
     const user = await this.findResident(device.userId);
     this.assertUserActive(user);
+    this.assertAccountNotLocked(user);
+
+    const withHash = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.accessCodeHash')
+      .where('user.id = :userId', { userId: user.id })
+      .getOne();
+
+    if (!withHash?.accessCodeHash) {
+      throw new CustomError({
+        message: 'Tu cuenta todavía no tiene clave. Ingresa con WhatsApp para crearla',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.ACCESS_CODE_NOT_SET,
+      });
+    }
+
+    const isValid = await bcrypt.compare(this.normalizeCode(code), withHash.accessCodeHash);
+    if (!isValid) await this.registerFailedAttempt(withHash);
 
     // Un dispositivo sostiene una sola sesión: al volver a entrar se cierra la
     // anterior para no dejar refresh tokens huérfanos vivos 180 días.
@@ -166,14 +240,17 @@ export class ResidentDeviceService {
 
     await this.sessionService.createOrUpdateSession(user.id, tokenPair.sessionId, deviceInfo);
 
+    await this.userRepo.update(user.id, {
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: null,
+    });
+
     await this.deviceRepo.update(device.id, {
-      failedAttempts: 0,
-      lockedUntil: null,
       lastUsedAt: new Date(),
       sessionId: tokenPair.sessionId,
     });
 
-    this.logger.log(`Login por PIN de dispositivo — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(`Login con clave de acceso — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`);
 
     return {
       accessToken: tokenPair.accessToken,
@@ -223,6 +300,35 @@ export class ResidentDeviceService {
     return true;
   }
 
+  /**
+   * Deja vinculado solo el dispositivo actual y cierra las demás sesiones.
+   *
+   * Es la respuesta al celular perdido: el residente entra desde el equipo nuevo
+   * y corta de raíz el acceso del anterior, sin depender de que recuerde cuál
+   * era. Equivale al "cerrar sesión en los demás dispositivos" de una cuenta de
+   * correo.
+   */
+  async revokeOtherDevices(userId: string, deviceInfo: DeviceInfo): Promise<number> {
+    const currentDeviceId = this.requireDeviceId(deviceInfo);
+
+    const others = await this.deviceRepo.find({ where: { userId, isRevoked: false } });
+    const toRevoke = others.filter(device => device.deviceId !== currentDeviceId);
+
+    for (const device of toRevoke) {
+      await this.deviceRepo.update(device.id, {
+        isRevoked: true,
+        revokedReason: 'revoked_by_user',
+      });
+      if (device.sessionId) {
+        await this.tokenService.revokeSession(device.sessionId, 'device_revoked');
+        await this.sessionService.terminateSession(device.sessionId).catch(() => undefined);
+      }
+    }
+
+    this.logger.log(`Otros dispositivos revocados — userId: ${userId} | cantidad: ${toRevoke.length}`);
+    return toRevoke.length;
+  }
+
   // ── Privados ──────────────────────────────────────────────────────────────
 
   private requireDeviceId(deviceInfo: DeviceInfo): string {
@@ -238,93 +344,80 @@ export class ResidentDeviceService {
     return deviceId;
   }
 
+  /** Mayúsculas y sin espacios: ver el comentario de ACCESS_CODE_LENGTH. */
+  private normalizeCode(code: string): string {
+    return (code ?? '').trim().toUpperCase();
+  }
+
   /**
-   * Rechaza los PIN que un atacante probaría primero. Con 6 dígitos el espacio
-   * es de un millón de combinaciones; descartar los patrones obvios es lo que
-   * mantiene útil ese espacio.
+   * Rechaza las claves que un atacante probaría primero. Exigir letra Y dígito
+   * evita que el espacio alfanumérico se degrade al de un PIN de 6 cifras, que
+   * es lo que pasa cuando todos eligen solo números.
    */
-  private assertPinIsAcceptable(pin: string): void {
+  private assertCodeIsAcceptable(code: string): void {
+    const length = AUTH_CONSTANTS.ACCESS_CODE_LENGTH;
+
     const weak =
-      !/^\d{6}$/.test(pin) ||
-      /^(\d)\1{5}$/.test(pin) ||                 // 000000, 111111…
-      '0123456789'.includes(pin) ||              // 012345, 123456…
-      '9876543210'.includes(pin) ||              // 654321, 987654…
-      /^(\d{2})\1{2}$/.test(pin) ||              // 121212, 454545…
-      /^(\d{3})\1$/.test(pin);                   // 123123, 789789…
+      !new RegExp(`^[A-Z0-9]{${length}}$`).test(code) ||
+      !/[A-Z]/.test(code) ||
+      !/[0-9]/.test(code) ||
+      new RegExp(`^(.)\\1{${length - 1}}$`).test(code) ||   // AAAAAA, 111111…
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.includes(code) ||        // ABCDEF, BCDEFG…
+      '0123456789'.includes(code) ||                        // 012345, 123456…
+      '9876543210'.includes(code);                          // 654321, 987654…
 
     if (weak) {
       throw new CustomError({
-        message: 'El PIN debe tener 6 dígitos y no puede ser una secuencia o repetición obvia',
+        message: `La clave debe tener ${length} caracteres, combinar letras y números, y no ser una secuencia obvia`,
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: AuthErrorCode.DEVICE_PIN_TOO_WEAK,
+        errorCode: AuthErrorCode.ACCESS_CODE_TOO_WEAK,
       });
     }
   }
 
-  private assertDeviceNotLocked(device: ResidentDevice): void {
-    if (device.lockedUntil && new Date() < device.lockedUntil) {
-      const minutes = Math.ceil((device.lockedUntil.getTime() - Date.now()) / 60_000);
+  private assertAccountNotLocked(user: User): void {
+    if (user.accessCodeLockedUntil && new Date() < user.accessCodeLockedUntil) {
+      const minutes = Math.ceil((user.accessCodeLockedUntil.getTime() - Date.now()) / 60_000);
       throw new CustomError({
-        message: `Dispositivo bloqueado por intentos fallidos. Intenta en ${minutes} minuto(s)`,
+        message: `Cuenta bloqueada por intentos fallidos. Intenta en ${minutes} minuto(s)`,
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
-        errorCode: AuthErrorCode.DEVICE_LOCKED,
+        errorCode: AuthErrorCode.ACCESS_CODE_LOCKED,
       });
     }
   }
 
   /**
    * Cuenta el fallo y decide el castigo. Siempre termina lanzando: nunca
-   * devuelve el control al caller tras un PIN incorrecto.
+   * devuelve el control al caller tras una clave incorrecta.
+   *
+   * A diferencia del esquema anterior, agotar los intentos NO desvincula el
+   * dispositivo: el bloqueo es de la cuenta, y desvincular por fallos permitiría
+   * a un tercero dejar sin acceso rápido al residente solo tecleando mal.
    */
-  private async registerFailedPinAttempt(device: ResidentDevice): Promise<never> {
-    const attempts = device.failedAttempts + 1;
+  private async registerFailedAttempt(user: User): Promise<never> {
+    const attempts = (user.accessCodeFailedAttempts ?? 0) + 1;
 
-    if (attempts < AUTH_CONSTANTS.MAX_DEVICE_PIN_ATTEMPTS) {
-      await this.deviceRepo.update(device.id, { failedAttempts: attempts });
-      const remaining = AUTH_CONSTANTS.MAX_DEVICE_PIN_ATTEMPTS - attempts;
+    if (attempts < AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS) {
+      await this.userRepo.update(user.id, { accessCodeFailedAttempts: attempts });
+      const remaining = AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS - attempts;
       throw new CustomError({
-        message: `PIN incorrecto. Te quedan ${remaining} intento(s)`,
+        message: `Clave incorrecta. Te quedan ${remaining} intento(s)`,
         statusCode: HttpStatus.UNAUTHORIZED,
-        errorCode: AuthErrorCode.DEVICE_PIN_INVALID,
+        errorCode: AuthErrorCode.ACCESS_CODE_INVALID,
       });
     }
 
-    // Se agotaron los intentos de esta tanda. `failedAttempts` sigue creciendo
-    // entre bloqueos para detectar al que insiste: tras MAX_DEVICE_PIN_LOCKOUTS
-    // tandas el vínculo se rompe y solo se recupera con documento + systemCode.
-    const lockouts = Math.floor(attempts / AUTH_CONSTANTS.MAX_DEVICE_PIN_ATTEMPTS);
-
-    if (lockouts >= AUTH_CONSTANTS.MAX_DEVICE_PIN_LOCKOUTS) {
-      await this.deviceRepo.update(device.id, {
-        failedAttempts: attempts,
-        isRevoked: true,
-        revokedReason: 'pin_bruteforce',
-      });
-
-      if (device.sessionId) {
-        await this.tokenService.revokeSession(device.sessionId, 'pin_bruteforce');
-      }
-
-      this.logger.warn(
-        `Dispositivo revocado por fuerza bruta de PIN — userId: ${device.userId} | intentos: ${attempts}`,
-      );
-
-      throw new CustomError({
-        message: 'Dispositivo desvinculado por seguridad. Inicia sesión con tu documento y código',
-        statusCode: HttpStatus.UNAUTHORIZED,
-        errorCode: AuthErrorCode.DEVICE_REVOKED,
-      });
-    }
-
-    await this.deviceRepo.update(device.id, {
-      failedAttempts: attempts,
-      lockedUntil: new Date(Date.now() + AUTH_CONSTANTS.DEVICE_PIN_LOCK_DURATION * 1_000),
+    await this.userRepo.update(user.id, {
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: new Date(Date.now() + AUTH_CONSTANTS.ACCESS_CODE_LOCK_DURATION * 1_000),
     });
 
+    this.logger.warn(`Cuenta bloqueada por intentos de clave — userId: ${user.id}`);
+
     throw new CustomError({
-      message: `Dispositivo bloqueado por ${AUTH_CONSTANTS.DEVICE_PIN_LOCK_DURATION / 60} minutos por intentos fallidos`,
+      message: `Cuenta bloqueada por ${AUTH_CONSTANTS.ACCESS_CODE_LOCK_DURATION / 60} minutos por intentos fallidos`,
       statusCode: HttpStatus.TOO_MANY_REQUESTS,
-      errorCode: AuthErrorCode.DEVICE_LOCKED,
+      errorCode: AuthErrorCode.ACCESS_CODE_LOCKED,
     });
   }
 
@@ -377,9 +470,9 @@ export class ResidentDeviceService {
     const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
     if (!isResident) {
       throw new CustomError({
-        message: 'El login por PIN de dispositivo es exclusivo para residentes',
+        message: 'La clave de acceso es exclusiva para residentes',
         statusCode: HttpStatus.FORBIDDEN,
-        errorCode: AuthErrorCode.DEVICE_PIN_NOT_ALLOWED,
+        errorCode: AuthErrorCode.ACCESS_CODE_NOT_ALLOWED,
       });
     }
 
@@ -388,7 +481,7 @@ export class ResidentDeviceService {
 
   /**
    * Un dispositivo vinculado no puede saltarse el estado de la cuenta: si al
-   * residente lo suspendieron o le bloquearon el acceso, el PIN no sirve.
+   * residente lo suspendieron o le bloquearon el acceso, la clave no sirve.
    */
   private assertUserActive(user: User): void {
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {

@@ -12,9 +12,9 @@ import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 
 /**
- * Garantías del login por PIN: el PIN nunca basta solo (exige deviceId +
- * fingerprint), no se puede fuerza-brutear, y no sobrevive a una cuenta
- * suspendida.
+ * Garantías de la clave de acceso: es una por cuenta, nunca basta sola (exige
+ * deviceId + fingerprint), no se puede fuerza-brutear cambiando de equipo, y no
+ * sobrevive a una cuenta suspendida.
  */
 describe('ResidentDeviceService', () => {
   let service: ResidentDeviceService;
@@ -27,15 +27,22 @@ describe('ResidentDeviceService', () => {
     deviceId: 'dev-juan',
   };
 
-  const VALID_PIN = '482913';
+  const otherDevice: DeviceInfo = {
+    ...device,
+    fingerprint: 'fp-tablet-juan',
+    deviceId: 'dev-tablet',
+  };
+
+  const VALID_CODE = 'K7M2Q4';
 
   let rows: any[];
-  let userStatus: UserStatus;
+  let user: any;
+  let queriedDeviceId: string | undefined;
 
   const deviceRepo = {
     create: jest.fn((data: any) => data),
     save: jest.fn(async (data: any) => {
-      const row = { id: 'dev-row-1', failedAttempts: 0, isRevoked: false, ...data };
+      const row = { id: `dev-row-${rows.length + 1}`, isRevoked: false, ...data };
       rows.push(row);
       return row;
     }),
@@ -53,24 +60,30 @@ describe('ResidentDeviceService', () => {
     }),
     createQueryBuilder: jest.fn(() => ({
       addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn((_sql: string, params: any) => {
+        queriedDeviceId = params?.deviceId;
+        return deviceRepo.createQueryBuilder();
+      }),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn(async () =>
+        rows.find(r => !r.isRevoked && r.deviceId === queriedDeviceId) ?? null,
+      ),
+    })),
+  };
+
+  const userRepo = {
+    createQueryBuilder: jest.fn(() => ({
+      addSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      getOne: jest.fn(async () => rows.find(r => !r.isRevoked) ?? null),
+      getOne: jest.fn(async () => user),
     })),
+    update: jest.fn(async (_id: string, patch: any) => {
+      Object.assign(user, patch);
+      return { affected: 1 };
+    }),
   };
-
-  const userQueryBuilder = {
-    leftJoinAndSelect: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
-    andWhere: jest.fn().mockReturnThis(),
-    getOne: jest.fn(async () => ({
-      id: 'user-1',
-      status: userStatus,
-      userRoles: [{ role: { name: 'RESIDENT_ROL', permissions: [] } }],
-    })),
-  };
-
-  const userRepo = { createQueryBuilder: jest.fn(() => userQueryBuilder) };
 
   const tokenService = {
     generateTokenPair: jest.fn(async () => ({
@@ -87,7 +100,15 @@ describe('ResidentDeviceService', () => {
 
   beforeEach(async () => {
     rows = [];
-    userStatus = UserStatus.ACTIVE;
+    queriedDeviceId = undefined;
+    user = {
+      id: 'user-1',
+      status: UserStatus.ACTIVE,
+      accessCodeHash: null,
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: null,
+      userRoles: [{ role: { name: 'RESIDENT_ROL', permissions: [] } }],
+    };
     jest.clearAllMocks();
 
     const module = await Test.createTestingModule({
@@ -103,30 +124,45 @@ describe('ResidentDeviceService', () => {
     service = module.get(ResidentDeviceService);
   });
 
-  const link = async (pin = VALID_PIN) => service.setDevicePin('user-1', pin, device);
+  const link = async (code = VALID_CODE, info: DeviceInfo = device) =>
+    service.setAccessCode('user-1', code, info);
 
-  // ── Fortaleza del PIN ───────────────────────────────────────────────────
+  // ── Fortaleza de la clave ────────────────────────────────────────────────
 
-  it.each(['000000', '111111', '123456', '654321', '121212', '123123'])(
-    'rechaza el PIN obvio %s',
+  it.each(['AAAAAA', '111111', '123456', '654321', 'ABCDEF', 'ABCDE', 'ABCDEFG'])(
+    'rechaza la clave débil %s',
     async (weak) => {
-      await expect(link(weak)).rejects.toMatchObject({ errorCode: 'DEVICE_PIN_TOO_WEAK' });
+      await expect(link(weak)).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_TOO_WEAK' });
     },
   );
 
-  it('guarda el PIN como hash bcrypt, nunca en claro', async () => {
+  it('exige combinar letras y números', async () => {
+    await expect(link('QWERTY')).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_TOO_WEAK' });
+    await expect(link('284917')).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_TOO_WEAK' });
+  });
+
+  it('guarda la clave como hash bcrypt en la CUENTA, nunca en el dispositivo', async () => {
     await link();
 
-    expect(rows[0].pinHash).not.toBe(VALID_PIN);
-    expect(await bcrypt.compare(VALID_PIN, rows[0].pinHash)).toBe(true);
+    expect(user.accessCodeHash).not.toBe(VALID_CODE);
+    expect(await bcrypt.compare(VALID_CODE, user.accessCodeHash)).toBe(true);
+    expect(rows[0].pinHash).toBeUndefined();
+  });
+
+  it('acepta la clave en minúscula: se normaliza a mayúsculas', async () => {
+    await link();
+
+    await expect(service.loginWithAccessCode('k7m2q4', device)).resolves.toMatchObject({
+      accessToken: 'at',
+    });
   });
 
   // ── Login ────────────────────────────────────────────────────────────────
 
-  it('login con el PIN correcto devuelve tokens y usa vigencia extendida', async () => {
+  it('login con la clave correcta devuelve tokens y usa vigencia extendida', async () => {
     await link();
 
-    const auth = await service.loginWithDevicePin(VALID_PIN, device);
+    const auth = await service.loginWithAccessCode(VALID_CODE, device);
 
     expect(auth.accessToken).toBe('at');
     expect(tokenService.generateTokenPair).toHaveBeenCalledWith(
@@ -134,11 +170,28 @@ describe('ResidentDeviceService', () => {
     );
   });
 
+  it('la misma clave sirve en un segundo equipo ya vinculado', async () => {
+    await link();
+    await service.linkDevice('user-1', otherDevice);
+
+    await expect(service.loginWithAccessCode(VALID_CODE, otherDevice)).resolves.toMatchObject({
+      accessToken: 'at',
+    });
+  });
+
+  it('la clave correcta desde un equipo NO vinculado no abre sesión', async () => {
+    await link();
+
+    await expect(service.loginWithAccessCode(VALID_CODE, otherDevice)).rejects.toMatchObject({
+      errorCode: 'DEVICE_NOT_LINKED',
+    });
+  });
+
   it('sin header x-device-id no se puede intentar', async () => {
     await link();
 
     await expect(
-      service.loginWithDevicePin(VALID_PIN, { ...device, deviceId: undefined }),
+      service.loginWithAccessCode(VALID_CODE, { ...device, deviceId: undefined }),
     ).rejects.toMatchObject({ errorCode: 'DEVICE_ID_REQUIRED' });
   });
 
@@ -146,66 +199,98 @@ describe('ResidentDeviceService', () => {
     await link();
 
     await expect(
-      service.loginWithDevicePin(VALID_PIN, { ...device, fingerprint: 'fp-otro-navegador' }),
+      service.loginWithAccessCode(VALID_CODE, { ...device, fingerprint: 'fp-otro-navegador' }),
     ).rejects.toMatchObject({ errorCode: 'DEVICE_NOT_LINKED' });
   });
 
-  it('cuenta suspendida: el PIN correcto no abre sesión', async () => {
+  it('cuenta suspendida: la clave correcta no abre sesión', async () => {
     await link();
-    userStatus = UserStatus.SUSPENDED;
+    user.status = UserStatus.SUSPENDED;
 
-    await expect(service.loginWithDevicePin(VALID_PIN, device)).rejects.toMatchObject({
+    await expect(service.loginWithAccessCode(VALID_CODE, device)).rejects.toMatchObject({
       errorCode: 'USER_SUSPENDED',
     });
   });
 
   // ── Fuerza bruta ─────────────────────────────────────────────────────────
 
-  it('bloquea temporalmente tras agotar los intentos', async () => {
+  it('bloquea la cuenta tras agotar los intentos', async () => {
     await link();
 
-    for (let i = 1; i < AUTH_CONSTANTS.MAX_DEVICE_PIN_ATTEMPTS; i++) {
-      await expect(service.loginWithDevicePin('999999', device)).rejects.toMatchObject({
-        errorCode: 'DEVICE_PIN_INVALID',
+    for (let i = 1; i < AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS; i++) {
+      await expect(service.loginWithAccessCode('Z9Z9Z9', device)).rejects.toMatchObject({
+        errorCode: 'ACCESS_CODE_INVALID',
       });
     }
 
-    await expect(service.loginWithDevicePin('999999', device)).rejects.toMatchObject({
-      errorCode: 'DEVICE_LOCKED',
+    await expect(service.loginWithAccessCode('Z9Z9Z9', device)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_LOCKED',
     });
 
-    // El bloqueo también frena al que sí conoce el PIN, hasta que expire.
-    await expect(service.loginWithDevicePin(VALID_PIN, device)).rejects.toMatchObject({
-      errorCode: 'DEVICE_LOCKED',
+    // El bloqueo también frena a quien sí conoce la clave, hasta que expire.
+    await expect(service.loginWithAccessCode(VALID_CODE, device)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_LOCKED',
     });
     // Timeout ampliado: cada intento paga un bcrypt.compare de 12 rondas y en
     // la corrida completa los workers de jest compiten por CPU.
   }, 30_000);
 
-  it('revoca el dispositivo tras la segunda tanda de intentos', async () => {
+  it('cambiar de equipo no regala intentos: el conteo es de la cuenta', async () => {
     await link();
+    await service.linkDevice('user-1', otherDevice);
 
-    const total = AUTH_CONSTANTS.MAX_DEVICE_PIN_ATTEMPTS * AUTH_CONSTANTS.MAX_DEVICE_PIN_LOCKOUTS;
-
-    for (let i = 1; i <= total; i++) {
-      // Se ignora el bloqueo temporal para simular al atacante que espera.
-      rows[0].lockedUntil = null;
-      await expect(service.loginWithDevicePin('999999', device)).rejects.toBeDefined();
+    for (let i = 1; i < AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS; i++) {
+      await expect(service.loginWithAccessCode('Z9Z9Z9', device)).rejects.toBeDefined();
     }
 
-    expect(rows[0].isRevoked).toBe(true);
-    expect(rows[0].revokedReason).toBe('pin_bruteforce');
+    // El siguiente fallo llega desde el otro dispositivo y aun así bloquea.
+    await expect(service.loginWithAccessCode('Z9Z9Z9', otherDevice)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_LOCKED',
+    });
   }, 30_000);
 
-  it('re-vincular limpia el bloqueo (el residente ya probó identidad con sesión válida)', async () => {
+  it('agotar los intentos NO desvincula el dispositivo', async () => {
     await link();
-    rows[0].failedAttempts = 4;
-    rows[0].lockedUntil = new Date(Date.now() + 60_000);
 
-    await service.setDevicePin('user-1', '571824', device);
+    for (let i = 1; i <= AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS; i++) {
+      await expect(service.loginWithAccessCode('Z9Z9Z9', device)).rejects.toBeDefined();
+    }
 
-    expect(rows[0].failedAttempts).toBe(0);
-    expect(rows[0].lockedUntil).toBeNull();
+    expect(rows[0].isRevoked).toBe(false);
+  }, 30_000);
+
+  it('cambiar la clave limpia el bloqueo (el residente ya probó identidad con sesión válida)', async () => {
+    await link();
+    user.accessCodeFailedAttempts = 4;
+    user.accessCodeLockedUntil = new Date(Date.now() + 60_000);
+
+    await service.setAccessCode('user-1', 'R3T8W1', device);
+
+    expect(user.accessCodeFailedAttempts).toBe(0);
+    expect(user.accessCodeLockedUntil).toBeNull();
+  });
+
+  // ── Verificación como segundo factor ─────────────────────────────────────
+
+  it('verifyAccessCode acepta la clave correcta y rechaza la incorrecta', async () => {
+    await link();
+
+    await expect(service.verifyAccessCode('user-1', VALID_CODE)).resolves.toBeUndefined();
+    await expect(service.verifyAccessCode('user-1', 'Z9Z9Z9')).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_INVALID',
+    });
+  });
+
+  it('verifyAccessCode falla si la cuenta todavía no tiene clave', async () => {
+    await expect(service.verifyAccessCode('user-1', VALID_CODE)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_NOT_SET',
+    });
+  });
+
+  it('hasAccessCode refleja si la cuenta ya la creó', async () => {
+    await expect(service.hasAccessCode('user-1')).resolves.toBe(false);
+    await link();
+    await expect(service.hasAccessCode('user-1')).resolves.toBe(true);
   });
 
   // ── Revocación ───────────────────────────────────────────────────────────
@@ -218,5 +303,18 @@ describe('ResidentDeviceService', () => {
 
     expect(rows[0].isRevoked).toBe(true);
     expect(tokenService.revokeSession).toHaveBeenCalledWith('sess-perdida', 'device_revoked');
+  });
+
+  it('revocar los demás equipos deja vivo solo el actual (celular perdido)', async () => {
+    await link();
+    await service.linkDevice('user-1', otherDevice);
+    rows[0].sessionId = 'sess-vieja';
+
+    const revoked = await service.revokeOtherDevices('user-1', otherDevice);
+
+    expect(revoked).toBe(1);
+    expect(rows.find(r => r.deviceId === 'dev-juan').isRevoked).toBe(true);
+    expect(rows.find(r => r.deviceId === 'dev-tablet').isRevoked).toBe(false);
+    expect(tokenService.revokeSession).toHaveBeenCalledWith('sess-vieja', 'device_revoked');
   });
 });

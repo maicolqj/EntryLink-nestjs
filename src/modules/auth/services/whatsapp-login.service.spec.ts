@@ -9,6 +9,7 @@ import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
+import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 
@@ -95,6 +96,14 @@ describe('WhatsAppLoginService', () => {
     delete: jest.fn(async () => undefined),
   };
 
+  // La cuenta de las pruebas todavía no tiene clave de acceso: ese es el primer
+  // ingreso, el único que puede vincular un equipo sin segundo factor.
+  const residentDeviceService = {
+    hasAccessCode: jest.fn(async () => false),
+    verifyAccessCode: jest.fn(async () => undefined),
+    linkDevice: jest.fn(async () => ({ id: 'dev-row-1' })),
+  };
+
   beforeEach(async () => {
     challenges = [];
     jest.clearAllMocks();
@@ -106,6 +115,7 @@ describe('WhatsAppLoginService', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
         { provide: SessionService, useValue: sessionService },
+        { provide: ResidentDeviceService, useValue: residentDeviceService },
         { provide: CacheService, useValue: cacheService },
         {
           provide: ConfigService,

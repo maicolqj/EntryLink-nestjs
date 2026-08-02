@@ -13,19 +13,20 @@ import { ObjectType, Field, ID, HideField } from '@nestjs/graphql';
 import { User } from '../../users/entities/user.entity';
 
 /**
- * Dispositivo vinculado a un residente para login por PIN.
+ * Dispositivo vinculado a un residente.
  *
- * Estrategia de costo cero: el residente autentica UNA vez por el canal caro
- * (documento + systemCode enviado por WhatsApp) y a partir de ahí el
- * dispositivo queda vinculado. Los logins siguientes se resuelven con un PIN
- * local validado contra `pinHash` — sin ningún mensaje saliente.
+ * Estrategia de costo cero: el residente prueba su identidad UNA vez por un
+ * canal externo (WhatsApp entrante o aprobación desde otro equipo suyo) y a
+ * partir de ahí el dispositivo queda vinculado. Los ingresos siguientes se
+ * resuelven con la clave de la cuenta, sin ningún mensaje saliente.
  *
- * El PIN NO es una credencial independiente: solo desbloquea un dispositivo
- * que ya fue verificado. Por eso el login exige que coincidan `deviceId` Y
- * `deviceFingerprint` (HMAC de user-agent + deviceId, no falsificable por el
- * cliente porque la llave vive en el servidor).
+ * La clave NO vive acá: es una sola por cuenta (`users.access_code_hash`), así
+ * que vincular un equipo nuevo no obliga a inventar otra. Este registro aporta
+ * el otro factor: el login exige que coincidan `deviceId` Y `deviceFingerprint`
+ * (HMAC de user-agent + deviceId, no falsificable por el cliente porque la
+ * llave vive en el servidor).
  */
-@ObjectType({ description: 'Dispositivo vinculado a un residente para login por PIN' })
+@ObjectType({ description: 'Dispositivo vinculado a un residente' })
 @Entity({ name: 'resident_devices' })
 @Unique('UQ_resident_devices_user_device', ['userId', 'deviceId'])
 @Index(['deviceId', 'isRevoked'])
@@ -57,11 +58,6 @@ export class ResidentDevice {
   @Column({ name: 'device_fingerprint', type: 'text' })
   deviceFingerprint: string;
 
-  /** bcrypt del PIN. Nunca se expone en el esquema GraphQL. */
-  @HideField()
-  @Column({ name: 'pin_hash', type: 'text', select: false })
-  pinHash: string;
-
   @Field(() => String, { nullable: true, description: 'Nombre legible del dispositivo' })
   @Column({ name: 'label', type: 'varchar', length: 120, nullable: true })
   label?: string;
@@ -69,15 +65,6 @@ export class ResidentDevice {
   @Field(() => String, { nullable: true })
   @Column({ name: 'platform', type: 'varchar', length: 20, nullable: true })
   platform?: string;
-
-  /** Intentos fallidos consecutivos de PIN. Se resetea en cada login exitoso. */
-  @HideField()
-  @Column({ name: 'failed_attempts', type: 'smallint', default: 0 })
-  failedAttempts: number;
-
-  @Field(() => Date, { nullable: true, description: 'Bloqueo temporal por intentos fallidos' })
-  @Column({ name: 'locked_until', type: 'timestamptz', nullable: true })
-  lockedUntil?: Date;
 
   @Field(() => Boolean)
   @Column({ name: 'is_revoked', type: 'boolean', default: false })

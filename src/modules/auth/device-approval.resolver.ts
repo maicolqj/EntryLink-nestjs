@@ -67,9 +67,10 @@ export class DeviceApprovalResolver {
   })
   async redeemDeviceApproval(
     @Args('challengeId', { type: () => ID }) challengeId: string,
+    @Args('accessCode', { type: () => String, nullable: true }) accessCode: string | undefined,
     @Context() context: any,
   ): Promise<AuthResponse> {
-    return this.deviceApprovalService.redeem(challengeId, this.deviceInfo(context));
+    return this.deviceApprovalService.redeem(challengeId, this.deviceInfo(context), accessCode);
   }
 
   // ── Dispositivo de confianza (con sesión) ─────────────────────────────────

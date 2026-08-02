@@ -89,11 +89,15 @@ export enum AuthErrorCode {
   DEVICE_ID_REQUIRED          = 'DEVICE_ID_REQUIRED',
   DEVICE_NOT_LINKED           = 'DEVICE_NOT_LINKED',
   DEVICE_REVOKED              = 'DEVICE_REVOKED',
-  DEVICE_LOCKED               = 'DEVICE_LOCKED',
-  DEVICE_PIN_INVALID          = 'DEVICE_PIN_INVALID',
-  DEVICE_PIN_TOO_WEAK         = 'DEVICE_PIN_TOO_WEAK',
   DEVICE_NOT_FOUND            = 'DEVICE_NOT_FOUND',
-  DEVICE_PIN_NOT_ALLOWED      = 'DEVICE_PIN_NOT_ALLOWED',
+  // Clave de acceso del residente: una por cuenta, sirve en los equipos ya
+  // vinculados. El bloqueo es de la cuenta, no del dispositivo.
+  ACCESS_CODE_INVALID         = 'ACCESS_CODE_INVALID',
+  ACCESS_CODE_TOO_WEAK        = 'ACCESS_CODE_TOO_WEAK',
+  ACCESS_CODE_LOCKED          = 'ACCESS_CODE_LOCKED',
+  ACCESS_CODE_NOT_SET         = 'ACCESS_CODE_NOT_SET',
+  ACCESS_CODE_REQUIRED        = 'ACCESS_CODE_REQUIRED',
+  ACCESS_CODE_NOT_ALLOWED     = 'ACCESS_CODE_NOT_ALLOWED',
   // Login por WhatsApp entrante (reverse-OTP)
   WA_LOGIN_NOT_CONFIGURED     = 'WA_LOGIN_NOT_CONFIGURED',
   WA_LOGIN_CHALLENGE_NOT_FOUND = 'WA_LOGIN_CHALLENGE_NOT_FOUND',

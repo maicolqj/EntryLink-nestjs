@@ -21,17 +21,21 @@ export const AUTH_CONSTANTS = {
   LOGIN_BLOCK_DURATION: 15 * 60,     // 15 minutos en segundos
   MAX_IP_ATTEMPTS: 60 /* //?20 */,
 
-  // ── Dispositivo + PIN (residentes) ───────────────────────────────────────
+  // ── Clave de acceso + dispositivos (residentes) ──────────────────────────
   // Sesión larga para que el residente no vuelva a pasar por el canal pago
-  // (WhatsApp). La seguridad la sostienen el PIN, el fingerprint y la
+  // (WhatsApp). La seguridad la sostienen la clave, el fingerprint y la
   // posibilidad de revocar el dispositivo, no la caducidad del token.
   RESIDENT_DEVICE_REFRESH_EXPIRY: '180d',
-  DEVICE_PIN_LENGTH: 6,
-  DEVICE_PIN_BCRYPT_ROUNDS: 12,
+  // La clave es UNA por cuenta y sirve en todos los equipos ya vinculados.
+  // Alfanumérica de 6: 36^6 ≈ 2.200 millones de combinaciones, contra el millón
+  // de un PIN numérico. Se normaliza a mayúsculas porque la diferencia entre
+  // "a" y "A" solo produce bloqueos por tipeo, sin aportar seguridad real
+  // frente a un atacante limitado a 5 intentos cada 15 minutos.
+  ACCESS_CODE_LENGTH: 6,
+  ACCESS_CODE_BCRYPT_ROUNDS: 12,
   MAX_DEVICES_PER_RESIDENT: 5,
-  MAX_DEVICE_PIN_ATTEMPTS: 5,        // fallos consecutivos → bloqueo temporal
-  DEVICE_PIN_LOCK_DURATION: 15 * 60, // 15 minutos en segundos
-  MAX_DEVICE_PIN_LOCKOUTS: 2,        // bloqueos acumulados → se revoca el dispositivo
+  MAX_ACCESS_CODE_ATTEMPTS: 5,        // fallos consecutivos → bloqueo temporal
+  ACCESS_CODE_LOCK_DURATION: 15 * 60, // 15 minutos en segundos
 
   // ── Login por WhatsApp entrante (reverse-OTP) ────────────────────────────
   // Ventana corta: el residente pulsa "enviar" en el momento. Alargarla solo

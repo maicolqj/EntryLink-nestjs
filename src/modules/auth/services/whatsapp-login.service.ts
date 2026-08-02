@@ -11,6 +11,7 @@ import { UserStatus } from '../../users/enums/user.enums';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
+import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
@@ -58,6 +59,7 @@ export class WhatsAppLoginService {
     private readonly userRepo: Repository<User>,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly residentDeviceService: ResidentDeviceService,
     private readonly cacheService: CacheService,
     private readonly config: ConfigService,
   ) {
@@ -223,8 +225,20 @@ export class WhatsAppLoginService {
     return { status: challenge.status, expiresAt: challenge.expiresAt };
   }
 
-  /** Canjea un challenge confirmado por una sesión. Un solo uso. */
-  async redeem(challengeId: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  /**
+   * Canjea un challenge confirmado por una sesión. Un solo uso.
+   *
+   * Si la cuenta ya tiene clave de acceso, hay que enviarla: quien roba el
+   * teléfono se lleva también la línea de WhatsApp, así que la posesión sola no
+   * puede bastar para vincular un equipo. Solo el primer ingreso —cuando
+   * todavía no hay clave— entra sin ese segundo factor, que es justo el momento
+   * en que el residente la crea.
+   */
+  async redeem(
+    challengeId: string,
+    deviceInfo: DeviceInfo,
+    accessCode?: string,
+  ): Promise<AuthResponse> {
     const challenge = await this.findChallengeForDevice(challengeId, deviceInfo);
 
     if (challenge.status === WhatsAppLoginStatus.CONSUMED) {
@@ -270,6 +284,10 @@ export class WhatsAppLoginService {
     const user = await this.loadResidentWithRoles(challenge.userId);
     this.assertUserActive(user);
 
+    await this.assertAccessCodeWhenRequired(user.id, accessCode);
+
+    await this.residentDeviceService.linkDevice(user.id, deviceInfo);
+
     await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
 
     const tokenPair = await this.tokenService.generateTokenPair(user, deviceInfo, false, 'user');
@@ -284,6 +302,25 @@ export class WhatsAppLoginService {
       expiresIn: tokenPair.expiresIn,
       sessionId: tokenPair.sessionId,
     };
+  }
+
+  /**
+   * Exige la clave de la cuenta cuando ya existe. Se resuelve acá y no en el
+   * resolver para que valga igual desde cualquier entrada.
+   */
+  private async assertAccessCodeWhenRequired(userId: string, accessCode?: string): Promise<void> {
+    const hasCode = await this.residentDeviceService.hasAccessCode(userId);
+    if (!hasCode) return;
+
+    if (!accessCode?.trim()) {
+      throw new CustomError({
+        message: 'Ingresa tu clave de acceso para autorizar este dispositivo',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.ACCESS_CODE_REQUIRED,
+      });
+    }
+
+    await this.residentDeviceService.verifyAccessCode(userId, accessCode);
   }
 
   /** Borra los challenges ya resueltos o vencidos. Para un cron de limpieza. */

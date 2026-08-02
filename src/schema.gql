@@ -657,6 +657,9 @@ type User {
   """Date until which the account is blocked due to failed attempts"""
   accountLockedUntil: DateTime
 
+  """Bloqueo temporal por intentos fallidos de clave de acceso"""
+  accessCodeLockedUntil: DateTime
+
   """Current status of user account"""
   status: UserStatus!
 
@@ -674,9 +677,6 @@ type User {
 
   """Reason for account suspension"""
   suspensionReason: String
-
-  """Código de sistema asignado a todo usuario (formato RES-xxxxx)"""
-  systemCode: String
 
   """ID del complejo residencial asociado"""
   complexId: String
@@ -1821,9 +1821,6 @@ type UserInfoCompleteResponse {
   timezone: String
 
   """Zona horaria preferida"""
-  systemCode: String
-
-  """Zona horaria preferida"""
   complexId: String
 
   """Zona horaria preferida"""
@@ -2124,7 +2121,7 @@ type QrLoginTokenResponse {
   pin: String!
 }
 
-"""Dispositivo vinculado a un residente para login por PIN"""
+"""Dispositivo vinculado a un residente"""
 type ResidentDevice {
   id: ID!
   userId: String!
@@ -2135,9 +2132,6 @@ type ResidentDevice {
   """Nombre legible del dispositivo"""
   label: String
   platform: String
-
-  """Bloqueo temporal por intentos fallidos"""
-  lockedUntil: DateTime
   isRevoked: Boolean!
   revokedReason: String
   lastUsedAt: DateTime
@@ -3674,6 +3668,11 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 scalar JSON
 
 type Query {
+  """
+  Indica si la cuenta ya tiene clave de acceso. El cliente la consulta tras iniciar sesión para exigir su creación cuando falta.
+  """
+  residentHasAccessCode: Boolean!
+
   """Lista los dispositivos vinculados del residente autenticado."""
   myResidentDevices: [ResidentDevice!]!
 
@@ -4186,19 +4185,24 @@ type Mutation {
   logout: Boolean!
 
   """
-  Vincula el dispositivo actual (header x-device-id) al residente autenticado y fija su PIN de 6 dígitos. A partir de aquí el residente inicia sesión con loginWithDevicePin, sin consumir mensajes de WhatsApp.
+  Fija o cambia la clave de acceso del residente autenticado y vincula el dispositivo actual (header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados.
   """
-  setResidentDevicePin(input: SetDevicePinInput!): ResidentDevice!
+  setResidentAccessCode(input: SetAccessCodeInput!): ResidentDevice!
 
   """
-  Inicia sesión con el PIN del dispositivo vinculado (header x-device-id). Exclusivo para RESIDENT_ROL. No envía ningún mensaje.
+  Inicia sesión con la clave de acceso desde un dispositivo ya vinculado (header x-device-id). Exclusivo para RESIDENT_ROL. No envía ningún mensaje.
   """
-  loginWithDevicePin(input: LoginDevicePinInput!): AuthResponse!
+  loginWithAccessCode(input: LoginAccessCodeInput!): AuthResponse!
 
   """
   Desvincula un dispositivo (ej. celular perdido) y cierra su sesión. Las sesiones de los demás dispositivos del residente no se ven afectadas.
   """
   revokeResidentDevice(deviceId: ID!): Boolean!
+
+  """
+  Desvincula todos los equipos del residente salvo el actual y cierra sus sesiones. Pensado para el celular perdido: se entra desde el equipo nuevo y se corta el acceso del anterior. Devuelve cuántos se revocaron.
+  """
+  revokeMyOtherDevices: Float!
 
   """
   Genera un link wa.me con un código que el residente debe ENVIAR desde su WhatsApp. No consume mensajes de plantilla: los mensajes entrantes no tienen costo. Responde igual exista o no la identidad, para no revelar qué documentos están registrados.
@@ -4208,7 +4212,7 @@ type Mutation {
   """
   Canjea un challenge CONFIRMED por los tokens de sesión. Un solo uso, y solo desde el dispositivo donde se inició el flujo.
   """
-  redeemWhatsAppLoginChallenge(challengeId: ID!): AuthResponse!
+  redeemWhatsAppLoginChallenge(challengeId: ID!, accessCode: String): AuthResponse!
 
   """
   Pide autorización de ingreso y avisa por push a los dispositivos vinculados del residente. No consume mensajes de WhatsApp. Responde igual exista o no la identidad, y no revela cuántos dispositivos se notificaron.
@@ -4218,7 +4222,7 @@ type Mutation {
   """
   Canjea una solicitud APPROVED por los tokens de sesión. Un solo uso, y solo desde el dispositivo donde se inició el flujo.
   """
-  redeemDeviceApproval(challengeId: ID!): AuthResponse!
+  redeemDeviceApproval(challengeId: ID!, accessCode: String): AuthResponse!
 
   """
   Autoriza el ingreso. Antes de llamarla, la interfaz DEBE hacer que el residente compare el código de esta pantalla con el del dispositivo que pide entrar.
@@ -4527,19 +4531,19 @@ input VerifyOtpInput {
   code: String!
 }
 
-"""Fija el PIN del dispositivo actual para el residente autenticado"""
-input SetDevicePinInput {
-  """PIN de 6 dígitos"""
-  pin: String!
+"""Fija o cambia la clave de acceso del residente autenticado"""
+input SetAccessCodeInput {
+  """Clave alfanumérica de 6 caracteres"""
+  code: String!
 
   """Nombre del dispositivo (ej. "iPhone de Juan")"""
   label: String
 }
 
-"""Credenciales de login por dispositivo vinculado + PIN (residentes)"""
-input LoginDevicePinInput {
-  """PIN de 6 dígitos del dispositivo vinculado"""
-  pin: String!
+"""Credenciales de login con la clave de acceso del residente"""
+input LoginAccessCodeInput {
+  """Clave alfanumérica de 6 caracteres"""
+  code: String!
 }
 
 input SendNotificationInput {
