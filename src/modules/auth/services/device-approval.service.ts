@@ -203,6 +203,28 @@ export class DeviceApprovalService {
 
     this.assertRedeemable(request);
 
+    const user = await this.loadResidentWithRoles(request.userId);
+    this.assertUserActive(user);
+
+    // El segundo factor protege el alta de un equipo NUEVO, no el reingreso
+    // desde uno ya vinculado. Y se exige ANTES de consumir la solicitud: al
+    // revés, el primer canje —el que todavía no trae la clave— la dejaba
+    // consumida y el reintento chocaba contra "ya fue usada".
+    const needsCode =
+      (await this.residentDeviceService.hasAccessCode(user.id)) &&
+      !(await this.residentDeviceService.isDeviceLinked(user.id, deviceInfo));
+
+    if (needsCode) {
+      if (!accessCode?.trim()) {
+        throw new CustomError({
+          message: 'Ingresa tu clave de acceso para autorizar este dispositivo',
+          statusCode: HttpStatus.UNAUTHORIZED,
+          errorCode: AuthErrorCode.ACCESS_CODE_REQUIRED,
+        });
+      }
+      await this.residentDeviceService.verifyAccessCode(user.id, accessCode);
+    }
+
     // Marcar consumido ANTES de emitir tokens: si entran dos peticiones a la
     // vez, solo la que gana el UPDATE condicional sigue adelante.
     const consumed = await this.approvalRepo.update(
@@ -216,28 +238,6 @@ export class DeviceApprovalService {
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.APPROVAL_CONSUMED,
       });
-    }
-
-    const user = await this.loadResidentWithRoles(request.userId);
-    this.assertUserActive(user);
-
-    // Igual que en el WhatsApp entrante: si la cuenta ya tiene clave, aprobar
-    // desde el otro equipo no alcanza para vincular este. Hacen falta las dos
-    // cosas, la aprobación y el conocimiento de la clave.
-    // Igual que en el WhatsApp entrante: el segundo factor protege el alta de un
-    // equipo nuevo, no el reingreso desde uno ya vinculado.
-    const hasCode =
-      (await this.residentDeviceService.hasAccessCode(user.id)) &&
-      !(await this.residentDeviceService.isDeviceLinked(user.id, deviceInfo));
-    if (hasCode) {
-      if (!accessCode?.trim()) {
-        throw new CustomError({
-          message: 'Ingresa tu clave de acceso para autorizar este dispositivo',
-          statusCode: HttpStatus.UNAUTHORIZED,
-          errorCode: AuthErrorCode.ACCESS_CODE_REQUIRED,
-        });
-      }
-      await this.residentDeviceService.verifyAccessCode(user.id, accessCode);
     }
 
     await this.residentDeviceService.linkDevice(user.id, deviceInfo);
