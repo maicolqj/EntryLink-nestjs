@@ -77,7 +77,7 @@ Cambiar la clave limpia el bloqueo por intentos fallidos: quien llega hasta aqu�
 
 ### 1.3 Iniciar sesión con la clave
 
-Público. Requiere `x-device-id` de un equipo ya vinculado.
+Público. Requiere `x-device-id`.
 
 ```graphql
 mutation LoginWithAccessCode($input: LoginAccessCodeInput!) {
@@ -91,10 +91,22 @@ mutation LoginWithAccessCode($input: LoginAccessCodeInput!) {
 ```
 
 ```json
-{ "input": { "code": "K7M2Q4" } }
+{ "input": { "code": "K7M2Q4", "identity": "1234567890", "label": "Mi Android" } }
 ```
 
 El dispositivo **no viaja en el input**: se toma del header.
+
+`identity` solo hace falta cuando ese equipo todavía **no está vinculado**; desde uno vinculado el servidor lo ignora. Como el cliente no puede saber con certeza si el vínculo sigue vivo del lado del servidor, lo más simple es **enviarlo siempre**.
+
+**Equipo ya vinculado** → basta la clave. Un fallo cuenta contra el bloqueo de la cuenta (5 intentos → 15 minutos).
+
+**Equipo sin vincular** → documento + clave correctos emiten los tokens **y vinculan el equipo** en el mismo paso, además de avisar por push (`NEW_DEVICE_LINKED`) a los equipos que ya estaban vinculados. Este camino existe porque los otros dos fallan justo para quien más los necesita: el residente que reinstaló la app en su único celular no tiene otro equipo desde donde aprobar, y el canal de WhatsApp puede estar apagado.
+
+Como el documento no es secreto, ese camino se compensa con tres cosas que la UI no debe interpretar como el caso vinculado:
+
+- **Respuesta uniforme.** Documento inexistente, cuenta sin clave y clave incorrecta devuelven todos `ACCESS_CODE_INVALID` con el mismo texto: el endpoint no puede volverse un oráculo de qué cédulas están registradas.
+- **Los fallos NO bloquean la cuenta.** Se frenan aparte, por documento y por IP (`DEVICE_ENROLLMENT_THROTTLED`, 15 minutos). Bloquear la cuenta desde aquí convertiría el endpoint en un DoS: bastaría una lista de cédulas para dejar sin acceso a todo el conjunto. Agotar el freno cierra **solo** el alta de equipos nuevos; los ya vinculados siguen entrando.
+- **Aviso al residente.** Es la señal que hace visible un robo de cuenta. La app debe mostrar la notificación con el camino a "Dispositivos vinculados".
 
 ### 1.4 Gestionar dispositivos
 
@@ -128,15 +140,18 @@ Revocar un equipo puntual cierra únicamente la sesión de ese equipo.
 | `extensions.code` | Significado | Qué hacer en la UI |
 | --- | --- | --- |
 | `DEVICE_ID_REQUIRED` | Falta el header | Bug del cliente: revisar el interceptor |
-| `ACCESS_CODE_INVALID` | Clave incorrecta | Mostrar intentos restantes (vienen en `message`) |
+| `ACCESS_CODE_INVALID` | Clave incorrecta. Desde un equipo sin vincular cubre además "documento inexistente" y "cuenta sin clave" | Mostrar el `message` tal cual: desde un equipo vinculado trae los intentos restantes |
 | `ACCESS_CODE_LOCKED` | Cuenta bloqueada 15 min | Cuenta regresiva; ofrecer ingreso por WhatsApp |
 | `ACCESS_CODE_NOT_SET` | La cuenta todavía no tiene clave | Enviar al ingreso por WhatsApp para crearla |
 | `ACCESS_CODE_TOO_WEAK` | Clave obvia o mal formada | Mostrar al crearla |
 | `ACCESS_CODE_REQUIRED` | Falta la clave al vincular un equipo nuevo | Pedirla en el canje (§2.3 y §3.1) |
-| `DEVICE_NOT_LINKED` | Equipo sin vincular o navegador distinto | Enviar a WhatsApp entrante o a la aprobación |
+| `DEVICE_NOT_LINKED` | Equipo sin vincular y **sin** `identity` en el input | Pedir el documento y reintentar; solo lo ven clientes viejos |
+| `DEVICE_ENROLLMENT_THROTTLED` | Demasiados intentos de vincular un equipo nuevo (por documento o por IP) | Aviso de espera; **no** es bloqueo de cuenta: los equipos ya vinculados siguen entrando |
 | `USER_SUSPENDED` / `ACCOUNT_LOCKED` | Cuenta no activa | Mensaje de contactar al administrador |
 
 El bloqueo por intentos es **de la cuenta**, no del dispositivo: cambiar de equipo no regala intentos nuevos. Y agotar los intentos ya no desvincula nada — antes lo hacía, y eso permitía a un tercero dejar al residente sin acceso rápido solo tecleando mal.
+
+Ese bloqueo de cuenta lo alimentan únicamente los fallos desde un equipo **ya vinculado**. Los del alta con documento + clave van al contador aparte de `DEVICE_ENROLLMENT_THROTTLED`, por la razón explicada en §1.3.
 
 ---
 
@@ -404,3 +419,4 @@ Estos flujos requieren configuración en el backend antes de poder probarse cont
 - `WHATSAPP_BUSINESS_NUMBER` → sin esta variable, `whatsAppLoginAvailable` devuelve `false` y `requestWhatsAppLoginChallenge` responde `WA_LOGIN_NOT_CONFIGURED`. El valor va en formato Meta: solo dígitos con indicativo país y sin `+` (ej. `573001234567`); es el número visible del negocio, no el `WHATSAPP_PHONE_NUMBER_ID`.
 - FCM y VAPID configurados → aprobación por push.
 - Migraciones ejecutadas (`resident_devices`, `whatsapp_login_challenges`, `device_approval_requests`).
+- Migración `AddNewDeviceLinkedNotificationType` → agrega el label `NEW_DEVICE_LINKED` al enum nativo de Postgres. Sin ella el aviso de equipo nuevo falla al insertarse, y como el envío es best-effort el ingreso funciona igual **sin avisar a nadie**: el residente pierde la única señal de un robo de cuenta. Correrla antes de habilitar §1.3 desde equipos sin vincular.

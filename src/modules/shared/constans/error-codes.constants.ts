@@ -90,6 +90,9 @@ export enum AuthErrorCode {
   DEVICE_NOT_LINKED           = 'DEVICE_NOT_LINKED',
   DEVICE_REVOKED              = 'DEVICE_REVOKED',
   DEVICE_NOT_FOUND            = 'DEVICE_NOT_FOUND',
+  // Freno del alta de equipos nuevos con documento + clave. NO es el bloqueo de
+  // la cuenta: los dispositivos ya vinculados siguen entrando con normalidad.
+  DEVICE_ENROLLMENT_THROTTLED = 'DEVICE_ENROLLMENT_THROTTLED',
   // Clave de acceso del residente: una por cuenta, sirve en los equipos ya
   // vinculados. El bloqueo es de la cuenta, no del dispositivo.
   ACCESS_CODE_INVALID         = 'ACCESS_CODE_INVALID',

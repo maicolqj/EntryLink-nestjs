@@ -63,6 +63,7 @@ export enum NotificationType {
 
   // ── Cuenta / Perfil ────────────────────────────────────────────
   PROFILE_UPDATED        = 'PROFILE_UPDATED',        // Datos personales del usuario modificados
+  NEW_DEVICE_LINKED      = 'NEW_DEVICE_LINKED',      // Un equipo nuevo se vinculó con documento + clave (aviso de seguridad)
   LOGIN_APPROVAL_REQUEST = 'LOGIN_APPROVAL_REQUEST', // Alguien pide entrar a la cuenta: aprobar desde un dispositivo confiable
 
   // ── Supervisores / Solicitudes de acceso ───────────────────────

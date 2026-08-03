@@ -37,6 +37,15 @@ export const AUTH_CONSTANTS = {
   MAX_ACCESS_CODE_ATTEMPTS: 5,        // fallos consecutivos → bloqueo temporal
   ACCESS_CODE_LOCK_DURATION: 15 * 60, // 15 minutos en segundos
 
+  // ── Ingreso con documento + clave desde un equipo NO vinculado ───────────
+  // Los fallos de este camino NO alimentan el bloqueo de cuenta: el documento
+  // no es secreto, así que cualquiera con una lista de cédulas podría dejar sin
+  // acceso a todo el conjunto. El freno es por IP y por documento, y solo cierra
+  // este camino: los equipos ya vinculados siguen entrando con normalidad.
+  UNLINKED_LOGIN_IP_MAX: 15,           // intentos por IP por ventana
+  UNLINKED_LOGIN_IDENTITY_MAX: 5,      // fallos por documento por ventana
+  UNLINKED_LOGIN_WINDOW: 15 * 60,      // 15 minutos en segundos
+
   // ── Login por WhatsApp entrante (reverse-OTP) ────────────────────────────
   // Ventana corta: el residente pulsa "enviar" en el momento. Alargarla solo
   // ampliaría el margen para que le hagan enviar un nonce ajeno.
@@ -75,6 +84,10 @@ export const AUTH_CONSTANTS = {
     SYSTEM_CODE_RATE_LIMIT: 'sc-rl',
     WA_LOGIN_RATE_LIMIT: 'wa-login-rl',
     DEVICE_APPROVAL_RATE_LIMIT: 'dev-appr-rl',
+    // Frenos del ingreso desde un equipo sin vincular. Separados del bloqueo de
+    // cuenta a propósito: ver UNLINKED_LOGIN_* arriba.
+    UNLINKED_LOGIN_IP: 'ul-login-ip',
+    UNLINKED_LOGIN_IDENTITY: 'ul-login-id',
     // Permiso temporal para fijar una clave nueva sin conocer la anterior. Lo
     // otorga un ingreso por un canal que ya probó identidad (WhatsApp entrante
     // o aprobación desde otro equipo) y es el camino del "olvidé mi clave".
@@ -98,6 +111,7 @@ export const AUTH_CONSTANTS = {
     SYSTEM_CODE_RATE_LIMIT: 600, // 10 min
     WA_LOGIN_RATE_LIMIT: 600,       // 10 min
     DEVICE_APPROVAL_RATE_LIMIT: 600, // 10 min
+    UNLINKED_LOGIN: 900,             // 15 min (= UNLINKED_LOGIN_WINDOW)
     // Ventana corta: el permiso se usa en la pantalla siguiente al ingreso.
     ACCESS_CODE_RESET: 900,          // 15 min
     PASSWORD_RESET_RATE_LIMIT: 3_600, // 1 hora
