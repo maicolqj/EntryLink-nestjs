@@ -72,15 +72,21 @@ export class ResidentDeviceResolver {
   @Mutation(() => AuthResponse, {
     name: 'loginWithAccessCode',
     description:
-      'Inicia sesión con la clave de acceso desde un dispositivo ya vinculado (header x-device-id). ' +
-      'Exclusivo para RESIDENT_ROL. No envía ningún mensaje.',
+      'Inicia sesión con la clave de acceso (header x-device-id). Desde un equipo ya vinculado basta ' +
+      'la clave; desde uno nuevo hay que enviar además `identity`, y el ingreso vincula el equipo y ' +
+      'avisa por push a los demás. Exclusivo para RESIDENT_ROL. No envía ningún mensaje de WhatsApp.',
   })
   async loginWithAccessCode(
     @Args('input') input: LoginAccessCodeInput,
     @Context() context: any,
   ): Promise<AuthResponse> {
     const deviceInfo = this.deviceInfo(context);
-    return this.residentDeviceService.loginWithAccessCode(input.code, deviceInfo);
+    return this.residentDeviceService.loginWithAccessCode(
+      input.code,
+      deviceInfo,
+      input.identity,
+      input.label,
+    );
   }
 
   // ── Gestión de dispositivos ───────────────────────────────────────────────
