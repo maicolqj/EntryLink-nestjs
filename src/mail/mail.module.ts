@@ -29,7 +29,7 @@ import { MailProcessor } from './mail.processor';
             : undefined,
         },
         defaults: {
-          from: `"${config.get<string>('MAIL_FROM', 'entrylink')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@entrylink.app')}>`,
+          from: `"${config.get<string>('MAIL_FROM', 'EntryLink')}" <${config.get<string>('MAIL_FROM_ADDRESS', 'noreply@entrylink.app')}>`,
         },
         template: {
           dir: join(__dirname, 'templates'),

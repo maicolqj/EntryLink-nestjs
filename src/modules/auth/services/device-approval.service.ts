@@ -117,8 +117,12 @@ export class DeviceApprovalService {
       challengeId: request.id,
       approvalCode,
       expiresAt,
+      // RemoteLink, no EntryLink: este flujo es exclusivo de residentes
+      // (`findResidentByIdentity` exige RESIDENT_ROL) y EntryLink es la app del
+      // personal del conjunto. Nombrar la app equivocada deja al residente
+      // buscando algo que no tiene instalado, justo cuando perdió el acceso.
       instructions:
-        'Abre EntryLink en un dispositivo donde ya tengas sesión y aprueba el ingreso. ' +
+        'Abre RemoteLink en un dispositivo donde ya tengas sesión y aprueba el ingreso. ' +
         `Verifica que el código mostrado allí sea ${approvalCode} antes de aprobar.`,
     };
   }
