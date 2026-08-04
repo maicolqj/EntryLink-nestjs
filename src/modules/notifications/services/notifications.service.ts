@@ -1477,9 +1477,15 @@ export class NotificationsService implements OnModuleInit {
         // android.notification only applies to a displayed (non-data-only)
         // message, so omit it for panic — the app builds its own Notifee
         // full-screen notification from the data payload.
+        // Sin `channelId` a propósito. Este backend sirve a dos apps con
+        // canales distintos —RemoteLink usa visits/payments/alerts/general y
+        // EntryLink usa entrylink_high_v2—, así que ningún valor fijo acierta:
+        // el que había ('entrylink-default') no existía en NINGUNA de las dos y
+        // Android caía a un canal genérico, perdiendo prioridad y sonido.
+        // Cada app declara el suyo en su manifiesto con el meta-data
+        // `com.google.firebase.messaging.default_notification_channel_id`.
         ...(!isPanic && {
           notification: {
-            channelId: 'entrylink-default',
             priority:
               params.priority === NotificationPriority.URGENT ? 'max' :
               params.priority === NotificationPriority.HIGH ? 'high' :
