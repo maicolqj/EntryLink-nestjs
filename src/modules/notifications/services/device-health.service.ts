@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 
 import { PushSubscription }     from '../entities/push-subscription.entity';
+import { UserRole }             from '../../users/entities/user_has_roles.entity';
+import { PushPlatform }         from '../enums/push-platform.enum';
+import { ValidRoles }           from '../../roles/enums/valid-roles';
 import { DevicePushHealth }     from '../entities/device-push-health.entity';
 import { PanicAckTokenService } from './panic-ack-token.service';
 import { NotificationsService } from './notifications.service';
@@ -32,6 +35,9 @@ export class DeviceHealthService {
 
     @InjectRepository(DevicePushHealth)
     private readonly healthRepo: Repository<DevicePushHealth>,
+
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
 
     private readonly ackTokenService: PanicAckTokenService,
 
@@ -160,6 +166,40 @@ export class DeviceHealthService {
     }
 
     return this.healthRepo.save(health);
+  }
+
+  /**
+   * Equipos que deben someterse a la prueba de humo semanal.
+   *
+   * Solo vigilancia y supervisión. La tabla push_subscriptions es COMPARTIDA
+   * entre EntryLink y RemoteLink, así que barrer todos los Android metería en la
+   * ronda el teléfono de cada residente: reciben un push que su app no conoce y
+   * quedan marcados como enfermos para siempre, porque nunca van a confirmarlo.
+   *
+   * El rol es el único discriminante disponible —no hay columna que diga de qué
+   * app viene el token— y además es el criterio correcto: la prueba existe para
+   * garantizar que quien ATIENDE un pánico lo reciba.
+   */
+  async findDevicesToMonitor(): Promise<string[]> {
+    const rows = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.user', 'u')
+      .innerJoin('ur.role', 'r')
+      .innerJoin(
+        PushSubscription,
+        'ps',
+        'ps.user_id = u.id AND ps.is_active = true AND ps.platform = :platform',
+        { platform: PushPlatform.ANDROID },
+      )
+      .where('r.name IN (:...roles)', {
+        roles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+      })
+      .andWhere('u.deleted_at IS NULL')
+      .select('ps.id', 'subscriptionId')
+      .distinct(true)
+      .getRawMany<{ subscriptionId: string }>();
+
+    return rows.map(r => r.subscriptionId);
   }
 
   /**

@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 
-import { PushSubscription }    from '../entities/push-subscription.entity';
-import { PushPlatform }        from '../enums/push-platform.enum';
 import { DeviceHealthService } from '../services/device-health.service';
 
 /**
@@ -22,11 +18,7 @@ import { DeviceHealthService } from '../services/device-health.service';
 export class DeviceHealthCron {
   private readonly logger = new Logger(DeviceHealthCron.name);
 
-  constructor(
-    @InjectRepository(PushSubscription)
-    private readonly pushSubRepo: Repository<PushSubscription>,
-    private readonly deviceHealthService: DeviceHealthService,
-  ) {}
+  constructor(private readonly deviceHealthService: DeviceHealthService) {}
 
   @Cron('0 3 * * 1', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
@@ -34,25 +26,25 @@ export class DeviceHealthCron {
     // si se hiciera después, se contarían como fallidas las recién enviadas.
     await this.deviceHealthService.expireStaleChecks();
 
-    const devices = await this.pushSubRepo.find({
-      where:  { isActive: true, platform: PushPlatform.ANDROID },
-      select: ['id'],
-    });
+    // Solo vigilancia y supervisión: push_subscriptions es compartida con
+    // RemoteLink y barrer todos los Android le mandaría a cada residente un push
+    // que su app no sabe interpretar.
+    const subscriptionIds = await this.deviceHealthService.findDevicesToMonitor();
 
-    this.logger.log(`Health-check semanal — ${devices.length} dispositivos`);
+    this.logger.log(`Health-check semanal — ${subscriptionIds.length} equipos de vigilancia`);
 
     let failed = 0;
-    for (const device of devices) {
+    for (const id of subscriptionIds) {
       try {
-        await this.deviceHealthService.sendHealthCheck(device.id);
+        await this.deviceHealthService.sendHealthCheck(id);
       } catch (err) {
         // Un token muerto no puede cortar la ronda de los demás.
         failed += 1;
-        this.logger.warn(`Health-check falló para ${device.id}: ${(err as Error)?.message}`);
+        this.logger.warn(`Health-check falló para ${id}: ${(err as Error)?.message}`);
       }
     }
 
-    this.logger.log(`Health-check semanal enviado (${devices.length - failed} ok, ${failed} con error)`);
+    this.logger.log(`Health-check semanal enviado (${subscriptionIds.length - failed} ok, ${failed} con error)`);
   }
 
   /**
