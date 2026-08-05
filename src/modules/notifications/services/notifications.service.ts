@@ -1099,6 +1099,25 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * True si el usuario es de los que deben ATENDER un pánico, no solo enterarse.
+   *
+   * Es lo que separa una confirmación de entrega que cuenta —la portería recibió
+   * la alerta— de una que solo sirve para estadística.
+   */
+  private async isPanicResponder(userId: string): Promise<boolean> {
+    const count = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.role', 'r')
+      .where('ur.user_id = :userId', { userId })
+      .andWhere('r.name IN (:...roles)', {
+        roles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+      })
+      .getCount();
+
+    return count > 0;
+  }
+
+  /**
    * Personal que debe enterarse de un pánico además de la vigilancia.
    *
    * El supervisor y la administración son quienes escalan cuando la portería no
@@ -1443,28 +1462,48 @@ export class NotificationsService implements OnModuleInit {
 
     const now = new Date();
 
-    // Solo desde PENDING: si ya fue reconocida o cerrada, un ACK de entrega
-    // tardío no puede hacerla retroceder de estado.
-    const result = await this.panicRepo.update(
-      { id: panicAlertId, status: PanicAlertStatus.PENDING },
-      { status: PanicAlertStatus.DELIVERED, deliveredAt: now },
-    );
+    const subscription = input.deviceToken
+      ? await this.pushSubRepo.findOne({
+          where:  { deviceToken: input.deviceToken },
+          select: ['id', 'userId'],
+        })
+      : null;
 
-    if (result.affected && result.affected > 0) {
-      this.logger.log(`Alerta ${panicAlertId} marcada como ENTREGADA`);
+    // Solo la confirmación de quien DEBE ATENDER mueve el estado de la alerta.
+    //
+    // Un pánico también llega a los vecinos, y su teléfono confirmándolo no
+    // significa que la portería se haya enterado. Si un residente pudiera
+    // marcarla como entregada, el nivel 1 del escalamiento —que existe
+    // exactamente para el caso "nadie la recibió"— se saltaría creyendo que sí
+    // llegó a destino. La auditoría en cambio sí registra a todos: para medir la
+    // entrega, el equipo del vecino es un dato tan válido como el del guardia.
+    const isResponder = subscription?.userId
+      ? await this.isPanicResponder(subscription.userId)
+      : false;
+
+    if (isResponder) {
+      // Solo desde PENDING: si ya fue reconocida o cerrada, un ACK de entrega
+      // tardío no puede hacerla retroceder de estado.
+      const result = await this.panicRepo.update(
+        { id: panicAlertId, status: PanicAlertStatus.PENDING },
+        { status: PanicAlertStatus.DELIVERED, deliveredAt: now },
+      );
+
+      if (result.affected && result.affected > 0) {
+        this.logger.log(`Alerta ${panicAlertId} marcada como ENTREGADA por vigilancia`);
+      }
+    } else {
+      // Sin deviceToken tampoco se promueve: ante la duda conviene escalar de
+      // más y no de menos.
+      this.logger.debug(
+        `ACK de entrega de ${panicAlertId} registrado sin promover estado (no es personal de respuesta)`,
+      );
     }
 
     // Auditoría por dispositivo: es lo que permite medir la tasa real de
     // entrega por marca. Se registra aunque la alerta ya estuviera entregada,
     // porque cada equipo que confirma es un dato distinto.
     try {
-      const subscription = input.deviceToken
-        ? await this.pushSubRepo.findOne({
-            where:  { deviceToken: input.deviceToken },
-            select: ['id', 'userId'],
-          })
-        : null;
-
       await this.panicDeliveryRepo.save(
         this.panicDeliveryRepo.create({
           panicAlertId,
