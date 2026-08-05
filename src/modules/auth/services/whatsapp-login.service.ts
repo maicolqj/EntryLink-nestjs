@@ -266,6 +266,15 @@ export class WhatsAppLoginService {
       });
     }
 
+    const user = await this.loadResidentWithRoles(challenge.userId);
+    this.assertUserActive(user);
+
+    // La clave se exige ANTES de consumir el challenge. Al revés, el primer
+    // canje —el que todavía no la trae— lo dejaba consumido, y el reintento con
+    // la clave chocaba contra "este intento ya fue usado": el residente quedaba
+    // encerrado sin poder entrar ni volver atrás.
+    await this.assertAccessCodeWhenRequired(user.id, deviceInfo, accessCode);
+
     // Marcar consumido ANTES de emitir tokens: si dos peticiones entran a la
     // vez, solo la que gana el UPDATE condicional sigue adelante.
     const consumed = await this.challengeRepo.update(
@@ -280,11 +289,6 @@ export class WhatsAppLoginService {
         errorCode: AuthErrorCode.WA_LOGIN_CHALLENGE_CONSUMED,
       });
     }
-
-    const user = await this.loadResidentWithRoles(challenge.userId);
-    this.assertUserActive(user);
-
-    await this.assertAccessCodeWhenRequired(user.id, deviceInfo, accessCode);
 
     await this.residentDeviceService.linkDevice(user.id, deviceInfo);
 

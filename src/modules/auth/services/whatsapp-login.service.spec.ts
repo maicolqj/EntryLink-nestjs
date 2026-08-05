@@ -192,6 +192,28 @@ describe('WhatsAppLoginService', () => {
     });
   });
 
+  it('pedir la clave no consume el challenge: el reintento con la clave entra', async () => {
+    // Regresión: el canje marcaba CONSUMED antes de exigir la clave, así que el
+    // primer intento —el que no la trae— quemaba el challenge y el residente
+    // quedaba encerrado con "este intento ya fue usado".
+    residentDeviceService.hasAccessCode.mockResolvedValue(true);
+
+    const res = await request();
+    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+
+    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject({
+      errorCode: 'ACCESS_CODE_REQUIRED',
+    });
+
+    const auth = await service.redeem(res.challengeId, device, 'K7M2Q4');
+    expect(auth.accessToken).toBe('at');
+    expect(residentDeviceService.verifyAccessCode).toHaveBeenCalledWith('user-1', 'K7M2Q4');
+
+    // clearAllMocks no borra las implementaciones: sin esto, el `true` se
+    // filtraría a las pruebas siguientes según el orden de ejecución.
+    residentDeviceService.hasAccessCode.mockResolvedValue(false);
+  });
+
   it('otro dispositivo no puede canjear aunque el challenge esté confirmado', async () => {
     const res = await request();
     await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);

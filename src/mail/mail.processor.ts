@@ -71,7 +71,7 @@ export class MailProcessor extends WorkerHost {
 
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Restablece tu contraseña — entrylink',
+      subject: 'Restablece tu contraseña — EntryLink',
       template: 'password-reset',
       context: {
         name,
@@ -91,7 +91,7 @@ export class MailProcessor extends WorkerHost {
 
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Verifica tu correo electrónico — entrylink',
+      subject: 'Verifica tu correo electrónico — EntryLink',
       template: 'email-verification',
       context: {
         name,

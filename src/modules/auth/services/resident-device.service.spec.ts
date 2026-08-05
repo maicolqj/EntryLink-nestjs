@@ -9,6 +9,7 @@ import { UserStatus } from '../../users/enums/user.enums';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 
@@ -93,14 +94,20 @@ describe('ResidentDeviceService', () => {
     revokeSession: jest.fn(async () => undefined),
   };
 
-  // Sin permiso de restablecimiento: el caso normal es que cambiar la clave
-  // exija la anterior. Las pruebas que necesitan lo contrario lo activan.
-  let resetPermission: { granted: boolean } | null;
+  // Caché real en memoria, con clave compuesta: el permiso de restablecimiento y
+  // los frenos del alta de equipos nuevos conviven sin pisarse.
+  let cacheStore: Map<string, any>;
+  const cacheKey = ({ prefix, key }: any) => `${prefix}:${key}`;
 
   const cacheService = {
-    get: jest.fn(async () => resetPermission),
-    set: jest.fn(async () => { resetPermission = { granted: true }; }),
-    delete: jest.fn(async () => { resetPermission = null; }),
+    get: jest.fn(async ({ key }: any) => cacheStore.get(cacheKey(key)) ?? null),
+    set: jest.fn(async ({ key, data }: any) => { cacheStore.set(cacheKey(key), data); }),
+    delete: jest.fn(async ({ key }: any) => { cacheStore.delete(cacheKey(key)); }),
+  };
+
+  const notificationsService = {
+    notify: jest.fn(async () => []),
+    dispatchPushOnly: jest.fn(async () => undefined),
   };
 
   const sessionService = {
@@ -112,9 +119,11 @@ describe('ResidentDeviceService', () => {
   beforeEach(async () => {
     rows = [];
     queriedDeviceId = undefined;
-    resetPermission = null;
+    cacheStore = new Map();
     user = {
       id: 'user-1',
+      complexId: 'complex-1',
+      identity: '1234567890',
       status: UserStatus.ACTIVE,
       accessCodeHash: null,
       accessCodeFailedAttempts: 0,
@@ -131,6 +140,7 @@ describe('ResidentDeviceService', () => {
         { provide: TokenService, useValue: tokenService },
         { provide: SessionService, useValue: sessionService },
         { provide: CacheService, useValue: cacheService },
+        { provide: NotificationsService, useValue: notificationsService },
       ],
     }).compile();
 
@@ -192,12 +202,110 @@ describe('ResidentDeviceService', () => {
     });
   });
 
-  it('la clave correcta desde un equipo NO vinculado no abre sesión', async () => {
+  it('sin el documento, la clave correcta desde un equipo NO vinculado no abre sesión', async () => {
     await link();
 
     await expect(service.loginWithAccessCode(VALID_CODE, otherDevice)).rejects.toMatchObject({
       errorCode: 'DEVICE_NOT_LINKED',
     });
+  });
+
+  // ── Alta de un equipo nuevo con documento + clave ────────────────────────
+  //
+  // Es el camino de vuelta del residente que reinstaló la app en su único
+  // celular: sin él quedaba encerrado, porque aprobar desde otro equipo exige
+  // tener uno vinculado y el canal de WhatsApp puede estar apagado.
+
+  const IDENTITY = '1234567890';
+
+  it('documento + clave vinculan el equipo nuevo y abren sesión', async () => {
+    await link();
+
+    const auth = await service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY, 'Mi Android');
+
+    expect(auth.accessToken).toBe('at');
+    const linked = rows.find(r => r.deviceId === otherDevice.deviceId);
+    expect(linked).toMatchObject({ userId: 'user-1', label: 'Mi Android', isRevoked: false });
+  });
+
+  it('vincular un equipo nuevo avisa al residente: es la señal de un robo de cuenta', async () => {
+    await link();
+
+    await service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY);
+
+    expect(notificationsService.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'NEW_DEVICE_LINKED', userIds: ['user-1'] }),
+    );
+  });
+
+  it('el aviso que falla no tumba el ingreso', async () => {
+    await link();
+    notificationsService.notify.mockRejectedValueOnce(new Error('FCM caído'));
+
+    await expect(
+      service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY),
+    ).resolves.toMatchObject({ accessToken: 'at' });
+  });
+
+  it('la clave incorrecta no dice si el documento existe', async () => {
+    await link();
+
+    // Mismo error que un documento inexistente o una cuenta sin clave: el
+    // endpoint no puede volverse un oráculo de qué cédulas están registradas.
+    await expect(
+      service.loginWithAccessCode('Z9Z9Z9', otherDevice, IDENTITY),
+    ).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_INVALID' });
+  });
+
+  it('los fallos desde un equipo sin vincular NO bloquean la cuenta', async () => {
+    await link();
+
+    for (let i = 0; i < AUTH_CONSTANTS.UNLINKED_LOGIN_IDENTITY_MAX; i++) {
+      await expect(
+        service.loginWithAccessCode('Z9Z9Z9', otherDevice, IDENTITY),
+      ).rejects.toMatchObject({ errorCode: 'ACCESS_CODE_INVALID' });
+    }
+
+    // Si bloquearan la cuenta, cualquiera con una lista de cédulas dejaría sin
+    // acceso a todo el conjunto. El equipo ya vinculado sigue entrando.
+    expect(user.accessCodeLockedUntil).toBeNull();
+    expect(user.accessCodeFailedAttempts).toBe(0);
+    await expect(service.loginWithAccessCode(VALID_CODE, device)).resolves.toMatchObject({
+      accessToken: 'at',
+    });
+  }, 30_000);
+
+  it('agotar el freno cierra solo el alta de equipos nuevos', async () => {
+    await link();
+
+    for (let i = 0; i < AUTH_CONSTANTS.UNLINKED_LOGIN_IDENTITY_MAX; i++) {
+      await expect(service.loginWithAccessCode('Z9Z9Z9', otherDevice, IDENTITY)).rejects.toBeDefined();
+    }
+
+    await expect(
+      service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY),
+    ).rejects.toMatchObject({ errorCode: 'DEVICE_ENROLLMENT_THROTTLED' });
+  }, 30_000);
+
+  it('un ingreso correcto limpia el freno del documento', async () => {
+    await link();
+
+    await expect(service.loginWithAccessCode('Z9Z9Z9', otherDevice, IDENTITY)).rejects.toBeDefined();
+    await service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY);
+
+    const thirdDevice = { ...device, deviceId: 'dev-nuevo', fingerprint: 'fp-nuevo' };
+    await expect(
+      service.loginWithAccessCode(VALID_CODE, thirdDevice, IDENTITY),
+    ).resolves.toMatchObject({ accessToken: 'at' });
+  });
+
+  it('cuenta suspendida: el documento y la clave correctos tampoco vinculan', async () => {
+    await link();
+    user.status = UserStatus.SUSPENDED;
+
+    await expect(
+      service.loginWithAccessCode(VALID_CODE, otherDevice, IDENTITY),
+    ).rejects.toMatchObject({ errorCode: 'USER_SUSPENDED' });
   });
 
   it('sin header x-device-id no se puede intentar', async () => {

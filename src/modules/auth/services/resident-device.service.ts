@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -10,6 +10,9 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AuthResponse } from '../dto/responses/auth-response';
@@ -23,9 +26,8 @@ import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.
  * que antes emitía el sistema y enviaba por WhatsApp. La elige el residente en
  * su primer ingreso y le sirve en todos los dispositivos que ya haya vinculado.
  *
- * Modelo de seguridad — la clave NUNCA alcanza por sí sola:
+ * Modelo de seguridad:
  *   1. `deviceId` (header x-device-id) identifica el equipo y, con él, al dueño.
- *      Un equipo desconocido no llega siquiera a comparar la clave.
  *   2. `deviceFingerprint` (HMAC con llave del servidor) ata ese equipo al
  *      user-agent con el que se vinculó; no es falsificable desde el cliente.
  *   3. La clave se valida SIEMPRE contra bcrypt en el servidor. El cliente puede
@@ -35,9 +37,17 @@ import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.
  *      por dispositivo permitiría multiplicar los intentos con solo cambiar de
  *      equipo, que es justo lo que el límite intenta impedir.
  *
- * Vincular un equipo nuevo exige pasar antes por WhatsApp entrante o por la
- * aprobación desde un equipo confiable. Entrar en el teléfono de un tercero
- * "solo con usuario y clave" no es posible por diseño.
+ * Alta de un equipo nuevo — dos caminos:
+ *   a) Documento + clave (`identity` en el login). El vínculo del dispositivo
+ *      dejó de ser un factor obligatorio porque los otros dos caminos fallan
+ *      justo para quien más los necesita: el residente que reinstaló la app en
+ *      su único celular no tiene otro equipo desde donde aprobar, y el canal de
+ *      WhatsApp puede estar apagado. Como el documento no es secreto, este
+ *      camino se compensa con: respuesta uniforme exista o no la identidad,
+ *      freno por IP y por documento que NO bloquea la cuenta, y aviso por push a
+ *      los equipos ya vinculados cada vez que entra uno nuevo.
+ *   b) WhatsApp entrante o aprobación desde un equipo confiable, que además
+ *      otorgan el permiso de restablecer la clave (el "olvidé mi clave").
  */
 @Injectable()
 export class ResidentDeviceService {
@@ -51,6 +61,8 @@ export class ResidentDeviceService {
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ── Clave de acceso ───────────────────────────────────────────────────────
@@ -257,42 +269,57 @@ export class ResidentDeviceService {
   // ── Login ─────────────────────────────────────────────────────────────────
 
   /**
-   * Inicia sesión con la clave de la cuenta desde un dispositivo ya vinculado.
-   * Cero mensajes salientes.
+   * Inicia sesión con la clave de la cuenta. Cero mensajes salientes.
    *
-   * Los errores de "dispositivo no vinculado" y "clave incorrecta" son
-   * deliberadamente distintos: el atacante ya necesita el deviceId exacto para
-   * llegar hasta aquí, y el residente necesita saber si debe volver a vincular.
+   * Dos caminos según el equipo:
+   *   · Ya vinculado → basta la clave; `identity` se ignora.
+   *   · Sin vincular → hace falta `identity`, y el ingreso vincula el equipo.
+   *
+   * Los dos difieren en cómo castigan el fallo, y la diferencia es deliberada:
+   * desde un equipo vinculado el fallo bloquea la CUENTA, porque llegar hasta
+   * ahí ya exigió poseer el equipo. Desde uno sin vincular alcanza con conocer
+   * un documento, así que bloquear la cuenta convertiría el endpoint en un DoS
+   * contra todo el conjunto; ese camino se frena aparte, sin tocar la cuenta.
    */
-  async loginWithAccessCode(code: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async loginWithAccessCode(
+    code: string,
+    deviceInfo: DeviceInfo,
+    identity?: string,
+    label?: string,
+  ): Promise<AuthResponse> {
     const deviceId = this.requireDeviceId(deviceInfo);
+    const identityKey = identity?.trim().toLowerCase() || undefined;
 
-    const device = await this.deviceRepo
-      .createQueryBuilder('device')
-      .where('device.device_id = :deviceId', { deviceId })
-      .andWhere('device.is_revoked = false')
-      .getOne();
+    const device = await this.findLinkedDevice(deviceId, deviceInfo, identityKey);
 
-    if (!device || device.deviceFingerprint !== deviceInfo.fingerprint) {
-      if (device) {
-        this.logger.warn(`Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`);
-      }
+    if (device) return this.loginFromLinkedDevice(code, deviceInfo, device);
+
+    if (!identityKey) {
       throw new CustomError({
-        message: 'Este dispositivo no está vinculado. Ingresa con WhatsApp o pide aprobación desde otro equipo',
+        message:
+          'Este dispositivo no está vinculado. Ingresa tu número de identidad junto con la clave para vincularlo',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.DEVICE_NOT_LINKED,
       });
     }
 
+    return this.loginAndLinkDevice(code, deviceInfo, identityKey, label);
+  }
+
+  /**
+   * Ingreso desde un equipo ya vinculado: la clave es lo único que falta.
+   * El fallo cuenta contra el bloqueo de la cuenta.
+   */
+  private async loginFromLinkedDevice(
+    code: string,
+    deviceInfo: DeviceInfo,
+    device: ResidentDevice,
+  ): Promise<AuthResponse> {
     const user = await this.findResident(device.userId);
     this.assertUserActive(user);
     this.assertAccountNotLocked(user);
 
-    const withHash = await this.userRepo
-      .createQueryBuilder('user')
-      .addSelect('user.accessCodeHash')
-      .where('user.id = :userId', { userId: user.id })
-      .getOne();
+    const withHash = await this.loadAccessCodeHash(user.id);
 
     if (!withHash?.accessCodeHash) {
       throw new CustomError({
@@ -305,6 +332,77 @@ export class ResidentDeviceService {
     const isValid = await bcrypt.compare(this.normalizeCode(code), withHash.accessCodeHash);
     if (!isValid) await this.registerFailedAttempt(withHash);
 
+    return this.issueDeviceSession(user, device, deviceInfo);
+  }
+
+  /**
+   * Ingreso desde un equipo sin vincular: documento + clave, y el equipo queda
+   * vinculado. Es el camino de vuelta del residente que reinstaló la app.
+   *
+   * Un solo mensaje de error para "documento inexistente", "cuenta sin clave" y
+   * "clave incorrecta": distinguirlos convertiría el endpoint en un oráculo de
+   * qué documentos están registrados, que es justo lo que evitan
+   * `requestWhatsAppLoginChallenge` y `requestDeviceApproval`.
+   */
+  private async loginAndLinkDevice(
+    code: string,
+    deviceInfo: DeviceInfo,
+    identityKey: string,
+    label?: string,
+  ): Promise<AuthResponse> {
+    await this.assertEnrollmentAllowed(identityKey, deviceInfo.ip);
+
+    const candidate = await this.findResidentByIdentity(identityKey);
+    const withHash = candidate ? await this.loadAccessCodeHash(candidate.id) : null;
+
+    const isValid =
+      !!withHash?.accessCodeHash &&
+      (await bcrypt.compare(this.normalizeCode(code), withHash.accessCodeHash));
+
+    if (!isValid) {
+      await this.registerEnrollmentFailure(identityKey);
+      throw new CustomError({
+        message:
+          'Documento o clave incorrectos. Si nunca creaste una clave, ingresa con WhatsApp o pide ' +
+          'aprobación desde otro equipo',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.ACCESS_CODE_INVALID,
+      });
+    }
+
+    // El estado de la cuenta se revisa DESPUÉS de la clave: antes, "cuenta
+    // suspendida" delataría que el documento existe sin conocer nada más.
+    const user = await this.findResident(candidate!.id);
+    this.assertUserActive(user);
+    this.assertAccountNotLocked(user);
+
+    await this.clearEnrollmentFailures(identityKey);
+
+    const device = await this.linkDevice(user.id, deviceInfo, label);
+
+    this.logger.warn(
+      `Equipo nuevo vinculado con documento + clave — userId: ${user.id} | ` +
+      `deviceId: ${this.maskDeviceId(device.deviceId)} | ip: ${deviceInfo.ip}`,
+    );
+
+    // Best-effort y ANTES de emitir tokens no: si el aviso falla, el ingreso
+    // sigue. Es la mitigación que hace visible un robo de cuenta, no un paso
+    // del que dependa la sesión.
+    await this.notifyNewDeviceLinked(user, device, deviceInfo);
+
+    return this.issueDeviceSession(user, device, deviceInfo);
+  }
+
+  /**
+   * Emite la sesión del residente sobre un dispositivo ya vinculado. Común a los
+   * dos caminos de login para que ninguno olvide cerrar la sesión anterior ni
+   * limpiar el estado punitivo de la cuenta.
+   */
+  private async issueDeviceSession(
+    user: User,
+    device: ResidentDevice,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
     // Un dispositivo sostiene una sola sesión: al volver a entrar se cierra la
     // anterior para no dejar refresh tokens huérfanos vivos 180 días.
     if (device.sessionId) {
@@ -341,6 +439,48 @@ export class ResidentDeviceService {
       expiresIn: tokenPair.expiresIn,
       sessionId: tokenPair.sessionId,
     };
+  }
+
+  /**
+   * Busca el vínculo vigente de este equipo, o null si hay que crearlo.
+   *
+   * Con `identityKey` la búsqueda se acota al dueño declarado. Sin él hay que
+   * resolver el deviceId a ciegas, y un mismo deviceId puede existir en varias
+   * cuentas (la unicidad es por user_id + device_id): un teléfono que pasó de un
+   * residente a otro tiene dos filas y `getOne()` devolvería cualquiera.
+   */
+  private async findLinkedDevice(
+    deviceId: string,
+    deviceInfo: DeviceInfo,
+    identityKey?: string,
+  ): Promise<ResidentDevice | null> {
+    let device: ResidentDevice | null = null;
+
+    if (identityKey) {
+      const owner = await this.findResidentByIdentity(identityKey);
+      if (!owner) return null;
+      device = await this.deviceRepo.findOne({
+        where: { userId: owner.id, deviceId, isRevoked: false },
+      });
+    } else {
+      device = await this.deviceRepo
+        .createQueryBuilder('device')
+        .where('device.device_id = :deviceId', { deviceId })
+        .andWhere('device.is_revoked = false')
+        .getOne();
+    }
+
+    if (!device) return null;
+
+    // Fingerprint distinto: el equipo cambió de user-agent o alguien reusa el
+    // deviceId. No es motivo para negar el ingreso —el camino con documento +
+    // clave revalida y reescribe el vínculo—, pero sí para dejar rastro.
+    if (device.deviceFingerprint !== deviceInfo.fingerprint) {
+      this.logger.warn(`Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`);
+      return null;
+    }
+
+    return device;
   }
 
   // ── Gestión ───────────────────────────────────────────────────────────────
@@ -430,6 +570,152 @@ export class ResidentDeviceService {
   /** Mayúsculas y sin espacios: ver el comentario de ACCESS_CODE_LENGTH. */
   private normalizeCode(code: string): string {
     return (code ?? '').trim().toUpperCase();
+  }
+
+  /** El hash está marcado `select: false`: hay que pedirlo explícitamente. */
+  private async loadAccessCodeHash(userId: string): Promise<User | null> {
+    return this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.accessCodeHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
+  }
+
+  /**
+   * Busca al residente por documento. Devuelve null sin lanzar: el caller no
+   * debe filtrar si el documento existe.
+   */
+  private async findResidentByIdentity(identityKey: string): Promise<User | null> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role')
+      .where('LOWER(user.identity) = :identity', { identity: identityKey })
+      .andWhere('user.deleted_at IS NULL')
+      .getOne();
+
+    if (!user) return null;
+
+    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+
+    return isResident ? user : null;
+  }
+
+  // ── Frenos del alta de equipos nuevos ─────────────────────────────────────
+  //
+  // Deliberadamente separados del bloqueo de cuenta. Agotar el contador aquí
+  // cierra SOLO el camino de "documento + clave desde un equipo nuevo": los
+  // dispositivos ya vinculados siguen entrando, y por eso un tercero con una
+  // lista de cédulas no puede dejar a nadie sin acceso.
+
+  private enrollmentIpKey(ip: string) {
+    return { prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IP, key: ip || 'sin-ip' };
+  }
+
+  private enrollmentIdentityKey(identityKey: string) {
+    return { prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IDENTITY, key: identityKey };
+  }
+
+  /**
+   * El contador por IP suma en CADA intento —acertado o no—, porque lo que
+   * limita es cuántos documentos puede probar una misma fuente. El contador por
+   * documento suma solo en los fallos, para no castigar al residente que entra
+   * bien varias veces desde equipos distintos.
+   */
+  private async assertEnrollmentAllowed(identityKey: string, ip: string): Promise<void> {
+    const minutes = AUTH_CONSTANTS.UNLINKED_LOGIN_WINDOW / 60;
+
+    const byIdentity = await this.cacheService.get<{ count: number }>({
+      key: this.enrollmentIdentityKey(identityKey),
+    });
+
+    if ((byIdentity?.count ?? 0) >= AUTH_CONSTANTS.UNLINKED_LOGIN_IDENTITY_MAX) {
+      throw new CustomError({
+        message:
+          `Demasiados intentos de vincular un equipo nuevo con este documento. Espera ${minutes} ` +
+          'minutos, o entra desde un dispositivo que ya tengas vinculado',
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.DEVICE_ENROLLMENT_THROTTLED,
+      });
+    }
+
+    const byIp = await this.cacheService.get<{ count: number }>({ key: this.enrollmentIpKey(ip) });
+
+    if ((byIp?.count ?? 0) >= AUTH_CONSTANTS.UNLINKED_LOGIN_IP_MAX) {
+      this.logger.warn(`[ENROLL] Límite por IP alcanzado — ip: ${ip}`);
+      throw new CustomError({
+        message: `Demasiados intentos desde esta conexión. Espera ${minutes} minutos`,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: AuthErrorCode.DEVICE_ENROLLMENT_THROTTLED,
+      });
+    }
+
+    await this.cacheService.set({
+      key: this.enrollmentIpKey(ip),
+      data: { count: (byIp?.count ?? 0) + 1 },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.UNLINKED_LOGIN },
+    });
+  }
+
+  private async registerEnrollmentFailure(identityKey: string): Promise<void> {
+    const key = this.enrollmentIdentityKey(identityKey);
+    const data = await this.cacheService.get<{ count: number }>({ key });
+
+    await this.cacheService.set({
+      key,
+      data: { count: (data?.count ?? 0) + 1 },
+      options: { ttl: AUTH_CONSTANTS.CACHE_TTL.UNLINKED_LOGIN },
+    });
+  }
+
+  private async clearEnrollmentFailures(identityKey: string): Promise<void> {
+    await this.cacheService.delete({ key: this.enrollmentIdentityKey(identityKey) });
+  }
+
+  /**
+   * Avisa al residente que un equipo nuevo entró a su cuenta.
+   *
+   * Es la mitigación que compensa haber quitado el vínculo del dispositivo como
+   * factor obligatorio: sin este aviso, quien conoce el documento y la clave
+   * entra sin dejar rastro visible. Se persiste (no es push efímero) para que
+   * quede en el buzón aunque el push no llegue.
+   *
+   * No lanza: un fallo de FCM no puede tumbar un login legítimo.
+   */
+  private async notifyNewDeviceLinked(
+    user: User,
+    device: ResidentDevice,
+    deviceInfo: DeviceInfo,
+  ): Promise<void> {
+    const params = {
+      complexId: user.complexId ?? '',
+      userIds: [user.id],
+      type: NotificationType.NEW_DEVICE_LINKED,
+      priority: NotificationPriority.URGENT,
+      title: 'Nuevo dispositivo en tu cuenta',
+      body:
+        `Se vinculó ${device.label ?? 'un dispositivo'} con tu documento y tu clave. ` +
+        'Si no fuiste tú, cambia tu clave y desvincúlalo desde Dispositivos vinculados.',
+      entityId: device.id,
+      entityType: 'ResidentDevice',
+      metadata: {
+        deviceId: device.id,
+        label: device.label ?? null,
+        platform: deviceInfo.platform,
+        ip: deviceInfo.ip,
+      },
+    };
+
+    try {
+      // `notify` exige complejo para persistir la fila; sin él queda el push,
+      // que es lo que hace visible el ingreso en el momento.
+      if (user.complexId) await this.notificationsService.notify(params);
+      else await this.notificationsService.dispatchPushOnly([user.id], params);
+    } catch (err: any) {
+      this.logger.error(
+        `[ENROLL] No se pudo avisar del equipo nuevo — userId: ${user.id}: ${err?.message ?? String(err)}`,
+      );
+    }
   }
 
   /**

@@ -1659,6 +1659,7 @@ enum NotificationType {
   COMPLEX_ALERT
   AMENITY_REMINDER
   PROFILE_UPDATED
+  NEW_DEVICE_LINKED
   LOGIN_APPROVAL_REQUEST
   ACCESS_REQUEST_APPROVED
   ACCESS_REQUEST_REJECTED
@@ -4247,7 +4248,7 @@ type Mutation {
   setResidentAccessCode(input: SetAccessCodeInput!): ResidentDevice!
 
   """
-  Inicia sesión con la clave de acceso desde un dispositivo ya vinculado (header x-device-id). Exclusivo para RESIDENT_ROL. No envía ningún mensaje.
+  Inicia sesión con la clave de acceso (header x-device-id). Desde un equipo ya vinculado basta la clave; desde uno nuevo hay que enviar además `identity`, y el ingreso vincula el equipo y avisa por push a los demás. Exclusivo para RESIDENT_ROL. No envía ningún mensaje de WhatsApp.
   """
   loginWithAccessCode(input: LoginAccessCodeInput!): AuthResponse!
 
@@ -4607,6 +4608,16 @@ input SetAccessCodeInput {
 input LoginAccessCodeInput {
   """Clave alfanumérica de 6 caracteres"""
   code: String!
+
+  """
+  Documento del residente. Obligatorio solo cuando el x-device-id todavía no está vinculado; desde un equipo vinculado el servidor lo ignora.
+  """
+  identity: String
+
+  """
+  Nombre del dispositivo que se vincula en este ingreso (ej. "Mi Android")
+  """
+  label: String
 }
 
 input SendNotificationInput {
