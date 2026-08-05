@@ -1,5 +1,7 @@
 import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
@@ -11,6 +13,12 @@ import { Notification }                  from '../entities/notification.entity';
 import { PushSubscription }              from '../entities/push-subscription.entity';
 import { NotificationBatch }             from '../entities/notification-batch.entity';
 import { PanicAlert }                    from '../entities/panic-alert.entity';
+import { PanicEscalationSettings }       from '../entities/panic-escalation-settings.entity';
+import {
+  PANIC_ESCALATION_QUEUE,
+  PANIC_ESCALATION_JOBS,
+  panicEscalationJobId,
+} from '../queues/panic-escalation.queue.constants';
 import { NotificationType }              from '../enums/notification-type.enum';
 import { NotificationPriority }          from '../enums/notification-priority.enum';
 import { NotificationActionType }        from '../enums/notification-action-type.enum';
@@ -100,6 +108,12 @@ export class NotificationsService implements OnModuleInit {
 
     @InjectRepository(PanicAlert)
     private readonly panicRepo: Repository<PanicAlert>,
+
+    @InjectRepository(PanicEscalationSettings)
+    private readonly panicSettingsRepo: Repository<PanicEscalationSettings>,
+
+    @InjectQueue(PANIC_ESCALATION_QUEUE)
+    private readonly panicEscalationQueue: Queue,
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
@@ -981,7 +995,7 @@ export class NotificationsService implements OnModuleInit {
     unitId?: string;
     residentId?: string;
   }): Promise<PanicAlert> {
-    return this.panicRepo.save(
+    const alert = await this.panicRepo.save(
       this.panicRepo.create({
         complexId:         params.complexId,
         triggeredByUserId: params.triggeredByUserId,
@@ -992,6 +1006,61 @@ export class NotificationsService implements OnModuleInit {
         status:            PanicAlertStatus.PENDING,
       }),
     );
+
+    await this.scheduleEscalation(alert);
+    return alert;
+  }
+
+  /**
+   * Arma la cadena de escalamiento encolando solo el primer nivel; cada nivel
+   * encola el siguiente si le corresponde. Nunca lanza: que falle Redis no puede
+   * impedir que la alerta se reparta por los canales inmediatos.
+   */
+  private async scheduleEscalation(alert: PanicAlert): Promise<void> {
+    try {
+      const settings = await this.panicSettingsRepo.findOne({
+        where: { complexId: alert.complexId },
+      });
+      if (settings && !settings.isEnabled) return;
+
+      const delaySeconds = settings?.level1DelaySeconds ?? 15;
+
+      await this.panicEscalationQueue.add(
+        PANIC_ESCALATION_JOBS.ESCALATE,
+        { panicAlertId: alert.id, complexId: alert.complexId, level: 1 },
+        {
+          delay: delaySeconds * 1000,
+          jobId: panicEscalationJobId(alert.id, 1),
+          attempts: 2,
+          backoff: { type: 'fixed', delay: 2_000 },
+          removeOnComplete: { count: 200 },
+          removeOnFail: { count: 100 },
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudo encolar el escalamiento de la alerta ${alert.id}: ${(err as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * Corta la cadena. Cada nivel ya revisa el estado antes de actuar, así que
+   * esto es defensa en profundidad: elimina el job pendiente para no depender de
+   * que el worker despierte solo a descartarlo.
+   */
+  private async cancelEscalation(panicAlertId: string): Promise<void> {
+    try {
+      await Promise.allSettled(
+        [1, 2, 3].map(level =>
+          this.panicEscalationQueue.remove(panicEscalationJobId(panicAlertId, level)),
+        ),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo limpiar la cola de escalamiento de ${panicAlertId}: ${(err as Error)?.message}`,
+      );
+    }
   }
 
   async triggerPanicAlert(
@@ -1303,6 +1372,8 @@ export class NotificationsService implements OnModuleInit {
       },
     );
 
+    await this.cancelEscalation(alert.id);
+
     this.socketService.emitToComplex(alert.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
     this.logger.log(
       `PANIC ALERT cerrada — alerta ${alert.id}, estado ${updated.status}, por ${currentUser.sub}`,
@@ -1502,6 +1573,7 @@ export class NotificationsService implements OnModuleInit {
           acknowledgedAt:        ackedAt,
         },
       );
+      await this.cancelEscalation(notif.panicAlertId);
     }
 
     this.socketService.emitToComplex(notif.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);

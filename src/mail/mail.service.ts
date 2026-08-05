@@ -6,6 +6,7 @@ import {
   MAIL_JOBS,
   SendPasswordResetJobPayload,
   SendEmailVerificationJobPayload,
+  SendPanicAlertJobPayload,
 } from './constants/mail.constants';
 
 @Injectable()
@@ -36,5 +37,23 @@ export class MailService {
     });
 
     this.logger.log(`Email verification job enqueued for userId: ${payload.userId}`);
+  }
+
+  /**
+   * Encola el correo de escalamiento de un pánico.
+   *
+   * Prioridad máxima y sin backoff exponencial largo: si este correo llega tarde
+   * ya no sirve de nada. Se reintenta rápido y pocas veces.
+   */
+  async queuePanicAlertEmail(payload: SendPanicAlertJobPayload): Promise<void> {
+    await this.mailQueue.add(MAIL_JOBS.SEND_PANIC_ALERT, payload, {
+      priority: 1,
+      attempts: 2,
+      backoff: { type: 'fixed', delay: 3_000 },
+      removeOnComplete: { count: 200 },
+      removeOnFail: { count: 100 },
+    });
+
+    this.logger.log(`Panic alert email job enqueued for alert: ${payload.alertId}`);
   }
 }
