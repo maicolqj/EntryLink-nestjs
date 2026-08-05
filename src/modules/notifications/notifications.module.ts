@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Notification }         from './entities/notification.entity';
 import { PushSubscription }      from './entities/push-subscription.entity';
 import { NotificationBatch }     from './entities/notification-batch.entity';
+import { PanicAlert }            from './entities/panic-alert.entity';
 
 import { User }     from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
@@ -22,6 +23,7 @@ import { NotificationsResolver } from './resolvers/notifications.resolver';
       Notification,
       PushSubscription,
       NotificationBatch,
+      PanicAlert,
       // Para resolver destinatarios por rol en sendNotification
       User,
       UserRole,
