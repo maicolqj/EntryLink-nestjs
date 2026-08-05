@@ -1606,6 +1606,7 @@ type Notification {
   complexId: String!
   entityId: String
   entityType: String
+  panicAlertId: String
   createdByUserId: String
   isActionable: Boolean!
   actionType: NotificationActionType
@@ -1705,6 +1706,46 @@ enum NotificationActionResult {
 
   """Alerta reconocida"""
   ACKNOWLEDGED
+}
+
+type PanicAlert {
+  id: ID!
+  complexId: String!
+  unitId: String
+  residentId: String
+  triggeredByUserId: String!
+  triggeredByLabel: String
+  type: PanicAlertType!
+  latitude: Float
+  longitude: Float
+  accuracy: Float
+  status: PanicAlertStatus!
+  deliveredAt: DateTime
+  acknowledgedByUserId: String
+  acknowledgedAt: DateTime
+  resolvedAt: DateTime
+  resolvedByUserId: String
+  resolutionNotes: String
+  escalationLevel: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de emergencia de una alerta de pánico"""
+enum PanicAlertType {
+  PANIC
+  MEDICAL
+  FIRE
+  INTRUSION
+}
+
+"""Estado de una alerta de pánico"""
+enum PanicAlertStatus {
+  PENDING
+  DELIVERED
+  ACKNOWLEDGED
+  RESOLVED
+  FALSE_ALARM
 }
 
 """Registro de visita de supervisor a un complejo residencial"""
@@ -1978,6 +2019,21 @@ type PaginatedBuildingsResponse {
 type PaginatedUnitsResponse {
   items: [Unit!]!
   pagination: PaginationReponse!
+}
+
+type PushHealthCheckResult {
+  healthId: String!
+  sentAt: DateTime!
+}
+
+type DevicePushHealthStatus {
+  healthId: String!
+  isHealthy: Boolean!
+  lastCheckAcknowledged: Boolean!
+  lastTestSentAt: DateTime
+  lastTestAckAt: DateTime
+  consecutiveFailures: Int!
+  onboardingCompletedAt: DateTime
 }
 
 type PaginatedNotificationsResponse {
@@ -3695,6 +3751,7 @@ type Query {
   Solicitudes de ingreso esperando respuesta. Sirve de respaldo cuando el push no llegó.
   """
   pendingDeviceApprovals: [PendingDeviceApproval!]!
+  devicePushHealth(deviceToken: String!): DevicePushHealthStatus!
   myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   notificationDetail(notificationId: String!, complexId: String): NotificationDetailResponse!
@@ -4233,6 +4290,8 @@ type Mutation {
   Rechaza el ingreso. Es terminal: el solicitante debe pedir una nueva autorización.
   """
   denyDeviceApproval(approvalId: ID!): Boolean!
+  runPushHealthCheck(deviceToken: String!): PushHealthCheckResult!
+  reportDevicePermissions(deviceToken: String!, hasNotificationPermission: Boolean, hasBatteryOptimizationDisabled: Boolean, hasFullScreenIntentPermission: Boolean, onboardingCompleted: Boolean): DevicePushHealthStatus!
   markNotificationAsRead(notificationId: String!): Notification!
   markAllNotificationsAsRead(complexId: String): Int!
   sendNotification(input: SendNotificationInput!): SendNotificationResult!
@@ -4240,6 +4299,7 @@ type Mutation {
   triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
   requestSecurityCall(complexId: String!): RequestSecurityCallResult!
   acknowledgePanicAlert(notificationId: String!): Notification!
+  resolvePanicAlert(panicAlertId: String!, resolutionNotes: String, falseAlarm: Boolean): PanicAlert!
   deleteNotification(notificationId: String!): Boolean!
   saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
   createResident(input: CreateResidentInput!): Resident!
@@ -4571,6 +4631,10 @@ input SaveMobileTokenInput {
   complexId: String!
   deviceToken: String!
   platform: PushPlatform!
+  deviceModel: String
+  manufacturer: String
+  osVersion: String
+  appVersion: String
 }
 
 """Plataforma de destino para notificaciones push"""
