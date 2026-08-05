@@ -675,7 +675,18 @@ export class NotificationsService implements OnModuleInit {
       },
     });
 
+    // Solo se sobrescribe lo que el cliente informó: una app vieja que no manda
+    // metadata no debe borrar la que ya había registrado una versión nueva.
+    const deviceInfo = {
+      ...(input.deviceModel  ? { deviceModel:  input.deviceModel }  : {}),
+      ...(input.manufacturer ? { manufacturer: input.manufacturer } : {}),
+      ...(input.osVersion    ? { osVersion:    input.osVersion }    : {}),
+      ...(input.appVersion   ? { appVersion:   input.appVersion }   : {}),
+      lastSeenAt: new Date(),
+    };
+
     if (existing) {
+      Object.assign(existing, deviceInfo);
       existing.isActive = true;
       await this.pushSubRepo.save(existing);
     } else {
@@ -686,6 +697,7 @@ export class NotificationsService implements OnModuleInit {
           platform:    input.platform,
           deviceToken: input.deviceToken,
           isActive:    true,
+          ...deviceInfo,
         }),
       );
     }
@@ -1342,6 +1354,44 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * Push de prueba de humo a un solo dispositivo.
+   *
+   * Data-only y prioridad alta, igual que un pánico real: probar con un mensaje
+   * de menor prioridad no diría nada, porque justamente lo que se quiere validar
+   * es el camino que usa la alerta de verdad. Sin bloque `notification`, para que
+   * el equipo lo procese y confirme sin molestar al usuario con un aviso visible.
+   */
+  async sendHealthCheckPush(
+    subscription: PushSubscription,
+    healthId: string,
+    token: string,
+  ): Promise<void> {
+    if (!this.fcmEnabled || !subscription.deviceToken) return;
+
+    const ackUrl = this.publicApiUrl
+      ? `${this.publicApiUrl}/api/v1/devices/health-check/${healthId}/ack`
+      : '';
+
+    await getMessaging().send({
+      token: subscription.deviceToken,
+      data: {
+        type:     'PUSH_HEALTH_CHECK',
+        healthId,
+        ackToken: token,
+        ...(ackUrl ? { ackUrl } : {}),
+      },
+      android: {
+        priority: 'high',
+        ttl: 60_000,
+      },
+      apns: {
+        headers: { 'apns-priority': '10', 'apns-push-type': 'background' },
+        payload: { aps: { 'content-available': 1 } },
+      },
+    });
+  }
+
+  /**
    * El dispositivo confirma que MOSTRÓ la alerta.
    *
    * Es lo que separa "no llegó" de "llegó y nadie respondió". Sin esta señal el
@@ -1790,7 +1840,14 @@ export class NotificationsService implements OnModuleInit {
           || params.priority === NotificationPriority.URGENT
           || params.priority === NotificationPriority.HIGH
           ? 'high' : 'normal',
-        ...(isPanic && { collapseKey: `panic-${params.complexId}` }),
+        ...(isPanic && {
+          collapseKey: `panic-${params.complexId}`,
+          // 60s: una alerta de pánico vieja confunde más de lo que ayuda, y el
+          // escalamiento del servidor ya cubre al equipo que estuvo sin red.
+          ttl: 60_000,
+          // Entrega tras un reinicio, antes de que el usuario desbloquee.
+          directBootOk: true,
+        }),
         // android.notification only applies to a displayed (non-data-only)
         // message, so omit it for panic — the app builds its own Notifee
         // full-screen notification from the data payload.

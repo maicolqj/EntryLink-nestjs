@@ -9,6 +9,7 @@ import { NotificationBatch }     from './entities/notification-batch.entity';
 import { PanicAlert }             from './entities/panic-alert.entity';
 import { PanicAlertDelivery }      from './entities/panic-alert-delivery.entity';
 import { PanicEscalationSettings } from './entities/panic-escalation-settings.entity';
+import { DevicePushHealth }        from './entities/device-push-health.entity';
 
 import { User }     from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
@@ -18,6 +19,9 @@ import { ResidentsModule }       from '../residents/residents.module';
 import { NotificationsService }  from './services/notifications.service';
 import { PanicAckTokenService }  from './services/panic-ack-token.service';
 import { PanicController }       from './controllers/panic.controller';
+import { DeviceHealthController } from './controllers/device-health.controller';
+import { DeviceHealthService }    from './services/device-health.service';
+import { DeviceHealthCron }       from './cron/device-health.cron';
 import { NotificationsResolver } from './resolvers/notifications.resolver';
 import { PanicEscalationProcessor } from './queues/panic-escalation.processor';
 import { PANIC_ESCALATION_QUEUE }   from './queues/panic-escalation.queue.constants';
@@ -42,16 +46,19 @@ import {
       PanicAlert,
       PanicAlertDelivery,
       PanicEscalationSettings,
+      DevicePushHealth,
       // Para resolver destinatarios por rol en sendNotification
       User,
       UserRole,
       Role,
     ]),
   ],
-  controllers: [PanicController],
+  controllers: [PanicController, DeviceHealthController],
   providers: [
     NotificationsService,
     PanicAckTokenService,
+    DeviceHealthService,
+    DeviceHealthCron,
     NotificationsResolver,
     PanicEscalationProcessor,
     // Canales de escalamiento. Los tres últimos declaran su indisponibilidad en
@@ -64,6 +71,7 @@ import {
     VoicePanicChannel,
   ],
   exports: [
+    DeviceHealthService,
     /**
      * Exportamos el servicio para que cualquier módulo del sistema
      * pueda crear notificaciones llamando a NotificationsService.create()
