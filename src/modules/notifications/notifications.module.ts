@@ -22,6 +22,7 @@ import { PanicController }       from './controllers/panic.controller';
 import { DeviceHealthController } from './controllers/device-health.controller';
 import { DeviceHealthService }    from './services/device-health.service';
 import { DeviceHealthCron }       from './cron/device-health.cron';
+import { DeviceHealthResolver }   from './resolvers/device-health.resolver';
 import { NotificationsResolver } from './resolvers/notifications.resolver';
 import { PanicEscalationProcessor } from './queues/panic-escalation.processor';
 import { PANIC_ESCALATION_QUEUE }   from './queues/panic-escalation.queue.constants';
@@ -59,6 +60,7 @@ import {
     PanicAckTokenService,
     DeviceHealthService,
     DeviceHealthCron,
+    DeviceHealthResolver,
     NotificationsResolver,
     PanicEscalationProcessor,
     // Canales de escalamiento. Los tres últimos declaran su indisponibilidad en

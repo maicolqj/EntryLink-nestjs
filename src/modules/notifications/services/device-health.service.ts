@@ -162,6 +162,29 @@ export class DeviceHealthService {
     return this.healthRepo.save(health);
   }
 
+  /**
+   * Resuelve la suscripción del usuario actual por su token FCM.
+   *
+   * El cliente conoce su token pero no el id de la fila: obligarlo a guardarlo
+   * sumaría estado que puede desincronizarse. Se filtra por usuario para que
+   * nadie pueda sondear el estado de un equipo ajeno.
+   */
+  async findSubscriptionForUser(userId: string, deviceToken: string): Promise<PushSubscription> {
+    const subscription = await this.pushSubRepo.findOne({
+      where: { userId, deviceToken },
+    });
+
+    if (!subscription) {
+      throw new CustomError({
+        message:    'Este dispositivo no está registrado para recibir notificaciones',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode:  GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    return subscription;
+  }
+
   /** Devuelve la fila de salud del dispositivo, creándola si es su primera vez. */
   private async ensureHealthRow(pushSubscriptionId: string): Promise<DevicePushHealth> {
     const existing = await this.healthRepo.findOne({ where: { pushSubscriptionId } });
