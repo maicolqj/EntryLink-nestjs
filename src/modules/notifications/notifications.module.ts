@@ -16,6 +16,8 @@ import { Role }     from '../roles/entities/role.entity';
 import { ResidentsModule }       from '../residents/residents.module';
 
 import { NotificationsService }  from './services/notifications.service';
+import { PanicAckTokenService }  from './services/panic-ack-token.service';
+import { PanicController }       from './controllers/panic.controller';
 import { NotificationsResolver } from './resolvers/notifications.resolver';
 import { PanicEscalationProcessor } from './queues/panic-escalation.processor';
 import { PANIC_ESCALATION_QUEUE }   from './queues/panic-escalation.queue.constants';
@@ -46,8 +48,10 @@ import {
       Role,
     ]),
   ],
+  controllers: [PanicController],
   providers: [
     NotificationsService,
+    PanicAckTokenService,
     NotificationsResolver,
     PanicEscalationProcessor,
     // Canales de escalamiento. Los tres últimos declaran su indisponibilidad en

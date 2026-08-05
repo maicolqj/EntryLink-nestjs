@@ -13,6 +13,10 @@ import { Notification }                  from '../entities/notification.entity';
 import { PushSubscription }              from '../entities/push-subscription.entity';
 import { NotificationBatch }             from '../entities/notification-batch.entity';
 import { PanicAlert }                    from '../entities/panic-alert.entity';
+import { PanicAlertDelivery }            from '../entities/panic-alert-delivery.entity';
+import { PanicDeliveryChannel }          from '../enums/panic-delivery-channel.enum';
+import { PanicAckTokenService }          from './panic-ack-token.service';
+import { PanicDeliveredInput }           from '../dto/inputs/panic-delivered.input';
 import { PanicEscalationSettings }       from '../entities/panic-escalation-settings.entity';
 import {
   PANIC_ESCALATION_QUEUE,
@@ -111,6 +115,11 @@ export class NotificationsService implements OnModuleInit {
 
     @InjectRepository(PanicEscalationSettings)
     private readonly panicSettingsRepo: Repository<PanicEscalationSettings>,
+
+    @InjectRepository(PanicAlertDelivery)
+    private readonly panicDeliveryRepo: Repository<PanicAlertDelivery>,
+
+    private readonly panicAckTokenService: PanicAckTokenService,
 
     @InjectQueue(PANIC_ESCALATION_QUEUE)
     private readonly panicEscalationQueue: Queue,
@@ -1319,6 +1328,63 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * El dispositivo confirma que MOSTRÓ la alerta.
+   *
+   * Es lo que separa "no llegó" de "llegó y nadie respondió". Sin esta señal el
+   * escalamiento no puede distinguir un problema de entrega de uno de respuesta
+   * y termina insistiendo por canales caros aunque la alerta se haya visto.
+   *
+   * Idempotente y silencioso: si el token es inválido o la alerta ya avanzó, no
+   * hace nada y responde igual. El cliente no puede hacer nada con un error —
+   * está sonando una sirena— y devolver detalles a un endpoint sin sesión solo
+   * ayudaría a sondearlo.
+   */
+  async markPanicDelivered(panicAlertId: string, input: PanicDeliveredInput): Promise<void> {
+    if (!this.panicAckTokenService.verify(panicAlertId, input.token)) {
+      this.logger.warn(`ACK de entrega rechazado — token inválido para la alerta ${panicAlertId}`);
+      return;
+    }
+
+    const now = new Date();
+
+    // Solo desde PENDING: si ya fue reconocida o cerrada, un ACK de entrega
+    // tardío no puede hacerla retroceder de estado.
+    const result = await this.panicRepo.update(
+      { id: panicAlertId, status: PanicAlertStatus.PENDING },
+      { status: PanicAlertStatus.DELIVERED, deliveredAt: now },
+    );
+
+    if (result.affected && result.affected > 0) {
+      this.logger.log(`Alerta ${panicAlertId} marcada como ENTREGADA`);
+    }
+
+    // Auditoría por dispositivo: es lo que permite medir la tasa real de
+    // entrega por marca. Se registra aunque la alerta ya estuviera entregada,
+    // porque cada equipo que confirma es un dato distinto.
+    try {
+      const subscription = input.deviceToken
+        ? await this.pushSubRepo.findOne({
+            where:  { deviceToken: input.deviceToken },
+            select: ['id', 'userId'],
+          })
+        : null;
+
+      await this.panicDeliveryRepo.save(
+        this.panicDeliveryRepo.create({
+          panicAlertId,
+          channel:        PanicDeliveryChannel.FCM,
+          deviceTokenId:  subscription?.id,
+          userId:         subscription?.userId,
+          deliveredAt:    now,
+        }),
+      );
+    } catch (err) {
+      // Nunca puede tumbar el ACK: el estado de la alerta ya se actualizó.
+      this.logger.warn(`No se pudo auditar la entrega de ${panicAlertId}: ${(err as Error)?.message}`);
+    }
+  }
+
+  /**
    * Cierra el incidente con notas.
    *
    * Paso distinto del reconocimiento: reconocer significa "voy en camino",
@@ -1692,6 +1758,11 @@ export class NotificationsService implements OnModuleInit {
           // Identifica el incidente para que el dispositivo confirme entrega y
           // reconozca la alerta correcta cuando hay más de una abierta.
           ...(params.panicAlertId ? { alertId: params.panicAlertId } : {}),
+          // Permiso de un solo uso para POST /panic/:id/delivered. Viaja aquí
+          // porque el ACK sale desde Kotlin con la app quizá muerta y sin sesión.
+          ...(params.panicAlertId
+            ? { ackToken: this.panicAckTokenService.sign(params.panicAlertId) }
+            : {}),
         }),
       },
       android: {
