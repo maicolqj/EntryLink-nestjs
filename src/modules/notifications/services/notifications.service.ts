@@ -99,6 +99,12 @@ export class NotificationsService implements OnModuleInit {
   private fcmEnabled = false;
   /** Indica si web-push VAPID fue configurado correctamente */
   private webPushEnabled = false;
+  /**
+   * URL pública del API, para construir el ackUrl que el cliente nativo llama.
+   * Sin ella el push de pánico simplemente no lleva ackUrl y el dispositivo no
+   * confirma la entrega: se degrada al comportamiento anterior, no se rompe.
+   */
+  private publicApiUrl = '';
 
   constructor(
     @InjectRepository(Notification)
@@ -146,6 +152,14 @@ export class NotificationsService implements OnModuleInit {
   onModuleInit() {
     this.initFirebase();
     this.initWebPush();
+
+    this.publicApiUrl = (this.configService.get<string>('API_PUBLIC_URL') ?? '').replace(/\/+$/, '');
+    if (!this.publicApiUrl) {
+      this.logger.warn(
+        'Sin API_PUBLIC_URL: los push de pánico saldrán sin ackUrl y ningún equipo podrá ' +
+        'confirmar la entrega, así que el escalamiento tratará toda alerta como no entregada.',
+      );
+    }
   }
 
   private initFirebase(): void {
@@ -1762,6 +1776,12 @@ export class NotificationsService implements OnModuleInit {
           // porque el ACK sale desde Kotlin con la app quizá muerta y sin sesión.
           ...(params.panicAlertId
             ? { ackToken: this.panicAckTokenService.sign(params.panicAlertId) }
+            : {}),
+          // URL completa, no solo el id: el código nativo no conoce la URL del
+          // API (vive en el .env de JS) y así el servidor puede mudarse sin
+          // publicar una versión nueva de la app.
+          ...(params.panicAlertId && this.publicApiUrl
+            ? { ackUrl: `${this.publicApiUrl}/api/v1/panic/${params.panicAlertId}/delivered` }
             : {}),
         }),
       },
