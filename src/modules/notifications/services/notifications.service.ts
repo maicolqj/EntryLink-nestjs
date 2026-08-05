@@ -1098,6 +1098,21 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Personal que debe enterarse de un pánico además de la vigilancia.
+   *
+   * El supervisor y la administración son quienes escalan cuando la portería no
+   * responde. Incluirlos en el envío inmediato —y no solo en el escalamiento a
+   * los 45s— les da esos segundos de ventaja, que en una emergencia es
+   * exactamente el margen que se busca ganar.
+   */
+  private async resolveResponseStaffIds(complexId: string): Promise<string[]> {
+    return this.resolveTargetUserIds(complexId, [
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ]);
+  }
+
   async triggerPanicAlert(
     complexId: string,
     currentUser: JwtAccessPayload,
@@ -1117,9 +1132,10 @@ export class NotificationsService implements OnModuleInit {
 
     // ── Caso: staff del complejo (admin, supervisor, contador, compliance) ───
     if (isStaff) {
-      const [residentIds, securityIds] = await Promise.all([
+      const [residentIds, securityIds, staffIds] = await Promise.all([
         this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]),
         this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
+        this.resolveResponseStaffIds(complexId),
       ]);
 
       const triggeredByLabel = triggerFullName
@@ -1145,7 +1161,10 @@ export class NotificationsService implements OnModuleInit {
         metadata:        { triggeredByLabel },
       };
 
-      const allIds = [...residentIds, ...securityIds].filter(id => id !== currentUser.sub);
+      // Set: un usuario con dos roles aparecería dos veces y recibiría la alerta
+      // duplicada.
+      const allIds = [...new Set([...residentIds, ...securityIds, ...staffIds])]
+        .filter(id => id !== currentUser.sub);
 
       this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
       this.logger.warn(`PANIC ALERT (staff) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
@@ -1154,7 +1173,7 @@ export class NotificationsService implements OnModuleInit {
         void this.notify({
           ...panicPayload,
           userIds:     allIds,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
         }).catch(e => this.logger.error(`PANIC notify error (staff): ${e?.message}`));
       }
 
@@ -1187,11 +1206,11 @@ export class NotificationsService implements OnModuleInit {
         metadata:        { triggeredByLabel },
       };
 
-      const complexAdminIds = await this.resolveTargetUserIds(complexId, [ValidRoles.COMPLEX_ROL]);
-      const allIds = [
+      const staffIds = await this.resolveResponseStaffIds(complexId);
+      const allIds = [...new Set([
         ...residentIds.filter(id => id !== currentUser.sub),
-        ...complexAdminIds,
-      ];
+        ...staffIds,
+      ])].filter(id => id !== currentUser.sub);
 
       this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
       this.logger.warn(`PANIC ALERT (security) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
@@ -1199,7 +1218,7 @@ export class NotificationsService implements OnModuleInit {
       void this.notify({
         ...panicPayload,
         userIds:     allIds,
-        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
       }).catch(e => this.logger.error(`PANIC notify error (security): ${e?.message}`));
 
       return { success: true };
@@ -1229,8 +1248,16 @@ export class NotificationsService implements OnModuleInit {
       const unitNumber  = unit.number;
       const title       = `Alerta de pánico — Unidad ${unitNumber}`;
 
-      const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
-      this.logger.warn(`[PANIC][resident] resolveTargetUserIds(SECURITY) → ${securityIds.length} ids`);
+      // La vigilancia y el personal de respuesta reciben el mismo mensaje urgente:
+      // el supervisor y la administración son quienes escalan si la portería no
+      // contesta, y enterarse a la vez que ella les da el margen que importa.
+      const [securityIds, staffIds] = await Promise.all([
+        this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
+        this.resolveResponseStaffIds(complexId),
+      ]);
+      const responderIds = [...new Set([...securityIds, ...staffIds])]
+        .filter(id => id !== currentUser.sub);
+      this.logger.warn(`[PANIC][resident] destinatarios de respuesta → ${responderIds.length} ids (vigilancia ${securityIds.length} + personal ${staffIds.length})`);
 
       let triggeredByLabel: string;
 
@@ -1249,9 +1276,12 @@ export class NotificationsService implements OnModuleInit {
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 1 (torre) buildingId=${unit.buildingId} buildingName=${buildingName}`);
 
+        // Excluye al activador y a quien ya está en el grupo de respuesta: un
+        // residente que además es guardia recibiría el push dos veces, con dos
+        // textos distintos del mismo incidente.
         const buildingIds = (
           await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
-        ).filter(id => id !== currentUser.sub);   // excluir al propio activador
+        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
         this.logger.warn(`[PANIC][resident] findActiveUserIdsByBuildingInternal → ${buildingIds.length} ids`);
 
         const residentPanicBase = {
@@ -1268,21 +1298,21 @@ export class NotificationsService implements OnModuleInit {
           metadata:        { triggeredByLabel },
         };
 
-        const allIds = [...buildingIds, ...securityIds];
+        const allIds = [...new Set([...buildingIds, ...responderIds])];
         this.logger.warn(`[PANIC][resident] antes de persistBulk (torre) → allIds=${allIds.length}`);
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
             userIds:     allIds,
             body:        buildingBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
         this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
         void Promise.allSettled([
           this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
         ]).then(results => {
           const failed = results.filter(r => r.status === 'rejected');
           if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (torre) falló: ${JSON.stringify(failed)}`);
@@ -1301,9 +1331,11 @@ export class NotificationsService implements OnModuleInit {
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 2 (casa individual)`);
 
+        // Mismo criterio que en el caso de torre: sin esto, quien tenga los dos
+        // roles recibe el mismo pánico por duplicado.
         const residentIds = (
           await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
-        ).filter(id => id !== currentUser.sub);
+        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
         this.logger.warn(`[PANIC][resident] resolveTargetUserIds(RESIDENT) → ${residentIds.length} ids`);
 
         const residentPanicBase = {
@@ -1320,21 +1352,21 @@ export class NotificationsService implements OnModuleInit {
           metadata:        { triggeredByLabel },
         };
 
-        const allIds = [...residentIds, ...securityIds];
+        const allIds = [...new Set([...residentIds, ...responderIds])];
         this.logger.warn(`[PANIC][resident] antes de persistBulk (casa) → allIds=${allIds.length}`);
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
             userIds:     allIds,
             body:        complexBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
         this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
         void Promise.allSettled([
           this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
         ]).then(results => {
           const failed = results.filter(r => r.status === 'rejected');
           if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (casa) falló: ${JSON.stringify(failed)}`);
