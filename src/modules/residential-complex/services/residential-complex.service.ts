@@ -249,6 +249,32 @@ export class ResidentialComplexService {
     return complex;
   }
 
+  /**
+   * Devuelve solo el slug del complejo. Se usa para armar rutas de R2, donde
+   * cargar el complejo completo con buildings y units sería desproporcionado.
+   * No valida acceso: el llamador ya autorizó la entidad dueña del archivo.
+   */
+  async getSlugById(id: string): Promise<string | null> {
+    if (!id) return null;
+
+    const cacheKey = BK.complex.slug(id);
+    const cached = await this.cacheService.get<string>({ key: cacheKey });
+    if (cached) return cached;
+
+    const complex = await this.complexRepo.findOne({
+      where: { id, deletedAt: IsNull() },
+      select: ['id', 'slug'],
+    });
+    if (!complex?.slug) return null;
+
+    await this.cacheService.set({
+      key: cacheKey,
+      data: complex.slug,
+      options: { ttl: BK.complex.TTL },
+    });
+    return complex.slug;
+  }
+
   // ================================================================
   // ACTUALIZAR
   // ================================================================
@@ -681,7 +707,7 @@ export class ResidentialComplexService {
       throw new ConflictException(`El email "${dto.email}" ya está registrado`);
     }
 
-    const folder = this.storageService.buildFolder('documents', slug);
+    const folder = this.storageService.buildFolder(slug, 'documents');
 
     let rutPublicId: string | undefined;
     let legalRepPublicId: string | undefined;
@@ -785,7 +811,7 @@ export class ResidentialComplexService {
       throw new BadRequestException('El documento firmado debe ser un PDF.');
     }
 
-    const folder = this.storageService.buildFolder('documents', complex.slug, 'signed-dpa');
+    const folder = this.storageService.buildFolder(complex.slug, 'documents', 'signed-dpa');
     const oldPublicId = complex.signedDpaPublicId;
 
     const uploaded = await this.storageService.uploadBuffer(

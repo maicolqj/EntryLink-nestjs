@@ -12,6 +12,7 @@ import {
 import { Request } from 'express';
 
 import { VehiclesService }            from '../services/vehicles.service';
+import { ResidentialComplexService }  from '../../residential-complex/services/residential-complex.service';
 import { R2StorageService }           from '../../../core/infrastructure/r2/r2.service';
 import { singleImageInterceptor }     from '../../../core/infrastructure/r2/upload-interceptors';
 import { JwtRestGuard }               from '../../shared/guards/jwt-rest.guard';
@@ -34,6 +35,7 @@ export class VehiclesController {
 
   constructor(
     private readonly vehiclesService: VehiclesService,
+    private readonly complexService:  ResidentialComplexService,
     private readonly storageService:  R2StorageService,
   ) {}
 
@@ -42,6 +44,8 @@ export class VehiclesController {
    *
    * Sube o reemplaza la foto de un vehículo en Cloudflare R2.
    * Body (multipart/form-data): photo — jpeg/png/webp/heic, máx 5 MB
+   *
+   * Ruta R2: EntryLink/{complexSlug}/vehicles/photos
    */
   @Post(':vehicleId/photo')
   @UseInterceptors(singleImageInterceptor('photo', { maxSizeMb: 5 }))
@@ -64,7 +68,11 @@ export class VehiclesController {
       throw new BadRequestException('El campo photo es requerido');
     }
 
-    const folder = this.storageService.buildFolder('vehicles', 'photos');
+    // La foto se guarda bajo el complejo dueño del vehículo; findById además
+    // valida el acceso del usuario antes de que subamos nada a R2.
+    const vehicleRecord = await this.vehiclesService.findById(vehicleId, currentUser);
+    const complexSlug   = await this.complexService.getSlugById(vehicleRecord.complexId);
+    const folder = this.storageService.buildFolder(complexSlug, 'vehicles', 'photos');
 
     let publicId: string | undefined;
     try {

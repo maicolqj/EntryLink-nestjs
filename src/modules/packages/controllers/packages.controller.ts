@@ -56,7 +56,7 @@ export class PackagesController {
    *   - notes         : notas adicionales (opcional)
    *   - photo         : archivo de imagen (opcional) — jpeg/png/webp/heic, máx 10 MB
    *
-   * Ruta R2: entryLink/{complexSlug}/packages/{packageId}
+   * Ruta R2: EntryLink/{complexSlug}/packages/{packageId}
    */
   @Post()
   @UseInterceptors(
@@ -116,9 +116,8 @@ export class PackagesController {
     // 2. Subir foto si fue enviada
     if (!photo) return pkg;
 
-    // R2 path: entryLink/{complexSlug}/packages/{packageId}
     const complex = await this.complexService.findById(pkg.complexId, currentUser);
-    const folder  = `entryLink/${complex.slug}/packages/${pkg.id}`;
+    const folder  = this.storageService.buildFolder(complex.slug, 'packages', pkg.id);
 
     let storagePublicId: string | undefined;
     try {

@@ -47,7 +47,7 @@ export class NotesController {
    *   - complexId : UUID del complejo
    *   - files     : imagen(es) opcional(es) — jpeg/png/webp/heic, máx 10 MB c/u, máx 10 archivos
    *
-   * Carpeta R2: entryLink/{complex-slug}/notas
+   * Carpeta R2: EntryLink/{complex-slug}/notes
    */
   @Post()
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL] })
@@ -89,7 +89,7 @@ export class NotesController {
     }
 
     const complex = await this.complexService.findById(body.complexId, currentUser);
-    const folder = this.storageService.buildFolder('notes', complex.slug);
+    const folder = this.storageService.buildFolder(complex.slug, 'notes');
 
     // ── Subir imágenes a R2 ──────────────────────────────
     // Guardamos los publicIds para hacer rollback si la BD falla

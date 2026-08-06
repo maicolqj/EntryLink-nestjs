@@ -1339,6 +1339,25 @@ export class UsersService {
     }
   }
 
+  /**
+   * Slug del complejo al que pertenece el usuario, para armar la ruta en R2.
+   * Devuelve null cuando el usuario no está ligado a ningún complejo
+   * (SUPER_ADMIN, COMPLIANCE): esos archivos van a la carpeta de plataforma.
+   */
+  async getComplexSlugForUser(userId: string): Promise<string | null> {
+    const user = await this.userRepo.findOne({
+      where:  { id: userId },
+      select: ['id', 'complexId'],
+    });
+    if (!user?.complexId) return null;
+
+    const complex = await this.complexRepo.findOne({
+      where:  { id: user.complexId },
+      select: ['id', 'slug'],
+    });
+    return complex?.slug ?? null;
+  }
+
   async updateProfilePicture(userId: string, url: string): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 

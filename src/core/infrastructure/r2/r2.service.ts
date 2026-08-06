@@ -14,6 +14,10 @@ export interface StorageUploadResult {
   bytes: number;
 }
 
+import { buildFolderPath, resolveAppRoot } from './r2-paths';
+
+export { PLATFORM_SCOPE } from './r2-paths';
+
 const EXT_TO_CONTENT_TYPE: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -61,12 +65,29 @@ export class R2StorageService implements OnModuleInit {
       // requestHandler: new NodeHttpHandler({ httpsAgent }), 
     });
 
-    this.logger.log('Cloudflare R2 configurado correctamente');
+    // La raíz queda en el log para detectar de inmediato un APPNAME con otra
+    // grafía: sería una segunda carpeta en el bucket, no un alias de la actual.
+    this.logger.log(`Cloudflare R2 configurado correctamente — carpeta raíz "${this.appRoot}"`);
   }
 
-  buildFolder(module: string, ...subPaths: string[]): string {
-    const appName = this.configService.get<string>('r2.appName') ?? 'residash';
-    return [appName, module, ...subPaths].filter(Boolean).join('/');
+  /** Carpeta raíz del bucket, resuelta desde APPNAME y normalizada. */
+  private get appRoot(): string {
+    return resolveAppRoot(this.configService.get<string>('r2.appName'));
+  }
+
+  /**
+   * Construye la ruta de un archivo dentro del bucket.
+   * Estructura única: `{appRoot}/{complexSlug}/{module}/{...subPaths}`
+   *
+   * @param complexSlug slug del complejo dueño del archivo; null/undefined → `_platform`
+   * @param module      módulo que produce el archivo (packages, notes, visitors…)
+   */
+  buildFolder(
+    complexSlug: string | null | undefined,
+    module: string,
+    ...subPaths: string[]
+  ): string {
+    return buildFolderPath(this.appRoot, complexSlug, module, ...subPaths);
   }
 
   async uploadBuffer(

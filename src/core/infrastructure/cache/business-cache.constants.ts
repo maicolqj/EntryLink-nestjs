@@ -14,6 +14,8 @@ export const BK = {
   /** Complejo residencial */
   complex: {
     one:    (id: string) => ({ prefix: 'cpx', key: id }),
+    /** Solo el slug — usado para armar rutas de almacenamiento en R2 */
+    slug:   (id: string) => ({ prefix: 'cpx', key: `${id}:slug` }),
     prefix: (id: string) => `cpx:${id}`,
     TTL: 120,   // 2 min — se llama en cada operación como auth check
   },
