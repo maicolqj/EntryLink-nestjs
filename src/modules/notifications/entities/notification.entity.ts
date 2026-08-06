@@ -109,6 +109,22 @@ export class Notification {
   @Column({ nullable: true })
   entityType?: string;
 
+  // ─── Alerta de pánico que originó esta notificación ──────────
+
+  /**
+   * Incidente al que pertenece, cuando type = PANIC_ALERT.
+   *
+   * Es lo que agrupa las N copias de un mismo pánico (una por destinatario), de
+   * modo que reconocerlo las cierre todas sin depender de la ventana de ±30s,
+   * que confundía dos pánicos simultáneos del mismo complejo.
+   *
+   * NULL en todo lo que no sea pánico y en las alertas anteriores a la tabla
+   * "panic_alerts", que se siguen resolviendo por la ventana.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'panic_alert_id', nullable: true })
+  panicAlertId?: string;
+
   // ─── Trazabilidad — quién originó la notificación ────────────
 
   /**

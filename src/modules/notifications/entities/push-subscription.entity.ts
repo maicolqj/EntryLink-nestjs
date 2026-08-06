@@ -55,6 +55,27 @@ export class PushSubscription {
   @Column({ name: 'auth', type: 'text', nullable: true })
   auth?: string;
 
+  // ─── Identificación del equipo ─────────────────────────────────────────────
+  // Nullable: los equipos ya registrados no la tienen y la llenan al renovar el
+  // token. Sirve para cruzar la tasa real de entrega contra el fabricante, que
+  // es lo que dice si el problema son ciertas ROMs o es transversal.
+
+  @Column({ name: 'device_model', nullable: true })
+  deviceModel?: string;
+
+  @Column({ name: 'manufacturer', nullable: true })
+  manufacturer?: string;
+
+  @Column({ name: 'os_version', nullable: true })
+  osVersion?: string;
+
+  @Column({ name: 'app_version', nullable: true })
+  appVersion?: string;
+
+  /** Último registro/refresco del token: delata equipos que dejaron de reportar. */
+  @Column({ name: 'last_seen_at', type: 'timestamptz', nullable: true })
+  lastSeenAt?: Date;
+
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 

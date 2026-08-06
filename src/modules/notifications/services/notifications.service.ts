@@ -1,5 +1,7 @@
 import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Between, In, IsNull, Repository } from 'typeorm';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
@@ -10,11 +12,24 @@ import { isUUID } from 'class-validator';
 import { Notification }                  from '../entities/notification.entity';
 import { PushSubscription }              from '../entities/push-subscription.entity';
 import { NotificationBatch }             from '../entities/notification-batch.entity';
+import { PanicAlert }                    from '../entities/panic-alert.entity';
+import { PanicAlertDelivery }            from '../entities/panic-alert-delivery.entity';
+import { PanicDeliveryChannel }          from '../enums/panic-delivery-channel.enum';
+import { PanicAckTokenService }          from './panic-ack-token.service';
+import { PanicDeliveredInput }           from '../dto/inputs/panic-delivered.input';
+import { PanicEscalationSettings }       from '../entities/panic-escalation-settings.entity';
+import {
+  PANIC_ESCALATION_QUEUE,
+  PANIC_ESCALATION_JOBS,
+  panicEscalationJobId,
+} from '../queues/panic-escalation.queue.constants';
 import { NotificationType }              from '../enums/notification-type.enum';
 import { NotificationPriority }          from '../enums/notification-priority.enum';
 import { NotificationActionType }        from '../enums/notification-action-type.enum';
 import { NotificationActionResult }      from '../enums/notification-action-result.enum';
 import { PushPlatform }                  from '../enums/push-platform.enum';
+import { PanicAlertStatus }              from '../enums/panic-alert-status.enum';
+import { PanicAlertType }                from '../enums/panic-alert-type.enum';
 import { CreateNotificationPayload }     from '../dto/inputs/create-notification.input';
 import { FilterNotificationsInput }      from '../dto/inputs/filter-notifications.input';
 import { SavePushSubscriptionInput }     from '../dto/inputs/save-push-subscription.input';
@@ -68,6 +83,12 @@ export interface NotifyParams {
   isBroadcast?:     boolean;
   /** Roles destinatarios del broadcast (para trazabilidad). */
   targetRoles?:     string[];
+  /**
+   * Incidente de pánico al que pertenece. Agrupa las N copias del mismo evento
+   * para que reconocerlo las cierre todas, y viaja en el payload FCM como
+   * `alertId` para que el ACK del dispositivo sepa qué alerta confirma.
+   */
+  panicAlertId?:    string;
 }
 
 @Injectable()
@@ -78,6 +99,12 @@ export class NotificationsService implements OnModuleInit {
   private fcmEnabled = false;
   /** Indica si web-push VAPID fue configurado correctamente */
   private webPushEnabled = false;
+  /**
+   * URL pública del API, para construir el ackUrl que el cliente nativo llama.
+   * Sin ella el push de pánico simplemente no lleva ackUrl y el dispositivo no
+   * confirma la entrega: se degrada al comportamiento anterior, no se rompe.
+   */
+  private publicApiUrl = '';
 
   constructor(
     @InjectRepository(Notification)
@@ -88,6 +115,20 @@ export class NotificationsService implements OnModuleInit {
 
     @InjectRepository(NotificationBatch)
     private readonly batchRepo: Repository<NotificationBatch>,
+
+    @InjectRepository(PanicAlert)
+    private readonly panicRepo: Repository<PanicAlert>,
+
+    @InjectRepository(PanicEscalationSettings)
+    private readonly panicSettingsRepo: Repository<PanicEscalationSettings>,
+
+    @InjectRepository(PanicAlertDelivery)
+    private readonly panicDeliveryRepo: Repository<PanicAlertDelivery>,
+
+    private readonly panicAckTokenService: PanicAckTokenService,
+
+    @InjectQueue(PANIC_ESCALATION_QUEUE)
+    private readonly panicEscalationQueue: Queue,
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
@@ -111,6 +152,14 @@ export class NotificationsService implements OnModuleInit {
   onModuleInit() {
     this.initFirebase();
     this.initWebPush();
+
+    this.publicApiUrl = (this.configService.get<string>('API_PUBLIC_URL') ?? '').replace(/\/+$/, '');
+    if (!this.publicApiUrl) {
+      this.logger.warn(
+        'Sin API_PUBLIC_URL: los push de pánico saldrán sin ackUrl y ningún equipo podrá ' +
+        'confirmar la entrega, así que el escalamiento tratará toda alerta como no entregada.',
+      );
+    }
   }
 
   private initFirebase(): void {
@@ -626,7 +675,18 @@ export class NotificationsService implements OnModuleInit {
       },
     });
 
+    // Solo se sobrescribe lo que el cliente informó: una app vieja que no manda
+    // metadata no debe borrar la que ya había registrado una versión nueva.
+    const deviceInfo = {
+      ...(input.deviceModel  ? { deviceModel:  input.deviceModel }  : {}),
+      ...(input.manufacturer ? { manufacturer: input.manufacturer } : {}),
+      ...(input.osVersion    ? { osVersion:    input.osVersion }    : {}),
+      ...(input.appVersion   ? { appVersion:   input.appVersion }   : {}),
+      lastSeenAt: new Date(),
+    };
+
     if (existing) {
+      Object.assign(existing, deviceInfo);
       existing.isActive = true;
       await this.pushSubRepo.save(existing);
     } else {
@@ -637,6 +697,7 @@ export class NotificationsService implements OnModuleInit {
           platform:    input.platform,
           deviceToken: input.deviceToken,
           isActive:    true,
+          ...deviceInfo,
         }),
       );
     }
@@ -954,6 +1015,123 @@ export class NotificationsService implements OnModuleInit {
    *  - RESIDENT_ROL  + buildingId → notifica al edificio + seguridad
    *  - RESIDENT_ROL  + sin edificio → notifica a todo el complejo + seguridad
    */
+  /**
+   * Abre el incidente antes de notificar a nadie.
+   *
+   * Se persiste primero a propósito: el id resultante viaja en el payload FCM y
+   * en cada notificación, así que tiene que existir antes del fan-out. Si esto
+   * falla, no se envía nada — es preferible a repartir una alarma que después
+   * nadie puede reconocer ni cerrar.
+   */
+  private async openPanicAlert(params: {
+    complexId: string;
+    triggeredByUserId: string;
+    triggeredByLabel?: string;
+    unitId?: string;
+    residentId?: string;
+  }): Promise<PanicAlert> {
+    const alert = await this.panicRepo.save(
+      this.panicRepo.create({
+        complexId:         params.complexId,
+        triggeredByUserId: params.triggeredByUserId,
+        triggeredByLabel:  params.triggeredByLabel,
+        unitId:            params.unitId,
+        residentId:        params.residentId,
+        type:              PanicAlertType.PANIC,
+        status:            PanicAlertStatus.PENDING,
+      }),
+    );
+
+    await this.scheduleEscalation(alert);
+    return alert;
+  }
+
+  /**
+   * Arma la cadena de escalamiento encolando solo el primer nivel; cada nivel
+   * encola el siguiente si le corresponde. Nunca lanza: que falle Redis no puede
+   * impedir que la alerta se reparta por los canales inmediatos.
+   */
+  private async scheduleEscalation(alert: PanicAlert): Promise<void> {
+    try {
+      const settings = await this.panicSettingsRepo.findOne({
+        where: { complexId: alert.complexId },
+      });
+      if (settings && !settings.isEnabled) return;
+
+      const delaySeconds = settings?.level1DelaySeconds ?? 15;
+
+      await this.panicEscalationQueue.add(
+        PANIC_ESCALATION_JOBS.ESCALATE,
+        { panicAlertId: alert.id, complexId: alert.complexId, level: 1 },
+        {
+          delay: delaySeconds * 1000,
+          jobId: panicEscalationJobId(alert.id, 1),
+          attempts: 2,
+          backoff: { type: 'fixed', delay: 2_000 },
+          removeOnComplete: { count: 200 },
+          removeOnFail: { count: 100 },
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudo encolar el escalamiento de la alerta ${alert.id}: ${(err as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * Corta la cadena. Cada nivel ya revisa el estado antes de actuar, así que
+   * esto es defensa en profundidad: elimina el job pendiente para no depender de
+   * que el worker despierte solo a descartarlo.
+   */
+  private async cancelEscalation(panicAlertId: string): Promise<void> {
+    try {
+      await Promise.allSettled(
+        [1, 2, 3].map(level =>
+          this.panicEscalationQueue.remove(panicEscalationJobId(panicAlertId, level)),
+        ),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo limpiar la cola de escalamiento de ${panicAlertId}: ${(err as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * True si el usuario es de los que deben ATENDER un pánico, no solo enterarse.
+   *
+   * Es lo que separa una confirmación de entrega que cuenta —la portería recibió
+   * la alerta— de una que solo sirve para estadística.
+   */
+  private async isPanicResponder(userId: string): Promise<boolean> {
+    const count = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.role', 'r')
+      .where('ur.user_id = :userId', { userId })
+      .andWhere('r.name IN (:...roles)', {
+        roles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+      })
+      .getCount();
+
+    return count > 0;
+  }
+
+  /**
+   * Personal que debe enterarse de un pánico además de la vigilancia.
+   *
+   * El supervisor y la administración son quienes escalan cuando la portería no
+   * responde. Incluirlos en el envío inmediato —y no solo en el escalamiento a
+   * los 45s— les da esos segundos de ventaja, que en una emergencia es
+   * exactamente el margen que se busca ganar.
+   */
+  private async resolveResponseStaffIds(complexId: string): Promise<string[]> {
+    return this.resolveTargetUserIds(complexId, [
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ]);
+  }
+
   async triggerPanicAlert(
     complexId: string,
     currentUser: JwtAccessPayload,
@@ -973,16 +1151,23 @@ export class NotificationsService implements OnModuleInit {
 
     // ── Caso: staff del complejo (admin, supervisor, contador, compliance) ───
     if (isStaff) {
-      const [residentIds, securityIds] = await Promise.all([
+      const [residentIds, securityIds, staffIds] = await Promise.all([
         this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]),
         this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
+        this.resolveResponseStaffIds(complexId),
       ]);
 
       const triggeredByLabel = triggerFullName
         ? `Administración – ${triggerFullName}`
         : 'Administración del complejo';
+      const alert = await this.openPanicAlert({
+        complexId,
+        triggeredByUserId: currentUser.sub,
+        triggeredByLabel,
+      });
       const panicPayload = {
         complexId,
+        panicAlertId:    alert.id,
         type:            NotificationType.PANIC_ALERT,
         priority:        NotificationPriority.URGENT,
         title:           'Alerta de pánico — Personal del complejo',
@@ -995,16 +1180,19 @@ export class NotificationsService implements OnModuleInit {
         metadata:        { triggeredByLabel },
       };
 
-      const allIds = [...residentIds, ...securityIds].filter(id => id !== currentUser.sub);
+      // Set: un usuario con dos roles aparecería dos veces y recibiría la alerta
+      // duplicada.
+      const allIds = [...new Set([...residentIds, ...securityIds, ...staffIds])]
+        .filter(id => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
-      this.logger.warn(`PANIC ALERT (staff) — complejo ${complexId}, activado por ${currentUser.sub}`);
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
+      this.logger.warn(`PANIC ALERT (staff) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
 
       if (allIds.length > 0) {
         void this.notify({
           ...panicPayload,
           userIds:     allIds,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
         }).catch(e => this.logger.error(`PANIC notify error (staff): ${e?.message}`));
       }
 
@@ -1016,8 +1204,14 @@ export class NotificationsService implements OnModuleInit {
       const residentIds = await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]);
 
       const triggeredByLabel = triggerFullName ? `Guardia – ${triggerFullName}` : 'Guardia';
+      const alert = await this.openPanicAlert({
+        complexId,
+        triggeredByUserId: currentUser.sub,
+        triggeredByLabel,
+      });
       const panicPayload = {
         complexId,
+        panicAlertId:    alert.id,
         type:            NotificationType.PANIC_ALERT,
         priority:        NotificationPriority.HIGH,
         title:           'Alerta de pánico — Seguridad',
@@ -1031,19 +1225,19 @@ export class NotificationsService implements OnModuleInit {
         metadata:        { triggeredByLabel },
       };
 
-      const complexAdminIds = await this.resolveTargetUserIds(complexId, [ValidRoles.COMPLEX_ROL]);
-      const allIds = [
+      const staffIds = await this.resolveResponseStaffIds(complexId);
+      const allIds = [...new Set([
         ...residentIds.filter(id => id !== currentUser.sub),
-        ...complexAdminIds,
-      ];
+        ...staffIds,
+      ])].filter(id => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, triggeredBy: currentUser.sub, triggeredByLabel });
-      this.logger.warn(`PANIC ALERT (security) — complejo ${complexId}, activado por ${currentUser.sub}`);
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
+      this.logger.warn(`PANIC ALERT (security) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
 
       void this.notify({
         ...panicPayload,
         userIds:     allIds,
-        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
       }).catch(e => this.logger.error(`PANIC notify error (security): ${e?.message}`));
 
       return { success: true };
@@ -1073,8 +1267,16 @@ export class NotificationsService implements OnModuleInit {
       const unitNumber  = unit.number;
       const title       = `Alerta de pánico — Unidad ${unitNumber}`;
 
-      const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
-      this.logger.warn(`[PANIC][resident] resolveTargetUserIds(SECURITY) → ${securityIds.length} ids`);
+      // La vigilancia y el personal de respuesta reciben el mismo mensaje urgente:
+      // el supervisor y la administración son quienes escalan si la portería no
+      // contesta, y enterarse a la vez que ella les da el margen que importa.
+      const [securityIds, staffIds] = await Promise.all([
+        this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
+        this.resolveResponseStaffIds(complexId),
+      ]);
+      const responderIds = [...new Set([...securityIds, ...staffIds])]
+        .filter(id => id !== currentUser.sub);
+      this.logger.warn(`[PANIC][resident] destinatarios de respuesta → ${responderIds.length} ids (vigilancia ${securityIds.length} + personal ${staffIds.length})`);
 
       let triggeredByLabel: string;
 
@@ -1082,17 +1284,28 @@ export class NotificationsService implements OnModuleInit {
         // ── Caso 1: edificio/torre ──────────────────────────────────────────
         const buildingName = unit.building?.name ?? unit.buildingId;
         triggeredByLabel   = `Residente – Unidad ${unitNumber}, ${buildingName}`;
+        const alert = await this.openPanicAlert({
+          complexId,
+          triggeredByUserId: currentUser.sub,
+          triggeredByLabel,
+          unitId:            unit.id,
+          residentId:        resident.id,
+        });
         const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 1 (torre) buildingId=${unit.buildingId} buildingName=${buildingName}`);
 
+        // Excluye al activador y a quien ya está en el grupo de respuesta: un
+        // residente que además es guardia recibiría el push dos veces, con dos
+        // textos distintos del mismo incidente.
         const buildingIds = (
           await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
-        ).filter(id => id !== currentUser.sub);   // excluir al propio activador
+        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
         this.logger.warn(`[PANIC][resident] findActiveUserIdsByBuildingInternal → ${buildingIds.length} ids`);
 
         const residentPanicBase = {
           complexId,
+          panicAlertId:    alert.id,
           type:            NotificationType.PANIC_ALERT,
           priority:        NotificationPriority.URGENT,
           title,
@@ -1104,21 +1317,21 @@ export class NotificationsService implements OnModuleInit {
           metadata:        { triggeredByLabel },
         };
 
-        const allIds = [...buildingIds, ...securityIds];
+        const allIds = [...new Set([...buildingIds, ...responderIds])];
         this.logger.warn(`[PANIC][resident] antes de persistBulk (torre) → allIds=${allIds.length}`);
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
             userIds:     allIds,
             body:        buildingBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
-        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
         void Promise.allSettled([
           this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
         ]).then(results => {
           const failed = results.filter(r => r.status === 'rejected');
           if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (torre) falló: ${JSON.stringify(failed)}`);
@@ -1126,17 +1339,27 @@ export class NotificationsService implements OnModuleInit {
       } else {
         // ── Caso 2: casa individual ─────────────────────────────────────────
         triggeredByLabel   = `Residente – Unidad ${unitNumber}`;
+        const alert = await this.openPanicAlert({
+          complexId,
+          triggeredByUserId: currentUser.sub,
+          triggeredByLabel,
+          unitId:            unit.id,
+          residentId:        resident.id,
+        });
         const complexBody  = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 2 (casa individual)`);
 
+        // Mismo criterio que en el caso de torre: sin esto, quien tenga los dos
+        // roles recibe el mismo pánico por duplicado.
         const residentIds = (
           await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
-        ).filter(id => id !== currentUser.sub);
+        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
         this.logger.warn(`[PANIC][resident] resolveTargetUserIds(RESIDENT) → ${residentIds.length} ids`);
 
         const residentPanicBase = {
           complexId,
+          panicAlertId:    alert.id,
           type:            NotificationType.PANIC_ALERT,
           priority:        NotificationPriority.URGENT,
           title,
@@ -1148,21 +1371,21 @@ export class NotificationsService implements OnModuleInit {
           metadata:        { triggeredByLabel },
         };
 
-        const allIds = [...residentIds, ...securityIds];
+        const allIds = [...new Set([...residentIds, ...responderIds])];
         this.logger.warn(`[PANIC][resident] antes de persistBulk (casa) → allIds=${allIds.length}`);
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
             userIds:     allIds,
             body:        complexBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL],
+            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
-        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
         void Promise.allSettled([
           this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(securityIds, { ...residentPanicBase, userIds: securityIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL] }),
+          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
         ]).then(results => {
           const failed = results.filter(r => r.status === 'rejected');
           if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (casa) falló: ${JSON.stringify(failed)}`);
@@ -1179,6 +1402,185 @@ export class NotificationsService implements OnModuleInit {
       );
       throw err;
     }
+  }
+
+  /**
+   * Push de prueba de humo a un solo dispositivo.
+   *
+   * Data-only y prioridad alta, igual que un pánico real: probar con un mensaje
+   * de menor prioridad no diría nada, porque justamente lo que se quiere validar
+   * es el camino que usa la alerta de verdad. Sin bloque `notification`, para que
+   * el equipo lo procese y confirme sin molestar al usuario con un aviso visible.
+   */
+  async sendHealthCheckPush(
+    subscription: PushSubscription,
+    healthId: string,
+    token: string,
+  ): Promise<void> {
+    if (!this.fcmEnabled || !subscription.deviceToken) return;
+
+    const ackUrl = this.publicApiUrl
+      ? `${this.publicApiUrl}/api/v1/devices/health-check/${healthId}/ack`
+      : '';
+
+    await getMessaging().send({
+      token: subscription.deviceToken,
+      data: {
+        type:     'PUSH_HEALTH_CHECK',
+        healthId,
+        ackToken: token,
+        ...(ackUrl ? { ackUrl } : {}),
+      },
+      android: {
+        priority: 'high',
+        ttl: 60_000,
+      },
+      apns: {
+        headers: { 'apns-priority': '10', 'apns-push-type': 'background' },
+        payload: { aps: { 'content-available': 1 } },
+      },
+    });
+  }
+
+  /**
+   * El dispositivo confirma que MOSTRÓ la alerta.
+   *
+   * Es lo que separa "no llegó" de "llegó y nadie respondió". Sin esta señal el
+   * escalamiento no puede distinguir un problema de entrega de uno de respuesta
+   * y termina insistiendo por canales caros aunque la alerta se haya visto.
+   *
+   * Idempotente y silencioso: si el token es inválido o la alerta ya avanzó, no
+   * hace nada y responde igual. El cliente no puede hacer nada con un error —
+   * está sonando una sirena— y devolver detalles a un endpoint sin sesión solo
+   * ayudaría a sondearlo.
+   */
+  async markPanicDelivered(panicAlertId: string, input: PanicDeliveredInput): Promise<void> {
+    if (!this.panicAckTokenService.verify(panicAlertId, input.token)) {
+      this.logger.warn(`ACK de entrega rechazado — token inválido para la alerta ${panicAlertId}`);
+      return;
+    }
+
+    const now = new Date();
+
+    const subscription = input.deviceToken
+      ? await this.pushSubRepo.findOne({
+          where:  { deviceToken: input.deviceToken },
+          select: ['id', 'userId'],
+        })
+      : null;
+
+    // Solo la confirmación de quien DEBE ATENDER mueve el estado de la alerta.
+    //
+    // Un pánico también llega a los vecinos, y su teléfono confirmándolo no
+    // significa que la portería se haya enterado. Si un residente pudiera
+    // marcarla como entregada, el nivel 1 del escalamiento —que existe
+    // exactamente para el caso "nadie la recibió"— se saltaría creyendo que sí
+    // llegó a destino. La auditoría en cambio sí registra a todos: para medir la
+    // entrega, el equipo del vecino es un dato tan válido como el del guardia.
+    const isResponder = subscription?.userId
+      ? await this.isPanicResponder(subscription.userId)
+      : false;
+
+    if (isResponder) {
+      // Solo desde PENDING: si ya fue reconocida o cerrada, un ACK de entrega
+      // tardío no puede hacerla retroceder de estado.
+      const result = await this.panicRepo.update(
+        { id: panicAlertId, status: PanicAlertStatus.PENDING },
+        { status: PanicAlertStatus.DELIVERED, deliveredAt: now },
+      );
+
+      if (result.affected && result.affected > 0) {
+        this.logger.log(`Alerta ${panicAlertId} marcada como ENTREGADA por vigilancia`);
+      }
+    } else {
+      // Sin deviceToken tampoco se promueve: ante la duda conviene escalar de
+      // más y no de menos.
+      this.logger.debug(
+        `ACK de entrega de ${panicAlertId} registrado sin promover estado (no es personal de respuesta)`,
+      );
+    }
+
+    // Auditoría por dispositivo: es lo que permite medir la tasa real de
+    // entrega por marca. Se registra aunque la alerta ya estuviera entregada,
+    // porque cada equipo que confirma es un dato distinto.
+    try {
+      await this.panicDeliveryRepo.save(
+        this.panicDeliveryRepo.create({
+          panicAlertId,
+          channel:        PanicDeliveryChannel.FCM,
+          deviceTokenId:  subscription?.id,
+          userId:         subscription?.userId,
+          deliveredAt:    now,
+        }),
+      );
+    } catch (err) {
+      // Nunca puede tumbar el ACK: el estado de la alerta ya se actualizó.
+      this.logger.warn(`No se pudo auditar la entrega de ${panicAlertId}: ${(err as Error)?.message}`);
+    }
+  }
+
+  /**
+   * Cierra el incidente con notas.
+   *
+   * Paso distinto del reconocimiento: reconocer significa "voy en camino",
+   * resolver significa "ya pasó, esto fue lo que ocurrió". Separarlos es lo que
+   * permite medir cuánto tarda la respuesta y auditar qué se hizo, y es también
+   * donde se marca una falsa alarma sin borrar el registro.
+   */
+  async resolvePanicAlert(
+    panicAlertId: string,
+    currentUser: JwtAccessPayload,
+    resolutionNotes?: string,
+    falseAlarm = false,
+  ): Promise<PanicAlert> {
+    const alert = await this.panicRepo.findOne({ where: { id: panicAlertId } });
+
+    if (!alert) {
+      throw new CustomError({
+        message:    'Alerta de pánico no encontrada',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode:  GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    if (currentUser.complexId && alert.complexId !== currentUser.complexId) {
+      throw new CustomError({
+        message:    'No tienes acceso a esta alerta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode:  GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    // Idempotente, igual que el ACK: cerrar dos veces no es un error, y el
+    // cliente puede reintentar sobre una conexión mala sin recibir un fallo.
+    if (alert.resolvedAt) return alert;
+
+    alert.status           = falseAlarm ? PanicAlertStatus.FALSE_ALARM : PanicAlertStatus.RESOLVED;
+    alert.resolvedAt       = new Date();
+    alert.resolvedByUserId = currentUser.sub;
+    alert.resolutionNotes  = resolutionNotes;
+
+    const updated = await this.panicRepo.save(alert);
+
+    // Deja de estar abierta también para las notificaciones que nadie llegó a
+    // reconocer; si no, seguirían saliendo como pendientes en la portería.
+    await this.notifRepo.update(
+      { panicAlertId: alert.id, actionTakenAt: IsNull() },
+      {
+        actionTakenAt:       updated.resolvedAt,
+        actionTakenByUserId: currentUser.sub,
+        actionResult:        NotificationActionResult.ACKNOWLEDGED,
+      },
+    );
+
+    await this.cancelEscalation(alert.id);
+
+    this.socketService.emitToComplex(alert.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
+    this.logger.log(
+      `PANIC ALERT cerrada — alerta ${alert.id}, estado ${updated.status}, por ${currentUser.sub}`,
+    );
+
+    return updated;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1334,24 +1736,46 @@ export class NotificationsService implements OnModuleInit {
 
     const updated = await this.notifRepo.save(notif);
 
-    // Mark all sibling notifications from the same panic event (±30s window)
-    // so every recipient's record is cleared — one ACK closes the modal for everyone.
-    const windowMs    = 30_000;
-    const windowStart = new Date(notif.createdAt.getTime() - windowMs);
-    const windowEnd   = new Date(notif.createdAt.getTime() + windowMs);
-    await this.notifRepo.update(
-      {
-        complexId:     notif.complexId,
-        type:          NotificationType.PANIC_ALERT,
-        actionTakenAt: IsNull(),
-        createdAt:     Between(windowStart, windowEnd),
-      },
-      {
-        actionTakenAt:       ackedAt,
-        actionTakenByUserId: currentUser.sub,
-        actionResult:        NotificationActionResult.ACKNOWLEDGED,
-      },
-    );
+    // Cierra las copias hermanas: un solo ACK apaga la alarma de todos.
+    //
+    // Con panicAlertId el criterio es exacto. Sin él —alertas anteriores a la
+    // tabla panic_alerts— se cae a la ventana de ±30s, que es lo único
+    // disponible para el histórico pero confunde dos pánicos simultáneos del
+    // mismo complejo. Por eso solo se usa como respaldo.
+    const siblingCriteria = notif.panicAlertId
+      ? { panicAlertId: notif.panicAlertId, actionTakenAt: IsNull() }
+      : {
+          complexId:     notif.complexId,
+          type:          NotificationType.PANIC_ALERT,
+          actionTakenAt: IsNull(),
+          createdAt:     Between(
+            new Date(notif.createdAt.getTime() - 30_000),
+            new Date(notif.createdAt.getTime() + 30_000),
+          ),
+        };
+
+    await this.notifRepo.update(siblingCriteria, {
+      actionTakenAt:       ackedAt,
+      actionTakenByUserId: currentUser.sub,
+      actionResult:        NotificationActionResult.ACKNOWLEDGED,
+    });
+
+    // Estado del incidente. Se marca ACKNOWLEDGED solo si sigue abierto, para
+    // no pisar un RESOLVED ni mover la marca de tiempo del primero que atendió.
+    if (notif.panicAlertId) {
+      await this.panicRepo.update(
+        {
+          id:     notif.panicAlertId,
+          status: In([PanicAlertStatus.PENDING, PanicAlertStatus.DELIVERED]),
+        },
+        {
+          status:                PanicAlertStatus.ACKNOWLEDGED,
+          acknowledgedByUserId:  currentUser.sub,
+          acknowledgedAt:        ackedAt,
+        },
+      );
+      await this.cancelEscalation(notif.panicAlertId);
+    }
 
     this.socketService.emitToComplex(notif.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
 
@@ -1466,6 +1890,20 @@ export class NotificationsService implements OnModuleInit {
         ...(isPanic && {
           triggeredBy:      params.createdByUserId ?? '',
           triggeredByLabel: metadata.triggeredByLabel ?? '',
+          // Identifica el incidente para que el dispositivo confirme entrega y
+          // reconozca la alerta correcta cuando hay más de una abierta.
+          ...(params.panicAlertId ? { alertId: params.panicAlertId } : {}),
+          // Permiso de un solo uso para POST /panic/:id/delivered. Viaja aquí
+          // porque el ACK sale desde Kotlin con la app quizá muerta y sin sesión.
+          ...(params.panicAlertId
+            ? { ackToken: this.panicAckTokenService.sign(params.panicAlertId) }
+            : {}),
+          // URL completa, no solo el id: el código nativo no conoce la URL del
+          // API (vive en el .env de JS) y así el servidor puede mudarse sin
+          // publicar una versión nueva de la app.
+          ...(params.panicAlertId && this.publicApiUrl
+            ? { ackUrl: `${this.publicApiUrl}/api/v1/panic/${params.panicAlertId}/delivered` }
+            : {}),
         }),
       },
       android: {
@@ -1473,7 +1911,14 @@ export class NotificationsService implements OnModuleInit {
           || params.priority === NotificationPriority.URGENT
           || params.priority === NotificationPriority.HIGH
           ? 'high' : 'normal',
-        ...(isPanic && { collapseKey: `panic-${params.complexId}` }),
+        ...(isPanic && {
+          collapseKey: `panic-${params.complexId}`,
+          // 60s: una alerta de pánico vieja confunde más de lo que ayuda, y el
+          // escalamiento del servidor ya cubre al equipo que estuvo sin red.
+          ttl: 60_000,
+          // Entrega tras un reinicio, antes de que el usuario desbloquee.
+          directBootOk: true,
+        }),
         // android.notification only applies to a displayed (non-data-only)
         // message, so omit it for panic — the app builds its own Notifee
         // full-screen notification from the data payload.
@@ -1603,6 +2048,7 @@ export class NotificationsService implements OnModuleInit {
         isActionable:    params.isActionable ?? false,
         actionType:      params.actionType,
         actionLabel:     params.actionLabel,
+        panicAlertId:    params.panicAlertId,
       });
       saved = [await this.notifRepo.save(entity)];
       this.socketService.emitToComplex(params.complexId, SocketEvent.NOTIFICATION_NEW, saved[0]);
@@ -1627,6 +2073,7 @@ export class NotificationsService implements OnModuleInit {
           isActionable:    params.isActionable ?? false,
           actionType:      params.actionType,
           actionLabel:     params.actionLabel,
+          panicAlertId:    params.panicAlertId,
         }),
       );
       saved = await this.notifRepo.save(entities);

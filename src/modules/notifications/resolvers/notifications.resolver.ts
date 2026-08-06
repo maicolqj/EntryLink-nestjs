@@ -12,6 +12,7 @@ import { PushSubscriptionResult }              from '../dto/responses/push-subsc
 import { SendNotificationResult }              from '../dto/responses/send-notification.response';
 import { SentNotificationPaginatedResult }     from '../dto/responses/sent-notifications.response';
 import { TriggerPanicAlertResult }             from '../dto/responses/trigger-panic-alert.response';
+import { PanicAlert }                         from '../entities/panic-alert.entity';
 import { RequestSecurityCallResult }           from '../dto/responses/request-security-call.response';
 import { NotificationDetailResponse }          from '../dto/responses/notification-detail.response';
 import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
@@ -140,6 +141,31 @@ export class NotificationsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Notification> {
     return this.notificationsService.acknowledgePanicAlert(notificationId, currentUser);
+  }
+
+  /**
+   * Cierra una alerta de pánico con notas de resolución.
+   * Distinto de reconocer: reconocer es "voy en camino", resolver es "ya pasó".
+   * Sin RESIDENT_ROL — cerrar el incidente es del personal, no de quien lo activó.
+   */
+  @Mutation(() => PanicAlert, { name: 'resolvePanicAlert' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+    ],
+  })
+  resolvePanicAlert(
+    @Args('panicAlertId') panicAlertId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('resolutionNotes', { nullable: true }) resolutionNotes?: string,
+    @Args('falseAlarm', { nullable: true }) falseAlarm?: boolean,
+  ): Promise<PanicAlert> {
+    return this.notificationsService.resolvePanicAlert(
+      panicAlertId, currentUser, resolutionNotes, falseAlarm ?? false,
+    );
   }
 
   /**

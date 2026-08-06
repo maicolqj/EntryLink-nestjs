@@ -1199,6 +1199,45 @@ export class ResidentsService {
   }
 
   // ================================================================
+  // FICHA DE RESIDENTE A PARTIR DE UN ID DE USUARIO
+  // ================================================================
+
+  /**
+   * Resuelve quién es un usuario dentro del complejo de quien pregunta.
+   *
+   * Existe para la alerta de pánico: el push solo lleva el id de quien la
+   * disparó, y quien la atiende necesita saber a qué unidad ir. Sin esto la app
+   * solo puede mostrar una etiqueta genérica ("Residente").
+   *
+   * Devuelve null en vez de lanzar cuando no hay ficha: quien dispara el pánico
+   * puede ser un guarda o la administración, que no son residentes, y ese caso
+   * es normal — no un error que deba ensuciar el log de la app.
+   *
+   * **Siempre acotado al complejo de quien pregunta.** Sin ese filtro, cualquier
+   * usuario autenticado con un id ajeno podría leer teléfono y unidad de
+   * residentes de otros conjuntos.
+   */
+  async findByUserId(
+    userId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Resident | null> {
+    // Un usuario sin complejo asignado (super admin) no tiene un "su complejo"
+    // contra el cual acotar, y esta consulta existe para un caso de operación
+    // dentro de un conjunto: no se le resuelve.
+    if (!currentUser.complexId) return null;
+
+    return this.residentRepo.findOne({
+      where: {
+        userId,
+        complexId: currentUser.complexId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
+      relations: ['user', 'unit', 'unit.building'],
+    });
+  }
+
+  // ================================================================
   // HISTORIAL DE RESIDENTES DE UNA UNIDAD
   // ================================================================
 

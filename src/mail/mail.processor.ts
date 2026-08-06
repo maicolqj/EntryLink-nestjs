@@ -7,6 +7,7 @@ import {
   MAIL_JOBS,
   SendPasswordResetJobPayload,
   SendEmailVerificationJobPayload,
+  SendPanicAlertJobPayload,
 } from './constants/mail.constants';
 
 /**
@@ -31,9 +32,36 @@ export class MailProcessor extends WorkerHost {
       case MAIL_JOBS.SEND_EMAIL_VERIFICATION:
         await this.handleEmailVerification(job as Job<SendEmailVerificationJobPayload>);
         break;
+      case MAIL_JOBS.SEND_PANIC_ALERT:
+        await this.handlePanicAlert(job as Job<SendPanicAlertJobPayload>);
+        break;
       default:
         this.logger.warn(`Job desconocido en cola mail: ${job.name}`);
     }
+  }
+
+  private async handlePanicAlert(job: Job<SendPanicAlertJobPayload>): Promise<void> {
+    const d = job.data;
+
+    this.logger.warn(`Procesando correo de pánico — alerta ${d.alertId}, nivel ${d.escalationLevel}`);
+
+    await this.mailerService.sendMail({
+      to: d.email,
+      // El asunto lleva el dato accionable delante: en la lista del cliente de
+      // correo suele verse solo el principio.
+      subject: `ALERTA DE PÁNICO — ${d.triggeredByLabel}`,
+      template: 'panic-alert',
+      context: {
+        name:             d.name,
+        triggeredByLabel: d.triggeredByLabel,
+        triggeredAt:      d.triggeredAt,
+        escalationLevel:  d.escalationLevel,
+        locationUrl:      d.locationUrl,
+        year:             new Date().getFullYear(),
+      },
+    });
+
+    this.logger.warn(`Correo de pánico enviado — alerta ${d.alertId}`);
   }
 
   private async handlePasswordReset(job: Job<SendPasswordResetJobPayload>): Promise<void> {
