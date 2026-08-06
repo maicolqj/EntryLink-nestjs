@@ -221,6 +221,35 @@ export class ResidentsResolver {
   }
 
   /**
+   * Quién es un usuario dentro del complejo de quien pregunta.
+   *
+   * La alerta de pánico solo transporta el id de quien la disparó; esto es lo
+   * que permite a la app mostrar nombre, teléfono y unidad en vez de una
+   * etiqueta genérica. De ahí que la abran los mismos roles que ven la alerta,
+   * residentes incluidos: en un conjunto, saber a qué apartamento acudir es
+   * justamente el dato que hace útil el aviso.
+   *
+   * Devuelve null cuando el usuario no tiene ficha de residente activa (un
+   * guarda o la administración disparando el pánico), y el servicio acota
+   * siempre al complejo de quien pregunta.
+   */
+  @Query(() => Resident, { name: 'residentByUserId', nullable: true })
+  @Auth({
+    roles: [
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
+  })
+  findByUserId(
+    @Args('userId') userId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Resident | null> {
+    return this.residentsService.findByUserId(userId, currentUser);
+  }
+
+  /**
    * Estadísticas de residentes del complejo.
    */
   @Query(() => ResidentStatsResponse, { name: 'residentStats' })

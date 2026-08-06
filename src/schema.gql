@@ -3761,6 +3761,7 @@ type Query {
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!
   myResidentProfile: Resident!
+  residentByUserId(userId: String!): Resident
   residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
   pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
