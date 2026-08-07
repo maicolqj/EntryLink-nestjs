@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
-import { Between, In, IsNull, Repository } from 'typeorm';
+import { Between, In, IsNull, Not, Repository } from 'typeorm';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging, type Message } from 'firebase-admin/messaging';
 import * as webpush from 'web-push';
@@ -668,11 +668,53 @@ export class NotificationsService implements OnModuleInit {
   // SUSCRIPCIONES PUSH
   // ─────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Retira un destino de push de las cuentas que ya no lo usan.
+   *
+   * Un token FCM identifica una INSTALACIÓN y un endpoint Web Push un NAVEGADOR:
+   * ninguno de los dos cambia al cambiar de sesión. Sin este barrido, cada cuenta
+   * que alguna vez entró en ese equipo deja una fila activa apuntando al mismo
+   * destino, con dos consecuencias:
+   *
+   *  - El despacho manda una copia por suscripción, así que el equipo recibe
+   *    cada notificación tantas veces como cuentas hayan pasado por él. Además de
+   *    ruidoso, falsea la auditoría de entrega, que cuenta entregas por equipo.
+   *  - Y lo grave: las notificaciones dirigidas a la cuenta anterior se entregan
+   *    en un equipo que hoy usa otra persona. Aquí eso incluye datos de unidad,
+   *    visitas y finanzas.
+   *
+   * Se desactiva en vez de borrar para no perder el historial de qué equipos
+   * estuvieron registrados, que es lo que alimenta la medición de entrega.
+   */
+  private async deactivateForeignSubscriptions(
+    where: { deviceToken: string } | { endpoint: string },
+    userId: string,
+  ): Promise<void> {
+    try {
+      const result = await this.pushSubRepo.update(
+        { ...where, userId: Not(userId), isActive: true },
+        { isActive: false },
+      );
+
+      if (result.affected) {
+        this.logger.log(
+          `Suscripción push reasignada a ${userId}: ${result.affected} registro(s) de otra cuenta desactivados en el mismo equipo.`,
+        );
+      }
+    } catch (e: any) {
+      // Nunca impedir el registro por esto: quedarse sin push es peor que
+      // arrastrar una fila de más, y el despacho ya sabe desactivar lo inválido.
+      this.logger.warn(`No se pudieron desactivar suscripciones ajenas: ${e?.message}`);
+    }
+  }
+
   /** Registra o actualiza una suscripción Web Push para el dashboard */
   async savePushSubscription(
     input: SavePushSubscriptionInput,
     currentUser: JwtAccessPayload,
   ): Promise<PushSubscriptionResult> {
+    await this.deactivateForeignSubscriptions({ endpoint: input.endpoint }, currentUser.sub);
+
     const existing = await this.pushSubRepo.findOne({
       where: {
         userId:   currentUser.sub,
@@ -715,6 +757,11 @@ export class NotificationsService implements OnModuleInit {
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
+
+    await this.deactivateForeignSubscriptions(
+      { deviceToken: input.deviceToken },
+      currentUser.sub,
+    );
 
     const existing = await this.pushSubRepo.findOne({
       where: {
