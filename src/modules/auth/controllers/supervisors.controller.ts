@@ -11,7 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
-import { R2StorageService }        from '../../../core/infrastructure/r2/r2.service';
+import { R2StorageService, PLATFORM_SCOPE } from '../../../core/infrastructure/r2/r2.service';
 import { singleImageInterceptor }  from '../../../core/infrastructure/r2/upload-interceptors';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { AuthErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
@@ -74,7 +74,8 @@ export class SupervisorsController {
 
     const result = await this.storageService.uploadBuffer(
       file.buffer,
-      this.storageService.buildFolder('auth', 'company-cards'),
+      // El supervisor aún no está asignado a ningún complejo → carpeta `_platform`
+      this.storageService.buildFolder(PLATFORM_SCOPE, 'auth', 'company-cards'),
       file.originalname,
     );
 

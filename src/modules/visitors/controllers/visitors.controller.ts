@@ -12,6 +12,7 @@ import {
 import { Request } from 'express';
 
 import { VisitorsService }           from '../services/visitors.service';
+import { ResidentialComplexService }  from '../../residential-complex/services/residential-complex.service';
 import { R2StorageService }           from '../../../core/infrastructure/r2/r2.service';
 import { singleImageInterceptor }     from '../../../core/infrastructure/r2/upload-interceptors';
 import { JwtRestGuard }               from '../../shared/guards/jwt-rest.guard';
@@ -34,6 +35,7 @@ export class VisitorsController {
 
   constructor(
     private readonly visitorsService: VisitorsService,
+    private readonly complexService:  ResidentialComplexService,
     private readonly storageService:  R2StorageService,
   ) {}
 
@@ -42,6 +44,8 @@ export class VisitorsController {
    *
    * Sube o reemplaza la foto de un visitante en Cloudflare R2.
    * Body (multipart/form-data): photo — jpeg/png/webp/heic, máx 5 MB
+   *
+   * Ruta R2: EntryLink/{complexSlug}/visitors/photos
    */
   @Post(':visitorId/photo')
   @UseInterceptors(singleImageInterceptor('photo', { maxSizeMb: 5 }))
@@ -64,7 +68,11 @@ export class VisitorsController {
       throw new BadRequestException('El campo photo es requerido');
     }
 
-    const folder = this.storageService.buildFolder('visitors', 'photos');
+    // La foto se guarda bajo el complejo dueño del visitante, así que resolvemos
+    // el slug antes de subir; de paso confirma que el visitante existe.
+    const visitorRecord = await this.visitorsService.findById(visitorId);
+    const complexSlug   = await this.complexService.getSlugById(visitorRecord.complexId);
+    const folder = this.storageService.buildFolder(complexSlug, 'visitors', 'photos');
 
     let publicId: string | undefined;
     try {

@@ -6,5 +6,7 @@ export default registerAs('r2', () => ({
   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
   bucketName:      process.env.R2_BUCKET_NAME,
   publicUrl:       process.env.R2_PUBLIC_URL ?? '',
-  appName:         process.env.APPNAME ?? 'residash',
+  // Carpeta raíz del bucket. Debe ser idéntica en todos los entornos: R2
+  // distingue mayúsculas, así que otra grafía crea una segunda carpeta.
+  appName:         process.env.APPNAME ?? 'EntryLink',
 }));

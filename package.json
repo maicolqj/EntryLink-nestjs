@@ -1,6 +1,6 @@
 {
   "name": "phone-dialer-nestjs",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "",
   "author": "",
   "private": true,
@@ -40,7 +40,8 @@
     "whatsapp:send-test": "ts-node -r tsconfig-paths/register scripts/whatsapp-send-test.ts",
     "whatsapp:token-check": "node scripts/whatsapp-token-check.js",
     "whatsapp:subscribed-apps": "node scripts/whatsapp-subscribed-apps.js",
-    "whatsapp:webhook-selftest": "node scripts/whatsapp-webhook-selftest.js"
+    "whatsapp:webhook-selftest": "node scripts/whatsapp-webhook-selftest.js",
+    "r2:migrate": "ts-node -r tsconfig-paths/register scripts/migrate-r2-layout.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

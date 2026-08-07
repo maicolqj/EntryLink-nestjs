@@ -14,7 +14,7 @@ import { LegalDocument } from '../entities/legal-document.entity';
 import { LegalAudience } from '../enums/legal-audience.enum';
 import { CreateLegalDocumentInput } from '../dto/inputs/create-legal-document.input';
 import { UpdateLegalDocumentInput } from '../dto/inputs/update-legal-document.input';
-import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { R2StorageService, PLATFORM_SCOPE } from '../../../core/infrastructure/r2/r2.service';
 import { decodeBase64File } from '../../shared/utils/base64-file.utils';
 
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
@@ -51,7 +51,8 @@ export class LegalDocumentService {
     if (buffer.subarray(0, 4).toString('ascii') !== '%PDF') {
       throw new BadRequestException('El archivo descargable debe ser un PDF.');
     }
-    const folder = this.storage.buildFolder('legal', slug);
+    // Documento de la plataforma, no de un complejo → carpeta `_platform`
+    const folder = this.storage.buildFolder(PLATFORM_SCOPE, 'legal', slug);
     const result = await this.storage.uploadBuffer(buffer, folder, fileName ?? `${slug}.pdf`, 'raw');
     return { url: result.url, publicId: result.publicId };
   }

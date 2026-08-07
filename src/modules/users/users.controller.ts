@@ -137,6 +137,8 @@ export class UsersController {
    * Body (multipart/form-data): photo — jpeg/png/webp/heic, máx 5 MB
    *
    * Permitido: el propio usuario, COMPLEX_ROL y SUPER_ADMIN_ROL.
+   *
+   * Ruta R2: EntryLink/{complexSlug|_platform}/users/profile-pictures
    */
   @Post(':userId/profile-picture')
   @UseGuards(JwtRestGuard)
@@ -161,7 +163,9 @@ export class UsersController {
       throw new BadRequestException('El campo photo es requerido');
     }
 
-    const folder = this.storageService.buildFolder('users', 'profile-pictures');
+    // Usuarios sin complejo (SUPER_ADMIN, COMPLIANCE) caen en `_platform`
+    const complexSlug = await this.usersService.getComplexSlugForUser(userId);
+    const folder = this.storageService.buildFolder(complexSlug, 'users', 'profile-pictures');
 
     let publicId: string | undefined;
     try {
