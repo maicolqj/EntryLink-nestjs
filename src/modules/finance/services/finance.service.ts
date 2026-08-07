@@ -17,6 +17,7 @@ import { ChargeType } from '../enums/charge-type.enum';
 import { PrelacionConcept } from '../enums/prelacion-concept.enum';
 import { AccountingService } from './accounting.service';
 import { FeeFrequency } from '../enums/fee-frequency.enum';
+import { PAYMENT_METHOD_LABELS } from '../enums/payment-method.enum';
 import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
 import { CreateChargeCategoryInput } from '../dto/inputs/create-charge-category.input';
@@ -1075,7 +1076,7 @@ export class FinanceService {
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId: charge.complexId,
-        description: `Pago registrado: $${input.amount} sobre cargo ${input.chargeId} — método: ${input.method}`,
+        description: `Pago registrado: $${input.amount} sobre cargo de ${charge.period} — método: ${PAYMENT_METHOD_LABELS[input.method] ?? input.method}`,
       });
 
       this.notifyPaymentConfirmed(charge, input.amount, new Date(input.paidAt)).catch(err =>
@@ -1237,7 +1238,7 @@ export class FinanceService {
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId,
-        description: `Pago masivo FIFO: $${amount} — ${paid} cargos saldados, ${created} pagos creados`,
+        description: `Pago masivo FIFO: $${amount} (${PAYMENT_METHOD_LABELS[method] ?? method}) — ${paid} cargos saldados, ${created} pagos creados`,
         isBulk: true,
       });
 
@@ -1318,7 +1319,7 @@ export class FinanceService {
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
         complexId: payment.complexId,
-        description: `Pago anulado: ${paymentId} — razón: ${reason} — cargo: ${payment.chargeId}`,
+        description: `Pago anulado: $${payment.amount} sobre cargo de ${charge.period} — razón: ${reason}`,
       });
 
       this.notifyPaymentReversed(charge, Number(payment.amount), reason).catch(err =>
