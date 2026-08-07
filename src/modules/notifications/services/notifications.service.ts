@@ -44,6 +44,7 @@ import { NotificationDetailResponse, NotificationUserInfo } from '../dto/respons
 
 import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
 import { CustomError }      from '../../shared/utils/errors.utils';
+import { PEM_HEADER, normalizePem } from '../../shared/utils/pem.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 
@@ -165,25 +166,73 @@ export class NotificationsService implements OnModuleInit {
   private initFirebase(): void {
     const projectId   = this.configService.get<string>('FIREBASE_PROJECT_ID');
     const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
-    const privateKey  = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
+    const privateKey  = this.resolveFirebasePrivateKey();
 
     if (!projectId || !clientEmail || !privateKey) {
-      this.logger.warn('Firebase no configurado — FCM deshabilitado. Define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY.');
+      this.logger.warn('Firebase no configurado — FCM deshabilitado. Define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY (o FIREBASE_PRIVATE_KEY_BASE64).');
       return;
     }
 
-    if (getApps().length === 0) {
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n'),
-        }),
-      });
+    // `cert()` lanza si la llave no parsea, y esto corre en onModuleInit: sin el
+    // try/catch una llave mal pegada no deshabilita el push, impide que Nest
+    // arranque y deja SIN SERVICIO todo el conjunto —visitas, pagos, ingreso—
+    // por un subsistema que unas líneas más arriba ya sabemos degradar. Pasó en
+    // producción el 2026-08-07: dos despliegues seguidos en bucle de reinicio.
+    try {
+      if (getApps().length === 0) {
+        initializeApp({
+          credential: cert({ projectId, clientEmail, privateKey }),
+        });
+      }
+      this.fcmEnabled = true;
+      this.logger.log('Firebase Admin SDK inicializado');
+    } catch (e: any) {
+      // Nombrar el diagnóstico: `DECODER routines::unsupported` de OpenSSL
+      // significa PEM deformado —comillas, escapado o saltos perdidos por el
+      // panel de despliegue—, no una llave revocada ni un proyecto equivocado.
+      this.logger.error(
+        `Credenciales de Firebase inválidas — FCM deshabilitado, el resto del API sigue arriba: ${e?.message}. ` +
+        'Si el error menciona DECODER routines::unsupported, el PEM llegó deformado: usa FIREBASE_PRIVATE_KEY_BASE64.',
+      );
+    }
+  }
+
+  /**
+   * Devuelve la llave privada en PEM, tolerando cómo la haya guardado el panel.
+   *
+   * PEM es un formato hostil para un campo de texto: sus saltos de línea son
+   * significativos, y cada panel de despliegue los trata distinto —unos los
+   * escapan, otros los doblan, otros los borran—. Un `replace(/\\n/g,'\n')` a
+   * secas cubre solo uno de esos casos y el resto falla con el mismo error
+   * indistinguible (`DECODER routines::unsupported`).
+   *
+   * Por eso FIREBASE_PRIVATE_KEY_BASE64 es la vía recomendada: en base64 no hay
+   * saltos, comillas ni escapado que nadie pueda estropear. Se genera una vez
+   * desde el JSON de la cuenta de servicio:
+   *
+   *   node -e "console.log(Buffer.from(require('./serviceAccount.json').private_key).toString('base64'))"
+   *
+   * FIREBASE_PRIVATE_KEY se mantiene por compatibilidad con los entornos que ya
+   * la tienen puesta y funcionando.
+   */
+  private resolveFirebasePrivateKey(): string | undefined {
+    const base64 = this.configService.get<string>('FIREBASE_PRIVATE_KEY_BASE64')?.trim();
+
+    if (base64) {
+      try {
+        const decoded = Buffer.from(base64, 'base64').toString('utf8');
+        if (decoded.includes(PEM_HEADER)) return decoded;
+        // Base64 válido cuyo contenido no es un PEM: casi siempre es la llave
+        // sin codificar pegada en el campo equivocado. Avisar en vez de seguir a
+        // ciegas, porque el error de `cert()` no distingue los dos casos.
+        this.logger.warn('FIREBASE_PRIVATE_KEY_BASE64 no contiene un PEM al decodificar — se ignora.');
+      } catch (e: any) {
+        this.logger.warn(`FIREBASE_PRIVATE_KEY_BASE64 no es base64 válido: ${e?.message}`);
+      }
     }
 
-    this.fcmEnabled = true;
-    this.logger.log('Firebase Admin SDK inicializado');
+    const raw = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
+    return raw ? normalizePem(raw) : undefined;
   }
 
   private initWebPush(): void {
