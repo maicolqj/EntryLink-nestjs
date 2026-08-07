@@ -1844,7 +1844,22 @@ export class NotificationsService implements OnModuleInit {
     params: NotifyParams,
     notifIdByUser?: Map<string, string>,
   ): Promise<void> {
-    if (!this.fcmEnabled || subs.length === 0) return;
+    // Descartar con FCM apagado teniendo destinatarios reales es el fallo más
+    // caro de este servicio: no rompe nada, no deja rastro, y desde fuera se ve
+    // idéntico a "el push llegó y el usuario lo ignoró". Se avisa por cada lote
+    // descartado a propósito — repetirlo en el log es justo lo que hace evidente
+    // que falta configuración, en vez de un warn solitario en el arranque que
+    // nadie vuelve a mirar.
+    if (!this.fcmEnabled) {
+      if (subs.length > 0) {
+        this.logger.warn(
+          `[FCM] DESCARTADO [${params.type}] → ${subs.length} equipos sin notificar: FCM deshabilitado por falta de credenciales.`,
+        );
+      }
+      return;
+    }
+
+    if (subs.length === 0) return;
 
     // Enviamos por token (no multicast) para incrustar el notificationId real
     // de cada destinatario en el data del mensaje. Conservamos el token en
@@ -1868,7 +1883,12 @@ export class NotificationsService implements OnModuleInit {
       try {
         const response = await getMessaging().sendEach(batch.map(b => b.message));
 
-        this.logger.debug(
+        // `log`, no `debug`: en producción el logger corre en ['error','warn','log']
+        // (main.ts), así que en debug esto era invisible justo donde hace falta.
+        // Un push que no llega no deja NINGÚN otro rastro —ni en la app, ni en la
+        // base, ni en el equipo—, y sin esta línea la única forma de investigarlo
+        // es adivinar. Costó una sesión entera de diagnóstico a ciegas.
+        this.logger.log(
           `[FCM] Lote enviado [${params.type}] → ${response.successCount} exitosos, ${response.failureCount} fallidos | complejo ${params.complexId}`,
         );
 
@@ -1876,6 +1896,21 @@ export class NotificationsService implements OnModuleInit {
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
             const code = resp.error?.code;
+
+            // El código de FCM es el diagnóstico entero, y cada uno pide una
+            // acción distinta: `mismatched-credential` significa que
+            // FIREBASE_PROJECT_ID no corresponde a la cuenta de servicio —que el
+            // arranque NO detecta, porque validar la llave no valida el proyecto—,
+            // `third-party-auth-error` que falta la clave de APNs, y
+            // `invalid-argument` que el payload viola alguna regla de FCM.
+            // Sin esto los tres se ven igual: silencio.
+            //
+            // Del token solo el prefijo: identifica el equipo al cruzarlo con
+            // push_subscriptions sin dejar la credencial completa en el log.
+            this.logger.warn(
+              `[FCM] Envío fallido → ${code ?? 'sin código'} | token ${batch[idx].token.slice(0, 12)}… | ${resp.error?.message ?? ''}`,
+            );
+
             if (
               code === 'messaging/registration-token-not-registered' ||
               code === 'messaging/invalid-registration-token'
@@ -1890,7 +1925,7 @@ export class NotificationsService implements OnModuleInit {
             { deviceToken: In(invalidTokens) },
             { isActive: false },
           );
-          this.logger.debug(`Desactivados ${invalidTokens.length} tokens FCM inválidos`);
+          this.logger.log(`Desactivados ${invalidTokens.length} tokens FCM inválidos`);
         }
       } catch (err: any) {
         this.logger.warn(`Error en despacho FCM: ${err?.message}`);
