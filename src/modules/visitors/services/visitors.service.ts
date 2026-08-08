@@ -16,6 +16,25 @@ import { NotificationType }         from '../../notifications/enums/notification
 import { NotificationPriority }     from '../../notifications/enums/notification-priority.enum';
 import { ValidRoles }              from '../../roles/enums/valid-roles';
 
+/**
+ * Fusiona los datos del documento que llegan de portería con los que el
+ * visitante ya tenía. Devuelve `null` cuando no hay nada nuevo que guardar, para
+ * no escribir en la BD en cada visita de la misma persona.
+ *
+ * Se fusiona y no se reemplaza porque cada escaneo lee lo que alcanza a leer: si
+ * uno saca seis campos y el siguiente sólo cuatro, reemplazar borraría los dos
+ * que ya estaban bien guardados.
+ */
+const mergeVisitorMetadata = (
+  current: Record<string, any> | undefined,
+  incoming: Record<string, any> | undefined,
+): Record<string, any> | null => {
+  if (!incoming || Object.keys(incoming).length === 0) return null;
+  const base = current ?? {};
+  const merged = { ...base, ...incoming };
+  return JSON.stringify(merged) === JSON.stringify(base) ? null : merged;
+};
+
 @Injectable()
 export class VisitorsService {
   private readonly logger = new Logger(VisitorsService.name);
@@ -40,6 +59,7 @@ export class VisitorsService {
       identityType?: VisitorIdentityType;
       phone?: string;
       photoUrl?: string;
+      metadata?: Record<string, any>;
     },
   ): Promise<Visitor> {
     const identity = data.identity.trim().toUpperCase();
@@ -55,11 +75,21 @@ export class VisitorsService {
     });
 
     if (existing) {
+      let changed = false;
+
       // Actualizar foto si viene nueva
       if (data.photoUrl && data.photoUrl !== existing.photoUrl) {
         existing.photoUrl = data.photoUrl;
-        await this.visitorRepo.save(existing);
+        changed = true;
       }
+
+      const merged = mergeVisitorMetadata(existing.metadata, data.metadata);
+      if (merged) {
+        existing.metadata = merged;
+        changed = true;
+      }
+
+      if (changed) await this.visitorRepo.save(existing);
       return existing;
     }
 
@@ -71,6 +101,7 @@ export class VisitorsService {
       identityType: data.identityType ?? VisitorIdentityType.CC,
       phone:        data.phone,
       photoUrl:     data.photoUrl,
+      metadata:     data.metadata,
       isBlacklisted: false,
     });
 
