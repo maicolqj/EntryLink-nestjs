@@ -46,14 +46,14 @@
   "dependencies": {
     "@apollo/server": "^5.5.1",
     "@as-integrations/express5": "^1.1.2",
-    "@aws-sdk/client-s3": "^3.1095.0",
+    "@aws-sdk/client-s3": "^3.1105.0",
     "@bull-board/api": "^6.20.6",
     "@bull-board/express": "^6.20.6",
     "@bull-board/nestjs": "^6.20.6",
     "@nestjs-modules/mailer": "^2.3.7",
     "@nestjs/apollo": "^13.4.2",
     "@nestjs/axios": "^4.0.1",
-    "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.28",
@@ -69,7 +69,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "@types/multer": "^2.2.0",
     "@types/web-push": "^3.6.4",
-    "axios": "^1.18.1",
+    "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.81.2",
     "class-transformer": "^0.5.1",
@@ -110,7 +110,7 @@
     "@types/express": "^5.0.0",
     "@types/graphql-depth-limit": "^1.1.6",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "@types/nodemailer": "^7.0.11",
     "@types/passport-jwt": "^4.0.1",
     "@types/sanitize-html": "^2.16.1",
@@ -129,7 +129,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.66.0"
   },
   "jest": {
     "moduleFileExtensions": [
