@@ -1,4 +1,4 @@
-import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
+import { Resolver, Mutation, Query, Args, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './services/auth.service';
@@ -11,6 +11,7 @@ import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
 import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
 import { RegisterSupervisorInput } from './dto/inputs/register-supervisor.input';
 import { RegisterSupervisorResponse } from './dto/responses/register-supervisor.response';
+import { SupervisorVerificationStatusResponse } from './dto/responses/supervisor-verification-status.response';
 import { ResetPasswordInput } from './dto/inputs/reset-password.input';
 import { RequestPasswordResetResponse } from './dto/responses/request-password-reset.response';
 import { DeviceInfo } from './interfaces/jwt-payload.interface';
@@ -91,6 +92,32 @@ export class AuthResolver {
     @Args('input') input: RegisterSupervisorInput,
   ): Promise<RegisterSupervisorResponse> {
     return this.authService.registerSupervisor(input);
+  }
+
+  @Public()
+  @Mutation(() => RegisterSupervisorResponse, {
+    name: 'resendSupervisorVerification',
+    description:
+      'Reenvía el enlace de verificación al correo ya registrado. Sujeto a un enfriamiento del servidor; ' +
+      'responde igual para un registro inexistente o ya verificado, para no revelar cuál es cuál.',
+  })
+  async resendSupervisorVerification(
+    @Args('supervisorId', { type: () => String }) supervisorId: string,
+  ): Promise<RegisterSupervisorResponse> {
+    return this.authService.resendSupervisorVerificationEmail(supervisorId);
+  }
+
+  @Public()
+  @Query(() => SupervisorVerificationStatusResponse, {
+    name: 'supervisorVerificationStatus',
+    description:
+      'Estado del registro mientras la app espera en "Revisa tu correo". El enlace se abre en el navegador, ' +
+      'así que la app solo puede enterarse consultando. No devuelve datos del usuario.',
+  })
+  async supervisorVerificationStatus(
+    @Args('supervisorId', { type: () => String }) supervisorId: string,
+  ): Promise<SupervisorVerificationStatusResponse> {
+    return this.authService.supervisorVerificationStatus(supervisorId);
   }
 
   @Public()

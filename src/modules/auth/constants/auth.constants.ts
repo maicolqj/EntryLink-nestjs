@@ -96,6 +96,14 @@ export const AUTH_CONSTANTS = {
     OTP_LOCK: 'otp-lock',
     PASSWORD_RESET_RATE_LIMIT: 'pr-rl',
     EMAIL_VERIFICATION_TOKEN: 'ev-tok',
+    // Último token de verificación emitido por usuario. Existe para poder
+    // ANULARLO: si el supervisor se equivocó de correo y corrige, el enlace que
+    // ya salió a la dirección errónea seguiría siendo válido, y verificar da
+    // sesión — se lo estaríamos entregando a un desconocido.
+    EMAIL_VERIFICATION_BY_USER: 'ev-user',
+    // Enfriamiento del reenvío. Sin él, el botón de la app se convierte en un
+    // disparador de correo gratis contra la dirección de un tercero.
+    EMAIL_VERIFICATION_RESEND: 'ev-resend',
     PASSWORD_RESET_TOKEN: 'pr-tok',
     GRACE_WINDOW: 'rt-grace',
   },
@@ -124,6 +132,9 @@ export const AUTH_CONSTANTS = {
 
   // ── Verificación de email (registro de supervisor) ───────────────────────
   EMAIL_VERIFICATION_EXPIRY_MINUTES: 24,  // 24 horas
+  // Espera entre reenvíos. El botón de la app cuenta hacia atrás con este mismo
+  // número, pero quien manda es el servidor: el cliente puede reiniciarse.
+  EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: 60,
 } as const;
 
 /**
