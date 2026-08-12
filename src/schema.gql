@@ -2159,6 +2159,17 @@ type RegisterSupervisorResponse {
   supervisorId: String
 }
 
+"""Estado de verificación del correo de un supervisor recién registrado"""
+type SupervisorVerificationStatusResponse {
+  """True cuando el supervisor ya abrió el enlace y su cuenta quedó activa"""
+  verified: Boolean!
+
+  """
+  Segundos que faltan para poder reenviar. 0 = el botón de reenvío ya está habilitado. Lo decide el servidor: el cliente puede reiniciarse y perder su cuenta atrás.
+  """
+  resendAvailableInSeconds: Int!
+}
+
 type RequestPasswordResetResponse {
   success: Boolean!
   message: String!
@@ -3726,6 +3737,11 @@ scalar JSON
 
 type Query {
   """
+  Estado del registro mientras la app espera en "Revisa tu correo". El enlace se abre en el navegador, así que la app solo puede enterarse consultando. No devuelve datos del usuario.
+  """
+  supervisorVerificationStatus(supervisorId: String!): SupervisorVerificationStatusResponse!
+
+  """
   Indica si la cuenta ya tiene clave de acceso. El cliente la consulta tras iniciar sesión para exigir su creación cuando falta.
   """
   residentHasAccessCode: Boolean!
@@ -4191,6 +4207,11 @@ type Mutation {
   registerSupervisor(input: RegisterSupervisorInput!): RegisterSupervisorResponse!
 
   """
+  Reenvía el enlace de verificación al correo ya registrado. Sujeto a un enfriamiento del servidor; responde igual para un registro inexistente o ya verificado, para no revelar cuál es cuál.
+  """
+  resendSupervisorVerification(supervisorId: String!): RegisterSupervisorResponse!
+
+  """
   Verifica el correo del supervisor con el token enviado por email. Activa la cuenta y devuelve tokens JWT.
   """
   verifySupervisorEmail(token: String!): AuthResponse!
@@ -4304,6 +4325,7 @@ type Mutation {
   resolvePanicAlert(panicAlertId: String!, resolutionNotes: String, falseAlarm: Boolean): PanicAlert!
   deleteNotification(notificationId: String!): Boolean!
   saveMobileToken(input: SaveMobileTokenInput!): PushSubscriptionResult!
+  deactivateMobileToken(deviceToken: String!): PushSubscriptionResult!
   createResident(input: CreateResidentInput!): Resident!
   updateResident(input: UpdateResidentInput!): Resident!
   suspendResident(residentId: String!, reason: String!): Resident!
