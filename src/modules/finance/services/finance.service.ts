@@ -656,8 +656,11 @@ export class FinanceService {
         });
         if (existingMora) { skipped++; continue; }
 
-        const moraDueDate = new Date(now);
-        moraDueDate.setDate(moraDueDate.getDate() + 5);
+        // La nota de mora vence como cualquier otro cargo de su período: el último
+        // día del mes en curso. Antes eran 5 días fijos desde la corrida, lo que
+        // hacía que la nota venciera antes que la cuota que la originó y que su
+        // fecha dependiera del día en que se ejecutara el proceso.
+        const moraDueDate = this.buildDueDate(period);
 
         await queryRunner.manager.save(
           FeeCharge,
