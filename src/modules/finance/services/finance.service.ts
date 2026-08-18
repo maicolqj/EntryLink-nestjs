@@ -252,6 +252,69 @@ export class FinanceService {
   // MÉTODOS INTERNOS PARA CRONS (sin validación de acceso)
   // ─────────────────────────────────────────────────────────────────────────────
 
+  /** Tope de meses que el catch-up recupera de una sola corrida. */
+  private static readonly MAX_CATCHUP_MONTHS = 12;
+
+  /**
+   * Emite los cargos de todos los períodos pendientes hasta el mes en curso,
+   * inclusive. Existe porque la emisión mensual puede perderse: si el proceso
+   * está caído el día 1, ese mes nunca se facturaba y quedaba un hueco permanente
+   * en la cartera (p. ej. cargos hasta junio con el complejo operando en agosto).
+   *
+   * El punto de partida es el mes siguiente al último período ya facturado. Sin
+   * cargos previos solo emite el mes en curso — no inventa historia hacia atrás.
+   * `generateChargesInternal` es idempotente, así que reprocesar es inofensivo.
+   */
+  async generateMissingChargesInternal(
+    complexId: string,
+    currentPeriod: string,
+  ): Promise<{ generated: number; skipped: number; periods: string[] }> {
+    this.assertValidPeriod(currentPeriod);
+
+    const lastRow = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('MAX(c.period)', 'period')
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere('c.deletedAt IS NULL')
+      .getRawOne<{ period: string | null }>();
+
+    const lastPeriod = lastRow?.period ?? null;
+    const startPeriod = lastPeriod ? this.nextPeriod(lastPeriod) : currentPeriod;
+
+    const pending: string[] = [];
+    for (let p = startPeriod; p <= currentPeriod; p = this.nextPeriod(p)) {
+      pending.push(p);
+      if (pending.length >= FinanceService.MAX_CATCHUP_MONTHS) break;
+    }
+
+    if (pending.length === 0) return { generated: 0, skipped: 0, periods: [] };
+
+    if (pending.length > 1) {
+      this.logger.warn(
+        `[catch-up] Complejo ${complexId}: ${pending.length} períodos sin facturar ` +
+        `(${pending[0]} → ${pending[pending.length - 1]}); recuperando.`,
+      );
+    }
+
+    let generated = 0;
+    let skipped = 0;
+    for (const p of pending) {
+      const r = await this.generateChargesInternal(complexId, p);
+      generated += r.generated;
+      skipped += r.skipped;
+    }
+
+    return { generated, skipped, periods: pending };
+  }
+
+  /** Período YYYY-MM siguiente al recibido. */
+  private nextPeriod(period: string): string {
+    const [year, month] = period.split('-').map(Number);
+    const y = month === 12 ? year + 1 : year;
+    const m = month === 12 ? 1 : month + 1;
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+
   /**
    * Versión interna de generateCharges para uso desde cron jobs.
    * Omite la verificación de acceso del usuario.
@@ -363,7 +426,7 @@ export class FinanceService {
           continue;
         }
 
-        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
+        const dueDate = this.buildDueDate(period, config.billingMode);
 
         // Descuento de pronto pago: usar earlyPaymentAmount si la unidad está al día
         let chargeAmount: number = Number(config.amount);
@@ -385,7 +448,7 @@ export class FinanceService {
           if (!priorUnpaid) {
             chargeAmount = Number(config.earlyPaymentAmount);
             normalAmount = Number(config.amount);
-            earlyPaymentDueDate = this.buildDueDate(
+            earlyPaymentDueDate = this.buildPeriodDayDate(
               period,
               config.earlyPaymentDueDayOfMonth ?? config.dueDayOfMonth,
               config.billingMode,
@@ -462,7 +525,7 @@ export class FinanceService {
         });
         if (existing) continue;
 
-        const dueDate = this.buildDueDate(period, config.dueDayOfMonth, config.billingMode);
+        const dueDate = this.buildDueDate(period, config.billingMode);
         await this.chargeRepo.save(
           this.chargeRepo.create({
             complexId,
@@ -540,10 +603,13 @@ export class FinanceService {
     const now = new Date();
     const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+    // Incluye PENDING a propósito: si el cron de vencimiento no corrió (contenedor
+    // caído, entorno local apagado), el cargo sigue PENDING en BD aunque su fecha
+    // ya pasó. La mora se decide por fecha, no por el status persistido.
     const overdueCharges = await this.chargeRepo.find({
       where: {
         complexId,
-        status: In([ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID]),
+        status: In([ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID, ChargeStatus.OVERDUE]),
         deletedAt: null as any,
       },
     });
@@ -566,9 +632,14 @@ export class FinanceService {
 
     try {
       for (const charge of chargesToProcess) {
-        // Fecha de referencia: día 1 del mes siguiente al período del cargo
+        // La mora corre desde el vencimiento real del cargo. Usar `dueDate` (fin
+        // del mes de cobro) en vez de derivarlo del período es lo único correcto
+        // en ARREARS, donde el cargo de junio vence el 31 de julio y no el 1.
+        // Fallback al día 1 del mes siguiente al período para cargos sin dueDate.
         const [chargeYear, chargeMonth] = charge.period.split('-').map(Number);
-        const refDate = new Date(chargeYear, chargeMonth, 1); // chargeMonth es 1-indexed → mes siguiente en Date (0-indexed)
+        const refDate = charge.dueDate
+          ? new Date(charge.dueDate)
+          : new Date(chargeYear, chargeMonth, 1); // chargeMonth 1-indexed → mes siguiente en Date
         const diasVencidos = Math.floor((now.getTime() - refDate.getTime()) / 86_400_000);
 
         if (diasVencidos <= graceDays) { skipped++; continue; }
@@ -772,6 +843,7 @@ export class FinanceService {
     const { complexId, period } = input;
     await this.complexService.findById(complexId, currentUser);
     this.assertValidPeriod(period);
+    this.assertNotFuturePeriod(period);
 
     // Núcleo compartido: misma lógica que el cron (incluye reconciliación de
     // saldos materializados y emisión del socket FINANCE_CHARGE_NEW).
@@ -815,9 +887,7 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
     this.assertValidPeriod(period);
 
-    const [year, month] = period.split('-').map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    const dueDate = new Date(year, month - 1, lastDay);
+    const dueDate = this.buildDueDate(period);
 
     let created = 0;
     let skipped = 0;
@@ -1639,6 +1709,14 @@ export class FinanceService {
 
     await this.populateMoraAmount(items);
 
+    // Reportar el estado derivado: el filtro ya trataba como vencido un cargo con
+    // saldo y fecha pasada, pero `status` seguía saliendo con el valor persistido,
+    // así que un cargo de junio se mostraba "Pendiente" en agosto si el cron de
+    // vencimiento no había corrido. Solo lectura — estas entidades no se guardan.
+    for (const charge of items) {
+      charge.status = charge.effectiveStatus;
+    }
+
     return {
       items,
       pagination: {
@@ -2173,9 +2251,12 @@ export class FinanceService {
       )
       .where('u.complexId = :complexId', { complexId })
       .andWhere('u.deletedAt IS NULL')
-      .andWhere('u.status NOT IN (:...excludedStatuses)', {
-        excludedStatuses: [UnitStatus.DISABLED, UnitStatus.MAINTENANCE],
-      })
+      // Las unidades fuera de servicio se omiten de la cartera, salvo que arrastren
+      // saldo: un cambio de estado operativo no puede ocultar deuda real.
+      .andWhere(
+        '(u.status NOT IN (:...excludedStatuses) OR COALESCE(ch.total_debt, 0) > 0)',
+        { excludedStatuses: [UnitStatus.DISABLED, UnitStatus.MAINTENANCE] },
+      )
       .orderBy('u.number', 'ASC')
       .getRawMany();
 
@@ -2698,23 +2779,69 @@ export class FinanceService {
     });
   }
 
-  /** Calcula la fecha de vencimiento a partir del período YYYY-MM y el día de vencimiento. */
+  /**
+   * Vencimiento del cargo: último instante del mes facturado (ADVANCE) o del mes
+   * siguiente (ARREARS). Un cargo del período M se paga durante todo M; recién el
+   * día 1 de M+1 pasa a OVERDUE y empieza a correr la mora.
+   *
+   * `dueDayOfMonth` NO define el vencimiento: solo marca el corte del descuento
+   * por pronto pago (ver `buildPeriodDayDate`). Pasado ese día el cargo cobra
+   * tarifa plena pero sigue PENDING.
+   *
+   * La hora 23:59:59 es deliberada: sin ella el cargo se reportaría vencido
+   * durante su propio último día, porque `effectiveStatus` compara contra `now`.
+   */
   private buildDueDate(
+    period: string,
+    billingMode: FeeConfigBillingMode = FeeConfigBillingMode.ADVANCE,
+  ): Date {
+    const { year, month } = this.resolveDueMonth(period, billingMode);
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, lastDay, 23, 59, 59, 999);
+  }
+
+  /**
+   * Un día concreto dentro del mes facturado. Se usa para el corte de pronto pago,
+   * que sí depende de un día configurable.
+   */
+  private buildPeriodDayDate(
     period: string,
     day: number,
     billingMode: FeeConfigBillingMode = FeeConfigBillingMode.ADVANCE,
   ): Date {
+    const { year, month } = this.resolveDueMonth(period, billingMode);
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, Math.min(day, lastDay), 23, 59, 59, 999);
+  }
+
+  /** Mes de cobro de un período: el mismo (ADVANCE) o el siguiente (ARREARS). */
+  private resolveDueMonth(
+    period: string,
+    billingMode: FeeConfigBillingMode,
+  ): { year: number; month: number } {
     const [year, month] = period.split('-').map(Number);
-    let dueYear = year;
-    let dueMonth = month;
+    if (billingMode !== FeeConfigBillingMode.ARREARS) return { year, month };
+    return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  }
 
-    if (billingMode === FeeConfigBillingMode.ARREARS) {
-      if (dueMonth === 12) { dueMonth = 1; dueYear += 1; }
-      else { dueMonth += 1; }
+  /**
+   * Impide facturar por adelantado un mes que todavía no empezó (emitir agosto
+   * durante julio). El cargo de un período nace el día 1 de ese período; los
+   * períodos pasados sí se permiten, para backfill de complejos que migran.
+   */
+  private assertNotFuturePeriod(period: string): void {
+    const today = new Date();
+    const currentPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    if (period > currentPeriod) {
+      throw new CustomError({
+        message:
+          `No se pueden generar cargos del período ${period} porque aún no ha iniciado. ` +
+          `El período facturable más reciente es ${currentPeriod}.`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: FinanceErrorCode.PERIOD_IN_FUTURE,
+      });
     }
-
-    const lastDay = new Date(dueYear, dueMonth, 0).getDate();
-    return new Date(dueYear, dueMonth - 1, Math.min(day, lastDay));
   }
 
   private assertValidPeriod(period: string): void {

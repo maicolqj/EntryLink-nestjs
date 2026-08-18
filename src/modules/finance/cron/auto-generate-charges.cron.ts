@@ -9,16 +9,16 @@ import { FinanceService }       from '../services/finance.service';
 import { ComplexStatus }        from '../../residential-complex/enums/complex-status.enum';
 
 /**
- * Cron diario a las 00:05 AM (Bogotá) que genera cargos automáticamente
- * para los complejos que tienen `autoGenerateCharges = true`.
+ * Cron diario 00:05 AM (Bogotá): emite los cargos de los períodos que falten
+ * hasta el mes en curso, para los complejos con `autoGenerateCharges = true`.
  *
- * Lógica por complejo:
- *  1. Obtiene todas las FeeConfigs activas.
- *  2. Para cada FeeConfig, calcula el "día efectivo de vencimiento"
- *     del mes anterior (min(dueDayOfMonth, últimoDíaDelMes)).
- *  3. Si ayer coincide con ese día efectivo, llama a generateChargesInternal
- *     con el período = YYYY-MM de ayer.
- *  4. La idempotencia del servicio evita duplicados.
+ * Corre todos los días, no solo el 1, porque una sola corrida mensual perdida
+ * (proceso caído, despliegue, entorno apagado) dejaba un hueco permanente en la
+ * cartera. El catch-up recupera esos meses en la siguiente corrida; en el caso
+ * normal el día 1 emite el mes que arranca y los demás días no hacen nada.
+ *
+ * Nunca emite un período futuro, y `dueDayOfMonth` ya no dispara la emisión:
+ * quedó solo como corte de pronto pago.
  */
 @Injectable()
 export class AutoGenerateChargesCron {
@@ -34,18 +34,9 @@ export class AutoGenerateChargesCron {
 
   @Cron('5 0 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
-    // Calcular "ayer" en la zona horaria del servidor (America/Bogota via TZ env)
-    const today     = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-
-    const yDay   = yesterday.getDate();
-    const yMonth = yesterday.getMonth() + 1;
-    const yYear  = yesterday.getFullYear();
-    const period = `${yYear}-${String(yMonth).padStart(2, '0')}`;
-
-    // Días en el mes de ayer (para calcular el efectivo de cada FeeConfig)
-    const lastDayOfYesterdayMonth = new Date(yYear, yMonth, 0).getDate();
+    // Mes en curso (America/Bogota via TZ env). Es el tope: nunca se emite futuro.
+    const today  = new Date();
+    const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
     // Cargar configs activas que tienen autoGenerateCharges=true
     // y cuyo complejo está ACTIVO
@@ -59,8 +50,9 @@ export class AutoGenerateChargesCron {
 
     if (!configs.length) return;
 
-    this.logger.log(
-      `[AutoGenerateCharges] Ejecutando para período ${period} ` +
+    // Debug: corre a diario y la mayoría de los días no hay nada que emitir.
+    this.logger.debug(
+      `[AutoGenerateCharges] Revisando hasta ${period} ` +
       `— ${configs.length} complejo(s) candidatos`,
     );
 
@@ -69,28 +61,21 @@ export class AutoGenerateChargesCron {
     for (const cfg of configs) {
       const complexId = cfg.complexId;
 
-      // Obtener FeeConfigs activas del complejo
-      const feeConfigs = await this.feeConfigRepo.find({
+      // Sin conceptos activos no hay nada que emitir
+      const activeConfigs = await this.feeConfigRepo.count({
         where: { complexId, isActive: true, deletedAt: null as any },
-        select: ['id', 'dueDayOfMonth'],
       });
 
-      if (!feeConfigs.length) continue;
-
-      // Verificar si alguna FeeConfig tiene ayer como su día efectivo de vencimiento
-      const shouldGenerate = feeConfigs.some(fc => {
-        const effectiveDay = Math.min(fc.dueDayOfMonth, lastDayOfYesterdayMonth);
-        return effectiveDay === yDay;
-      });
-
-      if (!shouldGenerate) continue;
+      if (!activeConfigs) continue;
 
       try {
-        const result = await this.financeService.generateChargesInternal(complexId, period);
-        this.logger.log(
-          `[AutoGenerateCharges] Complejo ${complexId} | período ${period} ` +
-          `→ ${result.generated} generados, ${result.skipped} omitidos`,
-        );
+        const result = await this.financeService.generateMissingChargesInternal(complexId, period);
+        if (result.generated > 0) {
+          this.logger.log(
+            `[AutoGenerateCharges] Complejo ${complexId} | períodos ${result.periods.join(', ')} ` +
+            `→ ${result.generated} generados, ${result.skipped} omitidos`,
+          );
+        }
         processedComplexes++;
       } catch (err) {
         this.logger.error(
@@ -101,8 +86,8 @@ export class AutoGenerateChargesCron {
     }
 
     if (processedComplexes > 0) {
-      this.logger.log(
-        `[AutoGenerateCharges] Completado: ${processedComplexes} complejo(s) procesados para ${period}`,
+      this.logger.debug(
+        `[AutoGenerateCharges] Completado: ${processedComplexes} complejo(s) revisados hasta ${period}`,
       );
     }
   }

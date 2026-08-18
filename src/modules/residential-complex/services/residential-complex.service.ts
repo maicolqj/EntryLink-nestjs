@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, ILike, IsNull, Repository } from 'typeorm';
 
 import { ResidentialComplex } from '../entities/residential-complex.entity';
 import { CreateComplexInput } from '../dto/inputs/create-complex.input';
@@ -356,7 +356,6 @@ export class ResidentialComplexService {
       const saved = await manager.save(ResidentialComplex, complex);
 
       // Al desactivar el complejo, marcar todas sus unidades como DISABLED.
-      // Al reactivar NO se restauran — cada unidad se gestiona de forma independiente.
       if (status === ComplexStatus.INACTIVE) {
         await manager.update(Unit, { complexId: id }, { status: UnitStatus.DISABLED });
         this.logger.warn(`Complejo ${id} desactivado — unidades marcadas como DISABLED`);
@@ -365,6 +364,7 @@ export class ResidentialComplexService {
       // Al activar un complejo (p. ej. aprobación de registro PENDING_REVIEW→ACTIVE),
       // garantizar que tenga su PUC contable sembrado (idempotente, best-effort).
       if (status === ComplexStatus.ACTIVE && previousStatus !== ComplexStatus.ACTIVE) {
+        await this.restoreDisabledUnits(manager, id);
         await this.seedPucSafe(id);
       }
 
@@ -385,6 +385,53 @@ export class ResidentialComplexService {
 
       return saved;
     });
+  }
+
+  /**
+   * Devuelve a servicio las unidades que quedaron en DISABLED tras desactivar el
+   * complejo. Sin la restauración, un complejo reactivado queda con todas sus
+   * unidades invisibles para finanzas, torres y asignación de residentes.
+   *
+   * El estado destino se deriva de la ocupación real: OCCUPIED si la unidad tiene
+   * al menos un residente activo, AVAILABLE en caso contrario. Las unidades en
+   * MAINTENANCE no se tocan.
+   *
+   * Nota: no distinguimos una unidad deshabilitada individualmente (disableUnit)
+   * de una deshabilitada en masa, así que la reactivación del complejo también
+   * devuelve a servicio las primeras.
+   */
+  private async restoreDisabledUnits(manager: EntityManager, complexId: string): Promise<void> {
+    // El estado va como parámetro (no como literal dentro de un CASE) para que
+    // Postgres infiera units_status_enum desde la columna destino en vez de text.
+    const restoreTo = async (targetStatus: UnitStatus, occupancyPredicate: string): Promise<number> => {
+      const result = await manager.query(
+        `UPDATE units u
+            SET status = $2,
+                updated_at = NOW()
+          WHERE u."complexId" = $1
+            AND u.status = 'DISABLED'
+            AND u.deleted_at IS NULL
+            AND ${occupancyPredicate} (
+              SELECT 1 FROM residents r
+               WHERE r.unit_id = u.id
+                 AND r.status = 'ACTIVE'
+                 AND r.deleted_at IS NULL
+            )`,
+        [complexId, targetStatus],
+      );
+      return Array.isArray(result) ? (result[1] ?? 0) : 0;
+    };
+
+    const occupied  = await restoreTo(UnitStatus.OCCUPIED,  'EXISTS');
+    const available = await restoreTo(UnitStatus.AVAILABLE, 'NOT EXISTS');
+    const restored  = occupied + available;
+
+    if (restored > 0) {
+      this.logger.log(
+        `Complejo ${complexId} reactivado — ${restored} unidades devueltas a servicio ` +
+        `(${occupied} OCCUPIED, ${available} AVAILABLE)`,
+      );
+    }
   }
 
   // ================================================================
