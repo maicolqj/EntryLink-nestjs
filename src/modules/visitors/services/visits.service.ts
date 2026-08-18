@@ -96,12 +96,16 @@ export class VisitsService {
     await this.unitService.findById(input.unitId, currentUser);
 
     // 3. Obtener o crear visitante
+    // Los datos del documento (nacimiento, nacionalidad, estatura, expedición)
+    // describen a la persona, no a esta visita concreta: van al visitante, donde
+    // se conservan entre visitas en vez de duplicarse en cada entrada.
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
       name:      input.visitorName,
       lastName:  input.visitorLastName,
       identity:  input.visitorIdentity,
       phone:     input.visitorPhone,
       photoUrl:  input.visitorPhotoUrl,
+      metadata:  input.metadata,
     });
 
     // 4. Verificar lista negra ANTES de crear la visita
@@ -128,7 +132,6 @@ export class VisitsService {
       purpose:            input.purpose,
       vehiclePlate:       input.vehiclePlate?.toUpperCase().trim(),
       notes:              input.notes,
-      metadata:           input.metadata,
       registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 

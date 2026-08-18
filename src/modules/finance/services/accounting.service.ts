@@ -607,7 +607,7 @@ export class AccountingService {
       let created = 0;
       for (const rc of recs) {
         const incomeAcc = await this.requireAccountById(em, complexId, rc.incomeAccountId);
-        const dueDate = this.buildPeriodDate(period, rc.billingDay, rc.billingMode);
+        const dueDate = this.buildPeriodDate(period, rc.billingMode);
         const earlyPct = Number(rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0);
         const earlyDay = rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
         const matching = rc.vehicleTypes?.length
@@ -1540,7 +1540,7 @@ export class AccountingService {
         const earlyPct = Number(rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0);
         const earlyDay = rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
 
-        const dueDate = this.buildPeriodDate(period, rc.billingDay, rc.billingMode);
+        const dueDate = this.buildPeriodDate(period, rc.billingMode);
         const common = {
           complexId, period, dueDate, prelacion: concept, conceptName: rc.concept,
           receivableAccId: receivableAcc.id, incomeAccId: incomeAcc.id,
@@ -1759,7 +1759,11 @@ export class AccountingService {
     let earlyPaymentDueDate: Date | null = null;
     if (p.earlyPct > 0 && p.earlyDay != null) {
       const lastDay = new Date(p.dueDate.getFullYear(), p.dueDate.getMonth() + 1, 0).getDate();
-      const epd = new Date(p.dueDate.getFullYear(), p.dueDate.getMonth(), Math.min(p.earlyDay, lastDay));
+      // Fin del día: el descuento vale durante todo el `earlyDay`, no hasta su medianoche.
+      const epd = new Date(
+        p.dueDate.getFullYear(), p.dueDate.getMonth(),
+        Math.min(p.earlyDay, lastDay), 23, 59, 59, 999,
+      );
       const discounted = round2(p.unitAmount * (1 - p.earlyPct / 100));
       if (epd > p.now && discounted < p.unitAmount) {
         chargeAmount = discounted; normalAmount = p.unitAmount; earlyPaymentDueDate = epd;
@@ -1777,14 +1781,16 @@ export class AccountingService {
   }
 
   /**
-   * Fecha de vencimiento del cargo causado.
-   * - ADVANCE: vence el `day` del MISMO período.
-   * - ARREARS (mes vencido, default): vence el `day` del mes SIGUIENTE, para que
-   *   un cargo causado dentro del período no nazca vencido.
+   * Fecha de vencimiento del cargo causado: último instante del mes de cobro.
+   * - ADVANCE: fin del MISMO período.
+   * - ARREARS (mes vencido, default): fin del mes SIGUIENTE.
+   *
+   * El cargo se paga durante todo su mes de cobro; recién el día 1 del mes
+   * siguiente pasa a OVERDUE y empieza a correr la mora. El `billingDay` del
+   * recurrente ya no adelanta el vencimiento — solo dispara la causación.
    */
   private buildPeriodDate(
     period: string,
-    day: number,
     billingMode: FeeConfigBillingMode = FeeConfigBillingMode.ARREARS,
   ): Date {
     const [year, month] = period.split('-').map(Number);
@@ -1797,7 +1803,7 @@ export class AccountingService {
     }
 
     const lastDay = new Date(dueYear, dueMonth, 0).getDate(); // dueMonth es 1-indexed
-    return new Date(dueYear, dueMonth - 1, Math.min(day, lastDay));
+    return new Date(dueYear, dueMonth - 1, lastDay, 23, 59, 59, 999);
   }
 
   /** Filtra unidades según las reglas de segmentación de un cobro recurrente. */

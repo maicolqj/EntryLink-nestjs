@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { VisitType } from '../../enums/visit-type.enum';
 import GraphQLJSON from 'graphql-type-json';
 
@@ -38,8 +38,15 @@ export class RegisterWalkInInput {
   @IsString()
   visitorPhotoUrl?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
+  /**
+   * Datos que portería lee del documento y que no tienen columna propia:
+   * fecha y lugar de nacimiento, nacionalidad, estatura, expedición, grupo
+   * sanguíneo. Se guardan en `visitors.metadata` —describen a la persona, no a
+   * la visita— fusionándose con lo que el visitante ya tuviera.
+   */
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Datos del documento; se guardan en el visitante' })
   @IsOptional()
+  @IsObject()
   metadata?: Record<string, any>;
 
   // ---- Datos de la visita ----

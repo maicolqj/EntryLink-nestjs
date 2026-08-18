@@ -78,7 +78,7 @@ export class ChargeEmissionService {
       });
     }
 
-    const dueDate = this.buildDueDate(input.period, input.dueDayOfMonth, input.billingMode ?? FeeConfigBillingMode.ADVANCE);
+    const dueDate = this.buildDueDate(input.period, input.billingMode ?? FeeConfigBillingMode.ADVANCE);
 
     const emission = this.emissionRepo.create({
       complexId: input.complexId,
@@ -367,8 +367,12 @@ export class ChargeEmissionService {
     return new Set(rows.map((r: any) => r.unitId));
   }
 
-  /** Fecha de vencimiento a partir del período YYYY-MM y el día (ADVANCE/ARREARS). */
-  private buildDueDate(period: string, day: number, billingMode: FeeConfigBillingMode): Date {
+  /**
+   * Fecha de vencimiento: fin del mes de cobro del período (ADVANCE: el mismo mes;
+   * ARREARS: el siguiente). El cargo vence recién el día 1 del mes posterior, que
+   * es cuando pasa a OVERDUE y arranca la mora. `dueDayOfMonth` no lo adelanta.
+   */
+  private buildDueDate(period: string, billingMode: FeeConfigBillingMode): Date {
     const [year, month] = period.split('-').map(Number);
     let dueYear = year;
     let dueMonth = month;
@@ -376,6 +380,6 @@ export class ChargeEmissionService {
       if (dueMonth === 12) { dueMonth = 1; dueYear += 1; } else { dueMonth += 1; }
     }
     const lastDay = new Date(dueYear, dueMonth, 0).getDate();
-    return new Date(dueYear, dueMonth - 1, Math.min(day, lastDay));
+    return new Date(dueYear, dueMonth - 1, lastDay, 23, 59, 59, 999);
   }
 }

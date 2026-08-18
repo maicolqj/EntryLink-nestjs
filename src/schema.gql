@@ -5266,6 +5266,8 @@ input RegisterWalkInInput {
 
   """URL de la foto capturada en portería"""
   visitorPhotoUrl: String
+
+  """Datos del documento; se guardan en el visitante"""
   metadata: JSON
 
   """ID del residente anfitrión"""

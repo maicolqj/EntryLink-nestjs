@@ -24,6 +24,7 @@ import { AuditService } from '../../audit/services/audit.service';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode } from '../../shared/constans/error-codes.constants';
 import { AccountClass, AccountNature } from '../enums/account-nature.enum';
+import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 
 /**
  * Specs de las transacciones contables. Mockeamos un EntityManager mínimo que
@@ -516,6 +517,50 @@ describe('AccountingService', () => {
       await expect(service.deletePucAccount('acc-1', CPX, user)).rejects.toMatchObject({
         errorCode: FinanceErrorCode.PUC_ACCOUNT_IN_USE,
       });
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Vencimiento: el cargo de un período vive hasta el último día de su mes de
+  // cobro. Recién el día 1 del mes siguiente pasa a OVERDUE (y arranca la mora).
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('buildPeriodDate', () => {
+    const build = (period: string, mode: FeeConfigBillingMode) =>
+      (service as any).buildPeriodDate(period, mode) as Date;
+
+    it('ADVANCE: vence el último instante del mismo período', () => {
+      const d = build('2026-07', FeeConfigBillingMode.ADVANCE);
+      expect(d.getFullYear()).toBe(2026);
+      expect(d.getMonth()).toBe(6);   // julio (0-indexed)
+      expect(d.getDate()).toBe(31);
+      expect(d.getHours()).toBe(23);
+      expect(d.getMinutes()).toBe(59);
+    });
+
+    it('ARREARS: vence el último instante del mes siguiente', () => {
+      const d = build('2026-07', FeeConfigBillingMode.ARREARS);
+      expect(d.getMonth()).toBe(7);   // agosto
+      expect(d.getDate()).toBe(31);
+    });
+
+    it('ARREARS en diciembre: rueda al año siguiente', () => {
+      const d = build('2026-12', FeeConfigBillingMode.ARREARS);
+      expect(d.getFullYear()).toBe(2027);
+      expect(d.getMonth()).toBe(0);   // enero
+      expect(d.getDate()).toBe(31);
+    });
+
+    it('respeta meses cortos (febrero de año no bisiesto)', () => {
+      const d = build('2026-02', FeeConfigBillingMode.ADVANCE);
+      expect(d.getDate()).toBe(28);
+    });
+
+    it('no está vencido durante su propio último día', () => {
+      const d = build('2026-07', FeeConfigBillingMode.ADVANCE);
+      const treintaYUnoAlMediodia = new Date(2026, 6, 31, 12, 0, 0);
+      const primeroDeAgosto = new Date(2026, 7, 1, 0, 0, 0);
+      expect(d < treintaYUnoAlMediodia).toBe(false);
+      expect(d < primeroDeAgosto).toBe(true);
     });
   });
 });
