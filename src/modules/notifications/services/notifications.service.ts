@@ -51,6 +51,8 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { User }     from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { Role }     from '../../roles/entities/role.entity';
+import { SupervisorVisit }       from '../../supervisor-visits/entities/supervisor-visit.entity';
+import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-visit-status.enum';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
@@ -139,6 +141,9 @@ export class NotificationsService implements OnModuleInit {
 
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
+
+    @InjectRepository(SupervisorVisit)
+    private readonly supervisorVisitRepo: Repository<SupervisorVisit>,
 
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => ResidentsService))
@@ -801,6 +806,56 @@ export class NotificationsService implements OnModuleInit {
     return { success: true };
   }
 
+  /**
+   * Desactiva el token de este equipo al cerrar sesión.
+   *
+   * Sin esto la suscripción sobrevive a la sesión: `logout` invalida tokens y
+   * termina la sesión, pero no toca `push_subscriptions`, así que el servidor
+   * sigue considerando al usuario alcanzable en un teléfono donde ya no hay
+   * nadie. El síntoma audible es la alarma de pánico sonando sin sesión, pero
+   * alcanza a todo lo demás —visitas, paquetería, finanzas—, que es lo grave:
+   * son datos de una cuenta entregados en un equipo que puede estar en otras
+   * manos.
+   *
+   * Acotado al usuario que pide: el token identifica una instalación, no una
+   * cuenta, y sin el filtro cualquiera que conociera un token ajeno podría
+   * dejar a ese equipo sin notificaciones. Las filas de OTRAS cuentas sobre el
+   * mismo equipo ya las cierra `deactivateForeignSubscriptions` al registrar.
+   *
+   * Se desactiva en vez de borrar, igual que el resto del módulo: el historial
+   * de qué equipos estuvieron registrados es lo que alimenta la medición de
+   * entrega por marca.
+   *
+   * Idempotente y silencioso ante un token desconocido: el logout del cliente
+   * es best-effort y no puede quedar bloqueado porque el token ya no exista.
+   */
+  async deactivateMobileToken(
+    deviceToken: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<PushSubscriptionResult> {
+    if (!deviceToken?.trim()) return { success: true };
+
+    try {
+      const result = await this.pushSubRepo.update(
+        { deviceToken, userId: currentUser.sub, isActive: true },
+        { isActive: false },
+      );
+
+      if (result.affected) {
+        this.logger.log(
+          `Cierre de sesión de ${currentUser.sub}: ${result.affected} suscripción(es) push desactivada(s) en el equipo.`,
+        );
+      }
+
+      return { success: true };
+    } catch (e: any) {
+      // Que un fallo aquí no impida cerrar sesión. El costo es que ese equipo
+      // siga recibiendo push hasta el próximo registro, no una sesión abierta.
+      this.logger.error(`No se pudo desactivar el token del equipo: ${e?.message}`);
+      return { success: false };
+    }
+  }
+
   /** Retorna la clave pública VAPID (pública, sin guard) */
   getVapidPublicKey(): string {
     const key = this.configService.get<string>('VAPID_PUBLIC_KEY');
@@ -1222,10 +1277,42 @@ export class NotificationsService implements OnModuleInit {
    * exactamente el margen que se busca ganar.
    */
   private async resolveResponseStaffIds(complexId: string): Promise<string[]> {
-    return this.resolveTargetUserIds(complexId, [
-      ValidRoles.SUPERVISOR_ROL,
-      ValidRoles.COMPLEX_ROL,
+    const [adminIds, supervisorIds] = await Promise.all([
+      this.resolveTargetUserIds(complexId, [ValidRoles.COMPLEX_ROL]),
+      this.resolveSupervisorIdsOnSite(complexId),
     ]);
+
+    return [...new Set([...adminIds, ...supervisorIds])];
+  }
+
+  /**
+   * Supervisores con visita ACTIVA en el complejo.
+   *
+   * El supervisor no pertenece a un conjunto: atiende varios y su vínculo con
+   * cada uno es la visita, que abre con check-in —validado por GPS contra las
+   * coordenadas del complejo— y cierra con check-out. Fuera de esa ventana no
+   * tiene nada que ver con el sitio, así que tampoco recibe sus alertas.
+   *
+   * Por eso NO se resuelve con `resolveTargetUserIds`: ese filtra por
+   * `users.complex_id`, una columna que para un supervisor de varios conjuntos
+   * no dice nada útil. La asignación (`user_complex_assignments`) tampoco
+   * sirve aquí: es el permiso para visitar, no la presencia — un supervisor
+   * asignado a diez conjuntos recibiría los diez.
+   *
+   * Devuelve ids distintos: la tabla admite a lo sumo una visita activa por
+   * supervisor y complejo, pero el DISTINCT deja la garantía en la consulta y
+   * no en una invariante que puede cambiar.
+   */
+  private async resolveSupervisorIdsOnSite(complexId: string): Promise<string[]> {
+    const rows = await this.supervisorVisitRepo
+      .createQueryBuilder('sv')
+      .select('sv.supervisor_id', 'supervisorId')
+      .where('sv.complex_id = :complexId', { complexId })
+      .andWhere('sv.status = :status', { status: SupervisorVisitStatus.ACTIVE })
+      .distinct(true)
+      .getRawMany<{ supervisorId: string }>();
+
+    return rows.map(r => r.supervisorId);
   }
 
   async triggerPanicAlert(
@@ -2232,6 +2319,18 @@ export class NotificationsService implements OnModuleInit {
    */
   async findUserIdsByRoleInternal(complexId: string, roles: string[]): Promise<string[]> {
     return this.resolveTargetUserIds(complexId, roles);
+  }
+
+  /**
+   * Supervisores con visita ACTIVA en el complejo, para el escalamiento.
+   *
+   * Mismo criterio que el envío inmediato: el supervisor solo cuenta como
+   * destinatario mientras está de visita. Expuesto porque el procesador de la
+   * cola resuelve sus propios destinatarios por nivel y no puede llamar al
+   * privado.
+   */
+  async findSupervisorIdsOnSiteInternal(complexId: string): Promise<string[]> {
+    return this.resolveSupervisorIdsOnSite(complexId);
   }
 
   private async resolveTargetUserIds(

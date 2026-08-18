@@ -14,6 +14,7 @@ import { DevicePushHealth }        from './entities/device-push-health.entity';
 import { User }     from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
 import { Role }     from '../roles/entities/role.entity';
+import { SupervisorVisit } from '../supervisor-visits/entities/supervisor-visit.entity';
 import { ResidentsModule }       from '../residents/residents.module';
 
 import { NotificationsService }  from './services/notifications.service';
@@ -52,6 +53,10 @@ import {
       User,
       UserRole,
       Role,
+      // El supervisor solo es destinatario del pánico mientras tenga una visita
+      // ACTIVA en el complejo: su vínculo con el conjunto es la visita, no una
+      // columna del usuario.
+      SupervisorVisit,
     ]),
   ],
   controllers: [PanicController, DeviceHealthController],

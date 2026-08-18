@@ -184,14 +184,26 @@ export class PanicEscalationProcessor extends WorkerHost {
   // ── Destinatarios ───────────────────────────────────────────────────────────
 
   private async resolveTargets(alert: PanicAlert, level: number): Promise<string[]> {
+    // El supervisor se resuelve aparte: no pertenece al conjunto, así que no
+    // sale por rol. Su vínculo es la visita activa (ver
+    // findSupervisorIdsOnSiteInternal), y fuera de ella no recibe nada.
     const roles =
       level === 1
         ? [ValidRoles.SECURITY_ROL, ValidRoles.COMPLEX_ROL]
         : level === 2
-          ? [ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL]
-          : [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL];
+          ? [ValidRoles.COMPLEX_ROL]
+          : [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
 
-    const ids = await this.notificationsService.findUserIdsByRoleInternal(alert.complexId, roles);
+    const includesSupervisors = level >= 2;
+
+    const [byRole, supervisors] = await Promise.all([
+      this.notificationsService.findUserIdsByRoleInternal(alert.complexId, roles),
+      includesSupervisors
+        ? this.notificationsService.findSupervisorIdsOnSiteInternal(alert.complexId)
+        : Promise.resolve([]),
+    ]);
+
+    const ids = [...new Set([...byRole, ...supervisors])];
     // Nunca al que activó la alarma: ya sabe que la activó.
     return ids.filter(id => id !== alert.triggeredByUserId);
   }

@@ -35,7 +35,9 @@ import { UserErrorCode, AuthErrorCode, ComplexErrorCode } from '../../shared/con
 import { CustomError } from '../../shared/utils/errors.utils';
 import { ResetPasswordInput } from '../dto/inputs/reset-password.input';
 import { RequestPasswordResetResponse } from '../dto/responses/request-password-reset.response';
+import { isUUID } from 'class-validator';
 import { RegisterSupervisorResponse } from '../dto/responses/register-supervisor.response';
+import { SupervisorVerificationStatusResponse } from '../dto/responses/supervisor-verification-status.response';
 import { MailService } from '../../../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -574,12 +576,65 @@ export class AuthService {
   // Registro de supervisor + verificación de email
   // ═══════════════════════════════════════════════════════════════
 
+  /**
+   * Alta de supervisor por autorregistro.
+   *
+   * Reintentable mientras el correo no esté verificado. Un registro deja al
+   * usuario en PENDING_VERIFICATION con índices únicos sobre correo, teléfono y
+   * documento, así que un correo mal escrito bloqueaba el documento para
+   * siempre: al corregirlo y reintentar, el insert chocaba contra el teléfono y
+   * el documento del intento anterior y salía un error de base de datos. Ahora
+   * ese registro pendiente se reutiliza — se actualizan los datos y se reenvía
+   * la verificación.
+   *
+   * Solo aplica a cuentas PENDING_VERIFICATION y sin correo verificado: una
+   * cuenta ya verificada nunca se toca por esta vía.
+   */
   async registerSupervisor(input: RegisterSupervisorInput): Promise<RegisterSupervisorResponse> {
     const { fullName, email, password, phone, documentNumber } = input;
+    const normalizedEmail = email.toLowerCase().trim();
 
-    const existing = await this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
-    if (existing) {
+    const [byEmail, byDocumentOrPhone] = await Promise.all([
+      this.userRepo.findOne({
+        where: { email: normalizedEmail },
+        relations: ['userRoles', 'userRoles.role'],
+      }),
+      this.userRepo.findOne({
+        where: [{ identity: documentNumber }, { phoneNumber: phone }],
+        relations: ['userRoles', 'userRoles.role'],
+      }),
+    ]);
+
+    // Un registro es reutilizable solo mientras no dé acceso a nada: pendiente
+    // de verificar y con rol de supervisor.
+    const isReusable = (u: User | null): boolean =>
+      !!u &&
+      !u.emailVerified &&
+      u.status === UserStatus.PENDING_VERIFICATION &&
+      !!u.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL);
+
+    // El correo ya es de otra cuenta —verificada, o el registro pendiente de
+    // otra persona—. Mismo mensaje ambiguo de siempre: decir "ese correo ya
+    // existe" convierte este endpoint en un detector de cuentas.
+    if (byEmail && (!isReusable(byEmail) || (byDocumentOrPhone && byDocumentOrPhone.id !== byEmail.id))) {
       return { success: false, message: 'Si el correo no está registrado, recibirás un enlace de verificación', supervisorId: null };
+    }
+
+    const reusable = byEmail ?? (isReusable(byDocumentOrPhone) ? byDocumentOrPhone : null);
+
+    // Documento o teléfono de una cuenta que ya se verificó. Aquí sí conviene
+    // ser explícito: no hay nada que enumerar —quien registra conoce su propio
+    // documento— y sin el mensaje el usuario no sabe que debe iniciar sesión.
+    if (!reusable && byDocumentOrPhone) {
+      throw new CustomError({
+        message: 'Ya existe una cuenta con este documento o teléfono. Inicia sesión o recupera tu contraseña.',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: UserErrorCode.USER_ALREADY_EXISTS,
+      });
+    }
+
+    if (reusable) {
+      return this.resendSupervisorVerification(reusable, input, normalizedEmail);
     }
 
     const supervisorRole = await this.roleRepo.findOne({ where: { name: ValidRoles.SUPERVISOR_ROL } });
@@ -622,27 +677,207 @@ export class AuthService {
       return savedUser;
     });
 
-    const token = uuidv4();
+    await this.issueEmailVerification(user.id, user.email, user.name);
+    // Arranca el enfriamiento desde el alta: el reenvío no tiene sentido en el
+    // mismo segundo en que salió el primer correo.
+    await this.startResendCooldown(user.id);
+
+    this.logger.log(`Supervisor registrado: userId=${user.id}`);
+    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
+  }
+
+  /**
+   * Reutiliza un registro de supervisor que todavía no verificó su correo.
+   *
+   * Es el camino del correo mal escrito: los datos se sobrescriben con los del
+   * intento nuevo —incluida la contraseña, porque quien reintenta puede haber
+   * cambiado también eso— y sale una verificación nueva.
+   *
+   * La contraseña se re-hashea siempre en vez de compararla: la comparación
+   * costaría lo mismo y dejaría la puerta a que un reintento parcial deje la
+   * anterior.
+   */
+  private async resendSupervisorVerification(
+    user: User,
+    input: RegisterSupervisorInput,
+    normalizedEmail: string,
+  ): Promise<RegisterSupervisorResponse> {
+    const { fullName, password, phone, documentNumber } = input;
+
+    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    const nameParts  = fullName.trim().split(/\s+/);
+
+    await this.userRepo.update(user.id, {
+      name:        nameParts[0],
+      lastName:    nameParts.slice(1).join(' ') || nameParts[0],
+      email:       normalizedEmail,
+      password:    await bcrypt.hash(password, saltRounds),
+      passwordSet: true,
+      phoneNumber: phone,
+      identity:    documentNumber,
+    });
+
+    await this.issueEmailVerification(user.id, normalizedEmail, nameParts[0]);
+    await this.startResendCooldown(user.id);
+
+    this.logger.log(
+      `Registro de supervisor reintentado: userId=${user.id} | correo actualizado=${user.email !== normalizedEmail}`,
+    );
+    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
+  }
+
+  /**
+   * Estado del registro mientras la app espera en "Revisa tu correo".
+   *
+   * El supervisor verifica desde el navegador —el enlace abre la web, no la
+   * app—, así que la app no tiene forma de enterarse por sí sola: no hay sesión
+   * todavía, y por tanto tampoco socket. Consultar cada pocos segundos es lo
+   * único disponible.
+   *
+   * Responde lo mismo para un id inexistente que para uno sin verificar: la
+   * consulta es pública y no debe servir para distinguir ids válidos.
+   */
+  async supervisorVerificationStatus(
+    supervisorId: string,
+  ): Promise<SupervisorVerificationStatusResponse> {
+    const notFound = { verified: false, resendAvailableInSeconds: 0 };
+
+    if (!isUUID(supervisorId)) return notFound;
+
+    const user = await this.userRepo.findOne({
+      where: { id: supervisorId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user?.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL)) {
+      return notFound;
+    }
+
+    return {
+      verified: user.emailVerified,
+      resendAvailableInSeconds: await this.resendCooldownRemaining(supervisorId),
+    };
+  }
+
+  /**
+   * Reenvía el enlace de verificación al correo ya registrado.
+   *
+   * Distinto de reintentar el registro: aquí no cambia ningún dato, solo sale
+   * un enlace nuevo. Es para el caso "el correo está bien pero no llegó".
+   *
+   * El enfriamiento vive en el servidor a propósito. La cuenta atrás de la app
+   * es una cortesía visual; cerrar la app o reinstalarla no debe convertir el
+   * botón en un generador de correo contra la dirección de un tercero.
+   */
+  async resendSupervisorVerificationEmail(
+    supervisorId: string,
+  ): Promise<RegisterSupervisorResponse> {
+    const genericOk = {
+      success: true,
+      message: 'Si el registro sigue pendiente, recibirás un enlace nuevo',
+      supervisorId: null,
+    };
+
+    if (!isUUID(supervisorId)) return genericOk;
+
+    const user = await this.userRepo.findOne({
+      where: { id: supervisorId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    const isPendingSupervisor =
+      !!user &&
+      !user.emailVerified &&
+      user.status === UserStatus.PENDING_VERIFICATION &&
+      !!user.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL);
+
+    // Mismo mensaje para "no existe", "ya verificó" y "no es supervisor": desde
+    // fuera, ninguno de los tres se distingue del caso bueno.
+    if (!isPendingSupervisor) return genericOk;
+
+    const remaining = await this.resendCooldownRemaining(supervisorId);
+    if (remaining > 0) {
+      return {
+        success: false,
+        message: `Espera ${remaining} segundos para volver a enviar el correo`,
+        supervisorId,
+      };
+    }
+
+    await this.issueEmailVerification(user.id, user.email, user.name);
+    await this.startResendCooldown(supervisorId);
+
+    this.logger.log(`Verificación reenviada: userId=${user.id}`);
+    return { success: true, message: 'Te enviamos el enlace de nuevo', supervisorId };
+  }
+
+  /** Segundos que faltan para habilitar el reenvío; 0 si ya se puede. */
+  private async resendCooldownRemaining(supervisorId: string): Promise<number> {
+    const cached = await this.cacheService.get<{ availableAt: number }>({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND, key: supervisorId },
+    });
+    if (!cached?.availableAt) return 0;
+
+    // Se guarda el instante y no un simple flag para poder devolver cuánto
+    // falta: el TTL de la entrada no es legible desde el servicio de caché.
+    return Math.max(0, Math.ceil((cached.availableAt - Date.now()) / 1000));
+  }
+
+  private async startResendCooldown(supervisorId: string): Promise<void> {
+    const seconds = AUTH_CONSTANTS.EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS;
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND, key: supervisorId },
+      data: { availableAt: Date.now() + seconds * 1000 },
+      options: { ttl: seconds },
+    });
+  }
+
+  /**
+   * Emite el enlace de verificación y anula el anterior de ese usuario.
+   *
+   * La anulación es la parte que importa: si el primer intento salió a una
+   * dirección equivocada, ese enlace sigue vivo 24 horas y `verifySupervisorEmail`
+   * devuelve una SESIÓN, así que quien lo reciba entraría a una cuenta que ya no
+   * es suya. Por eso se guarda el último token por usuario: es la única forma de
+   * poder borrarlo, ya que la clave principal es el token mismo.
+   */
+  private async issueEmailVerification(
+    userId: string,
+    email: string,
+    name: string,
+  ): Promise<void> {
     const ttl = AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES * 60;
+
+    const previous = await this.cacheService.get<{ token: string }>({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER, key: userId },
+    });
+    if (previous?.token) {
+      await this.cacheService.delete({
+        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: previous.token },
+      });
+    }
+
+    const token = uuidv4();
     await this.cacheService.set({
       key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
-      data: { userId: user.id },
+      data: { userId },
+      options: { ttl },
+    });
+    await this.cacheService.set({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER, key: userId },
+      data: { token },
       options: { ttl },
     });
 
     const frontendUrl = this.configService.get<string>('FRONTEND_URL', '');
-    const verificationUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
 
     await this.mailService.queueEmailVerificationEmail({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      verificationUrl,
+      userId,
+      email,
+      name,
+      verificationUrl: `${frontendUrl}/auth/verify-email?token=${token}`,
       expiresInMinutes: AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES,
     });
-
-    this.logger.log(`Supervisor registrado: userId=${user.id}`);
-    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
   }
 
   async verifySupervisorEmail(token: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {

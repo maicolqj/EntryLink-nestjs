@@ -193,6 +193,25 @@ export class NotificationsResolver {
     return this.notificationsService.saveMobileToken(input, currentUser);
   }
 
+  /**
+   * Desactiva el token de este equipo al cerrar sesión.
+   *
+   * La suscripción push no muere con la sesión: `logout` invalida tokens y
+   * termina la sesión, pero deja la fila de `push_subscriptions` activa, así que
+   * el equipo sigue recibiendo todo lo de la cuenta anterior.
+   *
+   * El cliente debe llamarla ANTES de descartar su token de acceso: después ya
+   * no tiene con qué autenticarse.
+   */
+  @Mutation(() => PushSubscriptionResult, { name: 'deactivateMobileToken' })
+  @Auth()
+  deactivateMobileToken(
+    @Args('deviceToken') deviceToken: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PushSubscriptionResult> {
+    return this.notificationsService.deactivateMobileToken(deviceToken, currentUser);
+  }
+
   // ================================================================
   // QUERIES
   // ================================================================
