@@ -107,6 +107,27 @@ export class ResidentialComplex {
   @Column({ type: 'int', default: 10 })
   maxUnits: number;
 
+  // ==================== PQRF ====================
+  //
+  // El plazo de respuesta lo fija cada copropiedad en su reglamento. El valor
+  // por defecto es el de la ley colombiana para peticiones —15 días—, contados
+  // en días CALENDARIO: la plataforma no tiene calendario de festivos, e
+  // inventarlo daría plazos equivocados con apariencia de exactitud.
+
+  @Field(() => Int, { description: 'Días que tiene el complejo para resolver un PQRF' })
+  @Column({ name: 'pqrf_resolution_days', type: 'int', default: 15 })
+  pqrfResolutionDays: number;
+
+  /** Cuántos días antes del vencimiento empieza a recordarse. */
+  @Field(() => Int, { description: 'Días antes del vencimiento en que empiezan los recordatorios' })
+  @Column({ name: 'pqrf_reminder_lead_days', type: 'int', default: 3 })
+  pqrfReminderLeadDays: number;
+
+  /** Cada cuánto se insiste dentro de esos días. 0 = sin recordatorios. */
+  @Field(() => Int, { description: 'Horas entre recordatorios. 0 = sin recordatorios' })
+  @Column({ name: 'pqrf_reminder_interval_hours', type: 'int', default: 24 })
+  pqrfReminderIntervalHours: number;
+
   // ==================== CONTACTO ====================
 
   @Column({
