@@ -34,7 +34,7 @@ const build = (rows: { userId: string }[]): NotificationsService => {
     null as never, null as never, null as never,
     null as never,              // userRepo
     userRoleRepo as never,      // userRoleRepo
-    null as never, null as never, null as never, null as never,
+    null as never, null as never, null as never, null as never, null as never,
   );
 };
 
