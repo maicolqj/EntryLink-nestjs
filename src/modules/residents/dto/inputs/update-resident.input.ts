@@ -22,6 +22,16 @@ export class UpdateResidentInput {
   @IsBoolean()
   isMainResident?: boolean;
 
+  /**
+   * Miembro del consejo de administración. No es un rol: el consejo se renueva
+   * cada año y entra a la app como cualquier residente. Hoy solo lo miran las
+   * zonas comunes que reconocen reservas gratuitas al consejo.
+   */
+  @Field(() => Boolean, { nullable: true, description: 'Miembro del consejo de administración' })
+  @IsOptional()
+  @IsBoolean()
+  isCouncilMember?: boolean;
+
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()

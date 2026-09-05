@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Not, Repository } from 'typeorm';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { generateSystemCode } from '../../users/utils/system-code.util';
@@ -54,6 +54,9 @@ export class ResidentsService {
 
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
+
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
 
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
@@ -666,7 +669,10 @@ export class ResidentsService {
       });
     }
 
-    const { name, lastName, phoneNumber, ...residentFields } = input;
+    // La pertenencia al consejo no es una columna del residente: es el rol
+    // COUNCIL_ROL sobre su usuario. Se saca del patch para que no viaje al
+    // `Object.assign` de abajo, y se sincroniza aparte.
+    const { name, lastName, phoneNumber, isCouncilMember, ...residentFields } = input;
     const hasUserFields = name !== undefined || lastName !== undefined || phoneNumber !== undefined;
 
     // Detecta cambios reales (antes de mutar) para avisar al residente.
@@ -704,7 +710,13 @@ export class ResidentsService {
       }
 
       Object.assign(resident, residentFields);
-      return manager.save(Resident, resident);
+      const updated = await manager.save(Resident, resident);
+
+      if (isCouncilMember !== undefined) {
+        await this.syncCouncilRole(manager, resident.userId, isCouncilMember);
+      }
+
+      return updated;
     });
 
     await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
@@ -718,6 +730,80 @@ export class ResidentsService {
     });
 
     return savedUpdate;
+  }
+
+  // ================================================================
+  // CONSEJO DE ADMINISTRACIÓN
+  // ================================================================
+
+  /**
+   * Pone o quita COUNCIL_ROL sobre el usuario del residente.
+   *
+   * El consejo es un rol ADICIONAL: quien lo tiene sigue siendo residente y
+   * entra a la app como tal. Se modela así —y no como una casilla— porque al
+   * consejo se le dirigen cosas que la administración no debe ver, y eso es una
+   * frontera de permisos.
+   */
+  private async syncCouncilRole(
+    manager: EntityManager,
+    userId: string,
+    shouldBelong: boolean,
+  ): Promise<void> {
+    const councilRole = await manager.findOne(Role, {
+      where: { name: ValidRoles.COUNCIL_ROL },
+    });
+
+    if (!councilRole) {
+      // Sin el rol sembrado no se puede asignar, pero tampoco tiene sentido
+      // tumbar la edición del residente por eso.
+      this.logger.warn('COUNCIL_ROL no existe en la base: no se pudo sincronizar el consejo');
+      return;
+    }
+
+    const existing = await manager.findOne(UserRole, {
+      where: { user: { id: userId }, role: { id: councilRole.id } },
+    });
+
+    if (shouldBelong && !existing) {
+      // `isPrimary: false`: el rol principal sigue siendo el de residente, que
+      // es con el que inicia sesión.
+      await manager.save(manager.create(UserRole, {
+        user: { id: userId },
+        role: { id: councilRole.id },
+        isPrimary: false,
+      }));
+      return;
+    }
+
+    if (!shouldBelong && existing) {
+      await manager.delete(UserRole, existing.id);
+    }
+  }
+
+  /** ¿El usuario pertenece al consejo de administración? */
+  async isCouncilUser(userId: string): Promise<boolean> {
+    const count = await this.userRoleRepo.count({
+      where: { user: { id: userId }, role: { name: ValidRoles.COUNCIL_ROL } },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Miembros del consejo de un complejo, como ids de usuario. Es a quienes se
+   * les dirige lo que llega al consejo.
+   */
+  async findCouncilUserIds(complexId: string): Promise<string[]> {
+    const rows = await this.residentRepo
+      .createQueryBuilder('r')
+      .innerJoin(UserRole, 'ur', 'ur.user_id = r.user_id')
+      .innerJoin(Role, 'role', 'role.id = ur.role_id')
+      .where('r.complex_id = :complexId', { complexId })
+      .andWhere('r.deleted_at IS NULL')
+      .andWhere('role.name = :name', { name: ValidRoles.COUNCIL_ROL })
+      .select('DISTINCT r.user_id', 'userId')
+      .getRawMany<{ userId: string }>();
+
+    return rows.map(row => row.userId);
   }
 
   // ================================================================
@@ -1027,6 +1113,10 @@ export class ResidentsService {
     const qb = this.residentRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.user', 'user')
+      // Los roles vienen en la misma consulta porque el campo `isCouncilMember`
+      // se resuelve por residente: sin esto serían tantas consultas como filas.
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'userRole')
       .leftJoinAndSelect('r.unit', 'unit')
       .leftJoinAndSelect('unit.building', 'building')
       .leftJoinAndSelect('r.approvedByUser', 'approvedByUser')
@@ -1090,7 +1180,9 @@ export class ResidentsService {
       .leftJoinAndSelect('r.complex', 'complex')
       .where('r.status = :status', { status: ResidentStatus.PENDING_APPROVAL })
       .andWhere('r.deleted_at IS NULL')
-      .orderBy('r.created_at', 'ASC') // Los más antiguos primero
+      // Propiedad de la entidad, no columna: al paginar con joins TypeORM
+      // resuelve el orderBy contra los metadatos y 'r.created_at' no existe ahí.
+      .orderBy('r.createdAt', 'ASC') // Los más antiguos primero
       .skip(skip)
       .take(limit);
 

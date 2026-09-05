@@ -45,6 +45,11 @@ export class Resident {
   @Column({ name: 'is_main_resident', type: 'boolean', default: false })
   isMainResident: boolean;
 
+  // La pertenencia al consejo de administración NO vive aquí: es el rol
+  // COUNCIL_ROL sobre el usuario, que es lo que permite dirigirle cosas —un
+  // PQRF contra el administrador— sin pasar por la administración. El campo
+  // `isCouncilMember` del schema lo resuelve ResidentsResolver.
+
   // ==================== FECHAS DE RESIDENCIA ====================
 
   @Field(() => String, { description: 'Fecha de inicio de residencia' })
