@@ -13,6 +13,7 @@ export enum AuditEntityType {
   PucAccount         = 'PucAccount',
   Payment            = 'Payment',
   Note               = 'Note',
+  Pqrf               = 'Pqrf',
   ResidentialComplex = 'ResidentialComplex',
   Unit               = 'Unit',
   Building           = 'Building',
@@ -24,6 +25,8 @@ export enum AuditEntityType {
   SentMessage              = 'SentMessage',
   CallLog                  = 'CallLog',
   SpecialNumber            = 'SpecialNumber',
+  Amenity                  = 'Amenity',
+  AmenityBooking           = 'AmenityBooking',
 }
 
 registerEnumType(AuditEntityType, {

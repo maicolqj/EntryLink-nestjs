@@ -61,6 +61,18 @@ export enum NotificationType {
   COMPLEX_ALERT          = 'COMPLEX_ALERT',          // Alerta de emergencia / corte de servicios
   AMENITY_REMINDER       = 'AMENITY_REMINDER',       // Recordatorio de reserva de zona común
 
+  // ── Zonas comunes / Reservas ───────────────────────────────────
+  AMENITY_BOOKING_REQUESTED = 'AMENITY_BOOKING_REQUESTED', // Nueva reserva pendiente de aprobación (admin)
+
+  PQRF_RECEIVED             = 'PQRF_RECEIVED',             // Radicado nuevo para la instancia destinataria
+  PQRF_RESOLVED             = 'PQRF_RESOLVED',             // Todos los destinatarios marcaron el radicado como resuelto
+  PQRF_REMINDER             = 'PQRF_REMINDER',             // Al radicado le queda poco para vencerse
+  AMENITY_BOOKING_APPROVED  = 'AMENITY_BOOKING_APPROVED',  // Reserva aprobada (residente)
+  AMENITY_BOOKING_REJECTED  = 'AMENITY_BOOKING_REJECTED',  // Reserva rechazada (residente)
+  AMENITY_BOOKING_CANCELLED = 'AMENITY_BOOKING_CANCELLED', // Reserva cancelada (contraparte)
+  AMENITY_BOOKING_NO_SHOW   = 'AMENITY_BOOKING_NO_SHOW',   // La reserva venció sin que nadie ingresara
+  AMENITY_DAMAGE_CHARGED    = 'AMENITY_DAMAGE_CHARGED',    // Se cargó a la unidad un valor por daños en la zona
+
   // ── Cuenta / Perfil ────────────────────────────────────────────
   PROFILE_UPDATED        = 'PROFILE_UPDATED',        // Datos personales del usuario modificados
   NEW_DEVICE_LINKED      = 'NEW_DEVICE_LINKED',      // Un equipo nuevo se vinculó con documento + clave (aviso de seguridad)

@@ -15,7 +15,9 @@ export enum ComplexModule {
   NOTIFICACIONES = 'NOTIFICACIONES',
   PARKING_ROTATION     = 'PARKING_ROTATION',
   PARKING_BILLING     = 'PARKING_BILLING',
-} 
+  ZONAS_COMUNES        = 'ZONAS_COMUNES',
+  PQRF                 = 'PQRF',
+}
 
 registerEnumType(ComplexModule, {
   name: 'ComplexModule',

@@ -78,6 +78,19 @@ export const BK = {
     TTL_CATS:   600,   // 10 min
   },
 
+  /** Zonas comunes y su disponibilidad */
+  amenity: {
+    list:         (complexId: string, filterKey: string) =>
+                    ({ prefix: 'amn', key: `${complexId}:list:${filterKey}` }),
+    one:          (complexId: string, amenityId: string) =>
+                    ({ prefix: 'amn', key: `${complexId}:one:${amenityId}` }),
+    availability: (complexId: string, amenityId: string, from: string, to: string) =>
+                    ({ prefix: 'amn', key: `${complexId}:avail:${amenityId}:${from}:${to}` }),
+    prefix:       (complexId: string) => `amn:${complexId}:`,
+    TTL_LIST:  300,  // 5 min — la configuración de la zona cambia poco
+    TTL_AVAIL: 30,   // 30 s — una reserva ajena debe verse casi de inmediato
+  },
+
   /** Números especiales de emergencia */
   specialNumber: {
     list:   (complexId: string) => ({ prefix: 'sn', key: complexId }),
