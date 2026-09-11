@@ -50,6 +50,8 @@ interface BuildOpts {
   councilIds?: string[];
   /** Huellas ya existentes: `resolvedAt` marca a quien ya lo dio por resuelto. */
   acks?: { userId: string; instance: PqrfAddressee; resolvedAt?: Date | null }[];
+  /** Consejeros que la administración designó para responder. Vacío = todos. */
+  designated?: string[];
 }
 
 const build = (pqrf: Pqrf | null, isCouncilUser = false, opts: BuildOpts = {}): Harness => {
@@ -104,6 +106,7 @@ const build = (pqrf: Pqrf | null, isCouncilUser = false, opts: BuildOpts = {}): 
     { log: jest.fn() } as never,
     { transaction: jest.fn() } as never,
     { emitToComplex: jest.fn(), emitToUser: jest.fn() } as never,
+    { findOne: jest.fn().mockResolvedValue({ pqrfCouncilResolverUserIds: opts.designated ?? [] }) } as never,
   );
 
   return { service, conditions, saved, acks: ackRepo as never, notify, pqrfRepo };
@@ -383,6 +386,75 @@ describe('PqrfService — plazo y silencio administrativo', () => {
 
     expect(sent).toBe(0);
     expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('PqrfService — consejeros designados para responder', () => {
+
+  const councilor = (sub: string) => userOf([ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL], sub);
+  const forCouncil = () => pqrfOf({ addressee: PqrfAddressee.CONSEJO, status: PqrfStatus.EN_TRAMITE });
+
+  it('un consejero no designado lo lee pero no lo puede resolver', async () => {
+    const { service } = build(forCouncil(), true, {
+      councilIds: ['c-1', 'c-2', 'c-3'], designated: ['c-1'],
+    });
+
+    await expect(service.findById('pqrf-1', councilor('c-2'))).resolves.toBeDefined();
+    await expect(service.markResolved('pqrf-1', councilor('c-2')))
+      .rejects.toThrow('Solo quien atiende el radicado puede marcarlo como resuelto');
+    await expect(service.isCouncilObserver(forCouncil(), councilor('c-2'))).resolves.toBe(true);
+  });
+
+  it('basta con que respondan los designados para cerrarlo', async () => {
+    const { service, saved } = build(forCouncil(), true, {
+      councilIds: ['c-1', 'c-2', 'c-3'],
+      designated: ['c-1'],
+      acks: [{ userId: 'c-1', instance: PqrfAddressee.CONSEJO, resolvedAt: new Date() }],
+    });
+
+    await service.markResolved('pqrf-1', councilor('c-1'));
+
+    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(true);
+  });
+
+  it('sin designación responde todo el consejo', async () => {
+    const { service, saved } = build(forCouncil(), true, {
+      councilIds: ['c-1', 'c-2'],
+      acks: [{ userId: 'c-1', instance: PqrfAddressee.CONSEJO, resolvedAt: new Date() }],
+    });
+
+    await service.markResolved('pqrf-1', councilor('c-1'));
+
+    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(false);
+  });
+
+  it('si ningún designado sigue en el consejo, responde el consejo completo', async () => {
+    // El único designado dejó el consejo: sin el respaldo, el radicado no
+    // tendría a nadie que lo atienda y solo se cerraría por silencio.
+    const { service } = build(forCouncil(), true, {
+      councilIds: ['c-2', 'c-3'], designated: ['c-1'],
+    });
+
+    await expect(service.instanceOf(forCouncil(), councilor('c-2'))).resolves.toBe(PqrfAddressee.CONSEJO);
+  });
+
+  it('el aviso de radicado nuevo va solo a los designados', async () => {
+    const { service, notify } = build(null, true, {
+      councilIds: ['c-1', 'c-2', 'c-3'], designated: ['c-1', 'c-3'],
+    });
+
+    await (service as unknown as { notifyAddressees: (p: Pqrf) => Promise<void> })
+      .notifyAddressees(forCouncil());
+
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ userIds: ['c-1', 'c-3'] }));
+  });
+
+  it('no deja designar a quien no es del consejo', async () => {
+    const { service } = build(null, false, { councilIds: ['c-1'] });
+
+    await expect(
+      service.updateCouncilResolvers('complex-1', ['intruso'], userOf([ValidRoles.COMPLEX_ROL], 'admin-user')),
+    ).rejects.toThrow('Solo puedes elegir a miembros actuales del consejo');
   });
 });
 

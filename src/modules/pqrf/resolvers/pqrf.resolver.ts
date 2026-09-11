@@ -7,6 +7,7 @@ import { PqrfService } from '../services/pqrf.service';
 import { CreatePqrfInput } from '../dto/inputs/create-pqrf.input';
 import { FilterPqrfInput } from '../dto/inputs/filter-pqrf.input';
 import { PaginatedPqrfResponse } from '../dto/responses/paginated-pqrf.response';
+import { PqrfCouncilMember }     from '../dto/responses/pqrf-council-member.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth }             from '../../shared/decorators/auth.decorator';
@@ -54,6 +55,19 @@ export class PqrfResolver {
     if (this.hasResolved(pqrf, currentUser)) return false;
 
     return (await this.pqrfService.instanceOf(pqrf, currentUser)) !== null;
+  }
+
+  /**
+   * ¿Es del consejo pero la administración no lo designó para responder este
+   * radicado? Sin esto el consejero lo ve sin botón y no sabe por qué.
+   */
+  @ResolveField(() => Boolean, { description: 'Quien consulta es del consejo pero no le toca responderlo' })
+  async viewerIsCouncilObserver(
+    @Parent() pqrf: Pqrf,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    if (pqrf.status === PqrfStatus.RESUELTO) return false;
+    return this.pqrfService.isCouncilObserver(pqrf, currentUser);
   }
 
   /** ¿Ya marcó su parte? Sirve para explicar por qué no hay botón. */
@@ -141,6 +155,37 @@ export class PqrfResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Pqrf> {
     return this.pqrfService.markResolved(pqrfId, currentUser);
+  }
+
+  /** El consejo del complejo y a quiénes les toca responder los radicados. */
+  @Query(() => [PqrfCouncilMember], { name: 'pqrfCouncilMembers' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.VIEW_PQRF],
+  })
+  findCouncilMembers(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PqrfCouncilMember[]> {
+    return this.pqrfService.findCouncilMembers(complexId, currentUser);
+  }
+
+  /**
+   * Qué consejeros responden los radicados dirigidos al consejo. Lista vacía =
+   * todo el consejo. Mismo permiso que los plazos: los dos son reglas del
+   * complejo sobre cómo se atienden los PQRF.
+   */
+  @Mutation(() => [PqrfCouncilMember], { name: 'updatePqrfCouncilResolvers' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EDIT_RESIDENCE],
+  })
+  updateCouncilResolvers(
+    @Args('complexId') complexId: string,
+    @Args('userIds', { type: () => [String] }) userIds: string[],
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PqrfCouncilMember[]> {
+    return this.pqrfService.updateCouncilResolvers(complexId, userIds, currentUser);
   }
 
   @Query(() => Pqrf, { name: 'pqrfRequest' })

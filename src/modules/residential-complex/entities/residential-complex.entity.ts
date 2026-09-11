@@ -128,6 +128,42 @@ export class ResidentialComplex {
   @Column({ name: 'pqrf_reminder_interval_hours', type: 'int', default: 24 })
   pqrfReminderIntervalHours: number;
 
+  /**
+   * Consejeros que responden los PQRF dirigidos al consejo. Vacío = todo el
+   * consejo. Se cruza con los miembros de HOY: quien deja el consejo deja de
+   * contar aunque siga en la lista.
+   */
+  @Field(() => [String], { description: 'Consejeros que responden los PQRF. Vacío = todo el consejo' })
+  @Column({ name: 'pqrf_council_resolver_user_ids', type: 'uuid', array: true, default: () => "'{}'" })
+  pqrfCouncilResolverUserIds: string[];
+
+  // ==================== VOTACIONES ====================
+
+  /**
+   * La administración les muestra las ASAMBLEAS a los residentes. Apagado, el
+   * residente no ve el módulo y el servidor rechaza sus votos.
+   */
+  @Field(() => Boolean, { description: 'Asambleas visibles para los residentes' })
+  @Column({ name: 'voting_enabled', type: 'boolean', default: false })
+  votingEnabled: boolean;
+
+  /**
+   * La administración le muestra al CONSEJO sus reuniones. Es un interruptor
+   * aparte: votar algo solo en el consejo no obliga a abrirle el módulo a toda
+   * la copropiedad.
+   */
+  @Field(() => Boolean, { description: 'Reuniones del consejo visibles para el consejo' })
+  @Column({ name: 'voting_council_enabled', type: 'boolean', default: false })
+  votingCouncilEnabled: boolean;
+
+  /**
+   * Consejeros con voz pero sin voto (los suplentes, por lo general). Se guarda
+   * a quien NO vota para que el consejero que nombren mañana vote por defecto.
+   */
+  @Field(() => [String], { description: 'Consejeros con voz pero sin voto en las reuniones del consejo' })
+  @Column({ name: 'voting_council_voice_only_user_ids', type: 'uuid', array: true, default: () => "'{}'" })
+  votingCouncilVoiceOnlyUserIds: string[];
+
   // ==================== CONTACTO ====================
 
   @Column({

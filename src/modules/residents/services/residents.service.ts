@@ -806,6 +806,32 @@ export class ResidentsService {
     return rows.map(row => row.userId);
   }
 
+  /**
+   * Miembros del consejo con nombre y unidad, para que la administración elija
+   * a quiénes les toca responder los PQRF. Quien vive en dos unidades aparece
+   * una sola vez.
+   */
+  async findCouncilMembers(complexId: string): Promise<Resident[]> {
+    const rows = await this.residentRepo
+      .createQueryBuilder('r')
+      .innerJoinAndSelect('r.user', 'user')
+      .leftJoinAndSelect('r.unit', 'unit')
+      .leftJoinAndSelect('unit.building', 'building')
+      .innerJoin(UserRole, 'ur', 'ur.user_id = r.user_id')
+      .innerJoin(Role, 'role', 'role.id = ur.role_id')
+      .where('r.complexId = :complexId', { complexId })
+      .andWhere('r.deletedAt IS NULL')
+      .andWhere('role.name = :name', { name: ValidRoles.COUNCIL_ROL })
+      .orderBy('user.name', 'ASC')
+      .getMany();
+
+    const byUser = new Map<string, Resident>();
+    for (const row of rows) {
+      if (!byUser.has(row.userId)) byUser.set(row.userId, row);
+    }
+    return [...byUser.values()];
+  }
+
   // ================================================================
   // TRASLADAR RESIDENTES A OTRA UNIDAD — COMPLEX_ROL o SUPER_ADMIN
   // Todos deben ser ACTIVOS. Unidades origen: AVAILABLE si quedan sin activos.

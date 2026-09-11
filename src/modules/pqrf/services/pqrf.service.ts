@@ -12,6 +12,7 @@ import {
 import { CreatePqrfInput } from '../dto/inputs/create-pqrf.input';
 import { FilterPqrfInput } from '../dto/inputs/filter-pqrf.input';
 import { PaginatedPqrfResponse } from '../dto/responses/paginated-pqrf.response';
+import { PqrfCouncilMember }     from '../dto/responses/pqrf-council-member.response';
 
 import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
 import { CustomError }      from '../../shared/utils/errors.utils';
@@ -20,6 +21,8 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { ResidentialComplex }        from '../../residential-complex/entities/residential-complex.entity';
+import { Unit }                      from '../../residential-complex/entities/unit.entity';
 import { ResidentsService }          from '../../residents/services/residents.service';
 import { NotificationsService }      from '../../notifications/services/notifications.service';
 import { NotificationType }          from '../../notifications/enums/notification-type.enum';
@@ -48,6 +51,20 @@ const TYPE_LABEL: Record<string, string> = {
   FELICITACION: 'Felicitación',
 };
 
+/**
+ * "Torre 2 · 301", o solo el número si la unidad no está en una torre. A la
+ * torre que se llama solo "2" se le antepone la palabra; a "Torre Norte", no.
+ */
+const unitLabel = (unit?: Unit | null): string | null => {
+  if (!unit) return null;
+
+  const building = unit.building?.name?.trim();
+  if (!building) return unit.number;
+
+  const tower = /^\d+[a-z]?$/i.test(building) ? `Torre ${building}` : building;
+  return `${tower} · ${unit.number}`;
+};
+
 @Injectable()
 export class PqrfService {
   private readonly logger = new Logger(PqrfService.name);
@@ -63,6 +80,8 @@ export class PqrfService {
     private readonly auditService: AuditService,
     private readonly dataSource: DataSource,
     private readonly socketService: SocketService,
+    @InjectRepository(ResidentialComplex)
+    private readonly complexRepo: Repository<ResidentialComplex>,
   ) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -198,7 +217,7 @@ export class PqrfService {
   async findById(pqrfId: string, currentUser: JwtAccessPayload): Promise<Pqrf> {
     const pqrf = await this.pqrfRepo.findOne({
       where: { id: pqrfId, deletedAt: IsNull() },
-      relations: ['unit'],
+      relations: ['unit', 'unit.building'],
     });
 
     if (!pqrf) {
@@ -453,6 +472,84 @@ export class PqrfService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // QUIÉN DEL CONSEJO RESPONDE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** El consejo del complejo, marcando a quiénes les toca responder hoy. */
+  async findCouncilMembers(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<PqrfCouncilMember[]> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const [residents, designated] = await Promise.all([
+      this.residentsService.findCouncilMembers(complexId),
+      this.designatedResolvers(complexId),
+    ]);
+
+    // Misma regla que al resolver: si de los elegidos no queda ninguno en el
+    // consejo, responde el consejo completo, y la pantalla tiene que decirlo.
+    const resolvers = this.pickResolvers(residents.map(r => r.userId), designated);
+
+    return residents.map(resident => ({
+      userId:    resident.userId,
+      name:      `${resident.user?.name ?? ''} ${resident.user?.lastName ?? ''}`.trim()
+                   || (resident.user?.email ?? 'Consejero'),
+      unitLabel: unitLabel(resident.unit),
+      canResolve: resolvers.includes(resident.userId),
+    }));
+  }
+
+  /**
+   * La administración elige qué consejeros responden los radicados dirigidos
+   * al consejo. Lista vacía = todo el consejo, también quien nombren mañana.
+   *
+   * Solo se puede elegir a miembros actuales: guardar a alguien que no es del
+   * consejo no le daría acceso y dejaría la configuración mintiendo.
+   */
+  async updateCouncilResolvers(
+    complexId: string,
+    userIds: string[],
+    currentUser: JwtAccessPayload,
+  ): Promise<PqrfCouncilMember[]> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const members = await this.residentsService.findCouncilUserIds(complexId);
+    const chosen = [...new Set(userIds)];
+
+    if (chosen.some(userId => !members.includes(userId))) {
+      throw new CustomError({
+        message: 'Solo puedes elegir a miembros actuales del consejo',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    await this.complexRepo.update(complexId, { pqrfCouncilResolverUserIds: chosen });
+
+    void this.auditService.log({
+      entityType: AuditEntityType.Pqrf,
+      entityId: complexId,
+      action: AuditAction.UPDATE,
+      newValue: { pqrfCouncilResolverUserIds: chosen },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId,
+      description: chosen.length === 0
+        ? 'Los PQRF dirigidos al consejo los responde todo el consejo'
+        : `Los PQRF dirigidos al consejo los responden ${chosen.length} consejero(s)`,
+    });
+
+    // Si el grupo se achicó, puede que los que quedan ya hayan respondido todo:
+    // sin este barrido esos radicados esperarían al cron.
+    this.closeFullyAnswered()
+      .catch(err => this.logger.warn(`Error al cerrar radicados tras cambiar el consejo: ${err?.message}`));
+
+    return this.findCouncilMembers(complexId, currentUser);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // INTERNOS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -460,7 +557,7 @@ export class PqrfService {
   async findByIdOrFail(pqrfId: string): Promise<Pqrf> {
     const pqrf = await this.pqrfRepo.findOne({
       where: { id: pqrfId, deletedAt: IsNull() },
-      relations: ['unit', 'acknowledgements'],
+      relations: ['unit', 'unit.building', 'acknowledgements'],
     });
 
     if (!pqrf) {
@@ -493,11 +590,56 @@ export class PqrfService {
       return PqrfAddressee.ADMINISTRACION;
     }
 
-    if (isForCouncil(pqrf.addressee) && await this.residentsService.isCouncilUser(currentUser.sub)) {
+    // Del consejo atiende solo a quien le toca: ser consejero da acceso a leer,
+    // no necesariamente a responder.
+    if (isForCouncil(pqrf.addressee) && (await this.councilResolvers(pqrf)).includes(currentUser.sub)) {
       return PqrfAddressee.CONSEJO;
     }
 
     return null;
+  }
+
+  /**
+   * ¿Es del consejo, le llegó el radicado, pero no le toca responderlo? La app
+   * lo usa para explicar por qué no hay botón en vez de dejarlo adivinando.
+   */
+  async isCouncilObserver(pqrf: Pqrf, currentUser: JwtAccessPayload): Promise<boolean> {
+    if (!isForCouncil(pqrf.addressee)) return false;
+    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub) return false;
+    if (!await this.residentsService.isCouncilUser(currentUser.sub)) return false;
+
+    return !(await this.councilResolvers(pqrf)).includes(currentUser.sub);
+  }
+
+  /**
+   * Consejeros a los que les toca responder este radicado.
+   *
+   * Si la administración eligió a algunos, solo esos —cruzados con los miembros
+   * de HOY—; si no eligió a nadie, todo el consejo. Quien radicó no se debe una
+   * respuesta a sí mismo. Si de los elegidos no queda ninguno (dejaron el
+   * consejo, o el único elegido es quien radicó), responde el consejo completo:
+   * un radicado sin nadie que lo atienda solo se cerraría por silencio.
+   */
+  private async councilResolvers(pqrf: Pqrf): Promise<string[]> {
+    const members = (await this.residentsService.findCouncilUserIds(pqrf.complexId))
+      .filter(userId => userId !== pqrf.requestedByUserId);
+
+    return this.pickResolvers(members, await this.designatedResolvers(pqrf.complexId));
+  }
+
+  private pickResolvers(members: string[], designated: string[]): string[] {
+    if (designated.length === 0) return members;
+
+    const chosen = members.filter(userId => designated.includes(userId));
+    return chosen.length > 0 ? chosen : members;
+  }
+
+  private async designatedResolvers(complexId: string): Promise<string[]> {
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+      select: { id: true, pqrfCouncilResolverUserIds: true },
+    });
+    return complex?.pqrfCouncilResolverUserIds ?? [];
   }
 
   /**
@@ -508,13 +650,14 @@ export class PqrfService {
    *   instancia ya respondió. Exigirle además a cada supervisor que lo marque
    *   dejaría el radicado abierto para siempre, porque el supervisor de
    *   portería no tiene por qué opinar sobre una petición de cuentas.
-   * - El CONSEJO es un cuerpo colegiado: responde cuando responden todos sus
-   *   miembros, que es como toma sus decisiones.
+   * - El CONSEJO es un cuerpo colegiado: responde cuando responden todos los
+   *   consejeros que la administración designó (o el consejo entero si no
+   *   designó a nadie).
    *
-   * Se mide contra los miembros de HOY: si nombraron a un consejero mientras el
-   * radicado estaba abierto, también le corresponde; y si uno se fue, deja de
-   * faltar. Una vez RESUELTO ya no se recalcula, así que los cambios
-   * posteriores no reabren lo cerrado.
+   * Se mide contra los miembros y la designación de HOY: si nombraron a un
+   * consejero mientras el radicado estaba abierto, también le corresponde; y si
+   * uno se fue, deja de faltar. Una vez RESUELTO ya no se recalcula, así que
+   * los cambios posteriores no reabren lo cerrado.
    */
   private async pendingResolvers(pqrf: Pqrf): Promise<string[]> {
     const acks = await this.ackRepo.find({ where: { pqrfId: pqrf.id } });
@@ -527,9 +670,7 @@ export class PqrfService {
     }
 
     if (isForCouncil(pqrf.addressee)) {
-      // Quien radicó no se debe a sí mismo una respuesta, aunque sea consejero.
-      const members = (await this.residentsService.findCouncilUserIds(pqrf.complexId))
-        .filter(userId => userId !== pqrf.requestedByUserId);
+      const members = await this.councilResolvers(pqrf);
 
       const done = new Set(
         resolved.filter(ack => ack.instance === PqrfAddressee.CONSEJO).map(ack => ack.userId),
@@ -735,7 +876,11 @@ export class PqrfService {
       });
     }
 
-    qb.leftJoinAndSelect('p.unit', 'unit').orderBy('p.createdAt', 'DESC');
+    // La torre viaja con la unidad: "Apto 301" no dice nada en un conjunto con
+    // cinco torres que tienen todas un 301.
+    qb.leftJoinAndSelect('p.unit', 'unit')
+      .leftJoinAndSelect('unit.building', 'building')
+      .orderBy('p.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
     const items = await qb.skip((page - 1) * limit).take(limit).getMany();
@@ -768,8 +913,10 @@ export class PqrfService {
       ]));
     }
 
+    // Del consejo se avisa a quienes les toca responder: los demás lo pueden
+    // leer en su bandeja, pero un aviso accionable sin botón es ruido.
     if (isForCouncil(pqrf.addressee)) {
-      userIds.push(...await this.residentsService.findCouncilUserIds(pqrf.complexId));
+      userIds.push(...await this.councilResolvers(pqrf));
     }
 
     const recipients = [...new Set(userIds)];
