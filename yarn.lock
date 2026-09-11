@@ -5650,10 +5650,10 @@ graphql-depth-limit@^1.1.0:
   dependencies:
     arrify "^1.0.1"
 
-graphql-query-complexity@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.npmjs.org/graphql-query-complexity/-/graphql-query-complexity-1.1.0.tgz"
-  integrity sha512-6sfAX+9CgkcPeZ7UiuBwgTGA+M1FYgHrQOXvORhQGd6SiaXbNVkLDcJ9ZSvNgzyChIfH0uPFFOY3Jm4wFZ4qEA==
+graphql-query-complexity@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/graphql-query-complexity/-/graphql-query-complexity-2.0.0.tgz#26f09b7ae3c269fcd0762a337a2ee3ef5e9691d3"
+  integrity sha512-gmdNp8Lq3KbJcWeX9mpIqpIxD2oDEVO5QgZtw7eiDB7Q1RYMlqDFQnGq6ZcaDclBNcwTnyOCHUtEr3qAjnUDVg==
   dependencies:
     lodash.get "^4.4.2"
 
