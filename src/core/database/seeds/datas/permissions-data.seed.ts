@@ -64,4 +64,16 @@ export const PERMISSIONS_TO_SEED = [
   // CALL LOGS
   { id: 'e3f4a5b6-c7d8-4e9f-0a1b-2c3d4e5f6a7b', name: ValidPermissions.VIEW_CALL_LOGS, label: 'Ver Historial de Llamadas', group: 'CALL_LOGS', isSystem: false, status: true, description: 'Ver registro de llamadas del complejo', level: 'LOW', dependsOn: [] },
   { id: 'f4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c', name: ValidPermissions.LOG_CALL, label: 'Registrar Llamada', group: 'CALL_LOGS', isSystem: false, status: true, description: 'Registrar llamada realizada o recibida', level: 'LOW', dependsOn: [] },
+
+  // AMENITIES — ZONAS COMUNES Y RESERVAS
+  { id: 'a5b6c7d8-e9f0-4a1b-2c3d-4e5f6a7b8c9e', name: ValidPermissions.VIEW_AMENITIES, label: 'Ver Zonas Comunes', group: 'AMENITIES', isSystem: false, status: true, description: 'Consultar zonas comunes y su disponibilidad', level: 'LOW', dependsOn: [] },
+  { id: 'b6c7d8e9-f0a1-4b2c-3d4e-5f6a7b8c9d0e', name: ValidPermissions.MANAGE_AMENITIES, label: 'Gestionar Zonas Comunes', group: 'AMENITIES', isSystem: false, status: true, description: 'Crear, editar y programar zonas comunes', level: 'HIGH', dependsOn: [ValidPermissions.VIEW_AMENITIES] },
+  { id: 'c7d8e9f0-a1b2-4c3d-4e5f-6a7b8c9d0e1f', name: ValidPermissions.VIEW_AMENITY_BOOKINGS, label: 'Ver Reservas', group: 'AMENITIES', isSystem: false, status: true, description: 'Consultar la agenda de reservas de zonas comunes', level: 'LOW', dependsOn: [ValidPermissions.VIEW_AMENITIES] },
+  { id: 'd8e9f0a1-b2c3-4d4e-5f6a-7b8c9d0e1f2b', name: ValidPermissions.CREATE_AMENITY_BOOKING, label: 'Reservar Zona Común', group: 'AMENITIES', isSystem: false, status: true, description: 'Crear y cancelar reservas de zonas comunes', level: 'LOW', dependsOn: [ValidPermissions.VIEW_AMENITIES] },
+  { id: 'e9f0a1b2-c3d4-4e5f-6a7b-8c9d0e1f2a3b', name: ValidPermissions.APPROVE_AMENITY_BOOKING, label: 'Aprobar Reservas', group: 'AMENITIES', isSystem: false, status: true, description: 'Aprobar o rechazar reservas de zonas comunes', level: 'MEDIUM', dependsOn: [ValidPermissions.VIEW_AMENITY_BOOKINGS] },
+  { id: 'f0a1b2c3-d4e5-4f6a-7b8c-9d0e1f2a3b4c', name: ValidPermissions.CHECK_IN_AMENITY_BOOKING, label: 'Registrar Ingreso a Zona', group: 'AMENITIES', isSystem: false, status: true, description: 'Validar el código y registrar ingreso/salida en portería', level: 'LOW', dependsOn: [ValidPermissions.VIEW_AMENITY_BOOKINGS] },
+
+  // PQRF — PETICIONES, QUEJAS, RECLAMOS Y FELICITACIONES
+  { id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5e', name: ValidPermissions.VIEW_PQRF, label: 'Ver Radicados PQRF', group: 'PQRF', isSystem: false, status: true, description: 'Ver los radicados dirigidos a la propia instancia', level: 'MEDIUM', dependsOn: [] },
+  { id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e', name: ValidPermissions.CREATE_PQRF, label: 'Radicar PQRF', group: 'PQRF', isSystem: false, status: true, description: 'Radicar una petición, queja, reclamo o felicitación', level: 'LOW', dependsOn: [] },
 ];

@@ -958,6 +958,45 @@ export class FinanceService {
   }
 
   /**
+   * Anula un cargo creado por `createInternalCharge`. Devuelve null cuando el
+   * cargo ya no existe o ya fue pagado: el módulo que llama está deshaciendo
+   * una operación suya, y un pago de por medio es justamente el caso en que no
+   * debe deshacerse solo.
+   */
+  async cancelInternalCharge(
+    chargeId: string,
+    reason: string,
+    performedByUserId?: string,
+  ): Promise<FeeCharge | null> {
+    const charge = await this.chargeRepo.findOne({ where: { id: chargeId } });
+    if (!charge) return null;
+
+    const untouchable: ChargeStatus[] = [
+      ChargeStatus.PAID, ChargeStatus.CANCELLED, ChargeStatus.WAIVED,
+    ];
+    if (untouchable.includes(charge.status) || Number(charge.paidAmount) > 0) return null;
+
+    charge.status             = ChargeStatus.CANCELLED;
+    charge.cancellationReason = reason;
+    charge.cancelledByUserId  = performedByUserId;
+    charge.cancelledAt        = new Date();
+
+    const saved = await this.chargeRepo.save(charge);
+
+    await this.accountingService.recomputeUnitStatus(
+      this.dataSource.manager, charge.complexId, charge.unitId,
+    );
+
+    return saved;
+  }
+
+  /** Período de facturación del mes en curso, en formato YYYY-MM. */
+  private currentPeriod(): string {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  /**
    * Marca como OVERDUE todos los cargos PENDING/PARTIALLY_PAID cuya fecha
    * de vencimiento ya pasó. Pensado para correr vía cron diario.
    */

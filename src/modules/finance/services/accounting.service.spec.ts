@@ -371,6 +371,88 @@ describe('AccountingService', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  describe('emitAmenityUnitCharge', () => {
+    const params = {
+      complexId: CPX,
+      unitId: 'unit-1',
+      amount: 350_000,
+      period: '2025-03',
+      dueDate: new Date('2025-03-31'),
+      documentDate: new Date('2025-03-10'),
+      description: 'Daños en Salón Comunal — se rompieron dos sillas',
+      createdByUserId: 'user-1',
+    };
+
+    it('asienta Débito 1311 (cartera) = Crédito 4295 (zonas comunes)', async () => {
+      pucByCode['1311'] = puc('1311');
+      pucByCode['4295'] = puc('4295');
+
+      const res = await service.emitAmenityUnitCharge(em, params);
+
+      expect(res.accountingHeaderId).not.toBeNull();
+      const invoice = saved.AccountingHeader[0];
+      expect(invoice.documentType).toBe(AccountingDocumentType.INVOICE);
+      // La partida doble tiene que cuadrar: es la razón de existir del asiento.
+      expect(invoice.totalDebit).toBe(350_000);
+      expect(invoice.totalCredit).toBe(350_000);
+      expect(invoice.lines.find((l: any) => l.pucAccountId === 'acc-1311').debit).toBe(350_000);
+      expect(invoice.lines.find((l: any) => l.pucAccountId === 'acc-4295').credit).toBe(350_000);
+      expect(invoice.unitId).toBe('unit-1');
+    });
+
+    it('etiqueta la CxC con la cuenta de ingreso para que el pago cuadre después', async () => {
+      pucByCode['1311'] = puc('1311');
+      pucByCode['4295'] = puc('4295');
+
+      await service.emitAmenityUnitCharge(em, params);
+
+      const charge = saved.FeeCharge[0];
+      expect(charge.amount).toBe(350_000);
+      expect(charge.unitId).toBe('unit-1');
+      expect(charge.description).toContain('Salón Comunal');
+      expect(charge.incomeAccountId).toBe('acc-4295');
+    });
+
+    it('crea la CxC igual cuando la copropiedad no tiene PUC, y omite la factura', async () => {
+      // Sin 4295 ni grupo 42: no hay dónde causar el ingreso.
+      const res = await service.emitAmenityUnitCharge(em, params);
+
+      // La deuda se rastrea de todos modos; lo contable es best-effort.
+      expect(saved.FeeCharge).toHaveLength(1);
+      expect(saved.FeeCharge[0].incomeAccountId).toBeNull();
+      expect(res.accountingHeaderId).toBeNull();
+      expect(saved.AccountingHeader).toHaveLength(0);
+    });
+
+    it('autoaprovisiona la 4295 bajo el grupo 42 si la copropiedad es anterior a esa cuenta', async () => {
+      pucByCode['1311'] = puc('1311');
+      pucByCode['42'] = {
+        ...puc('42'), isPostable: false, level: 2,
+        accountClass: 'INCOME', nature: 'CREDIT',
+      };
+
+      await service.emitAmenityUnitCharge(em, params);
+
+      const created = (saved.PucAccount ?? []).find((a: any) => a.code === '4295');
+      expect(created).toBeDefined();
+      expect(created.isPostable).toBe(true);
+      expect(created.parentId).toBe('acc-42');
+      expect(created.level).toBe(3);
+    });
+
+    it('marca el cargo como vencido si la fecha de vencimiento ya pasó', async () => {
+      pucByCode['1311'] = puc('1311');
+      pucByCode['4295'] = puc('4295');
+
+      await service.emitAmenityUnitCharge(em, {
+        ...params, dueDate: new Date('2020-01-31'),
+      });
+
+      expect(saved.FeeCharge[0].status).toBe(ChargeStatus.OVERDUE);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   describe('causeRecurringChargesInternal', () => {
     beforeEach(() => {
       pucByCode['1311'] = puc('1311');

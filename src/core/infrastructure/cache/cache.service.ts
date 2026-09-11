@@ -95,22 +95,36 @@ export class CacheService implements OnModuleDestroy {
    * Usa SCAN para no bloquear Redis en producción (a diferencia de KEYS).
    * Útil para invalidar todos los resultados paginados/filtrados de un scope.
    *
+   * OJO con `keyPrefix`: ioredis lo antepone en get/set/del, pero NO en scan —
+   * scan recorre el espacio de claves REAL. Sin sumarlo al patrón, el MATCH no
+   * coincide con nada y la invalidación se vuelve una operación silenciosa que
+   * no borra nada, dejando datos viejos hasta que expire el TTL.
+   *
    * @example deleteByPrefix('bld:complexId123:') → borra todas las páginas de torres
    */
   async deleteByPrefix(rawPrefix: string): Promise<void> {
     try {
+      const keyPrefix = this.client.options?.keyPrefix ?? '';
+      const pattern = `${keyPrefix}${rawPrefix}*`;
+
       let cursor = '0';
-      const pattern = `${rawPrefix}*`;
       do {
         const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
         cursor = nextCursor;
         if (keys.length > 0) {
-          await this.client.del(...keys);
+          // `del` vuelve a anteponer el prefijo, así que hay que devolverle la
+          // clave lógica; pasarle la real produciría `cache:cache:…`.
+          await this.client.del(...keys.map(k => this.stripPrefix(k, keyPrefix)));
         }
       } while (cursor !== '0');
     } catch (error: any) {
       this.logger.warn(`Cache DEL_PREFIX error [${rawPrefix}]: ${error.message}`);
     }
+  }
+
+  /** Quita el `keyPrefix` de una clave devuelta por SCAN. */
+  private stripPrefix(key: string, keyPrefix: string): string {
+    return keyPrefix && key.startsWith(keyPrefix) ? key.slice(keyPrefix.length) : key;
   }
 
   // ── Helper ───────────────────────────────────────────────────────────────

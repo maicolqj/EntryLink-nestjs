@@ -66,6 +66,7 @@ const PUC = {
   INTEREST_RECEIVABLE: '1345', // Multas e intereses por cobrar (CxC interés mora)
   MORA_INCOME:         '4210', // Intereses de mora (ingreso)
   VISITOR_PARKING_INCOME: '4220', // Parqueaderos de visitantes (ingreso)
+  COMMON_AREA_INCOME:     '4295', // Otros ingresos: multas y zonas comunes
 } as const;
 
 /** Convierte a centavos enteros para comparar sin error de coma flotante. */
@@ -1050,6 +1051,137 @@ export class AccountingService {
     }));
     this.logger.log(`Cuenta PUC ${PUC.VISITOR_PARKING_INCOME} creada automáticamente para complejo ${complexId}`);
     return created;
+  }
+
+  /**
+   * Igual que `ensureVisitorParkingIncomeAccount` pero para la 4295, donde caen
+   * los ingresos de zonas comunes: tanto la tarifa de la reserva como el cobro
+   * por daños. La cuenta viene en el PUC base, así que el autoaprovisionamiento
+   * solo actúa en copropiedades sembradas antes de que existiera esa fila.
+   */
+  private async ensureCommonAreaIncomeAccount(
+    em: EntityManager,
+    complexId: string,
+  ): Promise<PucAccount | null> {
+    const complex = await em.findOne(ResidentialComplex, {
+      where: { id: complexId },
+      select: ['id', 'enabledModules'],
+    });
+    const mods = complex?.enabledModules;
+    const financeEnabled = !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
+    if (!financeEnabled) return null;
+
+    const existing = await em.findOne(PucAccount, {
+      where: { complexId, code: PUC.COMMON_AREA_INCOME },
+    });
+    if (existing) {
+      return existing.isPostable && existing.isActive ? existing : null;
+    }
+
+    const parent = await em.findOne(PucAccount, { where: { complexId, code: '42' } });
+    if (!parent) return null;
+
+    const created = await em.save(PucAccount, em.create(PucAccount, {
+      complexId,
+      code: PUC.COMMON_AREA_INCOME,
+      name: 'Otros ingresos (multas, zonas comunes)',
+      accountClass: parent.accountClass,
+      nature: parent.nature,
+      isPostable: true,
+      isActive: true,
+      level: parent.level + 1,
+      parentId: parent.id,
+    }));
+    this.logger.log(`Cuenta PUC ${PUC.COMMON_AREA_INCOME} creada automáticamente para complejo ${complexId}`);
+    return created;
+  }
+
+  /**
+   * Causa a la CUENTA DE LA UNIDAD un cargo originado en una zona común: la
+   * tarifa de la reserva o el cobro por daños detectados al entregarla. Crea el
+   * `FeeCharge` operativo (CxC) y, si la copropiedad tiene PUC, la FACTURA que
+   * reconoce el ingreso por causación:
+   *
+   *   Débito 1311 (CxC) = Crédito 4295 (otros ingresos: zonas comunes)
+   *
+   * El `FeeCharge` queda etiquetado con `incomeAccountId=4295` para que al
+   * pagarse el ledger cuadre. Mismo criterio best-effort que el parqueadero de
+   * visitantes: sin PUC se crea igual la CxC —la deuda se rastrea— y se omite la
+   * factura. Debe correr dentro de la transacción del evento (mismo `em`).
+   */
+  async emitAmenityUnitCharge(
+    em: EntityManager,
+    params: {
+      complexId: string;
+      unitId: string;
+      amount: number;
+      period: string;
+      dueDate: Date;
+      documentDate: Date;
+      description: string;
+      createdByUserId: string;
+    },
+  ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
+    const amount = round2(params.amount);
+
+    const incomeAcc = await this.ensureCommonAreaIncomeAccount(em, params.complexId);
+    let receivableAcc: PucAccount | null = null;
+    if (incomeAcc) {
+      try {
+        receivableAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
+      } catch (e) {
+        if (!(e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND)) throw e;
+        this.logger.warn(`[amenityUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`);
+      }
+    }
+
+    const now = new Date();
+    const charge = await em.save(FeeCharge, em.create(FeeCharge, {
+      complexId: params.complexId,
+      unitId: params.unitId,
+      feeConfigId: null as any,
+      period: params.period,
+      dueDate: params.dueDate,
+      amount,
+      paidAmount: 0,
+      description: params.description,
+      status: params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
+      prelacionConcept: PrelacionConcept.ORDINARY,
+      incomeAccountId: incomeAcc?.id ?? null,
+    }));
+
+    let accountingHeaderId: string | null = null;
+    if (receivableAcc && incomeAcc && amount > 0) {
+      const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.INVOICE);
+      const header = em.create(AccountingHeader, {
+        documentType: AccountingDocumentType.INVOICE,
+        consecutive,
+        documentDate: params.documentDate,
+        period: params.period,
+        memo: `Factura zona común — ${params.description}`,
+        totalDebit: amount,
+        totalCredit: amount,
+        createdByUserId: params.createdByUserId,
+        complexId: params.complexId,
+        unitId: params.unitId,
+        lines: [
+          {
+            pucAccountId: receivableAcc.id, debit: amount, credit: 0,
+            memo: `Causación zona común — ${params.description}`,
+            unitId: params.unitId, complexId: params.complexId,
+          },
+          {
+            pucAccountId: incomeAcc.id, debit: 0, credit: amount,
+            memo: `Ingreso zona común — ${params.description}`,
+            unitId: params.unitId, complexId: params.complexId,
+          },
+        ] as AccountingLine[],
+      });
+      accountingHeaderId = (await em.save(AccountingHeader, header)).id;
+    }
+
+    await this.recomputeUnitStatus(em, params.complexId, params.unitId);
+    return { chargeId: charge.id, accountingHeaderId };
   }
 
   /**

@@ -124,6 +124,8 @@ enum ValidPermissions {
   VIEW_NOTES
   CREATE_NOTE
   DELETE_NOTE
+  VIEW_PQRF
+  CREATE_PQRF
   VIEW_CALL_LOGS
   LOG_CALL
   VIEW_SENT_MESSAGES
@@ -132,6 +134,12 @@ enum ValidPermissions {
   CREATE_SPECIAL_NUMBER
   EDIT_SPECIAL_NUMBER
   DELETE_SPECIAL_NUMBER
+  VIEW_AMENITIES
+  MANAGE_AMENITIES
+  VIEW_AMENITY_BOOKINGS
+  CREATE_AMENITY_BOOKING
+  APPROVE_AMENITY_BOOKING
+  CHECK_IN_AMENITY_BOOKING
   SUPERADMIN
 }
 
@@ -302,6 +310,27 @@ type ResidentialComplex {
   """Máximo de unidades permitidas por el plan"""
   maxUnits: Int!
 
+  """Días que tiene el complejo para resolver un PQRF"""
+  pqrfResolutionDays: Int!
+
+  """Días antes del vencimiento en que empiezan los recordatorios"""
+  pqrfReminderLeadDays: Int!
+
+  """Horas entre recordatorios. 0 = sin recordatorios"""
+  pqrfReminderIntervalHours: Int!
+
+  """Consejeros que responden los PQRF. Vacío = todo el consejo"""
+  pqrfCouncilResolverUserIds: [String!]!
+
+  """Asambleas visibles para los residentes"""
+  votingEnabled: Boolean!
+
+  """Reuniones del consejo visibles para el consejo"""
+  votingCouncilEnabled: Boolean!
+
+  """Consejeros con voz pero sin voto en las reuniones del consejo"""
+  votingCouncilVoiceOnlyUserIds: [String!]!
+
   """CountryCode"""
   countryCode: Country!
 
@@ -456,6 +485,7 @@ enum ValidRoles {
   SUPERVISOR_ROL
   RESIDENT_ROL
   SECURITY_ROL
+  COUNCIL_ROL
 }
 
 """Configuración del parqueadero para vehículos visitantes"""
@@ -1435,6 +1465,9 @@ type Resident {
 
   """Compliance Officer que aprobó/rechazó"""
   approvedByUser: User
+
+  """Miembro del consejo de administración"""
+  isCouncilMember: Boolean!
 }
 
 """Tipo de residente respecto a la unidad"""
@@ -1530,6 +1563,7 @@ enum AuditEntityType {
   PucAccount
   Payment
   Note
+  Pqrf
   ResidentialComplex
   Unit
   Building
@@ -1541,6 +1575,10 @@ enum AuditEntityType {
   SentMessage
   CallLog
   SpecialNumber
+  Amenity
+  AmenityBooking
+  VotingMeeting
+  VotingQuestion
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -1658,6 +1696,16 @@ enum NotificationType {
   SYSTEM_ANNOUNCEMENT
   COMPLEX_ALERT
   AMENITY_REMINDER
+  AMENITY_BOOKING_REQUESTED
+  PQRF_RECEIVED
+  PQRF_RESOLVED
+  PQRF_REMINDER
+  VOTING_OPENED
+  AMENITY_BOOKING_APPROVED
+  AMENITY_BOOKING_REJECTED
+  AMENITY_BOOKING_CANCELLED
+  AMENITY_BOOKING_NO_SHOW
+  AMENITY_DAMAGE_CHARGED
   PROFILE_UPDATED
   NEW_DEVICE_LINKED
   LOGIN_APPROVAL_REQUEST
@@ -3730,6 +3778,529 @@ enum LegalAudience {
   COMPLEX
 }
 
+"""Paso de un destinatario sobre el radicado"""
+type PqrfAcknowledgement {
+  id: String!
+  pqrfId: String!
+  userId: String!
+  userName: String
+  instance: PqrfAddressee!
+  openedAt: DateTime!
+  resolvedAt: DateTime
+}
+
+"""Instancia a la que se dirige el radicado"""
+enum PqrfAddressee {
+  ADMINISTRACION
+  CONSEJO
+  AMBOS
+}
+
+"""Radicado PQRF de un residente"""
+type Pqrf {
+  id: String!
+
+  """Número de radicado, consecutivo por complejo"""
+  code: String!
+  consecutive: Int!
+  type: PqrfType!
+
+  """A quién se dirige: define quién puede leerlo"""
+  addressee: PqrfAddressee!
+  status: PqrfStatus!
+  subject: String!
+  description: String!
+  residentId: String
+  unitId: String
+  unit: Unit
+  requestedByUserId: String
+  requestedByName: String
+  acknowledgements: [PqrfAcknowledgement!]
+  resolvedAt: DateTime
+  dueAt: DateTime!
+
+  """Resuelto por silencio administrativo positivo"""
+  resolvedBySilence: Boolean!
+  complexId: String!
+  complex: ResidentialComplex
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Quien consulta puede marcarlo como resuelto"""
+  viewerCanResolve: Boolean!
+
+  """Quien consulta es del consejo pero no le toca responderlo"""
+  viewerIsCouncilObserver: Boolean!
+
+  """Quien consulta ya marcó su parte"""
+  viewerHasResolved: Boolean!
+}
+
+"""Tipo de radicado: petición, queja, reclamo, sugerencia o felicitación"""
+enum PqrfType {
+  PETICION
+  QUEJA
+  RECLAMO
+  SUGERENCIA
+  FELICITACION
+}
+
+"""Estado del radicado PQRF"""
+enum PqrfStatus {
+  RADICADO
+  EN_TRAMITE
+  RESUELTO
+}
+
+"""Radicados PQRF paginados"""
+type PaginatedPqrfResponse {
+  items: [Pqrf!]!
+  pagination: PaginationReponse!
+}
+
+"""Miembro del consejo y si responde los PQRF"""
+type PqrfCouncilMember {
+  userId: String!
+  name: String!
+  unitLabel: String
+
+  """Le toca responder los PQRF dirigidos al consejo"""
+  canResolve: Boolean!
+}
+
+"""Opción de respuesta de una pregunta"""
+type VotingOption {
+  id: String!
+  questionId: String!
+  position: Int!
+  text: String!
+}
+
+"""Pregunta sometida a votación"""
+type VotingQuestion {
+  id: String!
+  meetingId: String!
+  meeting: VotingMeeting
+  position: Int!
+  text: String!
+  description: String
+  weighting: VoteWeighting!
+  secrecy: VoteSecrecy!
+  status: VotingQuestionStatus!
+  openedAt: DateTime
+  closedAt: DateTime
+  options: [VotingOption!]
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """
+  Resultados. El residente los ve al cerrarse; la administración, siempre
+  """
+  results: VotingResults
+
+  """Opción que eligió quien consulta (o su unidad, en asamblea)"""
+  myVoteOptionId: String
+
+  """Quien consulta es del consejo pero solo tiene voz"""
+  viewerHasVoiceOnly: Boolean!
+
+  """Quien consulta todavía puede votar"""
+  viewerCanVote: Boolean!
+}
+
+"""Peso del voto: coeficiente, una unidad un voto, o un consejero un voto"""
+enum VoteWeighting {
+  COEFFICIENT
+  UNIT
+  MEMBER
+}
+
+"""Voto nominal (se sabe quién votó qué) o secreto (solo totales)"""
+enum VoteSecrecy {
+  NOMINAL
+  SECRET
+}
+
+"""Borrador, abierta a votos o cerrada"""
+enum VotingQuestionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+"""Reunión en la que se vota: asamblea o consejo"""
+type VotingMeeting {
+  id: String!
+  kind: VotingMeetingKind!
+  title: String!
+  description: String
+  scheduledAt: DateTime!
+  questions: [VotingQuestion!]
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Asamblea de copropietarios o reunión del consejo"""
+enum VotingMeetingKind {
+  ASAMBLEA
+  CONSEJO
+}
+
+"""Módulo e interruptores de votaciones del complejo"""
+type VotingSettings {
+  """El SUPER_ADMIN le habilitó el módulo al complejo"""
+  moduleEnabled: Boolean!
+
+  """Asambleas visibles para los residentes"""
+  residentsEnabled: Boolean!
+
+  """Reuniones del consejo visibles para el consejo"""
+  councilEnabled: Boolean!
+}
+
+"""Resultado de una opción"""
+type VotingOptionResult {
+  optionId: String!
+  text: String!
+
+  """Cuántas unidades o consejeros la eligieron"""
+  votes: Int!
+
+  """Suma de pesos: coeficientes, unidades o consejeros"""
+  weight: Float!
+
+  """Fracción de los votos emitidos (0 a 1)"""
+  share: Float!
+
+  """Fracción del total habilitado para votar (0 a 1)"""
+  shareOfEligible: Float!
+}
+
+"""Voto nominal: quién votó qué"""
+type VotingBallotView {
+  """Unidad ("Torre 2 · 301") o nombre del consejero"""
+  voterLabel: String!
+
+  """Persona que registró el voto"""
+  voterName: String
+  optionText: String!
+  weight: Float!
+  votedAt: DateTime!
+}
+
+"""Resultados de una pregunta"""
+type VotingResults {
+  weighting: VoteWeighting!
+
+  """Unidades o consejeros habilitados"""
+  eligibleCount: Int!
+
+  """Peso total habilitado (suma de coeficientes, unidades o consejeros)"""
+  eligibleWeight: Float!
+  votedCount: Int!
+  votedWeight: Float!
+
+  """Peso que votó sobre el habilitado (0 a 1)"""
+  participation: Float!
+  options: [VotingOptionResult!]!
+  ballots: [VotingBallotView!]
+  participants: [String!]
+}
+
+"""Miembro del consejo y si vota en sus reuniones"""
+type VotingCouncilMember {
+  userId: String!
+  name: String!
+  unitLabel: String
+
+  """Tiene voto; si no, solo voz"""
+  hasVote: Boolean!
+}
+
+"""Horario semanal de apertura de una zona común"""
+type AmenitySchedule {
+  id: ID!
+  amenityId: String!
+  amenity: Amenity
+  complexId: String!
+
+  """0=domingo, 1=lunes … 6=sábado"""
+  dayOfWeek: Int!
+
+  """Hora de apertura en formato HH:mm"""
+  openTime: String!
+
+  """Hora de cierre en formato HH:mm"""
+  closeTime: String!
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Zona común reservable del complejo residencial"""
+type Amenity {
+  id: ID!
+
+  """Nombre visible (ej. Salón Comunal Piso 1)"""
+  name: String!
+  description: String
+  type: AmenityType!
+  status: AmenityStatus!
+  location: String
+  rules: String
+
+  """URLs de fotos de la zona (R2)"""
+  imageUrls: [String!]
+  bookingMode: AmenityBookingMode!
+  durationUnit: AmenityDurationUnit!
+  slotDurationMinutes: Int!
+  minDurationMinutes: Int!
+  maxDurationMinutes: Int!
+  capacity: Int!
+  maxSimultaneousBookings: Int!
+  advanceBookingDays: Int!
+  minAdvanceDays: Int!
+  cancellationDeadlineDays: Int!
+
+  """Se suman a cancellationDeadlineDays para formar el plazo real"""
+  cancellationDeadlineHours: Int!
+
+  """Porcentaje de la tarifa que se retiene al cancelar fuera de plazo"""
+  lateCancellationFeePercent: Int!
+
+  """Reservas gratis al año por miembro del consejo. 0 = sin beneficio"""
+  councilFreeBookingsPerYear: Int!
+  maxActiveBookingsPerUnit: Int!
+  maxBookingsPerUnitPerMonth: Int!
+
+  """
+  Si es true la reserva nace en PENDING y la administración debe aprobarla
+  """
+  requiresApproval: Boolean!
+
+  """Si es true, una unidad con saldo vencido no puede reservar"""
+  blockBookingsOnDebt: Boolean!
+  feeType: AmenityFeeType!
+  feeAmount: Float!
+  complexId: String!
+  complex: ResidentialComplex
+  schedules: [AmenitySchedule!]
+  createdByUserId: String
+  updatedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Tipo de zona común del complejo residencial"""
+enum AmenityType {
+  SALON_COMUNAL
+  ZONA_BBQ
+  PISCINA
+  GIMNASIO
+  CANCHA
+  COWORKING
+  SAUNA
+  TERRAZA
+  PARQUE_INFANTIL
+  TEATRINO
+  OTRO
+}
+
+"""Estado operativo de la zona común"""
+enum AmenityStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
+"""Modo en que se reservan las franjas horarias de la zona común"""
+enum AmenityBookingMode {
+  SLOT
+  RANGE
+}
+
+"""Unidad en que se expresan las duraciones de la zona común"""
+enum AmenityDurationUnit {
+  HOURS
+  DAYS
+}
+
+"""Forma de cobro de la reserva de zona común"""
+enum AmenityFeeType {
+  FREE
+  PER_BOOKING
+  PER_HOUR
+}
+
+"""Bloqueo puntual de una zona común (mantenimiento, evento)"""
+type AmenityBlackout {
+  id: ID!
+  amenityId: String!
+  amenity: Amenity
+  complexId: String!
+  startAt: DateTime!
+  endAt: DateTime!
+
+  """Motivo visible para el residente"""
+  reason: String!
+  createdByUserId: String
+  createdAt: DateTime!
+}
+
+"""Horario especial de una zona común para una fecha puntual"""
+type AmenityScheduleException {
+  id: ID!
+  amenityId: String!
+  amenity: Amenity
+  complexId: String!
+
+  """Fecha en formato YYYY-MM-DD"""
+  date: String!
+
+  """true: la zona no abre ese día, sin importar el horario semanal"""
+  isClosed: Boolean!
+
+  """Hora de apertura HH:mm"""
+  openTime: String
+
+  """Hora de cierre HH:mm"""
+  closeTime: String
+  reason: String
+  createdByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Reserva de zona común hecha por una unidad"""
+type AmenityBooking {
+  id: ID!
+  amenityId: String!
+  amenity: Amenity
+  startAt: DateTime!
+  endAt: DateTime!
+  attendees: Int!
+  purpose: String
+  notes: String
+  unitId: String!
+  unit: Unit
+  residentId: String
+  requestedByUserId: String
+  requestedByName: String
+  status: AmenityBookingStatus!
+  approvedByUserId: String
+  approvedAt: DateTime
+  rejectionReason: String
+  cancelledByUserId: String
+  cancelledAt: DateTime
+  cancellationReason: String
+  accessCode: String
+  checkInAt: DateTime
+  checkOutAt: DateTime
+  checkedInByUserId: String
+  feeAmount: Float!
+  feeChargeId: String
+
+  """Nació gratis por el cupo anual del consejo de administración"""
+  isCouncilFreeBooking: Boolean!
+  lateCancellationAmount: Float!
+  lateCancellationChargeId: String
+  damageAmount: Float!
+  damageDescription: String
+  damageChargeId: String
+  damageChargedAt: DateTime
+  damageChargedByUserId: String
+  complexId: String!
+  complex: ResidentialComplex
+  reminderSentAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+}
+
+"""Estado de la reserva de zona común"""
+enum AmenityBookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  CHECKED_IN
+  COMPLETED
+  NO_SHOW
+  EXPIRED
+}
+
+type PaginatedAmenitiesResponse {
+  items: [Amenity!]!
+  pagination: PaginationReponse!
+}
+
+"""Ventana de apertura de la zona común en un día"""
+type AmenityTimeWindow {
+  startAt: DateTime!
+  endAt: DateTime!
+}
+
+"""Franja reservable de una zona común"""
+type AmenitySlot {
+  startAt: DateTime!
+  endAt: DateTime!
+  capacityTotal: Int!
+  capacityUsed: Int!
+  isAvailable: Boolean!
+}
+
+"""Intervalo ocupado por una reserva activa"""
+type AmenityBusyRange {
+  startAt: DateTime!
+  endAt: DateTime!
+  bookingsCount: Int!
+}
+
+"""Disponibilidad de una zona común en un día calendario"""
+type AmenityAvailabilityDay {
+  """Fecha en formato YYYY-MM-DD"""
+  date: String!
+  isOpen: Boolean!
+  closedReason: String
+  openWindows: [AmenityTimeWindow!]!
+  slots: [AmenitySlot!]!
+  busy: [AmenityBusyRange!]!
+}
+
+"""Disponibilidad de una zona común en un rango de días"""
+type AmenityAvailabilityResponse {
+  amenityId: String!
+  days: [AmenityAvailabilityDay!]!
+}
+
+type PaginatedAmenityBookingsResponse {
+  items: [AmenityBooking!]!
+  pagination: PaginationReponse!
+}
+
+"""Cupo anual del consejo de administración en una zona común"""
+type AmenityCouncilQuotaResponse {
+  """Quien pregunta está marcado como miembro del consejo"""
+  isCouncilMember: Boolean!
+
+  """
+  Reservas gratis al año que concede la zona. 0 = no concede el beneficio
+  """
+  bookingsPerYear: Int!
+
+  """Cuántas lleva usadas este año en esta zona"""
+  used: Int!
+
+  """Cuántas le quedan este año en esta zona"""
+  remaining: Int!
+
+  """Año calendario sobre el que se cuenta"""
+  year: Int!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -3904,6 +4475,31 @@ type Query {
   Documentos legales dirigidos a complejos registrados (audience COMPLEX, publicados). Ej: Anexo B2B / DPA a firmar. Disponible para complejos autenticados.
   """
   complexLegalDocuments: [LegalDocument!]!
+  amenityScheduleExceptions(amenityId: String!, from: String!, to: String!): [AmenityScheduleException!]!
+  amenities(complexId: String!, pagination: PaginationInput, filters: FilterAmenitiesInput): PaginatedAmenitiesResponse!
+  amenity(amenityId: String!): Amenity!
+  amenityAvailability(input: AmenityAvailabilityInput!): AmenityAvailabilityResponse!
+  amenityBlackouts(amenityId: String!): [AmenityBlackout!]!
+  amenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
+  myUnitAmenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
+  myAmenityCouncilQuota(amenityId: String!): AmenityCouncilQuotaResponse!
+  amenityBooking(bookingId: String!): AmenityBooking!
+  pqrfRequests(complexId: String!, pagination: PaginationInput, filters: FilterPqrfInput): PaginatedPqrfResponse!
+  myPqrfRequests(complexId: String!, pagination: PaginationInput, filters: FilterPqrfInput): PaginatedPqrfResponse!
+  pqrfCouncilMembers(complexId: String!): [PqrfCouncilMember!]!
+  pqrfRequest(pqrfId: String!): Pqrf!
+  votingEnabled(complexId: String!): Boolean!
+  votingSettings(complexId: String!): VotingSettings!
+
+  """Todas las reuniones (administración)"""
+  votingMeetings(complexId: String!): [VotingMeeting!]!
+
+  """Lo que el residente puede votar o consultar"""
+  myVotingMeetings(complexId: String!): [VotingMeeting!]!
+  votingQuestion(questionId: String!): VotingQuestion!
+
+  """El consejo y quién tiene voto"""
+  votingCouncilMembers(complexId: String!): [VotingCouncilMember!]!
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
@@ -3958,6 +4554,9 @@ enum ComplexModule {
   NOTIFICACIONES
   PARKING_ROTATION
   PARKING_BILLING
+  ZONAS_COMUNES
+  PQRF
+  VOTACIONES
 }
 
 input FilterComplexInput {
@@ -4183,6 +4782,45 @@ input CallLogsInput {
   dateFrom: String
   dateTo: String
   pagination: PaginationInput
+}
+
+input FilterAmenitiesInput {
+  status: AmenityStatus
+  type: AmenityType
+
+  """Búsqueda por nombre"""
+  search: String
+}
+
+input AmenityAvailabilityInput {
+  amenityId: String!
+
+  """Primer día a consultar (YYYY-MM-DD)"""
+  from: String!
+
+  """Último día a consultar, inclusive (YYYY-MM-DD)"""
+  to: String!
+}
+
+input FilterAmenityBookingsInput {
+  status: AmenityBookingStatus
+  amenityId: String
+  unitId: String
+
+  """Reservas que inician desde esta fecha (ISO 8601)"""
+  startFrom: String
+
+  """Reservas que inician hasta esta fecha (ISO 8601)"""
+  startUntil: String
+}
+
+input FilterPqrfInput {
+  type: PqrfType
+  status: PqrfStatus
+  addressee: PqrfAddressee
+
+  """Busca en el número de radicado y en el asunto"""
+  search: String
 }
 
 type Mutation {
@@ -4543,6 +5181,43 @@ type Mutation {
 
   """Elimina un documento legal. Solo SUPER_ADMIN."""
   deleteLegalDocument(id: ID!): Boolean!
+  createAmenity(input: CreateAmenityInput!): Amenity!
+  updateAmenity(input: UpdateAmenityInput!): Amenity!
+  deleteAmenity(amenityId: String!): Boolean!
+  setAmenitySchedules(input: SetAmenitySchedulesInput!): Amenity!
+  createAmenityBlackout(input: CreateAmenityBlackoutInput!): AmenityBlackout!
+  deleteAmenityBlackout(blackoutId: String!): Boolean!
+  upsertAmenityScheduleException(input: UpsertScheduleExceptionInput!): AmenityScheduleException!
+  deleteAmenityScheduleException(exceptionId: String!): Boolean!
+  createAmenityBooking(input: CreateAmenityBookingInput!): AmenityBooking!
+  approveAmenityBooking(bookingId: String!): AmenityBooking!
+  rejectAmenityBooking(input: RejectAmenityBookingInput!): AmenityBooking!
+  cancelAmenityBooking(input: CancelAmenityBookingInput!): AmenityBooking!
+  checkInAmenityBooking(complexId: String!, accessCode: String!): AmenityBooking!
+  checkOutAmenityBooking(bookingId: String!): AmenityBooking!
+  chargeAmenityDamage(input: ChargeAmenityDamageInput!): AmenityBooking!
+
+  """Radica un PQRF"""
+  createPqrf(input: CreatePqrfInput!): Pqrf!
+
+  """Marca el radicado como abierto por quien lo atiende"""
+  openPqrf(pqrfId: String!): Pqrf!
+
+  """Marca el radicado como resuelto por quien lo atiende"""
+  resolvePqrf(pqrfId: String!): Pqrf!
+  updatePqrfCouncilResolvers(complexId: String!, userIds: [String!]!): [PqrfCouncilMember!]!
+  setVotingEnabled(complexId: String!, audience: VotingAudience!, enabled: Boolean!): Boolean!
+  createVotingMeeting(input: CreateVotingMeetingInput!): VotingMeeting!
+  deleteVotingMeeting(meetingId: String!): Boolean!
+  createVotingQuestion(input: CreateVotingQuestionInput!): VotingQuestion!
+  updateVotingQuestion(input: UpdateVotingQuestionInput!): VotingQuestion!
+  deleteVotingQuestion(questionId: String!): Boolean!
+  openVotingQuestion(questionId: String!): VotingQuestion!
+  closeVotingQuestion(questionId: String!): VotingQuestion!
+  updateVotingCouncilVoiceOnly(complexId: String!, voiceOnlyUserIds: [String!]!): [VotingCouncilMember!]!
+
+  """Un voto por unidad (asamblea) o por consejero"""
+  castVote(questionId: String!, optionId: String!): VotingQuestion!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -4705,6 +5380,9 @@ input CreateResidentInput {
   type: ResidentType! = OWNER
   isMainResident: Boolean! = false
 
+  """Miembro del consejo de administración"""
+  isCouncilMember: Boolean! = false
+
   """Nombre del contacto de emergencia"""
   emergencyContactName: String!
 
@@ -4723,6 +5401,9 @@ input UpdateResidentInput {
   id: String!
   type: ResidentType
   isMainResident: Boolean
+
+  """Miembro del consejo de administración"""
+  isCouncilMember: Boolean
   emergencyContactName: String
   emergencyContactLastName: String
   emergencyContactPhone: String
@@ -4815,6 +5496,15 @@ input CreateComplexInput {
 
   """Radio en metros para validar presencia GPS (por defecto 200 m)"""
   gpsRadius: Int
+
+  """Días para resolver un PQRF (calendario)"""
+  pqrfResolutionDays: Int
+
+  """Días antes del vencimiento en que empiezan los recordatorios"""
+  pqrfReminderLeadDays: Int
+
+  """Horas entre recordatorios. 0 = sin recordatorios"""
+  pqrfReminderIntervalHours: Int
 }
 
 """Código de país para el número de teléfono"""
@@ -4860,6 +5550,15 @@ input UpdateComplexInput {
 
   """Radio en metros para validar presencia GPS (por defecto 200 m)"""
   gpsRadius: Int
+
+  """Días para resolver un PQRF (calendario)"""
+  pqrfResolutionDays: Int
+
+  """Días antes del vencimiento en que empiezan los recordatorios"""
+  pqrfReminderLeadDays: Int
+
+  """Horas entre recordatorios. 0 = sin recordatorios"""
+  pqrfReminderIntervalHours: Int
 
   """ID del complejo a actualizar"""
   id: String!
@@ -5905,4 +6604,282 @@ input UpdateLegalDocumentInput {
   """Nuevo PDF descargable en base64. Reemplaza el anterior."""
   pdfBase64: String
   pdfFileName: String
+}
+
+input CreateAmenityInput {
+  complexId: String!
+  name: String!
+  description: String
+  type: AmenityType! = OTRO
+  status: AmenityStatus! = ACTIVE
+  location: String
+
+  """Reglamento de uso que ve el residente al reservar"""
+  rules: String
+  imageUrls: [String!]
+  bookingMode: AmenityBookingMode! = SLOT
+  durationUnit: AmenityDurationUnit! = HOURS
+
+  """
+  Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit
+  """
+  slotDurationMinutes: Int! = 120
+
+  """
+  Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit
+  """
+  minDurationMinutes: Int! = 60
+
+  """
+  Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit
+  """
+  maxDurationMinutes: Int! = 480
+
+  """Aforo por reserva. 0 = sin control"""
+  capacity: Int! = 0
+
+  """Reservas que caben a la misma hora (ej. 4 asadores)"""
+  maxSimultaneousBookings: Int! = 1
+  advanceBookingDays: Int! = 30
+
+  """Anticipación mínima en días. 0 = se puede reservar para hoy"""
+  minAdvanceDays: Int! = 1
+
+  """
+  Días antes del inicio en que aún se puede cancelar sin quedar con el cobro
+  """
+  cancellationDeadlineDays: Int! = 1
+
+  """Horas que se suman al plazo de cancelación en días"""
+  cancellationDeadlineHours: Int! = 0
+
+  """% de la tarifa que se retiene al cancelar fuera de plazo"""
+  lateCancellationFeePercent: Int! = 100
+
+  """Reservas gratis al año por miembro del consejo. 0 = sin beneficio"""
+  councilFreeBookingsPerYear: Int! = 0
+
+  """0 = sin límite"""
+  maxActiveBookingsPerUnit: Int! = 2
+
+  """0 = sin límite"""
+  maxBookingsPerUnitPerMonth: Int! = 0
+  requiresApproval: Boolean! = true
+  blockBookingsOnDebt: Boolean! = true
+  feeType: AmenityFeeType! = FREE
+  feeAmount: Float! = 0
+  schedules: [AmenityScheduleInput!]
+}
+
+input AmenityScheduleInput {
+  """0=domingo, 1=lunes … 6=sábado"""
+  dayOfWeek: Int!
+
+  """Hora de apertura HH:mm"""
+  openTime: String!
+
+  """Hora de cierre HH:mm"""
+  closeTime: String!
+}
+
+input UpdateAmenityInput {
+  name: String
+  description: String
+  type: AmenityType = OTRO
+  status: AmenityStatus = ACTIVE
+  location: String
+
+  """Reglamento de uso que ve el residente al reservar"""
+  rules: String
+  imageUrls: [String!]
+  bookingMode: AmenityBookingMode = SLOT
+  durationUnit: AmenityDurationUnit = HOURS
+
+  """
+  Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit
+  """
+  slotDurationMinutes: Int = 120
+
+  """
+  Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit
+  """
+  minDurationMinutes: Int = 60
+
+  """
+  Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit
+  """
+  maxDurationMinutes: Int = 480
+
+  """Aforo por reserva. 0 = sin control"""
+  capacity: Int = 0
+
+  """Reservas que caben a la misma hora (ej. 4 asadores)"""
+  maxSimultaneousBookings: Int = 1
+  advanceBookingDays: Int = 30
+
+  """Anticipación mínima en días. 0 = se puede reservar para hoy"""
+  minAdvanceDays: Int = 1
+
+  """
+  Días antes del inicio en que aún se puede cancelar sin quedar con el cobro
+  """
+  cancellationDeadlineDays: Int = 1
+
+  """Horas que se suman al plazo de cancelación en días"""
+  cancellationDeadlineHours: Int = 0
+
+  """% de la tarifa que se retiene al cancelar fuera de plazo"""
+  lateCancellationFeePercent: Int = 100
+
+  """Reservas gratis al año por miembro del consejo. 0 = sin beneficio"""
+  councilFreeBookingsPerYear: Int = 0
+
+  """0 = sin límite"""
+  maxActiveBookingsPerUnit: Int = 2
+
+  """0 = sin límite"""
+  maxBookingsPerUnitPerMonth: Int = 0
+  requiresApproval: Boolean = true
+  blockBookingsOnDebt: Boolean = true
+  feeType: AmenityFeeType = FREE
+  feeAmount: Float = 0
+
+  """ID de la zona común a actualizar"""
+  id: String!
+}
+
+input SetAmenitySchedulesInput {
+  amenityId: String!
+  schedules: [AmenityScheduleInput!]!
+}
+
+input CreateAmenityBlackoutInput {
+  amenityId: String!
+
+  """Inicio del bloqueo (ISO 8601)"""
+  startAt: String!
+
+  """Fin del bloqueo (ISO 8601)"""
+  endAt: String!
+
+  """Motivo visible para el residente"""
+  reason: String!
+}
+
+input UpsertScheduleExceptionInput {
+  amenityId: String!
+
+  """Fecha en formato YYYY-MM-DD"""
+  date: String!
+
+  """true: la zona no abre ese día"""
+  isClosed: Boolean! = false
+
+  """Requerido si isClosed=false. Formato HH:mm"""
+  openTime: String
+
+  """
+  Requerido si isClosed=false. Un cierre anterior a la apertura termina al día siguiente
+  """
+  closeTime: String
+
+  """Motivo; el residente lo ve cuando el día queda cerrado"""
+  reason: String
+}
+
+input CreateAmenityBookingInput {
+  amenityId: String!
+
+  """Inicio de la reserva (ISO 8601)"""
+  startAt: String!
+
+  """
+  Fin de la reserva (ISO 8601). Exclusivo: 12:00 no choca con una reserva que empieza a las 12:00
+  """
+  endAt: String!
+  attendees: Int! = 1
+
+  """Motivo del evento (ej. cumpleaños)"""
+  purpose: String
+  notes: String
+
+  """Usar el cupo anual del consejo si aplica"""
+  useCouncilFreeQuota: Boolean! = true
+
+  """Unidad a nombre de la cual se reserva (solo staff)"""
+  unitId: String
+}
+
+input RejectAmenityBookingInput {
+  bookingId: String!
+
+  """Motivo del rechazo. Obligatorio: el residente debe saber por qué"""
+  reason: String!
+}
+
+input CancelAmenityBookingInput {
+  bookingId: String!
+  reason: String
+}
+
+input ChargeAmenityDamageInput {
+  bookingId: String!
+
+  """Valor a cargar a la unidad"""
+  amount: Float!
+
+  """
+  Qué se dañó y por qué se cobra. Lo ve el residente en su estado de cuenta
+  """
+  description: String!
+}
+
+input CreatePqrfInput {
+  complexId: String!
+  type: PqrfType!
+  addressee: PqrfAddressee! = ADMINISTRACION
+
+  """Asunto en una línea"""
+  subject: String!
+
+  """Cuerpo del radicado"""
+  description: String!
+}
+
+"""Residentes (asambleas) o consejo (sus reuniones)"""
+enum VotingAudience {
+  RESIDENTS
+  COUNCIL
+}
+
+input CreateVotingMeetingInput {
+  complexId: String!
+  kind: VotingMeetingKind!
+  title: String!
+  description: String
+  scheduledAt: DateTime!
+}
+
+input CreateVotingQuestionInput {
+  meetingId: String!
+  text: String!
+  description: String
+
+  """
+  Solo asambleas: COEFFICIENT (por defecto) o UNIT. En el consejo vota cada miembro
+  """
+  weighting: VoteWeighting
+  secrecy: VoteSecrecy = NOMINAL
+
+  """Opciones de respuesta, de 2 a 10"""
+  options: [String!]!
+}
+
+input UpdateVotingQuestionInput {
+  questionId: String!
+  text: String
+  description: String
+  weighting: VoteWeighting
+  secrecy: VoteSecrecy
+  options: [String!]
 }

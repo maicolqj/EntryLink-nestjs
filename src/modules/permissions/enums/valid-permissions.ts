@@ -274,6 +274,16 @@ export enum ValidPermissions {
   DELETE_NOTE                = 'DELETE_NOTE',
 
   // ═══════════════════════════════════════════════════════
+  // PQRF
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver los radicados dirigidos a la propia instancia. ➜ Nivel: [MEDIUM] */
+  VIEW_PQRF                  = 'VIEW_PQRF',
+
+  /** Radicar un PQRF. Lo tiene el residente. ➜ Nivel: [LOW] */
+  CREATE_PQRF                = 'CREATE_PQRF',
+
+  // ═══════════════════════════════════════════════════════
   // LLAMADAS
   // ═══════════════════════════════════════════════════════
 
@@ -308,6 +318,28 @@ export enum ValidPermissions {
 
   /** Eliminar números especiales. ➜ Nivel: [HIGH] | Requiere: [VIEW_SPECIAL_NUMBERS] */
   DELETE_SPECIAL_NUMBER      = 'DELETE_SPECIAL_NUMBER',
+
+  // ═══════════════════════════════════════════════════════
+  // ZONAS COMUNES / RESERVAS
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver zonas comunes del complejo y su disponibilidad. ➜ Nivel: [LOW] */
+  VIEW_AMENITIES             = 'VIEW_AMENITIES',
+
+  /** Crear, editar y programar zonas comunes. ➜ Nivel: [HIGH] | Requiere: [VIEW_AMENITIES] */
+  MANAGE_AMENITIES           = 'MANAGE_AMENITIES',
+
+  /** Ver reservas de zonas comunes del complejo. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITIES] */
+  VIEW_AMENITY_BOOKINGS      = 'VIEW_AMENITY_BOOKINGS',
+
+  /** Crear una reserva de zona común. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITIES] */
+  CREATE_AMENITY_BOOKING     = 'CREATE_AMENITY_BOOKING',
+
+  /** Aprobar o rechazar reservas de zonas comunes. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_AMENITY_BOOKINGS] */
+  APPROVE_AMENITY_BOOKING    = 'APPROVE_AMENITY_BOOKING',
+
+  /** Registrar ingreso y salida a la zona común en portería. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITY_BOOKINGS] */
+  CHECK_IN_AMENITY_BOOKING   = 'CHECK_IN_AMENITY_BOOKING',
 
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN                = 'SUPERADMIN',

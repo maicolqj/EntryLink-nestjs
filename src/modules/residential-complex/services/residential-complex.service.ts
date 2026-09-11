@@ -594,6 +594,18 @@ export class ResidentialComplexService {
   // ACTUALIZAR MÓDULOS HABILITADOS
   // ================================================================
 
+  /**
+   * Quienes necesitan enterarse cuando cambian los módulos de un complejo.
+   *
+   * Es un registro y no una dependencia directa porque los módulos que
+   * escuchan (votaciones) ya dependen de este: importarlos aquí sería circular.
+   */
+  private readonly modulesListeners: ((complexId: string) => void)[] = [];
+
+  onModulesUpdated(listener: (complexId: string) => void): void {
+    this.modulesListeners.push(listener);
+  }
+
   async updateEnabledModules(complexId: string, modules: ComplexModule[]): Promise<ResidentialComplex> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId, deletedAt: IsNull() },
@@ -606,6 +618,15 @@ export class ResidentialComplexService {
     complex.enabledModules = modules;
     const updated = await this.complexRepo.save(complex);
     this.logger.log(`Módulos actualizados para complejo ${complexId}: [${modules.join(', ')}]`);
+
+    for (const listener of this.modulesListeners) {
+      try {
+        listener(complexId);
+      } catch (err: any) {
+        this.logger.warn(`Error avisando el cambio de módulos de ${complexId}: ${err?.message}`);
+      }
+    }
+
     return updated;
   }
 
