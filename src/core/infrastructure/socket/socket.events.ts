@@ -29,6 +29,12 @@ export enum SocketEvent {
   /** Cambió el estado de un radicado PQRF (abierto o resuelto). */
   PQRF_UPDATED                = 'pqrf:updated',
 
+  /** Llegó un voto o cambió el estado de una pregunta: las gráficas se repintan. */
+  VOTING_UPDATED              = 'voting:updated',
+
+  /** Las votaciones se volvieron visibles —o dejaron de serlo— para los residentes. */
+  VOTING_AVAILABILITY         = 'voting:availability',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS    = 'resident:import:progress',
   RESIDENT_IMPORT_DONE        = 'resident:import:done',

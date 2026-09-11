@@ -51,6 +51,7 @@ import { SocketModule } from './core/infrastructure/socket/socket.module';
 import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { PqrfModule }                 from './modules/pqrf/pqrf.module';
+import { VotingModule }               from './modules/voting/voting.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
@@ -245,6 +246,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     LegalModule,
     AmenitiesModule,
     PqrfModule,
+    VotingModule,
     MailModule,
     BullBoardAppModule,
     HealthModule,
