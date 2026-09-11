@@ -54,6 +54,7 @@ import { Role }     from '../../roles/entities/role.entity';
 import { SupervisorVisit }       from '../../supervisor-visits/entities/supervisor-visit.entity';
 import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-visit-status.enum';
 import { ResidentsService } from '../../residents/services/residents.service';
+import { AssignmentStatus } from '../../users/entities/user-complex-assignment.entity';
 import { ValidRoles }       from '../../roles/enums/valid-roles';
 import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
 import { RequestSecurityCallResult } from '../dto/responses/request-security-call.response';
@@ -1315,6 +1316,18 @@ export class NotificationsService implements OnModuleInit {
     return rows.map(r => r.supervisorId);
   }
 
+  /**
+   * Usuarios de un complejo que tienen alguno de los roles dados.
+   *
+   * Expone `resolveTargetUserIds` para los módulos que necesitan avisar a la
+   * administración de un evento propio (una reserva de zona común esperando
+   * aprobación, por ejemplo) sin pasar por `sendNotification`, que además
+   * registra un lote de envío masivo y exige un currentUser emisor.
+   */
+  async findUserIdsByRoles(complexId: string, roles: ValidRoles[]): Promise<string[]> {
+    return this.resolveTargetUserIds(complexId, roles);
+  }
+
   async triggerPanicAlert(
     complexId: string,
     currentUser: JwtAccessPayload,
@@ -2350,7 +2363,21 @@ export class NotificationsService implements OnModuleInit {
       .createQueryBuilder('ur')
       .innerJoin('ur.user', 'u')
       .innerJoin('ur.role', 'r')
-      .where('u.complex_id = :complexId', { complexId })
+      // El personal —supervisor, contador— puede atender VARIOS complejos, así
+      // que su vínculo no cabe en `users.complex_id`: vive en
+      // `user_complex_assignments`. Mirar solo la columna dejaba fuera a todo
+      // el que fue asignado por esa vía, y como quien avisa corta cuando la
+      // lista llega vacía, sus notificaciones se perdían sin rastro. Los
+      // residentes y la portería sí traen la columna, y por eso funcionaban.
+      .where(
+        `(u.complex_id = :complexId
+          OR EXISTS (
+            SELECT 1 FROM user_complex_assignments uca
+             WHERE uca.user_id = u.id
+               AND uca.complex_id = :complexId
+               AND uca.status = :assignmentActive))`,
+        { complexId, assignmentActive: AssignmentStatus.ACTIVE },
+      )
       .andWhere('u.deleted_at IS NULL')
       .select('u.id', 'userId')
       .distinct(true);
@@ -2364,8 +2391,23 @@ export class NotificationsService implements OnModuleInit {
     }
 
     const userRoles = await qb.getRawMany<{ userId: string }>();
+    const userIds = userRoles.map(row => row.userId);
 
-    return userRoles.map(row => row.userId);
+    // La cuenta del complejo NO es una fila de `users`: inicia sesión contra
+    // `residential_complexes` y su `sub` es el id del complejo, así que una
+    // consulta sobre usuarios nunca la encuentra. Sin esto, pedir COMPLEX_ROL
+    // devuelve una lista vacía y el aviso a la administración —una reserva por
+    // aprobar, una alerta de pánico— se pierde en silencio, porque quien avisa
+    // corta cuando no hay destinatarios. Mismo criterio que `notifyDpaReviewed`,
+    // que ya direcciona al complejo por su propio id.
+    //
+    // Con `targetUnitId` no aplica: ahí se busca a quien vive en una unidad, y
+    // el complejo no vive en ninguna.
+    const wantsComplexAccount = targetRoles.includes(ValidRoles.COMPLEX_ROL)
+      && !targetUnitId
+      && !userIds.includes(complexId);
+
+    return wantsComplexAccount ? [...userIds, complexId] : userIds;
   }
 
   private async findByIdOrFail(id: string): Promise<Notification> {

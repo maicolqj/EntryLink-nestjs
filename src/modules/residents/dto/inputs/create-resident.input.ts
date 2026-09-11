@@ -63,6 +63,12 @@ export class CreateResidentInput {
   @IsBoolean()
   isMainResident?: boolean;
 
+  /** Miembro del consejo de administración. Ver la nota en UpdateResidentInput. */
+  @Field(() => Boolean, { defaultValue: false, description: 'Miembro del consejo de administración' })
+  @IsOptional()
+  @IsBoolean()
+  isCouncilMember?: boolean;
+
   // ── Contacto de emergencia ────────────────────────────────────────────
 
   @Field(() => String, { description: 'Nombre del contacto de emergencia' })

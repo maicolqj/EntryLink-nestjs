@@ -2,7 +2,7 @@ import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
   IsString, IsEnum, IsOptional, IsEmail, IsUUID,
   MaxLength, MinLength, IsPhoneNumber, Matches,
-  ValidateNested, IsNumber, Min, Max,
+  ValidateNested, IsNumber, IsInt, Min, Max,
 } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 import { ComplexType }   from '../../enums/complex-type.enum';
@@ -141,4 +141,32 @@ export class CreateComplexInput {
   @Min(50)
   @Max(5000)
   gpsRadius?: number;
+
+  // ── PQRF ──────────────────────────────────────────────────────────────────
+  //
+  // Cuánto se demora el complejo en responder un radicado y cómo se le insiste
+  // antes de que se le venza. Vencido el plazo, el radicado se resuelve solo a
+  // favor de quien lo puso —silencio administrativo positivo—, así que estos
+  // números no son cosméticos.
+
+  @Field(() => Int, { nullable: true, description: 'Días para resolver un PQRF (calendario)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  pqrfResolutionDays?: number;
+
+  @Field(() => Int, { nullable: true, description: 'Días antes del vencimiento en que empiezan los recordatorios' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(90)
+  pqrfReminderLeadDays?: number;
+
+  @Field(() => Int, { nullable: true, description: 'Horas entre recordatorios. 0 = sin recordatorios' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(168)
+  pqrfReminderIntervalHours?: number;
 }

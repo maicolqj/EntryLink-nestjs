@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
 
 import { Resident } from '../entities/resident.entity';
 import { ResidentsService } from '../services/residents.service';
@@ -22,6 +22,24 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Resident)
 export class ResidentsResolver {
+
+  /**
+   * Pertenencia al consejo de administración.
+   *
+   * No es una columna del residente sino el rol COUNCIL_ROL sobre su usuario:
+   * al consejo se le dirigen cosas que la administración no debe ver, y eso es
+   * una frontera de permisos. Se expone como campo del residente porque es
+   * donde el administrador la marca y la consulta.
+   */
+  @ResolveField(() => Boolean, { description: 'Miembro del consejo de administración' })
+  isCouncilMember(@Parent() resident: Resident): boolean | Promise<boolean> {
+    // El listado ya trae los roles; solo se vuelve a la base cuando la consulta
+    // que trajo al residente no los cargó.
+    const loaded = resident.user?.userRoles;
+    if (loaded) return loaded.some(ur => ur.role?.name === ValidRoles.COUNCIL_ROL);
+
+    return this.residentsService.isCouncilUser(resident.userId);
+  }
 
   constructor(private readonly residentsService: ResidentsService) { }
 
