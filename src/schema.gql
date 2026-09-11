@@ -319,6 +319,18 @@ type ResidentialComplex {
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int!
 
+  """Consejeros que responden los PQRF. Vacío = todo el consejo"""
+  pqrfCouncilResolverUserIds: [String!]!
+
+  """Asambleas visibles para los residentes"""
+  votingEnabled: Boolean!
+
+  """Reuniones del consejo visibles para el consejo"""
+  votingCouncilEnabled: Boolean!
+
+  """Consejeros con voz pero sin voto en las reuniones del consejo"""
+  votingCouncilVoiceOnlyUserIds: [String!]!
+
   """CountryCode"""
   countryCode: Country!
 
@@ -1565,6 +1577,8 @@ enum AuditEntityType {
   SpecialNumber
   Amenity
   AmenityBooking
+  VotingMeeting
+  VotingQuestion
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -1686,6 +1700,7 @@ enum NotificationType {
   PQRF_RECEIVED
   PQRF_RESOLVED
   PQRF_REMINDER
+  VOTING_OPENED
   AMENITY_BOOKING_APPROVED
   AMENITY_BOOKING_REJECTED
   AMENITY_BOOKING_CANCELLED
@@ -3814,6 +3829,9 @@ type Pqrf {
   """Quien consulta puede marcarlo como resuelto"""
   viewerCanResolve: Boolean!
 
+  """Quien consulta es del consejo pero no le toca responderlo"""
+  viewerIsCouncilObserver: Boolean!
+
   """Quien consulta ya marcó su parte"""
   viewerHasResolved: Boolean!
 }
@@ -3838,6 +3856,167 @@ enum PqrfStatus {
 type PaginatedPqrfResponse {
   items: [Pqrf!]!
   pagination: PaginationReponse!
+}
+
+"""Miembro del consejo y si responde los PQRF"""
+type PqrfCouncilMember {
+  userId: String!
+  name: String!
+  unitLabel: String
+
+  """Le toca responder los PQRF dirigidos al consejo"""
+  canResolve: Boolean!
+}
+
+"""Opción de respuesta de una pregunta"""
+type VotingOption {
+  id: String!
+  questionId: String!
+  position: Int!
+  text: String!
+}
+
+"""Pregunta sometida a votación"""
+type VotingQuestion {
+  id: String!
+  meetingId: String!
+  meeting: VotingMeeting
+  position: Int!
+  text: String!
+  description: String
+  weighting: VoteWeighting!
+  secrecy: VoteSecrecy!
+  status: VotingQuestionStatus!
+  openedAt: DateTime
+  closedAt: DateTime
+  options: [VotingOption!]
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """
+  Resultados. El residente los ve al cerrarse; la administración, siempre
+  """
+  results: VotingResults
+
+  """Opción que eligió quien consulta (o su unidad, en asamblea)"""
+  myVoteOptionId: String
+
+  """Quien consulta es del consejo pero solo tiene voz"""
+  viewerHasVoiceOnly: Boolean!
+
+  """Quien consulta todavía puede votar"""
+  viewerCanVote: Boolean!
+}
+
+"""Peso del voto: coeficiente, una unidad un voto, o un consejero un voto"""
+enum VoteWeighting {
+  COEFFICIENT
+  UNIT
+  MEMBER
+}
+
+"""Voto nominal (se sabe quién votó qué) o secreto (solo totales)"""
+enum VoteSecrecy {
+  NOMINAL
+  SECRET
+}
+
+"""Borrador, abierta a votos o cerrada"""
+enum VotingQuestionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+"""Reunión en la que se vota: asamblea o consejo"""
+type VotingMeeting {
+  id: String!
+  kind: VotingMeetingKind!
+  title: String!
+  description: String
+  scheduledAt: DateTime!
+  questions: [VotingQuestion!]
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Asamblea de copropietarios o reunión del consejo"""
+enum VotingMeetingKind {
+  ASAMBLEA
+  CONSEJO
+}
+
+"""Módulo e interruptores de votaciones del complejo"""
+type VotingSettings {
+  """El SUPER_ADMIN le habilitó el módulo al complejo"""
+  moduleEnabled: Boolean!
+
+  """Asambleas visibles para los residentes"""
+  residentsEnabled: Boolean!
+
+  """Reuniones del consejo visibles para el consejo"""
+  councilEnabled: Boolean!
+}
+
+"""Resultado de una opción"""
+type VotingOptionResult {
+  optionId: String!
+  text: String!
+
+  """Cuántas unidades o consejeros la eligieron"""
+  votes: Int!
+
+  """Suma de pesos: coeficientes, unidades o consejeros"""
+  weight: Float!
+
+  """Fracción de los votos emitidos (0 a 1)"""
+  share: Float!
+
+  """Fracción del total habilitado para votar (0 a 1)"""
+  shareOfEligible: Float!
+}
+
+"""Voto nominal: quién votó qué"""
+type VotingBallotView {
+  """Unidad ("Torre 2 · 301") o nombre del consejero"""
+  voterLabel: String!
+
+  """Persona que registró el voto"""
+  voterName: String
+  optionText: String!
+  weight: Float!
+  votedAt: DateTime!
+}
+
+"""Resultados de una pregunta"""
+type VotingResults {
+  weighting: VoteWeighting!
+
+  """Unidades o consejeros habilitados"""
+  eligibleCount: Int!
+
+  """Peso total habilitado (suma de coeficientes, unidades o consejeros)"""
+  eligibleWeight: Float!
+  votedCount: Int!
+  votedWeight: Float!
+
+  """Peso que votó sobre el habilitado (0 a 1)"""
+  participation: Float!
+  options: [VotingOptionResult!]!
+  ballots: [VotingBallotView!]
+  participants: [String!]
+}
+
+"""Miembro del consejo y si vota en sus reuniones"""
+type VotingCouncilMember {
+  userId: String!
+  name: String!
+  unitLabel: String
+
+  """Tiene voto; si no, solo voz"""
+  hasVote: Boolean!
 }
 
 """Horario semanal de apertura de una zona común"""
@@ -4307,7 +4486,20 @@ type Query {
   amenityBooking(bookingId: String!): AmenityBooking!
   pqrfRequests(complexId: String!, pagination: PaginationInput, filters: FilterPqrfInput): PaginatedPqrfResponse!
   myPqrfRequests(complexId: String!, pagination: PaginationInput, filters: FilterPqrfInput): PaginatedPqrfResponse!
+  pqrfCouncilMembers(complexId: String!): [PqrfCouncilMember!]!
   pqrfRequest(pqrfId: String!): Pqrf!
+  votingEnabled(complexId: String!): Boolean!
+  votingSettings(complexId: String!): VotingSettings!
+
+  """Todas las reuniones (administración)"""
+  votingMeetings(complexId: String!): [VotingMeeting!]!
+
+  """Lo que el residente puede votar o consultar"""
+  myVotingMeetings(complexId: String!): [VotingMeeting!]!
+  votingQuestion(questionId: String!): VotingQuestion!
+
+  """El consejo y quién tiene voto"""
+  votingCouncilMembers(complexId: String!): [VotingCouncilMember!]!
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
@@ -4364,6 +4556,7 @@ enum ComplexModule {
   PARKING_BILLING
   ZONAS_COMUNES
   PQRF
+  VOTACIONES
 }
 
 input FilterComplexInput {
@@ -5012,6 +5205,19 @@ type Mutation {
 
   """Marca el radicado como resuelto por quien lo atiende"""
   resolvePqrf(pqrfId: String!): Pqrf!
+  updatePqrfCouncilResolvers(complexId: String!, userIds: [String!]!): [PqrfCouncilMember!]!
+  setVotingEnabled(complexId: String!, audience: VotingAudience!, enabled: Boolean!): Boolean!
+  createVotingMeeting(input: CreateVotingMeetingInput!): VotingMeeting!
+  deleteVotingMeeting(meetingId: String!): Boolean!
+  createVotingQuestion(input: CreateVotingQuestionInput!): VotingQuestion!
+  updateVotingQuestion(input: UpdateVotingQuestionInput!): VotingQuestion!
+  deleteVotingQuestion(questionId: String!): Boolean!
+  openVotingQuestion(questionId: String!): VotingQuestion!
+  closeVotingQuestion(questionId: String!): VotingQuestion!
+  updateVotingCouncilVoiceOnly(complexId: String!, voiceOnlyUserIds: [String!]!): [VotingCouncilMember!]!
+
+  """Un voto por unidad (asamblea) o por consejero"""
+  castVote(questionId: String!, optionId: String!): VotingQuestion!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -6638,4 +6844,42 @@ input CreatePqrfInput {
 
   """Cuerpo del radicado"""
   description: String!
+}
+
+"""Residentes (asambleas) o consejo (sus reuniones)"""
+enum VotingAudience {
+  RESIDENTS
+  COUNCIL
+}
+
+input CreateVotingMeetingInput {
+  complexId: String!
+  kind: VotingMeetingKind!
+  title: String!
+  description: String
+  scheduledAt: DateTime!
+}
+
+input CreateVotingQuestionInput {
+  meetingId: String!
+  text: String!
+  description: String
+
+  """
+  Solo asambleas: COEFFICIENT (por defecto) o UNIT. En el consejo vota cada miembro
+  """
+  weighting: VoteWeighting
+  secrecy: VoteSecrecy = NOMINAL
+
+  """Opciones de respuesta, de 2 a 10"""
+  options: [String!]!
+}
+
+input UpdateVotingQuestionInput {
+  questionId: String!
+  text: String
+  description: String
+  weighting: VoteWeighting
+  secrecy: VoteSecrecy
+  options: [String!]
 }
