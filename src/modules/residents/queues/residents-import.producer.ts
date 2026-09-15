@@ -25,12 +25,18 @@ export class ResidentsImportProducer {
   ): Promise<string> {
     const jobId = uuidv4();
 
-    const payload: ResidentImportJobPayload = { filePath, complexId, adminUserId, approvedByUserId, jobId };
+    const payload: ResidentImportJobPayload = {
+      filePath,
+      complexId,
+      adminUserId,
+      approvedByUserId,
+      jobId,
+    };
 
     await this.queue.add(RESIDENTS_IMPORT_JOBS.PROCESS_FILE, payload, {
       attempts: 1,
       removeOnComplete: { count: 50, age: 24 * 3600 },
-      removeOnFail:    { count: 20, age: 7 * 24 * 3600 },
+      removeOnFail: { count: 20, age: 7 * 24 * 3600 },
     });
 
     this.logger.log(

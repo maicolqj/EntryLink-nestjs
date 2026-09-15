@@ -16,23 +16,31 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
  */
 
 const userOf = (roles: ValidRoles[], sub = 'user-1'): JwtAccessPayload => ({
-  sub, email: 'quien@test.com', type: 'access', entityType: 'user',
-  tokenVersion: 1, sessionId: 's1', roles, permissions: [], complexId: 'complex-1',
-} as JwtAccessPayload);
-
-const pqrfOf = (partial: Partial<Pqrf> = {}): Pqrf => ({
-  id: 'pqrf-1',
-  code: 'PQRF-000001',
-  consecutive: 1,
+  sub,
+  email: 'quien@test.com',
+  type: 'access',
+  entityType: 'user',
+  tokenVersion: 1,
+  sessionId: 's1',
+  roles,
+  permissions: [],
   complexId: 'complex-1',
-  type: PqrfType.QUEJA,
-  addressee: PqrfAddressee.CONSEJO,
-  status: PqrfStatus.RADICADO,
-  subject: 'Queja sobre la administración',
-  description: 'El administrador no responde los correos.',
-  requestedByUserId: 'resident-user',
-  ...partial,
-} as Pqrf);
+});
+
+const pqrfOf = (partial: Partial<Pqrf> = {}): Pqrf =>
+  ({
+    id: 'pqrf-1',
+    code: 'PQRF-000001',
+    consecutive: 1,
+    complexId: 'complex-1',
+    type: PqrfType.QUEJA,
+    addressee: PqrfAddressee.CONSEJO,
+    status: PqrfStatus.RADICADO,
+    subject: 'Queja sobre la administración',
+    description: 'El administrador no responde los correos.',
+    requestedByUserId: 'resident-user',
+    ...partial,
+  }) as Pqrf;
 
 interface Harness {
   service: PqrfService;
@@ -49,27 +57,35 @@ interface BuildOpts {
   adminIds?: string[];
   councilIds?: string[];
   /** Huellas ya existentes: `resolvedAt` marca a quien ya lo dio por resuelto. */
-  acks?: { userId: string; instance: PqrfAddressee; resolvedAt?: Date | null }[];
+  acks?: {
+    userId: string;
+    instance: PqrfAddressee;
+    resolvedAt?: Date | null;
+  }[];
   /** Consejeros que la administración designó para responder. Vacío = todos. */
   designated?: string[];
 }
 
-const build = (pqrf: Pqrf | null, isCouncilUser = false, opts: BuildOpts = {}): Harness => {
+const build = (
+  pqrf: Pqrf | null,
+  isCouncilUser = false,
+  opts: BuildOpts = {},
+): Harness => {
   const conditions: { sql: string; params?: Record<string, unknown> }[] = [];
 
   const qb: Record<string, unknown> = {};
   Object.assign(qb, {
-    where:    jest.fn(() => qb),
+    where: jest.fn(() => qb),
     andWhere: jest.fn((sql: string, params?: Record<string, unknown>) => {
       conditions.push({ sql, params });
       return qb;
     }),
     leftJoinAndSelect: jest.fn(() => qb),
-    orderBy:  jest.fn(() => qb),
-    skip:     jest.fn(() => qb),
-    take:     jest.fn(() => qb),
+    orderBy: jest.fn(() => qb),
+    skip: jest.fn(() => qb),
+    take: jest.fn(() => qb),
     getCount: jest.fn().mockResolvedValue(0),
-    getMany:  jest.fn().mockResolvedValue([]),
+    getMany: jest.fn().mockResolvedValue([]),
   });
 
   const saved: Pqrf[] = [];
@@ -77,18 +93,23 @@ const build = (pqrf: Pqrf | null, isCouncilUser = false, opts: BuildOpts = {}): 
   const pqrfRepo = {
     createQueryBuilder: jest.fn(() => qb),
     findOne: jest.fn().mockResolvedValue(pqrf),
-    find:    jest.fn().mockResolvedValue([]),
-    save:    jest.fn(async (row: Pqrf) => { saved.push(row); return row; }),
+    find: jest.fn().mockResolvedValue([]),
+    save: jest.fn(async (row: Pqrf) => {
+      saved.push(row);
+      return row;
+    }),
   };
 
   const ackRepo = {
-    findOne: jest.fn().mockResolvedValue(
-      (opts.acks ?? []).find(a => a.userId === 'self') ?? null,
-    ),
-    find:    jest.fn().mockResolvedValue(opts.acks ?? []),
-    count:   jest.fn().mockResolvedValue((opts.acks ?? []).length),
-    create:  jest.fn((row: unknown) => row),
-    save:    jest.fn(async (row: unknown) => row),
+    findOne: jest
+      .fn()
+      .mockResolvedValue(
+        (opts.acks ?? []).find((a) => a.userId === 'self') ?? null,
+      ),
+    find: jest.fn().mockResolvedValue(opts.acks ?? []),
+    count: jest.fn().mockResolvedValue((opts.acks ?? []).length),
+    create: jest.fn((row: unknown) => row),
+    save: jest.fn(async (row: unknown) => row),
   };
 
   const notify = jest.fn();
@@ -102,34 +123,57 @@ const build = (pqrf: Pqrf | null, isCouncilUser = false, opts: BuildOpts = {}): 
       isCouncilUser: jest.fn().mockResolvedValue(isCouncilUser),
       findCouncilUserIds: jest.fn().mockResolvedValue(opts.councilIds ?? []),
     } as never,
-    { notify, findUserIdsByRoles: jest.fn().mockResolvedValue(opts.adminIds ?? []) } as never,
+    {
+      notify,
+      findUserIdsByRoles: jest.fn().mockResolvedValue(opts.adminIds ?? []),
+    } as never,
     { log: jest.fn() } as never,
     { transaction: jest.fn() } as never,
     { emitToComplex: jest.fn(), emitToUser: jest.fn() } as never,
-    { findOne: jest.fn().mockResolvedValue({ pqrfCouncilResolverUserIds: opts.designated ?? [] }) } as never,
+    {
+      findOne: jest.fn().mockResolvedValue({
+        pqrfCouncilResolverUserIds: opts.designated ?? [],
+      }),
+    } as never,
   );
 
-  return { service, conditions, saved, acks: ackRepo as never, notify, pqrfRepo };
+  return {
+    service,
+    conditions,
+    saved,
+    acks: ackRepo,
+    notify,
+    pqrfRepo,
+  };
 };
 
 const PAGE = { page: 1, limit: 20 };
 
 describe('PqrfService — quién puede leer un radicado', () => {
-
   describe('ficha del radicado', () => {
     it('la administración NO alcanza uno dirigido solo al consejo', async () => {
       const { service } = build(pqrfOf({ addressee: PqrfAddressee.CONSEJO }));
 
       await expect(
-        service.findById('pqrf-1', userOf([ValidRoles.COMPLEX_ROL], 'admin-user')),
+        service.findById(
+          'pqrf-1',
+          userOf([ValidRoles.COMPLEX_ROL], 'admin-user'),
+        ),
       ).rejects.toThrow('Este radicado no está dirigido a ti');
     });
 
     it('el consejero sí lo alcanza', async () => {
-      const { service } = build(pqrfOf({ addressee: PqrfAddressee.CONSEJO }), true);
+      const { service } = build(
+        pqrfOf({ addressee: PqrfAddressee.CONSEJO }),
+        true,
+      );
 
       const found = await service.findById(
-        'pqrf-1', userOf([ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL], 'council-user'),
+        'pqrf-1',
+        userOf(
+          [ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL],
+          'council-user',
+        ),
       );
 
       expect(found.code).toBe('PQRF-000001');
@@ -138,7 +182,10 @@ describe('PqrfService — quién puede leer un radicado', () => {
     it('la administración alcanza el dirigido a ambos', async () => {
       const { service } = build(pqrfOf({ addressee: PqrfAddressee.AMBOS }));
 
-      const found = await service.findById('pqrf-1', userOf([ValidRoles.COMPLEX_ROL], 'admin-user'));
+      const found = await service.findById(
+        'pqrf-1',
+        userOf([ValidRoles.COMPLEX_ROL], 'admin-user'),
+      );
 
       expect(found.id).toBe('pqrf-1');
     });
@@ -146,7 +193,10 @@ describe('PqrfService — quién puede leer un radicado', () => {
     it('quien lo radicó siempre lo puede leer, aunque no sea el destinatario', async () => {
       const { service } = build(pqrfOf({ addressee: PqrfAddressee.CONSEJO }));
 
-      const found = await service.findById('pqrf-1', userOf([ValidRoles.RESIDENT_ROL], 'resident-user'));
+      const found = await service.findById(
+        'pqrf-1',
+        userOf([ValidRoles.RESIDENT_ROL], 'resident-user'),
+      );
 
       expect(found.id).toBe('pqrf-1');
     });
@@ -156,11 +206,17 @@ describe('PqrfService — quién puede leer un radicado', () => {
     it('a la administración solo le consulta lo dirigido a ella o a ambos', async () => {
       const { service, conditions } = build(null);
 
-      await service.findByComplex('complex-1', PAGE, {}, userOf([ValidRoles.COMPLEX_ROL], 'admin-user'));
+      await service.findByComplex(
+        'complex-1',
+        PAGE,
+        {},
+        userOf([ValidRoles.COMPLEX_ROL], 'admin-user'),
+      );
 
-      const scope = conditions.find(c => c.sql.includes('addressee IN'));
+      const scope = conditions.find((c) => c.sql.includes('addressee IN'));
       expect(scope?.params?.visible).toEqual([
-        PqrfAddressee.ADMINISTRACION, PqrfAddressee.AMBOS,
+        PqrfAddressee.ADMINISTRACION,
+        PqrfAddressee.AMBOS,
       ]);
     });
 
@@ -168,18 +224,32 @@ describe('PqrfService — quién puede leer un radicado', () => {
       const { service, conditions } = build(null, true);
 
       await service.findByComplex(
-        'complex-1', PAGE, {}, userOf([ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL], 'council-user'),
+        'complex-1',
+        PAGE,
+        {},
+        userOf(
+          [ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL],
+          'council-user',
+        ),
       );
 
-      const scope = conditions.find(c => c.sql.includes('addressee IN'));
-      expect(scope?.params?.visible).toEqual([PqrfAddressee.CONSEJO, PqrfAddressee.AMBOS]);
+      const scope = conditions.find((c) => c.sql.includes('addressee IN'));
+      expect(scope?.params?.visible).toEqual([
+        PqrfAddressee.CONSEJO,
+        PqrfAddressee.AMBOS,
+      ]);
     });
 
     it('un residente cualquiera no tiene bandeja', async () => {
       const { service } = build(null);
 
       await expect(
-        service.findByComplex('complex-1', PAGE, {}, userOf([ValidRoles.RESIDENT_ROL], 'otro')),
+        service.findByComplex(
+          'complex-1',
+          PAGE,
+          {},
+          userOf([ValidRoles.RESIDENT_ROL], 'otro'),
+        ),
       ).rejects.toThrow('No tienes acceso a los radicados del complejo');
     });
 
@@ -189,25 +259,31 @@ describe('PqrfService — quién puede leer un radicado', () => {
       const { service, conditions } = build(null);
 
       await service.findByComplex(
-        'complex-1', PAGE, { addressee: PqrfAddressee.CONSEJO },
+        'complex-1',
+        PAGE,
+        { addressee: PqrfAddressee.CONSEJO },
         userOf([ValidRoles.COMPLEX_ROL], 'admin-user'),
       );
 
-      expect(conditions.find(c => c.sql.includes('addressee IN'))?.params?.visible).toEqual([
-        PqrfAddressee.ADMINISTRACION, PqrfAddressee.AMBOS,
-      ]);
-      expect(conditions.some(c => c.sql === 'p.addressee = :addressee')).toBe(true);
+      expect(
+        conditions.find((c) => c.sql.includes('addressee IN'))?.params?.visible,
+      ).toEqual([PqrfAddressee.ADMINISTRACION, PqrfAddressee.AMBOS]);
+      expect(conditions.some((c) => c.sql === 'p.addressee = :addressee')).toBe(
+        true,
+      );
     });
   });
 });
 
 describe('PqrfService — seguimiento del radicado', () => {
-
   const admin = () => userOf([ValidRoles.COMPLEX_ROL], 'admin-user');
 
   it('abrir la ficha pasa el radicado a EN TRÁMITE', async () => {
     const { service, saved, acks } = build(
-      pqrfOf({ addressee: PqrfAddressee.ADMINISTRACION, status: PqrfStatus.RADICADO }),
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        status: PqrfStatus.RADICADO,
+      }),
     );
 
     await service.open('pqrf-1', admin());
@@ -218,10 +294,16 @@ describe('PqrfService — seguimiento del radicado', () => {
 
   it('que lo abra quien lo radicó no cuenta como atendido', async () => {
     const { service, saved, acks } = build(
-      pqrfOf({ addressee: PqrfAddressee.ADMINISTRACION, requestedByUserId: 'resident-user' }),
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        requestedByUserId: 'resident-user',
+      }),
     );
 
-    await service.open('pqrf-1', userOf([ValidRoles.RESIDENT_ROL], 'resident-user'));
+    await service.open(
+      'pqrf-1',
+      userOf([ValidRoles.RESIDENT_ROL], 'resident-user'),
+    );
 
     expect(acks.save).not.toHaveBeenCalled();
     expect(saved).toHaveLength(0);
@@ -238,7 +320,7 @@ describe('PqrfService — seguimiento del radicado', () => {
     const result = await service.markResolved('pqrf-1', admin());
 
     expect(result.status).not.toBe(PqrfStatus.RESUELTO);
-    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(false);
+    expect(saved.some((p) => p.status === PqrfStatus.RESUELTO)).toBe(false);
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -251,15 +333,23 @@ describe('PqrfService — seguimiento del radicado', () => {
         adminIds: ['admin-user'],
         councilIds: ['council-user'],
         acks: [
-          { userId: 'council-user', instance: PqrfAddressee.CONSEJO,        resolvedAt: new Date() },
-          { userId: 'admin-user',   instance: PqrfAddressee.ADMINISTRACION, resolvedAt: new Date() },
+          {
+            userId: 'council-user',
+            instance: PqrfAddressee.CONSEJO,
+            resolvedAt: new Date(),
+          },
+          {
+            userId: 'admin-user',
+            instance: PqrfAddressee.ADMINISTRACION,
+            resolvedAt: new Date(),
+          },
         ],
       },
     );
 
     await service.markResolved('pqrf-1', admin());
 
-    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(true);
+    expect(saved.some((p) => p.status === PqrfStatus.RESUELTO)).toBe(true);
     expect(notify).toHaveBeenCalledWith(
       expect.objectContaining({
         userIds: ['resident-user'],
@@ -278,15 +368,23 @@ describe('PqrfService — seguimiento del radicado', () => {
         adminIds: ['admin-user', 'supervisor-1', 'supervisor-2'],
         councilIds: ['council-user'],
         acks: [
-          { userId: 'council-user', instance: PqrfAddressee.CONSEJO,        resolvedAt: new Date() },
-          { userId: 'admin-user',   instance: PqrfAddressee.ADMINISTRACION, resolvedAt: new Date() },
+          {
+            userId: 'council-user',
+            instance: PqrfAddressee.CONSEJO,
+            resolvedAt: new Date(),
+          },
+          {
+            userId: 'admin-user',
+            instance: PqrfAddressee.ADMINISTRACION,
+            resolvedAt: new Date(),
+          },
         ],
       },
     );
 
     await service.markResolved('pqrf-1', admin());
 
-    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(true);
+    expect(saved.some((p) => p.status === PqrfStatus.RESUELTO)).toBe(true);
     expect(notify).toHaveBeenCalled();
   });
 
@@ -294,19 +392,24 @@ describe('PqrfService — seguimiento del radicado', () => {
     const { service } = build(pqrfOf({ addressee: PqrfAddressee.CONSEJO }));
 
     await expect(
-      service.markResolved('pqrf-1', userOf([ValidRoles.RESIDENT_ROL], 'resident-user')),
-    ).rejects.toThrow('Solo quien atiende el radicado puede marcarlo como resuelto');
+      service.markResolved(
+        'pqrf-1',
+        userOf([ValidRoles.RESIDENT_ROL], 'resident-user'),
+      ),
+    ).rejects.toThrow(
+      'Solo quien atiende el radicado puede marcarlo como resuelto',
+    );
   });
 });
 
 describe('PqrfService — plazo y silencio administrativo', () => {
-
   /** Un radicado al que ya se le pasó la fecha límite. */
-  const overdue = () => pqrfOf({
-    addressee: PqrfAddressee.ADMINISTRACION,
-    status: PqrfStatus.EN_TRAMITE,
-    dueAt: new Date(Date.now() - 60 * 60 * 1000),
-  });
+  const overdue = () =>
+    pqrfOf({
+      addressee: PqrfAddressee.ADMINISTRACION,
+      status: PqrfStatus.EN_TRAMITE,
+      dueAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
 
   it('vencido y sin respuesta queda resuelto a favor del residente', async () => {
     const { service, saved, notify, pqrfRepo } = build(null);
@@ -340,12 +443,14 @@ describe('PqrfService — plazo y silencio administrativo', () => {
   it('recuerda solo dentro de la ventana previa configurada', async () => {
     // Faltan 10 días y la ventana de recordatorios son 3: todavía no molesta.
     const { service, notify, pqrfRepo } = build(null);
-    pqrfRepo.find.mockResolvedValue([pqrfOf({
-      addressee: PqrfAddressee.ADMINISTRACION,
-      status: PqrfStatus.EN_TRAMITE,
-      dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-      complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
-    } as never)]);
+    pqrfRepo.find.mockResolvedValue([
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        status: PqrfStatus.EN_TRAMITE,
+        dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
+      } as never),
+    ]);
 
     const sent = await service.sendDueReminders();
 
@@ -355,13 +460,17 @@ describe('PqrfService — plazo y silencio administrativo', () => {
 
   it('insiste cuando el vencimiento ya está cerca', async () => {
     // Falta un día y la ventana son 3: toca recordar.
-    const { service, notify, pqrfRepo } = build(null, false, { adminIds: ['admin-user'] });
-    pqrfRepo.find.mockResolvedValue([pqrfOf({
-      addressee: PqrfAddressee.ADMINISTRACION,
-      status: PqrfStatus.EN_TRAMITE,
-      dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
-    } as never)]);
+    const { service, notify, pqrfRepo } = build(null, false, {
+      adminIds: ['admin-user'],
+    });
+    pqrfRepo.find.mockResolvedValue([
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        status: PqrfStatus.EN_TRAMITE,
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
+      } as never),
+    ]);
 
     const sent = await service.sendDueReminders();
 
@@ -373,14 +482,18 @@ describe('PqrfService — plazo y silencio administrativo', () => {
 
   it('respeta el intervalo entre recordatorios', async () => {
     // Se recordó hace una hora y el intervalo es de 24: no se vuelve a insistir.
-    const { service, notify, pqrfRepo } = build(null, false, { adminIds: ['admin-user'] });
-    pqrfRepo.find.mockResolvedValue([pqrfOf({
-      addressee: PqrfAddressee.ADMINISTRACION,
-      status: PqrfStatus.EN_TRAMITE,
-      dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      lastReminderAt: new Date(Date.now() - 60 * 60 * 1000),
-      complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
-    } as never)]);
+    const { service, notify, pqrfRepo } = build(null, false, {
+      adminIds: ['admin-user'],
+    });
+    pqrfRepo.find.mockResolvedValue([
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        status: PqrfStatus.EN_TRAMITE,
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        lastReminderAt: new Date(Date.now() - 60 * 60 * 1000),
+        complex: { pqrfReminderLeadDays: 3, pqrfReminderIntervalHours: 24 },
+      } as never),
+    ]);
 
     const sent = await service.sendDueReminders();
 
@@ -390,91 +503,126 @@ describe('PqrfService — plazo y silencio administrativo', () => {
 });
 
 describe('PqrfService — consejeros designados para responder', () => {
-
-  const councilor = (sub: string) => userOf([ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL], sub);
-  const forCouncil = () => pqrfOf({ addressee: PqrfAddressee.CONSEJO, status: PqrfStatus.EN_TRAMITE });
+  const councilor = (sub: string) =>
+    userOf([ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL], sub);
+  const forCouncil = () =>
+    pqrfOf({ addressee: PqrfAddressee.CONSEJO, status: PqrfStatus.EN_TRAMITE });
 
   it('un consejero no designado lo lee pero no lo puede resolver', async () => {
     const { service } = build(forCouncil(), true, {
-      councilIds: ['c-1', 'c-2', 'c-3'], designated: ['c-1'],
+      councilIds: ['c-1', 'c-2', 'c-3'],
+      designated: ['c-1'],
     });
 
-    await expect(service.findById('pqrf-1', councilor('c-2'))).resolves.toBeDefined();
-    await expect(service.markResolved('pqrf-1', councilor('c-2')))
-      .rejects.toThrow('Solo quien atiende el radicado puede marcarlo como resuelto');
-    await expect(service.isCouncilObserver(forCouncil(), councilor('c-2'))).resolves.toBe(true);
+    await expect(
+      service.findById('pqrf-1', councilor('c-2')),
+    ).resolves.toBeDefined();
+    await expect(
+      service.markResolved('pqrf-1', councilor('c-2')),
+    ).rejects.toThrow(
+      'Solo quien atiende el radicado puede marcarlo como resuelto',
+    );
+    await expect(
+      service.isCouncilObserver(forCouncil(), councilor('c-2')),
+    ).resolves.toBe(true);
   });
 
   it('basta con que respondan los designados para cerrarlo', async () => {
     const { service, saved } = build(forCouncil(), true, {
       councilIds: ['c-1', 'c-2', 'c-3'],
       designated: ['c-1'],
-      acks: [{ userId: 'c-1', instance: PqrfAddressee.CONSEJO, resolvedAt: new Date() }],
+      acks: [
+        {
+          userId: 'c-1',
+          instance: PqrfAddressee.CONSEJO,
+          resolvedAt: new Date(),
+        },
+      ],
     });
 
     await service.markResolved('pqrf-1', councilor('c-1'));
 
-    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(true);
+    expect(saved.some((p) => p.status === PqrfStatus.RESUELTO)).toBe(true);
   });
 
   it('sin designación responde todo el consejo', async () => {
     const { service, saved } = build(forCouncil(), true, {
       councilIds: ['c-1', 'c-2'],
-      acks: [{ userId: 'c-1', instance: PqrfAddressee.CONSEJO, resolvedAt: new Date() }],
+      acks: [
+        {
+          userId: 'c-1',
+          instance: PqrfAddressee.CONSEJO,
+          resolvedAt: new Date(),
+        },
+      ],
     });
 
     await service.markResolved('pqrf-1', councilor('c-1'));
 
-    expect(saved.some(p => p.status === PqrfStatus.RESUELTO)).toBe(false);
+    expect(saved.some((p) => p.status === PqrfStatus.RESUELTO)).toBe(false);
   });
 
   it('si ningún designado sigue en el consejo, responde el consejo completo', async () => {
     // El único designado dejó el consejo: sin el respaldo, el radicado no
     // tendría a nadie que lo atienda y solo se cerraría por silencio.
     const { service } = build(forCouncil(), true, {
-      councilIds: ['c-2', 'c-3'], designated: ['c-1'],
+      councilIds: ['c-2', 'c-3'],
+      designated: ['c-1'],
     });
 
-    await expect(service.instanceOf(forCouncil(), councilor('c-2'))).resolves.toBe(PqrfAddressee.CONSEJO);
+    await expect(
+      service.instanceOf(forCouncil(), councilor('c-2')),
+    ).resolves.toBe(PqrfAddressee.CONSEJO);
   });
 
   it('el aviso de radicado nuevo va solo a los designados', async () => {
     const { service, notify } = build(null, true, {
-      councilIds: ['c-1', 'c-2', 'c-3'], designated: ['c-1', 'c-3'],
+      councilIds: ['c-1', 'c-2', 'c-3'],
+      designated: ['c-1', 'c-3'],
     });
 
-    await (service as unknown as { notifyAddressees: (p: Pqrf) => Promise<void> })
-      .notifyAddressees(forCouncil());
+    await (
+      service as unknown as { notifyAddressees: (p: Pqrf) => Promise<void> }
+    ).notifyAddressees(forCouncil());
 
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ userIds: ['c-1', 'c-3'] }));
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userIds: ['c-1', 'c-3'] }),
+    );
   });
 
   it('no deja designar a quien no es del consejo', async () => {
     const { service } = build(null, false, { councilIds: ['c-1'] });
 
     await expect(
-      service.updateCouncilResolvers('complex-1', ['intruso'], userOf([ValidRoles.COMPLEX_ROL], 'admin-user')),
+      service.updateCouncilResolvers(
+        'complex-1',
+        ['intruso'],
+        userOf([ValidRoles.COMPLEX_ROL], 'admin-user'),
+      ),
     ).rejects.toThrow('Solo puedes elegir a miembros actuales del consejo');
   });
 });
 
 describe('PqrfService — cierre por barrido', () => {
-
   it('cierra el radicado cuando ya respondieron todas las instancias', async () => {
     // Los dos marcaron, pero nadie va a volver a pulsar el botón: quien ya
     // marcó no lo vuelve a ver. Sin el barrido se queda abierto para siempre.
-    const { service, saved, notify, pqrfRepo } = build(
-      null,
-      false,
-      {
-        adminIds: ['admin-user'],
-        councilIds: ['council-user'],
-        acks: [
-          { userId: 'admin-user',   instance: PqrfAddressee.ADMINISTRACION, resolvedAt: new Date() },
-          { userId: 'council-user', instance: PqrfAddressee.CONSEJO,        resolvedAt: new Date() },
-        ],
-      },
-    );
+    const { service, saved, notify, pqrfRepo } = build(null, false, {
+      adminIds: ['admin-user'],
+      councilIds: ['council-user'],
+      acks: [
+        {
+          userId: 'admin-user',
+          instance: PqrfAddressee.ADMINISTRACION,
+          resolvedAt: new Date(),
+        },
+        {
+          userId: 'council-user',
+          instance: PqrfAddressee.CONSEJO,
+          resolvedAt: new Date(),
+        },
+      ],
+    });
     pqrfRepo.find.mockResolvedValue([
       pqrfOf({ addressee: PqrfAddressee.AMBOS, status: PqrfStatus.EN_TRAMITE }),
     ]);
@@ -489,17 +637,17 @@ describe('PqrfService — cierre por barrido', () => {
   });
 
   it('no cierra el que todavía espera a una instancia', async () => {
-    const { service, saved, pqrfRepo } = build(
-      null,
-      false,
-      {
-        adminIds: ['admin-user'],
-        councilIds: ['council-user'],
-        acks: [
-          { userId: 'admin-user', instance: PqrfAddressee.ADMINISTRACION, resolvedAt: new Date() },
-        ],
-      },
-    );
+    const { service, saved, pqrfRepo } = build(null, false, {
+      adminIds: ['admin-user'],
+      councilIds: ['council-user'],
+      acks: [
+        {
+          userId: 'admin-user',
+          instance: PqrfAddressee.ADMINISTRACION,
+          resolvedAt: new Date(),
+        },
+      ],
+    });
     pqrfRepo.find.mockResolvedValue([
       pqrfOf({ addressee: PqrfAddressee.AMBOS, status: PqrfStatus.EN_TRAMITE }),
     ]);
@@ -511,9 +659,15 @@ describe('PqrfService — cierre por barrido', () => {
   });
 
   it('no cierra un radicado que nadie ha atendido', async () => {
-    const { service, saved, pqrfRepo } = build(null, false, { adminIds: ['admin-user'], acks: [] });
+    const { service, saved, pqrfRepo } = build(null, false, {
+      adminIds: ['admin-user'],
+      acks: [],
+    });
     pqrfRepo.find.mockResolvedValue([
-      pqrfOf({ addressee: PqrfAddressee.ADMINISTRACION, status: PqrfStatus.RADICADO }),
+      pqrfOf({
+        addressee: PqrfAddressee.ADMINISTRACION,
+        status: PqrfStatus.RADICADO,
+      }),
     ]);
 
     const closed = await service.closeFullyAnswered();

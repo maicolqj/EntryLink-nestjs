@@ -1,4 +1,11 @@
-import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -9,90 +16,96 @@ import { getMessaging, type Message } from 'firebase-admin/messaging';
 import * as webpush from 'web-push';
 import { isUUID } from 'class-validator';
 
-import { Notification }                  from '../entities/notification.entity';
-import { PushSubscription }              from '../entities/push-subscription.entity';
-import { NotificationBatch }             from '../entities/notification-batch.entity';
-import { PanicAlert }                    from '../entities/panic-alert.entity';
-import { PanicAlertDelivery }            from '../entities/panic-alert-delivery.entity';
-import { PanicDeliveryChannel }          from '../enums/panic-delivery-channel.enum';
-import { PanicAckTokenService }          from './panic-ack-token.service';
-import { PanicDeliveredInput }           from '../dto/inputs/panic-delivered.input';
-import { PanicEscalationSettings }       from '../entities/panic-escalation-settings.entity';
+import { Notification } from '../entities/notification.entity';
+import { PushSubscription } from '../entities/push-subscription.entity';
+import { NotificationBatch } from '../entities/notification-batch.entity';
+import { PanicAlert } from '../entities/panic-alert.entity';
+import { PanicAlertDelivery } from '../entities/panic-alert-delivery.entity';
+import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
+import { PanicAckTokenService } from './panic-ack-token.service';
+import { PanicDeliveredInput } from '../dto/inputs/panic-delivered.input';
+import { PanicEscalationSettings } from '../entities/panic-escalation-settings.entity';
 import {
   PANIC_ESCALATION_QUEUE,
   PANIC_ESCALATION_JOBS,
   panicEscalationJobId,
 } from '../queues/panic-escalation.queue.constants';
-import { NotificationType }              from '../enums/notification-type.enum';
-import { NotificationPriority }          from '../enums/notification-priority.enum';
-import { NotificationActionType }        from '../enums/notification-action-type.enum';
-import { NotificationActionResult }      from '../enums/notification-action-result.enum';
-import { PushPlatform }                  from '../enums/push-platform.enum';
-import { PanicAlertStatus }              from '../enums/panic-alert-status.enum';
-import { PanicAlertType }                from '../enums/panic-alert-type.enum';
-import { CreateNotificationPayload }     from '../dto/inputs/create-notification.input';
-import { FilterNotificationsInput }      from '../dto/inputs/filter-notifications.input';
-import { SavePushSubscriptionInput }     from '../dto/inputs/save-push-subscription.input';
-import { SaveMobileTokenInput }          from '../dto/inputs/save-mobile-token.input';
-import { SendNotificationInput }         from '../dto/inputs/send-notification.input';
+import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationPriority } from '../enums/notification-priority.enum';
+import { NotificationActionType } from '../enums/notification-action-type.enum';
+import { NotificationActionResult } from '../enums/notification-action-result.enum';
+import { PushPlatform } from '../enums/push-platform.enum';
+import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
+import { PanicAlertType } from '../enums/panic-alert-type.enum';
+import { CreateNotificationPayload } from '../dto/inputs/create-notification.input';
+import { FilterNotificationsInput } from '../dto/inputs/filter-notifications.input';
+import { SavePushSubscriptionInput } from '../dto/inputs/save-push-subscription.input';
+import { SaveMobileTokenInput } from '../dto/inputs/save-mobile-token.input';
+import { SendNotificationInput } from '../dto/inputs/send-notification.input';
 import { PaginatedNotificationsResponse } from '../dto/responses/paginated-notifications.response';
-import { UnreadCountResponse }           from '../dto/responses/unread-count.response';
-import { PushSubscriptionResult }             from '../dto/responses/push-subscription-result.response';
-import { SendNotificationResult }             from '../dto/responses/send-notification.response';
-import { SentNotification, SentNotificationPaginatedResult } from '../dto/responses/sent-notifications.response';
-import { NotificationDetailResponse, NotificationUserInfo } from '../dto/responses/notification-detail.response';
+import { UnreadCountResponse } from '../dto/responses/unread-count.response';
+import { PushSubscriptionResult } from '../dto/responses/push-subscription-result.response';
+import { SendNotificationResult } from '../dto/responses/send-notification.response';
+import {
+  SentNotification,
+  SentNotificationPaginatedResult,
+} from '../dto/responses/sent-notifications.response';
+import {
+  NotificationDetailResponse,
+  NotificationUserInfo,
+} from '../dto/responses/notification-detail.response';
 
-import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
-import { CustomError }      from '../../shared/utils/errors.utils';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { PEM_HEADER, normalizePem } from '../../shared/utils/pem.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 
-import { User }     from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
-import { Role }     from '../../roles/entities/role.entity';
-import { SupervisorVisit }       from '../../supervisor-visits/entities/supervisor-visit.entity';
+import { Role } from '../../roles/entities/role.entity';
+import { SupervisorVisit } from '../../supervisor-visits/entities/supervisor-visit.entity';
 import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-visit-status.enum';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { AssignmentStatus } from '../../users/entities/user-complex-assignment.entity';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
 import { RequestSecurityCallResult } from '../dto/responses/request-security-call.response';
-import { SocketService }    from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }      from '../../../core/infrastructure/socket/socket.events';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 /** Parámetros para el método notify() llamado desde otros módulos */
 export interface NotifyParams {
-  complexId:        string;
-  userIds:          string[];
-  type:             NotificationType;
-  priority:         NotificationPriority;
-  title:            string;
-  body:             string;
-  entityId?:        string;
-  entityType?:      string;
-  metadata?:        Record<string, unknown>;
+  complexId: string;
+  userIds: string[];
+  type: NotificationType;
+  priority: NotificationPriority;
+  title: string;
+  body: string;
+  entityId?: string;
+  entityType?: string;
+  metadata?: Record<string, unknown>;
   /** ID del usuario que originó la notificación. */
   createdByUserId?: string;
   /** true si el destinatario debe tomar una acción (aprobar, rechazar, etc.). */
-  isActionable?:    boolean;
+  isActionable?: boolean;
   /** Tipo de acción esperada. */
-  actionType?:      NotificationActionType;
+  actionType?: NotificationActionType;
   /** Etiqueta del botón de acción en el frontend. */
-  actionLabel?:     string;
+  actionLabel?: string;
   /**
    * Si true, se crea UN solo registro en BD con recipientUserId = null.
    * El push delivery sigue siendo fan-out a todos los userIds.
    */
-  isBroadcast?:     boolean;
+  isBroadcast?: boolean;
   /** Roles destinatarios del broadcast (para trazabilidad). */
-  targetRoles?:     string[];
+  targetRoles?: string[];
   /**
    * Incidente de pánico al que pertenece. Agrupa las N copias del mismo evento
    * para que reconocerlo las cierre todas, y viaja en el payload FCM como
    * `alertId` para que el ACK del dispositivo sepa qué alerta confirma.
    */
-  panicAlertId?:    string;
+  panicAlertId?: string;
 }
 
 @Injectable()
@@ -160,22 +173,26 @@ export class NotificationsService implements OnModuleInit {
     this.initFirebase();
     this.initWebPush();
 
-    this.publicApiUrl = (this.configService.get<string>('API_PUBLIC_URL') ?? '').replace(/\/+$/, '');
+    this.publicApiUrl = (
+      this.configService.get<string>('API_PUBLIC_URL') ?? ''
+    ).replace(/\/+$/, '');
     if (!this.publicApiUrl) {
       this.logger.warn(
         'Sin API_PUBLIC_URL: los push de pánico saldrán sin ackUrl y ningún equipo podrá ' +
-        'confirmar la entrega, así que el escalamiento tratará toda alerta como no entregada.',
+          'confirmar la entrega, así que el escalamiento tratará toda alerta como no entregada.',
       );
     }
   }
 
   private initFirebase(): void {
-    const projectId   = this.configService.get<string>('FIREBASE_PROJECT_ID');
+    const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
     const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
-    const privateKey  = this.resolveFirebasePrivateKey();
+    const privateKey = this.resolveFirebasePrivateKey();
 
     if (!projectId || !clientEmail || !privateKey) {
-      this.logger.warn('Firebase no configurado — FCM deshabilitado. Define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY (o FIREBASE_PRIVATE_KEY_BASE64).');
+      this.logger.warn(
+        'Firebase no configurado — FCM deshabilitado. Define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL y FIREBASE_PRIVATE_KEY (o FIREBASE_PRIVATE_KEY_BASE64).',
+      );
       return;
     }
 
@@ -198,7 +215,7 @@ export class NotificationsService implements OnModuleInit {
       // panel de despliegue—, no una llave revocada ni un proyecto equivocado.
       this.logger.error(
         `Credenciales de Firebase inválidas — FCM deshabilitado, el resto del API sigue arriba: ${e?.message}. ` +
-        'Si el error menciona DECODER routines::unsupported, el PEM llegó deformado: usa FIREBASE_PRIVATE_KEY_BASE64.',
+          'Si el error menciona DECODER routines::unsupported, el PEM llegó deformado: usa FIREBASE_PRIVATE_KEY_BASE64.',
       );
     }
   }
@@ -222,7 +239,9 @@ export class NotificationsService implements OnModuleInit {
    * la tienen puesta y funcionando.
    */
   private resolveFirebasePrivateKey(): string | undefined {
-    const base64 = this.configService.get<string>('FIREBASE_PRIVATE_KEY_BASE64')?.trim();
+    const base64 = this.configService
+      .get<string>('FIREBASE_PRIVATE_KEY_BASE64')
+      ?.trim();
 
     if (base64) {
       try {
@@ -231,9 +250,13 @@ export class NotificationsService implements OnModuleInit {
         // Base64 válido cuyo contenido no es un PEM: casi siempre es la llave
         // sin codificar pegada en el campo equivocado. Avisar en vez de seguir a
         // ciegas, porque el error de `cert()` no distingue los dos casos.
-        this.logger.warn('FIREBASE_PRIVATE_KEY_BASE64 no contiene un PEM al decodificar — se ignora.');
+        this.logger.warn(
+          'FIREBASE_PRIVATE_KEY_BASE64 no contiene un PEM al decodificar — se ignora.',
+        );
       } catch (e: any) {
-        this.logger.warn(`FIREBASE_PRIVATE_KEY_BASE64 no es base64 válido: ${e?.message}`);
+        this.logger.warn(
+          `FIREBASE_PRIVATE_KEY_BASE64 no es base64 válido: ${e?.message}`,
+        );
       }
     }
 
@@ -242,12 +265,14 @@ export class NotificationsService implements OnModuleInit {
   }
 
   private initWebPush(): void {
-    const subject    = this.configService.get<string>('VAPID_SUBJECT');
-    const publicKey  = this.configService.get<string>('VAPID_PUBLIC_KEY');
+    const subject = this.configService.get<string>('VAPID_SUBJECT');
+    const publicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
     const privateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
 
     if (!subject || !publicKey || !privateKey) {
-      this.logger.warn('VAPID no configurado — Web Push deshabilitado. Define VAPID_SUBJECT, VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY.');
+      this.logger.warn(
+        'VAPID no configurado — Web Push deshabilitado. Define VAPID_SUBJECT, VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY.',
+      );
       return;
     }
 
@@ -280,17 +305,23 @@ export class NotificationsService implements OnModuleInit {
       where: { userId: In(params.userIds), isActive: true },
     });
 
-    const webSubs    = subscriptions.filter(s => s.platform === PushPlatform.WEB);
-    const mobileSubs = subscriptions.filter(s => s.platform !== PushPlatform.WEB);
+    const webSubs = subscriptions.filter(
+      (s) => s.platform === PushPlatform.WEB,
+    );
+    const mobileSubs = subscriptions.filter(
+      (s) => s.platform !== PushPlatform.WEB,
+    );
 
     // Mapa userId → notificationId real para incrustar el id correcto por
     // destinatario en el data del FCM. En broadcast todos comparten una sola fila.
     const notifIdByUser = new Map<string, string>();
     if (params.isBroadcast) {
       const broadcastId = saved[0]?.id;
-      if (broadcastId) for (const uid of params.userIds) notifIdByUser.set(uid, broadcastId);
+      if (broadcastId)
+        for (const uid of params.userIds) notifIdByUser.set(uid, broadcastId);
     } else {
-      for (const n of saved) if (n.recipientUserId) notifIdByUser.set(n.recipientUserId, n.id);
+      for (const n of saved)
+        if (n.recipientUserId) notifIdByUser.set(n.recipientUserId, n.id);
     }
 
     // 3. Despachar en paralelo sin bloquear la respuesta
@@ -339,11 +370,17 @@ export class NotificationsService implements OnModuleInit {
         body: `El complejo "${complex.name}" subió su Anexo B2B (DPA) firmado.`,
         entityId: complex.id,
         entityType: 'ResidentialComplex',
-        metadata: { complexId: complex.id, complexName: complex.name, fileUrl: complex.fileUrl ?? null },
+        metadata: {
+          complexId: complex.id,
+          complexName: complex.name,
+          fileUrl: complex.fileUrl ?? null,
+        },
         createdByUserId: complex.ownerId ?? undefined,
       });
     } catch (err: any) {
-      this.logger.warn(`No se pudo notificar DPA firmado del complejo ${complex.id}: ${err?.message}`);
+      this.logger.warn(
+        `No se pudo notificar DPA firmado del complejo ${complex.id}: ${err?.message}`,
+      );
     }
   }
 
@@ -364,19 +401,29 @@ export class NotificationsService implements OnModuleInit {
       await this.notify({
         complexId: params.id,
         userIds: [params.id],
-        type: isRejected ? NotificationType.DPA_REJECTED : NotificationType.DPA_APPROVED,
-        priority: isRejected ? NotificationPriority.HIGH : NotificationPriority.NORMAL,
+        type: isRejected
+          ? NotificationType.DPA_REJECTED
+          : NotificationType.DPA_APPROVED,
+        priority: isRejected
+          ? NotificationPriority.HIGH
+          : NotificationPriority.NORMAL,
         title: isRejected ? 'DPA firmado rechazado' : 'DPA firmado validado',
         body: isRejected
           ? `Tu Anexo B2B (DPA) firmado fue rechazado. Motivo: ${params.reason ?? 'sin especificar'}. Por favor sube uno nuevo corregido.`
           : 'Tu Anexo B2B (DPA) firmado fue validado. No necesitas hacer nada más.',
         entityId: params.id,
         entityType: 'ResidentialComplex',
-        metadata: { complexId: params.id, status: params.status, reason: params.reason ?? null },
+        metadata: {
+          complexId: params.id,
+          status: params.status,
+          reason: params.reason ?? null,
+        },
         createdByUserId: params.reviewerId ?? undefined,
       });
     } catch (err: any) {
-      this.logger.warn(`No se pudo notificar veredicto de DPA al complejo ${params.id}: ${err?.message}`);
+      this.logger.warn(
+        `No se pudo notificar veredicto de DPA al complejo ${params.id}: ${err?.message}`,
+      );
     }
   }
 
@@ -417,7 +464,9 @@ export class NotificationsService implements OnModuleInit {
         metadata: { userId, fields: changedFields },
       });
     } catch (err: any) {
-      this.logger.warn(`No se pudo notificar actualización de perfil a ${userId}: ${err?.message}`);
+      this.logger.warn(
+        `No se pudo notificar actualización de perfil a ${userId}: ${err?.message}`,
+      );
     }
   }
 
@@ -429,13 +478,20 @@ export class NotificationsService implements OnModuleInit {
    * (AuthModule), donde el payload lleva un código de un solo uso que no debe
    * quedar guardado ni volver a mostrarse una vez resuelto el intento.
    */
-  async dispatchPushOnly(userIds: string[], params: NotifyParams): Promise<void> {
+  async dispatchPushOnly(
+    userIds: string[],
+    params: NotifyParams,
+  ): Promise<void> {
     if (userIds.length === 0) return;
     const subscriptions = await this.pushSubRepo.find({
       where: { userId: In(userIds), isActive: true },
     });
-    const webSubs    = subscriptions.filter(s => s.platform === PushPlatform.WEB);
-    const mobileSubs = subscriptions.filter(s => s.platform !== PushPlatform.WEB);
+    const webSubs = subscriptions.filter(
+      (s) => s.platform === PushPlatform.WEB,
+    );
+    const mobileSubs = subscriptions.filter(
+      (s) => s.platform !== PushPlatform.WEB,
+    );
     await Promise.allSettled([
       this.dispatchWebPush(webSubs, params),
       this.dispatchFCM(mobileSubs, params),
@@ -454,28 +510,36 @@ export class NotificationsService implements OnModuleInit {
    */
   async create(payload: CreateNotificationPayload): Promise<Notification> {
     const notification = this.notifRepo.create({
-      type:            payload.type,
-      title:           payload.title,
-      body:            payload.body,
-      complexId:       payload.complexId,
+      type: payload.type,
+      title: payload.title,
+      body: payload.body,
+      complexId: payload.complexId,
       recipientUserId: payload.recipientUserId,
-      priority:        payload.priority ?? NotificationPriority.NORMAL,
-      entityId:        payload.entityId,
-      entityType:      payload.entityType,
-      metadata:        payload.metadata,
-      isRead:          false,
+      priority: payload.priority ?? NotificationPriority.NORMAL,
+      entityId: payload.entityId,
+      entityType: payload.entityType,
+      metadata: payload.metadata,
+      isRead: false,
       createdByUserId: payload.createdByUserId,
-      isActionable:    payload.isActionable ?? false,
-      actionType:      payload.actionType,
-      actionLabel:     payload.actionLabel,
+      isActionable: payload.isActionable ?? false,
+      actionType: payload.actionType,
+      actionLabel: payload.actionLabel,
     });
 
     const saved = await this.notifRepo.save(notification);
 
     if (saved.recipientUserId) {
-      this.socketService.emitToUser(saved.recipientUserId, SocketEvent.NOTIFICATION_NEW, saved);
+      this.socketService.emitToUser(
+        saved.recipientUserId,
+        SocketEvent.NOTIFICATION_NEW,
+        saved,
+      );
     } else {
-      this.socketService.emitToComplex(saved.complexId, SocketEvent.NOTIFICATION_NEW, saved);
+      this.socketService.emitToComplex(
+        saved.complexId,
+        SocketEvent.NOTIFICATION_NEW,
+        saved,
+      );
     }
 
     this.logger.debug(
@@ -493,20 +557,24 @@ export class NotificationsService implements OnModuleInit {
     userIds: string[],
     payload: Omit<CreateNotificationPayload, 'recipientUserId'>,
   ): Promise<void> {
-    const notifications = userIds.map(userId =>
+    const notifications = userIds.map((userId) =>
       this.notifRepo.create({
         ...payload,
-        priority:        payload.priority ?? NotificationPriority.NORMAL,
+        priority: payload.priority ?? NotificationPriority.NORMAL,
         recipientUserId: userId,
-        isRead:          false,
-        isActionable:    payload.isActionable ?? false,
+        isRead: false,
+        isActionable: payload.isActionable ?? false,
       }),
     );
 
     const saved = await this.notifRepo.save(notifications);
 
     for (const n of saved) {
-      this.socketService.emitToUser(n.recipientUserId, SocketEvent.NOTIFICATION_NEW, n);
+      this.socketService.emitToUser(
+        n.recipientUserId,
+        SocketEvent.NOTIFICATION_NEW,
+        n,
+      );
       this.logger.debug(
         `[Socket] Notificación emitida [${n.type}] → usuario ${n.recipientUserId} | complejo ${n.complexId}`,
       );
@@ -525,12 +593,14 @@ export class NotificationsService implements OnModuleInit {
     // id no-UUID → nada que borrar (idempotente, evita el error crudo de Postgres)
     if (!isUUID(notificationId)) return true;
 
-    const notif = await this.notifRepo.findOne({ where: { id: notificationId } });
+    const notif = await this.notifRepo.findOne({
+      where: { id: notificationId },
+    });
     if (!notif) return true;
 
-    const isSuperAdmin   = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isComplexAdmin = currentUser.roles.some(r =>
-      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isComplexAdmin = currentUser.roles.some(
+      (r) => r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
     );
 
     if (isSuperAdmin) {
@@ -546,7 +616,8 @@ export class NotificationsService implements OnModuleInit {
     } else {
       if (notif.isBroadcast) {
         throw new CustomError({
-          message: 'Las notificaciones de difusión no pueden eliminarse individualmente',
+          message:
+            'Las notificaciones de difusión no pueden eliminarse individualmente',
           statusCode: HttpStatus.FORBIDDEN,
           errorCode: GeneralErrorCode.FORBIDDEN,
         });
@@ -598,7 +669,9 @@ export class NotificationsService implements OnModuleInit {
       .andWhere('recipientUserId = :userId', { userId: currentUser.sub });
 
     if (!currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
-      qb.andWhere('complexId = :complexId', { complexId: complexId ?? currentUser.complexId });
+      qb.andWhere('complexId = :complexId', {
+        complexId: complexId ?? currentUser.complexId,
+      });
     }
 
     const result = await qb.execute();
@@ -612,7 +685,11 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<SendNotificationResult> {
     const targetRoles = input.targetRoles ?? [];
 
-    const userIds = await this.resolveTargetUserIds(input.complexId, targetRoles, input.targetUnitId);
+    const userIds = await this.resolveTargetUserIds(
+      input.complexId,
+      targetRoles,
+      input.targetUnitId,
+    );
 
     if (userIds.length === 0) {
       throw new CustomError({
@@ -622,7 +699,7 @@ export class NotificationsService implements OnModuleInit {
       });
     }
 
-    const type     = input.type     ?? NotificationType.SYSTEM_ANNOUNCEMENT;
+    const type = input.type ?? NotificationType.SYSTEM_ANNOUNCEMENT;
     const priority = input.priority ?? NotificationPriority.NORMAL;
 
     // Para COMPLEX_ROL el sub del JWT es el ID del complejo (no un User),
@@ -631,30 +708,30 @@ export class NotificationsService implements OnModuleInit {
 
     // Excluir al emisor de los destinatarios cuando es un usuario humano
     const filteredUserIds = senderId
-      ? userIds.filter(id => id !== senderId)
+      ? userIds.filter((id) => id !== senderId)
       : userIds;
 
     const [created] = await Promise.all([
       this.notify({
-        complexId:       input.complexId,
-        userIds:         filteredUserIds,
+        complexId: input.complexId,
+        userIds: filteredUserIds,
         type,
         priority,
-        title:           input.title,
-        body:            input.body,
-        metadata:        input.metadata,
+        title: input.title,
+        body: input.body,
+        metadata: input.metadata,
         createdByUserId: senderId ?? undefined,
-        isBroadcast:     false,
+        isBroadcast: false,
         targetRoles,
       }),
       this.batchRepo.save(
         this.batchRepo.create({
           senderId,
-          complexId:       input.complexId,
+          complexId: input.complexId,
           type,
           priority,
-          title:           input.title,
-          body:            input.body,
+          title: input.title,
+          body: input.body,
           targetRoles,
           recipientsCount: userIds.length,
         }),
@@ -663,9 +740,9 @@ export class NotificationsService implements OnModuleInit {
 
     const first = created[0];
     return {
-      id:        first.id,
-      title:     first.title,
-      body:      first.body,
+      id: first.id,
+      title: first.title,
+      body: first.body,
       createdAt: first.createdAt,
     };
   }
@@ -710,7 +787,9 @@ export class NotificationsService implements OnModuleInit {
     } catch (e: any) {
       // Nunca impedir el registro por esto: quedarse sin push es peor que
       // arrastrar una fila de más, y el despacho ya sabe desactivar lo inválido.
-      this.logger.warn(`No se pudieron desactivar suscripciones ajenas: ${e?.message}`);
+      this.logger.warn(
+        `No se pudieron desactivar suscripciones ajenas: ${e?.message}`,
+      );
     }
   }
 
@@ -719,31 +798,34 @@ export class NotificationsService implements OnModuleInit {
     input: SavePushSubscriptionInput,
     currentUser: JwtAccessPayload,
   ): Promise<PushSubscriptionResult> {
-    await this.deactivateForeignSubscriptions({ endpoint: input.endpoint }, currentUser.sub);
+    await this.deactivateForeignSubscriptions(
+      { endpoint: input.endpoint },
+      currentUser.sub,
+    );
 
     const existing = await this.pushSubRepo.findOne({
       where: {
-        userId:   currentUser.sub,
+        userId: currentUser.sub,
         platform: PushPlatform.WEB,
         endpoint: input.endpoint,
       },
     });
 
     if (existing) {
-      existing.p256dh   = input.p256dh;
-      existing.auth     = input.auth;
+      existing.p256dh = input.p256dh;
+      existing.auth = input.auth;
       existing.isActive = true;
       await this.pushSubRepo.save(existing);
     } else {
       await this.pushSubRepo.save(
         this.pushSubRepo.create({
-          userId:    currentUser.sub,
+          userId: currentUser.sub,
           complexId: input.complexId,
-          platform:  PushPlatform.WEB,
-          endpoint:  input.endpoint,
-          p256dh:    input.p256dh,
-          auth:      input.auth,
-          isActive:  true,
+          platform: PushPlatform.WEB,
+          endpoint: input.endpoint,
+          p256dh: input.p256dh,
+          auth: input.auth,
+          isActive: true,
         }),
       );
     }
@@ -771,8 +853,8 @@ export class NotificationsService implements OnModuleInit {
 
     const existing = await this.pushSubRepo.findOne({
       where: {
-        userId:      currentUser.sub,
-        platform:    input.platform,
+        userId: currentUser.sub,
+        platform: input.platform,
         deviceToken: input.deviceToken,
       },
     });
@@ -780,10 +862,10 @@ export class NotificationsService implements OnModuleInit {
     // Solo se sobrescribe lo que el cliente informó: una app vieja que no manda
     // metadata no debe borrar la que ya había registrado una versión nueva.
     const deviceInfo = {
-      ...(input.deviceModel  ? { deviceModel:  input.deviceModel }  : {}),
+      ...(input.deviceModel ? { deviceModel: input.deviceModel } : {}),
       ...(input.manufacturer ? { manufacturer: input.manufacturer } : {}),
-      ...(input.osVersion    ? { osVersion:    input.osVersion }    : {}),
-      ...(input.appVersion   ? { appVersion:   input.appVersion }   : {}),
+      ...(input.osVersion ? { osVersion: input.osVersion } : {}),
+      ...(input.appVersion ? { appVersion: input.appVersion } : {}),
       lastSeenAt: new Date(),
     };
 
@@ -794,11 +876,11 @@ export class NotificationsService implements OnModuleInit {
     } else {
       await this.pushSubRepo.save(
         this.pushSubRepo.create({
-          userId:      currentUser.sub,
-          complexId:   input.complexId,
-          platform:    input.platform,
+          userId: currentUser.sub,
+          complexId: input.complexId,
+          platform: input.platform,
           deviceToken: input.deviceToken,
-          isActive:    true,
+          isActive: true,
           ...deviceInfo,
         }),
       );
@@ -852,7 +934,9 @@ export class NotificationsService implements OnModuleInit {
     } catch (e: any) {
       // Que un fallo aquí no impida cerrar sesión. El costo es que ese equipo
       // siga recibiendo push hasta el próximo registro, no una sesión abierta.
-      this.logger.error(`No se pudo desactivar el token del equipo: ${e?.message}`);
+      this.logger.error(
+        `No se pudo desactivar el token del equipo: ${e?.message}`,
+      );
       return { success: false };
     }
   }
@@ -890,15 +974,16 @@ export class NotificationsService implements OnModuleInit {
     if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
       qb.where('n.recipientUserId = :userId', { userId: currentUser.sub });
     } else {
-      qb.where('n.complexId = :complexId', { complexId: complexId ?? currentUser.complexId })
-        .andWhere(
-          '(n.recipientUserId = :userId OR n.isBroadcast = true)',
-          { userId: currentUser.sub },
-        );
+      qb.where('n.complexId = :complexId', {
+        complexId: complexId ?? currentUser.complexId,
+      }).andWhere('(n.recipientUserId = :userId OR n.isBroadcast = true)', {
+        userId: currentUser.sub,
+      });
     }
 
-    if (filters.type)     qb.andWhere('n.type = :type',         { type:     filters.type });
-    if (filters.priority) qb.andWhere('n.priority = :priority', { priority: filters.priority });
+    if (filters.type) qb.andWhere('n.type = :type', { type: filters.type });
+    if (filters.priority)
+      qb.andWhere('n.priority = :priority', { priority: filters.priority });
     if (filters.isRead !== undefined) {
       qb.andWhere('n.isRead = :isRead', { isRead: filters.isRead });
     }
@@ -906,17 +991,20 @@ export class NotificationsService implements OnModuleInit {
     qb.orderBy('n.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items      = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
       items,
       pagination: {
-        currentPage:     page,
-        itemsPerPage:    limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -934,8 +1022,9 @@ export class NotificationsService implements OnModuleInit {
       .createQueryBuilder('n')
       .where('n.complexId = :complexId', { complexId });
 
-    if (filters.type)     qb.andWhere('n.type = :type',         { type:     filters.type });
-    if (filters.priority) qb.andWhere('n.priority = :priority', { priority: filters.priority });
+    if (filters.type) qb.andWhere('n.type = :type', { type: filters.type });
+    if (filters.priority)
+      qb.andWhere('n.priority = :priority', { priority: filters.priority });
     if (filters.isRead !== undefined) {
       qb.andWhere('n.isRead = :isRead', { isRead: filters.isRead });
     }
@@ -943,17 +1032,20 @@ export class NotificationsService implements OnModuleInit {
     qb.orderBy('n.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items      = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
       items,
       pagination: {
-        currentPage:     page,
-        itemsPerPage:    limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -976,7 +1068,9 @@ export class NotificationsService implements OnModuleInit {
     this.assertValidUuid(notificationId);
 
     // SUPER_ADMIN puede abrir el detalle de cualquier complejo (busca solo por id).
-    const isSuperAdmin = currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+    const isSuperAdmin = currentUser.roles?.includes(
+      ValidRoles.SUPER_ADMIN_ROL,
+    );
     let where: { id: string; complexId?: string };
     if (isSuperAdmin) {
       where = { id: notificationId };
@@ -997,16 +1091,20 @@ export class NotificationsService implements OnModuleInit {
     }
 
     // Solo el destinatario puede verla; admins/staff pueden ver cualquiera del complejo
-    const isAdmin = currentUser.roles?.some(r =>
+    const isAdmin = currentUser.roles?.some((r) =>
       [
         ValidRoles.SUPER_ADMIN_ROL,
         ValidRoles.COMPLEX_ROL,
         ValidRoles.SUPERVISOR_ROL,
         ValidRoles.COMPILANCE_OFFICER_ROL,
-      ].includes(r as ValidRoles),
+      ].includes(r),
     );
 
-    if (!isAdmin && notif.recipientUserId && notif.recipientUserId !== currentUser.sub) {
+    if (
+      !isAdmin &&
+      notif.recipientUserId &&
+      notif.recipientUserId !== currentUser.sub
+    ) {
       throw new CustomError({
         message: 'No tienes acceso a esta notificación',
         statusCode: HttpStatus.FORBIDDEN,
@@ -1017,10 +1115,15 @@ export class NotificationsService implements OnModuleInit {
     // ── Recopilar IDs de usuarios relevantes (sin nulls ni duplicados) ─────────
     // NOTA: recipientUserId puede ser complexId (no un usuario real) en notificaciones
     // enviadas al panel admin. Solo cargamos IDs que existan en la tabla users.
-    const candidateIds = [...new Set(
-      [notif.createdByUserId, notif.actionTakenByUserId, notif.recipientUserId]
-        .filter((id): id is string => !!id),
-    )];
+    const candidateIds = [
+      ...new Set(
+        [
+          notif.createdByUserId,
+          notif.actionTakenByUserId,
+          notif.recipientUserId,
+        ].filter((id): id is string => !!id),
+      ),
+    ];
 
     const userMap = new Map<string, NotificationUserInfo>();
 
@@ -1038,56 +1141,58 @@ export class NotificationsService implements OnModuleInit {
 
       for (const u of users) {
         const roles = (u.userRoles ?? [])
-          .map(ur => ur.role?.name)
+          .map((ur) => ur.role?.name)
           .filter((name): name is ValidRoles => name != null)
-          .map(name => name as string);
+          .map((name) => name as string);
 
         userMap.set(u.id, {
-          id:             u.id,
-          name:           u.name,
-          lastName:       u.lastName,
-          fullName:       `${u.name} ${u.lastName}`.trim(),
-          email:          u.email,
-          phoneNumber:    u.phoneNumber,
-          identity:       u.identity,
+          id: u.id,
+          name: u.name,
+          lastName: u.lastName,
+          fullName: `${u.name} ${u.lastName}`.trim(),
+          email: u.email,
+          phoneNumber: u.phoneNumber,
+          identity: u.identity,
           profilePicture: u.profilePicture,
           roles,
-        }); 
+        });
       }
     }
 
-    const buildUserInfo = (userId?: string): NotificationUserInfo | undefined => {
+    const buildUserInfo = (
+      userId?: string,
+    ): NotificationUserInfo | undefined => {
       if (!userId) return undefined;
       return userMap.get(userId);
     };
 
     return {
-      id:                  notif.id,
-      type:                notif.type,
-      priority:            notif.priority,
-      title:               notif.title,
-      body:                notif.body,
-      metadata:            notif.metadata,
-      isBroadcast:         notif.isBroadcast,
-      targetRoles:         notif.targetRoles,
-      isRead:              notif.isRead,
-      readAt:              notif.readAt,
-      recipientUserId:     notif.recipientUserId,
-      recipientUser:       buildUserInfo(notif.recipientUserId),
-      complexId:           notif.complexId,
-      entityId:            notif.entityId,
-      entityType:          notif.entityType,
-      createdByUserId:     notif.createdByUserId,
-      createdByUser:       buildUserInfo(notif.createdByUserId),
-      isActionable:        notif.isActionable,
-      actionType:          notif.actionType,
-      actionLabel:         notif.actionLabel,
-      actionTakenAt:       notif.actionTakenAt,
+      id: notif.id,
+      type: notif.type,
+      priority: notif.priority,
+      title: notif.title,
+      body: notif.body,
+      metadata: notif.metadata,
+      isBroadcast: notif.isBroadcast,
+      targetRoles: notif.targetRoles,
+      isRead: notif.isRead,
+      readAt: notif.readAt,
+      recipientUserId: notif.recipientUserId,
+      recipientUser: buildUserInfo(notif.recipientUserId),
+      complexId: notif.complexId,
+      entityId: notif.entityId,
+      entityType: notif.entityType,
+      createdByUserId: notif.createdByUserId,
+      createdByUser: buildUserInfo(notif.createdByUserId),
+      isActionable: notif.isActionable,
+      actionType: notif.actionType,
+      actionLabel: notif.actionLabel,
+      actionTakenAt: notif.actionTakenAt,
       actionTakenByUserId: notif.actionTakenByUserId,
-      actionTakenByUser:   buildUserInfo(notif.actionTakenByUserId),
-      actionResult:        notif.actionResult,
-      createdAt:           notif.createdAt,
-      updatedAt:           notif.updatedAt,
+      actionTakenByUser: buildUserInfo(notif.actionTakenByUserId),
+      actionResult: notif.actionResult,
+      createdAt: notif.createdAt,
+      updatedAt: notif.updatedAt,
     };
   }
 
@@ -1098,18 +1203,16 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<UnreadCountResponse> {
     // Siempre acotado al destinatario: cada cuenta cuenta solo sus propias
     // notificaciones. SUPER_ADMIN cuenta las de todos los complejos.
-    const qb = this.notifRepo
-      .createQueryBuilder('n')
-      .where('n.isRead = false');
+    const qb = this.notifRepo.createQueryBuilder('n').where('n.isRead = false');
 
     if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
       qb.andWhere('n.recipientUserId = :userId', { userId: currentUser.sub });
     } else {
-      qb.andWhere('n.complexId = :complexId', { complexId: complexId ?? currentUser.complexId })
-        .andWhere(
-          '(n.recipientUserId = :userId OR n.isBroadcast = true)',
-          { userId: currentUser.sub },
-        );
+      qb.andWhere('n.complexId = :complexId', {
+        complexId: complexId ?? currentUser.complexId,
+      }).andWhere('(n.recipientUserId = :userId OR n.isBroadcast = true)', {
+        userId: currentUser.sub,
+      });
     }
 
     const count = await qb.getCount();
@@ -1125,33 +1228,33 @@ export class NotificationsService implements OnModuleInit {
     const { page, limit } = pagination;
 
     const [rows, totalItems] = await this.batchRepo.findAndCount({
-      where:  { complexId },
-      order:  { createdAt: 'DESC' },
-      skip:   (page - 1) * limit,
-      take:   limit,
+      where: { complexId },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     const totalPages = Math.ceil(totalItems / limit);
 
-    const items: SentNotification[] = rows.map(b => ({
-      id:              b.id,
-      type:            b.type,
-      priority:        b.priority,
-      title:           b.title,
-      body:            b.body,
+    const items: SentNotification[] = rows.map((b) => ({
+      id: b.id,
+      type: b.type,
+      priority: b.priority,
+      title: b.title,
+      body: b.body,
       recipientsCount: b.recipientsCount,
-      targetRoles:     b.targetRoles,
-      createdAt:       b.createdAt,
+      targetRoles: b.targetRoles,
+      createdAt: b.createdAt,
     }));
 
     return {
       items,
       pagination: {
-        currentPage:     page,
-        itemsPerPage:    limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -1184,13 +1287,13 @@ export class NotificationsService implements OnModuleInit {
   }): Promise<PanicAlert> {
     const alert = await this.panicRepo.save(
       this.panicRepo.create({
-        complexId:         params.complexId,
+        complexId: params.complexId,
         triggeredByUserId: params.triggeredByUserId,
-        triggeredByLabel:  params.triggeredByLabel,
-        unitId:            params.unitId,
-        residentId:        params.residentId,
-        type:              PanicAlertType.PANIC,
-        status:            PanicAlertStatus.PENDING,
+        triggeredByLabel: params.triggeredByLabel,
+        unitId: params.unitId,
+        residentId: params.residentId,
+        type: PanicAlertType.PANIC,
+        status: PanicAlertStatus.PENDING,
       }),
     );
 
@@ -1239,8 +1342,10 @@ export class NotificationsService implements OnModuleInit {
   private async cancelEscalation(panicAlertId: string): Promise<void> {
     try {
       await Promise.allSettled(
-        [1, 2, 3].map(level =>
-          this.panicEscalationQueue.remove(panicEscalationJobId(panicAlertId, level)),
+        [1, 2, 3].map((level) =>
+          this.panicEscalationQueue.remove(
+            panicEscalationJobId(panicAlertId, level),
+          ),
         ),
       );
     } catch (err) {
@@ -1262,7 +1367,11 @@ export class NotificationsService implements OnModuleInit {
       .innerJoin('ur.role', 'r')
       .where('ur.user_id = :userId', { userId })
       .andWhere('r.name IN (:...roles)', {
-        roles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+        roles: [
+          ValidRoles.SECURITY_ROL,
+          ValidRoles.SUPERVISOR_ROL,
+          ValidRoles.COMPLEX_ROL,
+        ],
       })
       .getCount();
 
@@ -1304,7 +1413,9 @@ export class NotificationsService implements OnModuleInit {
    * supervisor y complejo, pero el DISTINCT deja la garantía en la consulta y
    * no en una invariante que puede cambiar.
    */
-  private async resolveSupervisorIdsOnSite(complexId: string): Promise<string[]> {
+  private async resolveSupervisorIdsOnSite(
+    complexId: string,
+  ): Promise<string[]> {
     const rows = await this.supervisorVisitRepo
       .createQueryBuilder('sv')
       .select('sv.supervisor_id', 'supervisorId')
@@ -1313,7 +1424,7 @@ export class NotificationsService implements OnModuleInit {
       .distinct(true)
       .getRawMany<{ supervisorId: string }>();
 
-    return rows.map(r => r.supervisorId);
+    return rows.map((r) => r.supervisorId);
   }
 
   /**
@@ -1324,7 +1435,10 @@ export class NotificationsService implements OnModuleInit {
    * aprobación, por ejemplo) sin pasar por `sendNotification`, que además
    * registra un lote de envío masivo y exige un currentUser emisor.
    */
-  async findUserIdsByRoles(complexId: string, roles: ValidRoles[]): Promise<string[]> {
+  async findUserIdsByRoles(
+    complexId: string,
+    roles: ValidRoles[],
+  ): Promise<string[]> {
     return this.resolveTargetUserIds(complexId, roles);
   }
 
@@ -1334,15 +1448,17 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<TriggerPanicAlertResult> {
     const isSecurity = currentUser.roles.includes(ValidRoles.SECURITY_ROL);
     const isResident = currentUser.roles.includes(ValidRoles.RESIDENT_ROL);
-    const isStaff    = !isSecurity && !isResident; // COMPLEX_ROL, ACCOUNTANT_ROL, SUPERVISOR_ROL, COMPILANCE_OFFICER_ROL
+    const isStaff = !isSecurity && !isResident; // COMPLEX_ROL, ACCOUNTANT_ROL, SUPERVISOR_ROL, COMPILANCE_OFFICER_ROL
 
     let triggerFullName: string | null = null;
     if (currentUser.entityType === 'user') {
       const triggeringUser = await this.userRepo.findOne({
-        where:  { id: currentUser.sub },
+        where: { id: currentUser.sub },
         select: ['id', 'name', 'lastName'],
       });
-      if (triggeringUser) triggerFullName = `${triggeringUser.name} ${triggeringUser.lastName}`.trim();
+      if (triggeringUser)
+        triggerFullName =
+          `${triggeringUser.name} ${triggeringUser.lastName}`.trim();
     }
 
     // ── Caso: staff del complejo (admin, supervisor, contador, compliance) ───
@@ -1363,33 +1479,48 @@ export class NotificationsService implements OnModuleInit {
       });
       const panicPayload = {
         complexId,
-        panicAlertId:    alert.id,
-        type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.URGENT,
-        title:           'Alerta de pánico — Personal del complejo',
-        body:            `Alerta de pánico activada por ${triggeredByLabel}.`,
-        isBroadcast:     true,
+        panicAlertId: alert.id,
+        type: NotificationType.PANIC_ALERT,
+        priority: NotificationPriority.URGENT,
+        title: 'Alerta de pánico — Personal del complejo',
+        body: `Alerta de pánico activada por ${triggeredByLabel}.`,
+        isBroadcast: true,
         createdByUserId: currentUser.sub,
-        isActionable:    true,
-        actionType:      NotificationActionType.ACKNOWLEDGE,
-        actionLabel:     'Reconocer alerta',
-        metadata:        { triggeredByLabel },
+        isActionable: true,
+        actionType: NotificationActionType.ACKNOWLEDGE,
+        actionLabel: 'Reconocer alerta',
+        metadata: { triggeredByLabel },
       };
 
       // Set: un usuario con dos roles aparecería dos veces y recibiría la alerta
       // duplicada.
-      const allIds = [...new Set([...residentIds, ...securityIds, ...staffIds])]
-        .filter(id => id !== currentUser.sub);
+      const allIds = [
+        ...new Set([...residentIds, ...securityIds, ...staffIds]),
+      ].filter((id) => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
-      this.logger.warn(`PANIC ALERT (staff) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, {
+        complexId,
+        alertId: alert.id,
+        triggeredBy: currentUser.sub,
+        triggeredByLabel,
+      });
+      this.logger.warn(
+        `PANIC ALERT (staff) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`,
+      );
 
       if (allIds.length > 0) {
         void this.notify({
           ...panicPayload,
-          userIds:     allIds,
-          targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
-        }).catch(e => this.logger.error(`PANIC notify error (staff): ${e?.message}`));
+          userIds: allIds,
+          targetRoles: [
+            ValidRoles.RESIDENT_ROL,
+            ValidRoles.SECURITY_ROL,
+            ValidRoles.SUPERVISOR_ROL,
+            ValidRoles.COMPLEX_ROL,
+          ],
+        }).catch((e) =>
+          this.logger.error(`PANIC notify error (staff): ${e?.message}`),
+        );
       }
 
       return { success: true };
@@ -1397,9 +1528,13 @@ export class NotificationsService implements OnModuleInit {
 
     // ── Caso: guardia de seguridad ──────────────────────────────────────────
     if (isSecurity) {
-      const residentIds = await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL]);
+      const residentIds = await this.resolveTargetUserIds(complexId, [
+        ValidRoles.RESIDENT_ROL,
+      ]);
 
-      const triggeredByLabel = triggerFullName ? `Guardia – ${triggerFullName}` : 'Guardia';
+      const triggeredByLabel = triggerFullName
+        ? `Guardia – ${triggerFullName}`
+        : 'Guardia';
       const alert = await this.openPanicAlert({
         complexId,
         triggeredByUserId: currentUser.sub,
@@ -1407,34 +1542,49 @@ export class NotificationsService implements OnModuleInit {
       });
       const panicPayload = {
         complexId,
-        panicAlertId:    alert.id,
-        type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.HIGH,
-        title:           'Alerta de pánico — Seguridad',
-        body:            `Alerta de pánico activada por ${triggeredByLabel}.`,
-        isBroadcast:     true,
-        targetRoles:     [ValidRoles.RESIDENT_ROL],
+        panicAlertId: alert.id,
+        type: NotificationType.PANIC_ALERT,
+        priority: NotificationPriority.HIGH,
+        title: 'Alerta de pánico — Seguridad',
+        body: `Alerta de pánico activada por ${triggeredByLabel}.`,
+        isBroadcast: true,
+        targetRoles: [ValidRoles.RESIDENT_ROL],
         createdByUserId: currentUser.sub,
-        isActionable:    true,
-        actionType:      NotificationActionType.ACKNOWLEDGE,
-        actionLabel:     'Reconocer alerta',
-        metadata:        { triggeredByLabel },
+        isActionable: true,
+        actionType: NotificationActionType.ACKNOWLEDGE,
+        actionLabel: 'Reconocer alerta',
+        metadata: { triggeredByLabel },
       };
 
       const staffIds = await this.resolveResponseStaffIds(complexId);
-      const allIds = [...new Set([
-        ...residentIds.filter(id => id !== currentUser.sub),
-        ...staffIds,
-      ])].filter(id => id !== currentUser.sub);
+      const allIds = [
+        ...new Set([
+          ...residentIds.filter((id) => id !== currentUser.sub),
+          ...staffIds,
+        ]),
+      ].filter((id) => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, triggeredBy: currentUser.sub, triggeredByLabel });
-      this.logger.warn(`PANIC ALERT (security) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`);
+      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, {
+        complexId,
+        alertId: alert.id,
+        triggeredBy: currentUser.sub,
+        triggeredByLabel,
+      });
+      this.logger.warn(
+        `PANIC ALERT (security) — alerta ${alert.id}, complejo ${complexId}, activado por ${currentUser.sub}`,
+      );
 
       void this.notify({
         ...panicPayload,
-        userIds:     allIds,
-        targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
-      }).catch(e => this.logger.error(`PANIC notify error (security): ${e?.message}`));
+        userIds: allIds,
+        targetRoles: [
+          ValidRoles.RESIDENT_ROL,
+          ValidRoles.COMPLEX_ROL,
+          ValidRoles.SUPERVISOR_ROL,
+        ],
+      }).catch((e) =>
+        this.logger.error(`PANIC notify error (security): ${e?.message}`),
+      );
 
       return { success: true };
     }
@@ -1442,26 +1592,32 @@ export class NotificationsService implements OnModuleInit {
     // ── Casos 1 y 2: residente ──────────────────────────────────────────────
     // TODO(debug-panic): logging puntual temporal para aislar el 500 en prod/staging.
     // Quitar este bloque de logs una vez identificada y corregida la causa raíz.
-    this.logger.warn(`[PANIC][resident] START userId=${currentUser.sub} complexId=${complexId} entityType=${currentUser.entityType} roles=${JSON.stringify(currentUser.roles)}`);
+    this.logger.warn(
+      `[PANIC][resident] START userId=${currentUser.sub} complexId=${complexId} entityType=${currentUser.entityType} roles=${JSON.stringify(currentUser.roles)}`,
+    );
 
     try {
-      const resident = await this.residentsService.findActiveResidentByUserIdInternal(
-        currentUser.sub,
-        complexId,
+      const resident =
+        await this.residentsService.findActiveResidentByUserIdInternal(
+          currentUser.sub,
+          complexId,
+        );
+      this.logger.warn(
+        `[PANIC][resident] findActiveResidentByUserIdInternal → residentId=${resident?.id} unitId=${resident?.unitId} hasUnitRelation=${!!resident?.unit} buildingId=${resident?.unit?.buildingId ?? 'null'}`,
       );
-      this.logger.warn(`[PANIC][resident] findActiveResidentByUserIdInternal → residentId=${resident?.id} unitId=${resident?.unitId} hasUnitRelation=${!!resident?.unit} buildingId=${resident?.unit?.buildingId ?? 'null'}`);
 
       if (!resident || !resident.unit) {
         throw new CustomError({
-          message:    'No se encontró un residente activo para este usuario en el complejo',
+          message:
+            'No se encontró un residente activo para este usuario en el complejo',
           statusCode: HttpStatus.FORBIDDEN,
-          errorCode:  GeneralErrorCode.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
         });
       }
 
-      const unit        = resident.unit;
-      const unitNumber  = unit.number;
-      const title       = `Alerta de pánico — Unidad ${unitNumber}`;
+      const unit = resident.unit;
+      const unitNumber = unit.number;
+      const title = `Alerta de pánico — Unidad ${unitNumber}`;
 
       // La vigilancia y el personal de respuesta reciben el mismo mensaje urgente:
       // el supervisor y la administración son quienes escalan si la portería no
@@ -1470,79 +1626,122 @@ export class NotificationsService implements OnModuleInit {
         this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]),
         this.resolveResponseStaffIds(complexId),
       ]);
-      const responderIds = [...new Set([...securityIds, ...staffIds])]
-        .filter(id => id !== currentUser.sub);
-      this.logger.warn(`[PANIC][resident] destinatarios de respuesta → ${responderIds.length} ids (vigilancia ${securityIds.length} + personal ${staffIds.length})`);
+      const responderIds = [...new Set([...securityIds, ...staffIds])].filter(
+        (id) => id !== currentUser.sub,
+      );
+      this.logger.warn(
+        `[PANIC][resident] destinatarios de respuesta → ${responderIds.length} ids (vigilancia ${securityIds.length} + personal ${staffIds.length})`,
+      );
 
       let triggeredByLabel: string;
 
       if (unit.buildingId) {
         // ── Caso 1: edificio/torre ──────────────────────────────────────────
         const buildingName = unit.building?.name ?? unit.buildingId;
-        triggeredByLabel   = `Residente – Unidad ${unitNumber}, ${buildingName}`;
+        triggeredByLabel = `Residente – Unidad ${unitNumber}, ${buildingName}`;
         const alert = await this.openPanicAlert({
           complexId,
           triggeredByUserId: currentUser.sub,
           triggeredByLabel,
-          unitId:            unit.id,
-          residentId:        resident.id,
+          unitId: unit.id,
+          residentId: resident.id,
         });
         const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
-        this.logger.warn(`[PANIC][resident] Caso 1 (torre) buildingId=${unit.buildingId} buildingName=${buildingName}`);
+        this.logger.warn(
+          `[PANIC][resident] Caso 1 (torre) buildingId=${unit.buildingId} buildingName=${buildingName}`,
+        );
 
         // Excluye al activador y a quien ya está en el grupo de respuesta: un
         // residente que además es guardia recibiría el push dos veces, con dos
         // textos distintos del mismo incidente.
         const buildingIds = (
-          await this.residentsService.findActiveUserIdsByBuildingInternal(unit.buildingId)
-        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
-        this.logger.warn(`[PANIC][resident] findActiveUserIdsByBuildingInternal → ${buildingIds.length} ids`);
+          await this.residentsService.findActiveUserIdsByBuildingInternal(
+            unit.buildingId,
+          )
+        ).filter((id) => id !== currentUser.sub && !responderIds.includes(id));
+        this.logger.warn(
+          `[PANIC][resident] findActiveUserIdsByBuildingInternal → ${buildingIds.length} ids`,
+        );
 
         const residentPanicBase = {
           complexId,
-          panicAlertId:    alert.id,
-          type:            NotificationType.PANIC_ALERT,
-          priority:        NotificationPriority.URGENT,
+          panicAlertId: alert.id,
+          type: NotificationType.PANIC_ALERT,
+          priority: NotificationPriority.URGENT,
           title,
-          isBroadcast:     true,
+          isBroadcast: true,
           createdByUserId: currentUser.sub,
-          isActionable:    true,
-          actionType:      NotificationActionType.ACKNOWLEDGE,
-          actionLabel:     'Reconocer alerta',
-          metadata:        { triggeredByLabel },
+          isActionable: true,
+          actionType: NotificationActionType.ACKNOWLEDGE,
+          actionLabel: 'Reconocer alerta',
+          metadata: { triggeredByLabel },
         };
 
         const allIds = [...new Set([...buildingIds, ...responderIds])];
-        this.logger.warn(`[PANIC][resident] antes de persistBulk (torre) → allIds=${allIds.length}`);
+        this.logger.warn(
+          `[PANIC][resident] antes de persistBulk (torre) → allIds=${allIds.length}`,
+        );
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
-            userIds:     allIds,
-            body:        buildingBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+            userIds: allIds,
+            body: buildingBody,
+            targetRoles: [
+              ValidRoles.RESIDENT_ROL,
+              ValidRoles.SECURITY_ROL,
+              ValidRoles.SUPERVISOR_ROL,
+              ValidRoles.COMPLEX_ROL,
+            ],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
-        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        this.socketService.emitToComplex(
+          complexId,
+          SocketEvent.PANIC_ALERT_NEW,
+          {
+            complexId,
+            alertId: alert.id,
+            unitId: unit.id,
+            triggeredBy: currentUser.sub,
+            triggeredByLabel,
+          },
+        );
         void Promise.allSettled([
-          this.dispatchPushOnly(buildingIds, { ...residentPanicBase, userIds: buildingIds, body: buildingBody, targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
-        ]).then(results => {
-          const failed = results.filter(r => r.status === 'rejected');
-          if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (torre) falló: ${JSON.stringify(failed)}`);
+          this.dispatchPushOnly(buildingIds, {
+            ...residentPanicBase,
+            userIds: buildingIds,
+            body: buildingBody,
+            targetRoles: [ValidRoles.RESIDENT_ROL],
+          }),
+          this.dispatchPushOnly(responderIds, {
+            ...residentPanicBase,
+            userIds: responderIds,
+            body: securityBody,
+            targetRoles: [
+              ValidRoles.SECURITY_ROL,
+              ValidRoles.SUPERVISOR_ROL,
+              ValidRoles.COMPLEX_ROL,
+            ],
+          }),
+        ]).then((results) => {
+          const failed = results.filter((r) => r.status === 'rejected');
+          if (failed.length > 0)
+            this.logger.error(
+              `[PANIC][resident] dispatchPushOnly (torre) falló: ${JSON.stringify(failed)}`,
+            );
         });
       } else {
         // ── Caso 2: casa individual ─────────────────────────────────────────
-        triggeredByLabel   = `Residente – Unidad ${unitNumber}`;
+        triggeredByLabel = `Residente – Unidad ${unitNumber}`;
         const alert = await this.openPanicAlert({
           complexId,
           triggeredByUserId: currentUser.sub,
           triggeredByLabel,
-          unitId:            unit.id,
-          residentId:        resident.id,
+          unitId: unit.id,
+          residentId: resident.id,
         });
-        const complexBody  = `Alerta de pánico activada. ${triggeredByLabel}.`;
+        const complexBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 2 (casa individual)`);
 
@@ -1550,48 +1749,90 @@ export class NotificationsService implements OnModuleInit {
         // roles recibe el mismo pánico por duplicado.
         const residentIds = (
           await this.resolveTargetUserIds(complexId, [ValidRoles.RESIDENT_ROL])
-        ).filter(id => id !== currentUser.sub && !responderIds.includes(id));
-        this.logger.warn(`[PANIC][resident] resolveTargetUserIds(RESIDENT) → ${residentIds.length} ids`);
+        ).filter((id) => id !== currentUser.sub && !responderIds.includes(id));
+        this.logger.warn(
+          `[PANIC][resident] resolveTargetUserIds(RESIDENT) → ${residentIds.length} ids`,
+        );
 
         const residentPanicBase = {
           complexId,
-          panicAlertId:    alert.id,
-          type:            NotificationType.PANIC_ALERT,
-          priority:        NotificationPriority.URGENT,
+          panicAlertId: alert.id,
+          type: NotificationType.PANIC_ALERT,
+          priority: NotificationPriority.URGENT,
           title,
-          isBroadcast:     true,
+          isBroadcast: true,
           createdByUserId: currentUser.sub,
-          isActionable:    true,
-          actionType:      NotificationActionType.ACKNOWLEDGE,
-          actionLabel:     'Reconocer alerta',
-          metadata:        { triggeredByLabel },
+          isActionable: true,
+          actionType: NotificationActionType.ACKNOWLEDGE,
+          actionLabel: 'Reconocer alerta',
+          metadata: { triggeredByLabel },
         };
 
         const allIds = [...new Set([...residentIds, ...responderIds])];
-        this.logger.warn(`[PANIC][resident] antes de persistBulk (casa) → allIds=${allIds.length}`);
+        this.logger.warn(
+          `[PANIC][resident] antes de persistBulk (casa) → allIds=${allIds.length}`,
+        );
         if (allIds.length > 0) {
           await this.persistBulk({
             ...residentPanicBase,
-            userIds:     allIds,
-            body:        complexBody,
-            targetRoles: [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+            userIds: allIds,
+            body: complexBody,
+            targetRoles: [
+              ValidRoles.RESIDENT_ROL,
+              ValidRoles.SECURITY_ROL,
+              ValidRoles.SUPERVISOR_ROL,
+              ValidRoles.COMPLEX_ROL,
+            ],
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
-        this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, { complexId, alertId: alert.id, unitId: unit.id, triggeredBy: currentUser.sub, triggeredByLabel });
+        this.socketService.emitToComplex(
+          complexId,
+          SocketEvent.PANIC_ALERT_NEW,
+          {
+            complexId,
+            alertId: alert.id,
+            unitId: unit.id,
+            triggeredBy: currentUser.sub,
+            triggeredByLabel,
+          },
+        );
         void Promise.allSettled([
-          this.dispatchPushOnly(residentIds, { ...residentPanicBase, userIds: residentIds, body: complexBody,  targetRoles: [ValidRoles.RESIDENT_ROL] }),
-          this.dispatchPushOnly(responderIds, { ...residentPanicBase, userIds: responderIds, body: securityBody, targetRoles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL] }),
-        ]).then(results => {
-          const failed = results.filter(r => r.status === 'rejected');
-          if (failed.length > 0) this.logger.error(`[PANIC][resident] dispatchPushOnly (casa) falló: ${JSON.stringify(failed)}`);
+          this.dispatchPushOnly(residentIds, {
+            ...residentPanicBase,
+            userIds: residentIds,
+            body: complexBody,
+            targetRoles: [ValidRoles.RESIDENT_ROL],
+          }),
+          this.dispatchPushOnly(responderIds, {
+            ...residentPanicBase,
+            userIds: responderIds,
+            body: securityBody,
+            targetRoles: [
+              ValidRoles.SECURITY_ROL,
+              ValidRoles.SUPERVISOR_ROL,
+              ValidRoles.COMPLEX_ROL,
+            ],
+          }),
+        ]).then((results) => {
+          const failed = results.filter((r) => r.status === 'rejected');
+          if (failed.length > 0)
+            this.logger.error(
+              `[PANIC][resident] dispatchPushOnly (casa) falló: ${JSON.stringify(failed)}`,
+            );
         });
       }
 
-      this.logger.warn(`PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`);
+      this.logger.warn(
+        `PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`,
+      );
       return { success: true };
     } catch (err) {
-      const e = err as Error & { code?: string; detail?: string; query?: string };
+      const e = err as Error & {
+        code?: string;
+        detail?: string;
+        query?: string;
+      };
       this.logger.error(
         `[PANIC][resident] FALLÓ — userId=${currentUser.sub} complexId=${complexId} name=${e?.constructor?.name} message=${e?.message} pgCode=${e?.code ?? 'n/a'} pgDetail=${e?.detail ?? 'n/a'}`,
         e?.stack,
@@ -1622,7 +1863,7 @@ export class NotificationsService implements OnModuleInit {
     await getMessaging().send({
       token: subscription.deviceToken,
       data: {
-        type:     'PUSH_HEALTH_CHECK',
+        type: 'PUSH_HEALTH_CHECK',
         healthId,
         ackToken: token,
         ...(ackUrl ? { ackUrl } : {}),
@@ -1650,9 +1891,14 @@ export class NotificationsService implements OnModuleInit {
    * está sonando una sirena— y devolver detalles a un endpoint sin sesión solo
    * ayudaría a sondearlo.
    */
-  async markPanicDelivered(panicAlertId: string, input: PanicDeliveredInput): Promise<void> {
+  async markPanicDelivered(
+    panicAlertId: string,
+    input: PanicDeliveredInput,
+  ): Promise<void> {
     if (!this.panicAckTokenService.verify(panicAlertId, input.token)) {
-      this.logger.warn(`ACK de entrega rechazado — token inválido para la alerta ${panicAlertId}`);
+      this.logger.warn(
+        `ACK de entrega rechazado — token inválido para la alerta ${panicAlertId}`,
+      );
       return;
     }
 
@@ -1660,7 +1906,7 @@ export class NotificationsService implements OnModuleInit {
 
     const subscription = input.deviceToken
       ? await this.pushSubRepo.findOne({
-          where:  { deviceToken: input.deviceToken },
+          where: { deviceToken: input.deviceToken },
           select: ['id', 'userId'],
         })
       : null;
@@ -1686,7 +1932,9 @@ export class NotificationsService implements OnModuleInit {
       );
 
       if (result.affected && result.affected > 0) {
-        this.logger.log(`Alerta ${panicAlertId} marcada como ENTREGADA por vigilancia`);
+        this.logger.log(
+          `Alerta ${panicAlertId} marcada como ENTREGADA por vigilancia`,
+        );
       }
     } else {
       // Sin deviceToken tampoco se promueve: ante la duda conviene escalar de
@@ -1703,15 +1951,17 @@ export class NotificationsService implements OnModuleInit {
       await this.panicDeliveryRepo.save(
         this.panicDeliveryRepo.create({
           panicAlertId,
-          channel:        PanicDeliveryChannel.FCM,
-          deviceTokenId:  subscription?.id,
-          userId:         subscription?.userId,
-          deliveredAt:    now,
+          channel: PanicDeliveryChannel.FCM,
+          deviceTokenId: subscription?.id,
+          userId: subscription?.userId,
+          deliveredAt: now,
         }),
       );
     } catch (err) {
       // Nunca puede tumbar el ACK: el estado de la alerta ya se actualizó.
-      this.logger.warn(`No se pudo auditar la entrega de ${panicAlertId}: ${(err as Error)?.message}`);
+      this.logger.warn(
+        `No se pudo auditar la entrega de ${panicAlertId}: ${(err as Error)?.message}`,
+      );
     }
   }
 
@@ -1733,17 +1983,17 @@ export class NotificationsService implements OnModuleInit {
 
     if (!alert) {
       throw new CustomError({
-        message:    'Alerta de pánico no encontrada',
+        message: 'Alerta de pánico no encontrada',
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode:  GeneralErrorCode.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
 
     if (currentUser.complexId && alert.complexId !== currentUser.complexId) {
       throw new CustomError({
-        message:    'No tienes acceso a esta alerta',
+        message: 'No tienes acceso a esta alerta',
         statusCode: HttpStatus.FORBIDDEN,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
@@ -1751,10 +2001,12 @@ export class NotificationsService implements OnModuleInit {
     // cliente puede reintentar sobre una conexión mala sin recibir un fallo.
     if (alert.resolvedAt) return alert;
 
-    alert.status           = falseAlarm ? PanicAlertStatus.FALSE_ALARM : PanicAlertStatus.RESOLVED;
-    alert.resolvedAt       = new Date();
+    alert.status = falseAlarm
+      ? PanicAlertStatus.FALSE_ALARM
+      : PanicAlertStatus.RESOLVED;
+    alert.resolvedAt = new Date();
     alert.resolvedByUserId = currentUser.sub;
-    alert.resolutionNotes  = resolutionNotes;
+    alert.resolutionNotes = resolutionNotes;
 
     const updated = await this.panicRepo.save(alert);
 
@@ -1763,15 +2015,19 @@ export class NotificationsService implements OnModuleInit {
     await this.notifRepo.update(
       { panicAlertId: alert.id, actionTakenAt: IsNull() },
       {
-        actionTakenAt:       updated.resolvedAt,
+        actionTakenAt: updated.resolvedAt,
         actionTakenByUserId: currentUser.sub,
-        actionResult:        NotificationActionResult.ACKNOWLEDGED,
+        actionResult: NotificationActionResult.ACKNOWLEDGED,
       },
     );
 
     await this.cancelEscalation(alert.id);
 
-    this.socketService.emitToComplex(alert.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
+    this.socketService.emitToComplex(
+      alert.complexId,
+      SocketEvent.PANIC_ALERT_ACKNOWLEDGED,
+      updated,
+    );
     this.logger.log(
       `PANIC ALERT cerrada — alerta ${alert.id}, estado ${updated.status}, por ${currentUser.sub}`,
     );
@@ -1794,64 +2050,73 @@ export class NotificationsService implements OnModuleInit {
     complexId: string,
     currentUser: JwtAccessPayload,
   ): Promise<RequestSecurityCallResult> {
-    const resident = await this.residentsService.findActiveResidentByUserIdInternal(
-      currentUser.sub,
-      complexId,
-    );
+    const resident =
+      await this.residentsService.findActiveResidentByUserIdInternal(
+        currentUser.sub,
+        complexId,
+      );
 
     if (!resident || !resident.unit) {
       throw new CustomError({
-        message:    'No se encontró un residente activo para este usuario en el complejo',
+        message:
+          'No se encontró un residente activo para este usuario en el complejo',
         statusCode: HttpStatus.FORBIDDEN,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
-    const unit         = resident.unit;
-    const buildingName  = unit.building?.name ?? null;
-    const unitLabel     = buildingName
+    const unit = resident.unit;
+    const buildingName = unit.building?.name ?? null;
+    const unitLabel = buildingName
       ? `Torre ${buildingName} · Unidad ${unit.number}`
       : `Unidad ${unit.number}`;
 
     // Nombre + teléfono del residente solicitante (el número que portería marcará).
     let requestedByName: string | null = null;
-    let phoneNumber:     string | null = null;
+    let phoneNumber: string | null = null;
     if (currentUser.entityType === 'user') {
       const u = await this.userRepo.findOne({
-        where:  { id: currentUser.sub },
+        where: { id: currentUser.sub },
         select: ['id', 'name', 'lastName', 'phoneNumber'],
       });
       if (u) {
         requestedByName = `${u.name} ${u.lastName}`.trim();
-        phoneNumber     = u.phoneNumber ?? null;
+        phoneNumber = u.phoneNumber ?? null;
       }
     }
 
-    const securityIds = await this.resolveTargetUserIds(complexId, [ValidRoles.SECURITY_ROL]);
+    const securityIds = await this.resolveTargetUserIds(complexId, [
+      ValidRoles.SECURITY_ROL,
+    ]);
 
     if (securityIds.length === 0) {
-      this.logger.warn(`SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}`);
-      return { success: false, message: 'No hay personal de seguridad disponible en este momento.' };
+      this.logger.warn(
+        `SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}`,
+      );
+      return {
+        success: false,
+        message: 'No hay personal de seguridad disponible en este momento.',
+      };
     }
 
     const title = `Solicitud de llamada — ${unitLabel}`;
-    const body  = requestedByName
+    const body = requestedByName
       ? `${requestedByName} (${unitLabel}) solicita que portería se comunique con su unidad.`
       : `${unitLabel} solicita que portería se comunique con su unidad.`;
 
     void this.notify({
       complexId,
-      userIds:         securityIds,
-      type:            NotificationType.SECURITY_CALL_REQUEST,
-      priority:        NotificationPriority.HIGH,
+      userIds: securityIds,
+      type: NotificationType.SECURITY_CALL_REQUEST,
+      priority: NotificationPriority.HIGH,
       title,
       body,
-      entityId:        unit.id,
-      entityType:      'unit',
+      entityId: unit.id,
+      entityType: 'unit',
       metadata: {
-        unitId:            unit.id,
-        unitNumber:        unit.number,
-        buildingId:        unit.buildingId ?? null,
+        unitId: unit.id,
+        unitNumber: unit.number,
+        buildingId: unit.buildingId ?? null,
         buildingName,
         unitLabel,
         phoneNumber,
@@ -1859,13 +2124,15 @@ export class NotificationsService implements OnModuleInit {
         requestedByName,
       },
       createdByUserId: currentUser.sub,
-      isActionable:    true,
+      isActionable: true,
       // No se usa actionType (enum nativo PG) para evitar otra migración; la app de
       // portería renderiza el botón "Llamar" a partir de type + metadata.phoneNumber.
-      actionLabel:     'Llamar a la unidad',
-      isBroadcast:     false,
-      targetRoles:     [ValidRoles.SECURITY_ROL],
-    }).catch(e => this.logger.error(`requestSecurityCall notify error: ${e?.message}`));
+      actionLabel: 'Llamar a la unidad',
+      isBroadcast: false,
+      targetRoles: [ValidRoles.SECURITY_ROL],
+    }).catch((e) =>
+      this.logger.error(`requestSecurityCall notify error: ${e?.message}`),
+    );
 
     this.logger.log(
       `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${securityIds.length} guardia(s)`,
@@ -1886,7 +2153,7 @@ export class NotificationsService implements OnModuleInit {
     return this.notifRepo.find({
       where: {
         complexId,
-        type:          NotificationType.PANIC_ALERT,
+        type: NotificationType.PANIC_ALERT,
         actionTakenAt: IsNull(),
       },
       order: { createdAt: 'DESC' },
@@ -1905,17 +2172,17 @@ export class NotificationsService implements OnModuleInit {
 
     if (notif.type !== NotificationType.PANIC_ALERT) {
       throw new CustomError({
-        message:    'Solo se pueden reconocer alertas de pánico',
+        message: 'Solo se pueden reconocer alertas de pánico',
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
     if (currentUser.complexId && notif.complexId !== currentUser.complexId) {
       throw new CustomError({
-        message:    'No tienes acceso a esta alerta',
+        message: 'No tienes acceso a esta alerta',
         statusCode: HttpStatus.FORBIDDEN,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
@@ -1926,9 +2193,9 @@ export class NotificationsService implements OnModuleInit {
 
     const ackedAt = new Date();
 
-    notif.actionTakenAt       = ackedAt;
+    notif.actionTakenAt = ackedAt;
     notif.actionTakenByUserId = currentUser.sub;
-    notif.actionResult        = NotificationActionResult.ACKNOWLEDGED;
+    notif.actionResult = NotificationActionResult.ACKNOWLEDGED;
 
     const updated = await this.notifRepo.save(notif);
 
@@ -1941,19 +2208,19 @@ export class NotificationsService implements OnModuleInit {
     const siblingCriteria = notif.panicAlertId
       ? { panicAlertId: notif.panicAlertId, actionTakenAt: IsNull() }
       : {
-          complexId:     notif.complexId,
-          type:          NotificationType.PANIC_ALERT,
+          complexId: notif.complexId,
+          type: NotificationType.PANIC_ALERT,
           actionTakenAt: IsNull(),
-          createdAt:     Between(
+          createdAt: Between(
             new Date(notif.createdAt.getTime() - 30_000),
             new Date(notif.createdAt.getTime() + 30_000),
           ),
         };
 
     await this.notifRepo.update(siblingCriteria, {
-      actionTakenAt:       ackedAt,
+      actionTakenAt: ackedAt,
       actionTakenByUserId: currentUser.sub,
-      actionResult:        NotificationActionResult.ACKNOWLEDGED,
+      actionResult: NotificationActionResult.ACKNOWLEDGED,
     });
 
     // Estado del incidente. Se marca ACKNOWLEDGED solo si sigue abierto, para
@@ -1961,19 +2228,23 @@ export class NotificationsService implements OnModuleInit {
     if (notif.panicAlertId) {
       await this.panicRepo.update(
         {
-          id:     notif.panicAlertId,
+          id: notif.panicAlertId,
           status: In([PanicAlertStatus.PENDING, PanicAlertStatus.DELIVERED]),
         },
         {
-          status:                PanicAlertStatus.ACKNOWLEDGED,
-          acknowledgedByUserId:  currentUser.sub,
-          acknowledgedAt:        ackedAt,
+          status: PanicAlertStatus.ACKNOWLEDGED,
+          acknowledgedByUserId: currentUser.sub,
+          acknowledgedAt: ackedAt,
         },
       );
       await this.cancelEscalation(notif.panicAlertId);
     }
 
-    this.socketService.emitToComplex(notif.complexId, SocketEvent.PANIC_ALERT_ACKNOWLEDGED, updated);
+    this.socketService.emitToComplex(
+      notif.complexId,
+      SocketEvent.PANIC_ALERT_ACKNOWLEDGED,
+      updated,
+    );
 
     this.logger.log(
       `PANIC ALERT reconocida — id ${notificationId}, complejo ${notif.complexId}, por ${currentUser.sub}`,
@@ -2012,11 +2283,11 @@ export class NotificationsService implements OnModuleInit {
     // de cada destinatario en el data del mensaje. Conservamos el token en
     // paralelo para desactivar los inválidos tras el envío.
     const items = subs
-      .filter(s => !!s.deviceToken)
-      .map(s => ({
-        token:   s.deviceToken as string,
+      .filter((s) => !!s.deviceToken)
+      .map((s) => ({
+        token: s.deviceToken,
         message: this.buildFcmMessage(
-          s.deviceToken as string,
+          s.deviceToken,
           params,
           notifIdByUser?.get(s.userId) ?? '',
         ),
@@ -2028,7 +2299,9 @@ export class NotificationsService implements OnModuleInit {
 
     for (const batch of batches) {
       try {
-        const response = await getMessaging().sendEach(batch.map(b => b.message));
+        const response = await getMessaging().sendEach(
+          batch.map((b) => b.message),
+        );
 
         // `log`, no `debug`: en producción el logger corre en ['error','warn','log']
         // (main.ts), así que en debug esto era invisible justo donde hace falta.
@@ -2072,7 +2345,9 @@ export class NotificationsService implements OnModuleInit {
             { deviceToken: In(invalidTokens) },
             { isActive: false },
           );
-          this.logger.log(`Desactivados ${invalidTokens.length} tokens FCM inválidos`);
+          this.logger.log(
+            `Desactivados ${invalidTokens.length} tokens FCM inválidos`,
+          );
         }
       } catch (err: any) {
         this.logger.warn(`Error en despacho FCM: ${err?.message}`);
@@ -2091,7 +2366,7 @@ export class NotificationsService implements OnModuleInit {
     params: NotifyParams,
     notificationId: string,
   ): Message {
-    const isPanic  = params.type === NotificationType.PANIC_ALERT;
+    const isPanic = params.type === NotificationType.PANIC_ALERT;
     const metadata = (params.metadata ?? {}) as Record<string, string>;
 
     return {
@@ -2102,24 +2377,26 @@ export class NotificationsService implements OnModuleInit {
       // handler when the app is killed, so the app's full-screen panic alarm
       // would never fire. Data-only + android.priority:'high' wakes the killed
       // app and runs setBackgroundMessageHandler, which drives the alarm.
-      ...(!isPanic && { notification: { title: params.title, body: params.body } }),
+      ...(!isPanic && {
+        notification: { title: params.title, body: params.body },
+      }),
       data: {
-        type:       params.type,
-        priority:   params.priority,
-        complexId:  params.complexId,
-        title:      params.title,
-        body:       params.body,
+        type: params.type,
+        priority: params.priority,
+        complexId: params.complexId,
+        title: params.title,
+        body: params.body,
         // FCM exige valores string en data → metadata SIEMPRE serializado.
-        metadata:   JSON.stringify(params.metadata ?? {}),
-        url:        '/dashboard/notificaciones',
+        metadata: JSON.stringify(params.metadata ?? {}),
+        url: '/dashboard/notificaciones',
         // notificationId/entityType/entityId solo cuando aplican.
         // Finanzas NO envía entityType/entityId → el cliente decide pantalla por metadata.
         // Panic queda sin estos campos (params.entityType undefined) → payload intacto.
-        ...(notificationId    ? { notificationId } : {}),
+        ...(notificationId ? { notificationId } : {}),
         ...(params.entityType ? { entityType: params.entityType } : {}),
-        ...(params.entityId   ? { entityId: params.entityId } : {}),
+        ...(params.entityId ? { entityId: params.entityId } : {}),
         ...(isPanic && {
-          triggeredBy:      params.createdByUserId ?? '',
+          triggeredBy: params.createdByUserId ?? '',
           triggeredByLabel: metadata.triggeredByLabel ?? '',
           // Identifica el incidente para que el dispositivo confirme entrega y
           // reconozca la alerta correcta cuando hay más de una abierta.
@@ -2133,15 +2410,19 @@ export class NotificationsService implements OnModuleInit {
           // API (vive en el .env de JS) y así el servidor puede mudarse sin
           // publicar una versión nueva de la app.
           ...(params.panicAlertId && this.publicApiUrl
-            ? { ackUrl: `${this.publicApiUrl}/api/v1/panic/${params.panicAlertId}/delivered` }
+            ? {
+                ackUrl: `${this.publicApiUrl}/api/v1/panic/${params.panicAlertId}/delivered`,
+              }
             : {}),
         }),
       },
       android: {
-        priority: isPanic
-          || params.priority === NotificationPriority.URGENT
-          || params.priority === NotificationPriority.HIGH
-          ? 'high' : 'normal',
+        priority:
+          isPanic ||
+          params.priority === NotificationPriority.URGENT ||
+          params.priority === NotificationPriority.HIGH
+            ? 'high'
+            : 'normal',
         ...(isPanic && {
           collapseKey: `panic-${params.complexId}`,
           // 60s: una alerta de pánico vieja confunde más de lo que ayuda, y el
@@ -2163,9 +2444,11 @@ export class NotificationsService implements OnModuleInit {
         ...(!isPanic && {
           notification: {
             priority:
-              params.priority === NotificationPriority.URGENT ? 'max' :
-              params.priority === NotificationPriority.HIGH ? 'high' :
-              'default',
+              params.priority === NotificationPriority.URGENT
+                ? 'max'
+                : params.priority === NotificationPriority.HIGH
+                  ? 'high'
+                  : 'default',
             defaultVibrateTimings: true,
             sound: 'default',
           },
@@ -2174,14 +2457,19 @@ export class NotificationsService implements OnModuleInit {
       apns: {
         headers: {
           'apns-priority':
-            params.priority === NotificationPriority.URGENT || params.priority === NotificationPriority.HIGH ? '10' : '5',
+            params.priority === NotificationPriority.URGENT ||
+            params.priority === NotificationPriority.HIGH
+              ? '10'
+              : '5',
         },
         payload: {
           aps: {
             // Android goes data-only for panic (handled above), but iOS still
             // needs a visible alert since it has no JS-driven full-screen path —
             // the top-level notification was removed, so set the APNS alert here.
-            ...(isPanic && { alert: { title: params.title, body: params.body } }),
+            ...(isPanic && {
+              alert: { title: params.title, body: params.body },
+            }),
             sound: 'default',
             badge: 1,
             'content-available': 1,
@@ -2215,21 +2503,21 @@ export class NotificationsService implements OnModuleInit {
               keys: { p256dh: sub.p256dh, auth: sub.auth },
             },
             JSON.stringify({
-              title:    params.title,
-              body:     params.body,
+              title: params.title,
+              body: params.body,
               priority: params.priority,
-              tag:      `entrylink-${params.type}`,
+              tag: `entrylink-${params.type}`,
               data: {
                 // mismos identificadores que FCM para que el dashboard navegue
                 // al recurso al hacer click. En finanzas se omiten entityType/entityId
                 // (el cliente decide pantalla por metadata). Web push acepta metadata
                 // como objeto: todo el payload se serializa una sola vez.
-                type:     params.type,
-                url:      '/dashboard/notificaciones',
+                type: params.type,
+                url: '/dashboard/notificaciones',
                 metadata: params.metadata,
-                ...(notificationId    ? { notificationId } : {}),
+                ...(notificationId ? { notificationId } : {}),
                 ...(params.entityType ? { entityType: params.entityType } : {}),
-                ...(params.entityId   ? { entityId: params.entityId } : {}),
+                ...(params.entityId ? { entityId: params.entityId } : {}),
               },
             }),
           );
@@ -2240,9 +2528,13 @@ export class NotificationsService implements OnModuleInit {
           // 410 Gone = suscripción expirada
           if (err?.statusCode === 410) {
             await this.pushSubRepo.update({ id: sub.id }, { isActive: false });
-            this.logger.debug(`Suscripción web push expirada desactivada: ${sub.id}`);
+            this.logger.debug(
+              `Suscripción web push expirada desactivada: ${sub.id}`,
+            );
           } else {
-            this.logger.warn(`Error en web push a ${sub.endpoint}: ${err?.message}`);
+            this.logger.warn(
+              `Error en web push a ${sub.endpoint}: ${err?.message}`,
+            );
           }
         }
       }),
@@ -2263,53 +2555,61 @@ export class NotificationsService implements OnModuleInit {
 
     if (params.isBroadcast) {
       const entity = this.notifRepo.create({
-        type:            params.type,
-        priority:        params.priority,
-        title:           params.title,
-        body:            params.body,
-        complexId:       params.complexId,
+        type: params.type,
+        priority: params.priority,
+        title: params.title,
+        body: params.body,
+        complexId: params.complexId,
         recipientUserId: undefined,
-        isBroadcast:     true,
-        targetRoles:     params.targetRoles ?? [],
-        entityId:        params.entityId,
-        entityType:      params.entityType,
-        metadata:        params.metadata,
-        isRead:          false,
+        isBroadcast: true,
+        targetRoles: params.targetRoles ?? [],
+        entityId: params.entityId,
+        entityType: params.entityType,
+        metadata: params.metadata,
+        isRead: false,
         createdByUserId: params.createdByUserId,
-        isActionable:    params.isActionable ?? false,
-        actionType:      params.actionType,
-        actionLabel:     params.actionLabel,
-        panicAlertId:    params.panicAlertId,
+        isActionable: params.isActionable ?? false,
+        actionType: params.actionType,
+        actionLabel: params.actionLabel,
+        panicAlertId: params.panicAlertId,
       });
       saved = [await this.notifRepo.save(entity)];
-      this.socketService.emitToComplex(params.complexId, SocketEvent.NOTIFICATION_NEW, saved[0]);
+      this.socketService.emitToComplex(
+        params.complexId,
+        SocketEvent.NOTIFICATION_NEW,
+        saved[0],
+      );
       this.logger.debug(
         `[Socket] broadcast [${params.type}] → ${params.userIds.length} destinatarios push | complejo ${params.complexId}`,
       );
     } else {
-      const entities = params.userIds.map(userId =>
+      const entities = params.userIds.map((userId) =>
         this.notifRepo.create({
-          type:            params.type,
-          priority:        params.priority,
-          title:           params.title,
-          body:            params.body,
-          complexId:       params.complexId,
+          type: params.type,
+          priority: params.priority,
+          title: params.title,
+          body: params.body,
+          complexId: params.complexId,
           recipientUserId: userId,
-          isBroadcast:     false,
-          entityId:        params.entityId,
-          entityType:      params.entityType,
-          metadata:        params.metadata,
-          isRead:          false,
+          isBroadcast: false,
+          entityId: params.entityId,
+          entityType: params.entityType,
+          metadata: params.metadata,
+          isRead: false,
           createdByUserId: params.createdByUserId,
-          isActionable:    params.isActionable ?? false,
-          actionType:      params.actionType,
-          actionLabel:     params.actionLabel,
-          panicAlertId:    params.panicAlertId,
+          isActionable: params.isActionable ?? false,
+          actionType: params.actionType,
+          actionLabel: params.actionLabel,
+          panicAlertId: params.panicAlertId,
         }),
       );
       saved = await this.notifRepo.save(entities);
       for (const n of saved) {
-        this.socketService.emitToUser(n.recipientUserId, SocketEvent.NOTIFICATION_NEW, n);
+        this.socketService.emitToUser(
+          n.recipientUserId,
+          SocketEvent.NOTIFICATION_NEW,
+          n,
+        );
         this.logger.debug(
           `[Socket] Notificación emitida [${n.type}] → usuario ${n.recipientUserId} | complejo ${n.complexId}`,
         );
@@ -2330,7 +2630,10 @@ export class NotificationsService implements OnModuleInit {
    * Devuelve los userId de los usuarios del complejo con alguno de los roles
    * indicados. Para que otros módulos resuelvan destinatarios sin duplicar la query.
    */
-  async findUserIdsByRoleInternal(complexId: string, roles: string[]): Promise<string[]> {
+  async findUserIdsByRoleInternal(
+    complexId: string,
+    roles: string[],
+  ): Promise<string[]> {
     return this.resolveTargetUserIds(complexId, roles);
   }
 
@@ -2356,7 +2659,7 @@ export class NotificationsService implements OnModuleInit {
         where: { complexId, deletedAt: undefined },
         select: ['id'],
       });
-      return users.map(u => u.id);
+      return users.map((u) => u.id);
     }
 
     const qb = this.userRoleRepo
@@ -2387,11 +2690,16 @@ export class NotificationsService implements OnModuleInit {
     }
 
     if (targetUnitId) {
-      qb.innerJoin('residents', 'res', 'res.user_id = u.id AND res.unit_id = :unitId AND res.deleted_at IS NULL', { unitId: targetUnitId });
+      qb.innerJoin(
+        'residents',
+        'res',
+        'res.user_id = u.id AND res.unit_id = :unitId AND res.deleted_at IS NULL',
+        { unitId: targetUnitId },
+      );
     }
 
     const userRoles = await qb.getRawMany<{ userId: string }>();
-    const userIds = userRoles.map(row => row.userId);
+    const userIds = userRoles.map((row) => row.userId);
 
     // La cuenta del complejo NO es una fila de `users`: inicia sesión contra
     // `residential_complexes` y su `sub` es el id del complejo, así que una
@@ -2403,9 +2711,10 @@ export class NotificationsService implements OnModuleInit {
     //
     // Con `targetUnitId` no aplica: ahí se busca a quien vive en una unidad, y
     // el complejo no vive en ninguna.
-    const wantsComplexAccount = targetRoles.includes(ValidRoles.COMPLEX_ROL)
-      && !targetUnitId
-      && !userIds.includes(complexId);
+    const wantsComplexAccount =
+      targetRoles.includes(ValidRoles.COMPLEX_ROL) &&
+      !targetUnitId &&
+      !userIds.includes(complexId);
 
     return wantsComplexAccount ? [...userIds, complexId] : userIds;
   }
@@ -2438,12 +2747,15 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  private assertRecipient(notif: Notification, currentUser: JwtAccessPayload): void {
+  private assertRecipient(
+    notif: Notification,
+    currentUser: JwtAccessPayload,
+  ): void {
     const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
     if (isSuperAdmin) return;
 
-    const isComplexAdmin = currentUser.roles.some(r =>
-      r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
+    const isComplexAdmin = currentUser.roles.some(
+      (r) => r === ValidRoles.COMPLEX_ROL || r === ValidRoles.SUPERVISOR_ROL,
     );
 
     if (isComplexAdmin) {

@@ -11,10 +11,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
-import { R2StorageService, PLATFORM_SCOPE } from '../../../core/infrastructure/r2/r2.service';
-import { singleImageInterceptor }  from '../../../core/infrastructure/r2/upload-interceptors';
+import {
+  R2StorageService,
+  PLATFORM_SCOPE,
+} from '../../../core/infrastructure/r2/r2.service';
+import { singleImageInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  GeneralErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 
 @Controller('supervisors')
 export class SupervisorsController {
@@ -38,7 +45,7 @@ export class SupervisorsController {
   @Post(':supervisorId/company-card')
   @UseInterceptors(
     singleImageInterceptor('companyCard', {
-      maxSizeMb:    5,
+      maxSizeMb: 5,
       allowedTypes: ['image/jpeg', 'image/png'],
     }),
   )
@@ -66,7 +73,8 @@ export class SupervisorsController {
 
     if (user.emailVerified) {
       throw new CustomError({
-        message: 'No se puede modificar la imagen de un supervisor ya verificado',
+        message:
+          'No se puede modificar la imagen de un supervisor ya verificado',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AuthErrorCode.ACCOUNT_ALREADY_VERIFIED,
       });

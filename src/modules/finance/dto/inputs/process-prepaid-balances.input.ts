@@ -1,16 +1,23 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsUUID, Matches, IsOptional, IsArray, IsBoolean } from 'class-validator';
+import {
+  IsUUID,
+  Matches,
+  IsOptional,
+  IsArray,
+  IsBoolean,
+} from 'class-validator';
 
 @InputType()
 export class ProcessPrepaidBalancesInput {
-
   @Field()
   @IsUUID()
   complexId: string;
 
   /** Período de las facturas recién causadas, YYYY-MM. */
   @Field()
-  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'El período debe tener el formato YYYY-MM' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'El período debe tener el formato YYYY-MM',
+  })
   period: string;
 
   /** Subconjunto opcional de unidades; vacío = todas las que tengan anticipo. */

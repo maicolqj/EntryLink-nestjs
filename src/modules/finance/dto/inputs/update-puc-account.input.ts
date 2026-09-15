@@ -1,6 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum, IsUUID, IsBoolean, MaxLength,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsUUID,
+  IsBoolean,
+  MaxLength,
 } from 'class-validator';
 
 import { AccountNature } from '../../enums/account-nature.enum';
@@ -11,7 +17,6 @@ import { AccountNature } from '../../enums/account-nature.enum';
  */
 @InputType()
 export class UpdatePucAccountInput {
-
   @Field()
   @IsUUID()
   id: string;

@@ -7,7 +7,10 @@ import { Permission } from '../entities/permission.entity';
 import { PermissionDependencyService } from './permission-dependecy.service';
 import { CreatePermissionResponse } from '../dto/responses/create-permission-response';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { GeneralErrorCode, PermissionErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  GeneralErrorCode,
+  PermissionErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { GraphQLError } from 'graphql/error';
 import { SearchPermissionsInput } from '../dto/inputs/search-permission.input';
 import { PaginatedPermissionsResponse } from '../dto/responses/paginate-permissions.response';
@@ -27,11 +30,12 @@ export class PermissionsService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly dependencyService: PermissionDependencyService,
-  ) { }
+  ) {}
 
-  async create(createPermissionInput: CreatePermissionInput): Promise<CreatePermissionResponse> {
-
-    this.logger.verbose(`**********************************`)
+  async create(
+    createPermissionInput: CreatePermissionInput,
+  ): Promise<CreatePermissionResponse> {
+    this.logger.verbose(`**********************************`);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -46,30 +50,37 @@ export class PermissionsService {
         throw new CustomError({
           message: `Intento de crear permiso duplicado: ${createPermissionInput.name}`,
           statusCode: HttpStatus.CONFLICT,
-          errorCode: PermissionErrorCode.PERMISSION_ALREADY_EXISTS
+          errorCode: PermissionErrorCode.PERMISSION_ALREADY_EXISTS,
         });
       }
 
       let dependentPermissions: Permission[] = [];
 
-      if (createPermissionInput.dependsOn && createPermissionInput.dependsOn.length > 0) {
+      if (
+        createPermissionInput.dependsOn &&
+        createPermissionInput.dependsOn.length > 0
+      ) {
         this.logger.debug(
-          `Validando dependencias para permiso '${createPermissionInput.name}': ${createPermissionInput.dependsOn.join(', ')}`
+          `Validando dependencias para permiso '${createPermissionInput.name}': ${createPermissionInput.dependsOn.join(', ')}`,
         );
 
         dependentPermissions = await queryRunner.manager.find(Permission, {
-          where: { id: In(createPermissionInput.dependsOn) }
+          where: { id: In(createPermissionInput.dependsOn) },
         });
 
-        if (dependentPermissions.length !== createPermissionInput.dependsOn.length) {
-          const foundIds = dependentPermissions.map(p => p.id);
-          const missingIds = createPermissionInput.dependsOn.filter(missPer => !foundIds.includes(missPer.id));
+        if (
+          dependentPermissions.length !== createPermissionInput.dependsOn.length
+        ) {
+          const foundIds = dependentPermissions.map((p) => p.id);
+          const missingIds = createPermissionInput.dependsOn.filter(
+            (missPer) => !foundIds.includes(missPer.id),
+          );
 
           throw new CustomError({
             message: `Los siguientes permisos de dependencia no existen: ${missingIds.join(', ')}`,
             statusCode: HttpStatus.BAD_REQUEST,
             errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
-            details: `Permisos no encontrados: ${missingIds.join(', ')}`
+            details: `Permisos no encontrados: ${missingIds.join(', ')}`,
           });
         }
 
@@ -77,14 +88,14 @@ export class PermissionsService {
         try {
           await this.dependencyService.validateCircularDependency(
             tempId,
-            createPermissionInput.dependsOn.map(dep => dep.id)
+            createPermissionInput.dependsOn.map((dep) => dep.id),
           );
         } catch (error: any) {
           throw new CustomError({
             message: `No se puede crear el permiso debido a dependencia circular: ${error.message}`,
             statusCode: HttpStatus.BAD_REQUEST,
             errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
-            details: `No se puede crear el permiso debido a dependencia circular: ${error.message}`
+            details: `No se puede crear el permiso debido a dependencia circular: ${error.message}`,
           });
         }
       }
@@ -103,11 +114,16 @@ export class PermissionsService {
         dependsOn: dependentPermissions,
       });
 
-      const savedPermission = await queryRunner.manager.save(Permission, newPermission);
+      const savedPermission = await queryRunner.manager.save(
+        Permission,
+        newPermission,
+      );
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Permiso creado exitosamente: ${savedPermission.id} - ${savedPermission.name}`);
+      this.logger.log(
+        `Permiso creado exitosamente: ${savedPermission.id} - ${savedPermission.name}`,
+      );
 
       const response: CreatePermissionResponse = {
         id: savedPermission.id,
@@ -118,15 +134,14 @@ export class PermissionsService {
         isSystem: savedPermission.isSystem,
         // metadata: savedPermission.metadata,
         category: savedPermission.group,
-        dependsOn: savedPermission.dependsOn.map(dep => ({
+        dependsOn: savedPermission.dependsOn.map((dep) => ({
           id: dep.id,
           name: dep.name,
-          description: dep.description
+          description: dep.description,
         })),
         createdAt: savedPermission.createdAt,
       };
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
@@ -138,18 +153,19 @@ export class PermissionsService {
         message: `Error al crear el permiso: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la creación del permiso: ${error.message}`
+        details: `Error técnico durante la creación del permiso: ${error.message}`,
       });
-
     } finally {
       await queryRunner.release();
-      this.logger.debug(`Recursos de QueryRunner liberados para permiso: ${createPermissionInput.name}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para permiso: ${createPermissionInput.name}`,
+      );
     }
   }
 
-
-
-async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsResponse> {
+  async findAll(
+    input: SearchPermissionsInput,
+  ): Promise<PaginatedPermissionsResponse> {
     try {
       const { filters, pagination, sort } = input;
       const { page = 1, limit = 20 } = pagination;
@@ -158,8 +174,10 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       const queryBuilder = await this.permissionsRepository
         .createQueryBuilder('permission')
         .leftJoinAndSelect('permission.dependsOn', 'dependsOn')
-        .leftJoinAndSelect('permission.dependentPermissions', 'dependentPermissions');
-
+        .leftJoinAndSelect(
+          'permission.dependentPermissions',
+          'dependentPermissions',
+        );
 
       this.applyFilters(queryBuilder, filters);
 
@@ -180,31 +198,31 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         totalItems,
         totalPages,
         hasNextPage,
-        hasPreviousPage
+        hasPreviousPage,
       };
 
       return { items, meta };
-
-
     } catch (error: any) {
-      this.logger.error(`Error al realizar la busqueda por filtros ${error.message}`);
+      this.logger.error(
+        `Error al realizar la busqueda por filtros ${error.message}`,
+      );
 
       if (error instanceof CustomError || error instanceof GraphQLError) {
-        throw error
+        throw error;
       }
 
       throw new CustomError({
         message: `Error al buscar los pemrisos por filtros: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la busqueda de permisos: ${error.message}`
+        details: `Error técnico durante la busqueda de permisos: ${error.message}`,
       });
     }
   }
 
   private applyFilters(
     queryBuilder: SelectQueryBuilder<Permission>,
-    filters: PermissionFiltersInput
+    filters: PermissionFiltersInput,
   ): void {
     const {
       status,
@@ -213,7 +231,7 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       category,
       hasDependentPermissions,
       createdAt,
-      search
+      search,
     } = filters;
 
     // Filtro por status
@@ -239,9 +257,13 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
     // Filtro por dependentPermissions
     if (typeof hasDependentPermissions === 'boolean') {
       if (!hasDependentPermissions) {
-        queryBuilder.andWhere('EXISTS (SELECT 1 FROM permission_dependencies pd WHERE pd.depends_on_permission_id = permission.id)');
+        queryBuilder.andWhere(
+          'EXISTS (SELECT 1 FROM permission_dependencies pd WHERE pd.depends_on_permission_id = permission.id)',
+        );
       } else {
-        queryBuilder.andWhere('NOT EXISTS (SELECT 1 FROM permission_dependencies pd WHERE pd.depends_on_permission_id = permission.id)');
+        queryBuilder.andWhere(
+          'NOT EXISTS (SELECT 1 FROM permission_dependencies pd WHERE pd.depends_on_permission_id = permission.id)',
+        );
       }
     }
 
@@ -249,12 +271,12 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
     if (createdAt) {
       if (createdAt.from) {
         queryBuilder.andWhere('permission.createdAt >= :fromDate', {
-          fromDate: new Date(createdAt.from)
+          fromDate: new Date(createdAt.from),
         });
       }
       if (createdAt.to) {
         queryBuilder.andWhere('permission.createdAt <= :toDate', {
-          toDate: new Date(createdAt.to)
+          toDate: new Date(createdAt.to),
         });
       }
     }
@@ -263,7 +285,7 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
     if (search) {
       queryBuilder.andWhere(
         '(permission.name ILIKE :search OR permission.description ILIKE :search)',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
   }
@@ -272,7 +294,7 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
     try {
       const permission = await this.permissionsRepository.findOne({
         where: { id },
-        relations: ['dependsOn', 'dependentPermissions']
+        relations: ['dependsOn', 'dependentPermissions'],
       });
       if (!permission) {
         this.logger.warn(`Permission with id ${id} not found`);
@@ -280,13 +302,15 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
           message: `Permission with id ${id} not found`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: GeneralErrorCode.BAD_REQUEST,
-          details: `Error technical while finding permission with id ${id}`
-        })
+          details: `Error technical while finding permission with id ${id}`,
+        });
       }
 
       return permission;
     } catch (error: any) {
-      this.logger.error(`Error finding permission with id ${id} : ${error.message}`)
+      this.logger.error(
+        `Error finding permission with id ${id} : ${error.message}`,
+      );
       if (error instanceof CustomError || error instanceof GraphQLError) {
         throw error;
       }
@@ -295,21 +319,23 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         message: `Error finding permission with id ${id} : ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error technical while finding permission with id ${id} : ${error.message}`
-      })
+        details: `Error technical while finding permission with id ${id} : ${error.message}`,
+      });
     }
   }
 
-  async update(id: string, updatePermissionInput: UpdatePermissionInput): Promise<UpdatePermissionResponse> {
+  async update(
+    id: string,
+    updatePermissionInput: UpdatePermissionInput,
+  ): Promise<UpdatePermissionResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-
       const existingPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       if (!existingPermission) {
@@ -318,45 +344,62 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
           message: `Permiso con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
           errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
-          details: `No se puede actualizar un permiso que no existe: ${id}`
+          details: `No se puede actualizar un permiso que no existe: ${id}`,
         });
       }
 
       if (existingPermission.isSystem) {
-        if (updatePermissionInput.name && updatePermissionInput.name !== existingPermission.name) {
-          this.logger.warn(`Intento de modificar nombre de permiso del sistema: ${existingPermission.name}`);
+        if (
+          updatePermissionInput.name &&
+          updatePermissionInput.name !== existingPermission.name
+        ) {
+          this.logger.warn(
+            `Intento de modificar nombre de permiso del sistema: ${existingPermission.name}`,
+          );
           throw new CustomError({
             message: `No se puede modificar el nombre de permisos del sistema`,
             statusCode: HttpStatus.BAD_REQUEST,
-            errorCode: PermissionErrorCode.SYSTEM_PERMISSION_MODIFICATION_NOT_ALLOWED,
-            details: `El permiso '${existingPermission.name}' es un permiso del sistema y no se puede renombrar`
+            errorCode:
+              PermissionErrorCode.SYSTEM_PERMISSION_MODIFICATION_NOT_ALLOWED,
+            details: `El permiso '${existingPermission.name}' es un permiso del sistema y no se puede renombrar`,
           });
         }
 
         if (updatePermissionInput.isSystem === false) {
-          this.logger.warn(`Intento de cambiar estado de sistema del permiso: ${existingPermission.name}`);
+          this.logger.warn(
+            `Intento de cambiar estado de sistema del permiso: ${existingPermission.name}`,
+          );
           throw new CustomError({
             message: `No se puede cambiar el estado de sistema de un permiso crítico`,
             statusCode: HttpStatus.BAD_REQUEST,
-            errorCode: PermissionErrorCode.SYSTEM_PERMISSION_MODIFICATION_NOT_ALLOWED,
-            details: `El permiso '${existingPermission.name}' debe mantener su estado de sistema`
+            errorCode:
+              PermissionErrorCode.SYSTEM_PERMISSION_MODIFICATION_NOT_ALLOWED,
+            details: `El permiso '${existingPermission.name}' debe mantener su estado de sistema`,
           });
         }
       }
 
       // 3. Validar nombre único si se está actualizando
-      if (updatePermissionInput.name && updatePermissionInput.name !== existingPermission.name) {
-        const duplicatePermission = await queryRunner.manager.findOne(Permission, {
-          where: { name: updatePermissionInput.name }
-        });
+      if (
+        updatePermissionInput.name &&
+        updatePermissionInput.name !== existingPermission.name
+      ) {
+        const duplicatePermission = await queryRunner.manager.findOne(
+          Permission,
+          {
+            where: { name: updatePermissionInput.name },
+          },
+        );
 
         if (duplicatePermission) {
-          this.logger.warn(`Intento de actualizar permiso con nombre duplicado: ${updatePermissionInput.name}`);
+          this.logger.warn(
+            `Intento de actualizar permiso con nombre duplicado: ${updatePermissionInput.name}`,
+          );
           throw new CustomError({
             message: `Ya existe un permiso con el nombre: ${updatePermissionInput.name}`,
             statusCode: HttpStatus.CONFLICT,
             errorCode: PermissionErrorCode.PERMISSION_ALREADY_EXISTS,
-            details: `No se puede cambiar el nombre porque ya existe otro permiso con ese nombre`
+            details: `No se puede cambiar el nombre porque ya existe otro permiso con ese nombre`,
           });
         }
       }
@@ -364,24 +407,34 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       // 4. Procesar dependencias usando la misma lógica que CREATE
       let dependentPermissions: Permission[] = [];
       if (updatePermissionInput.dependsOn !== undefined) {
-        if (updatePermissionInput.dependsOn && updatePermissionInput.dependsOn.length > 0) {
+        if (
+          updatePermissionInput.dependsOn &&
+          updatePermissionInput.dependsOn.length > 0
+        ) {
           this.logger.debug(
-            `Validando dependencias para actualización del permiso '${existingPermission.name}': ${updatePermissionInput.dependsOn.map(d => d.id).join(', ')}`
+            `Validando dependencias para actualización del permiso '${existingPermission.name}': ${updatePermissionInput.dependsOn.map((d) => d.id).join(', ')}`,
           );
 
           dependentPermissions = await queryRunner.manager.find(Permission, {
-            where: { id: In(updatePermissionInput.dependsOn.map(dep => dep.id)) }
+            where: {
+              id: In(updatePermissionInput.dependsOn.map((dep) => dep.id)),
+            },
           });
 
-          if (dependentPermissions.length !== updatePermissionInput.dependsOn.length) {
-            const foundIds = dependentPermissions.map(p => p.id);
-            const missingIds = updatePermissionInput.dependsOn.filter(dep => !foundIds.includes(dep.id)).map(dep => dep.id);
+          if (
+            dependentPermissions.length !==
+            updatePermissionInput.dependsOn.length
+          ) {
+            const foundIds = dependentPermissions.map((p) => p.id);
+            const missingIds = updatePermissionInput.dependsOn
+              .filter((dep) => !foundIds.includes(dep.id))
+              .map((dep) => dep.id);
 
             throw new CustomError({
               message: `Los siguientes permisos de dependencia no existen: ${missingIds.join(', ')}`,
               statusCode: HttpStatus.BAD_REQUEST,
               errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
-              details: `Permisos no encontrados: ${missingIds.join(', ')}`
+              details: `Permisos no encontrados: ${missingIds.join(', ')}`,
             });
           }
 
@@ -389,14 +442,14 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
           try {
             await this.dependencyService.validateCircularDependency(
               id,
-              updatePermissionInput.dependsOn.map(dep => dep.id)
+              updatePermissionInput.dependsOn.map((dep) => dep.id),
             );
           } catch (error: any) {
             throw new CustomError({
               message: `No se puede actualizar el permiso debido a dependencia circular: ${error.message}`,
               statusCode: HttpStatus.BAD_REQUEST,
               errorCode: PermissionErrorCode.CIRCULAR_DEPENDENCY_DETECTED,
-              details: `No se puede actualizar el permiso debido a dependencia circular: ${error.message}`
+              details: `No se puede actualizar el permiso debido a dependencia circular: ${error.message}`,
             });
           }
         }
@@ -405,7 +458,9 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         dependentPermissions = existingPermission.dependsOn || [];
       }
 
-      this.logger.log(`Actualizando permiso: ${existingPermission.name} (ID: ${id})`);
+      this.logger.log(
+        `Actualizando permiso: ${existingPermission.name} (ID: ${id})`,
+      );
 
       // 5. Actualizar los campos del permiso (solo los que se proporcionaron)
       const updateData: Partial<Permission> = {
@@ -413,22 +468,31 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       };
 
       // Aplicar solo los campos que se proporcionaron
-      if (updatePermissionInput.name !== undefined) updateData.name = updatePermissionInput.name;
-      if (updatePermissionInput.description !== undefined) updateData.description = updatePermissionInput.description;
-      if (updatePermissionInput.level !== undefined) updateData.level = updatePermissionInput.level;
-      if (updatePermissionInput.isSystem !== undefined) updateData.isSystem = updatePermissionInput.isSystem;
-      if (updatePermissionInput.label !== undefined) updateData.label = updatePermissionInput.label;
-      if (updatePermissionInput.group !== undefined) updateData.group = updatePermissionInput.group;
+      if (updatePermissionInput.name !== undefined)
+        updateData.name = updatePermissionInput.name;
+      if (updatePermissionInput.description !== undefined)
+        updateData.description = updatePermissionInput.description;
+      if (updatePermissionInput.level !== undefined)
+        updateData.level = updatePermissionInput.level;
+      if (updatePermissionInput.isSystem !== undefined)
+        updateData.isSystem = updatePermissionInput.isSystem;
+      if (updatePermissionInput.label !== undefined)
+        updateData.label = updatePermissionInput.label;
+      if (updatePermissionInput.group !== undefined)
+        updateData.group = updatePermissionInput.group;
 
       // 6. Actualizar el permiso y sus dependencias
       await queryRunner.manager.update(Permission, { id }, updateData);
 
       // 7. Actualizar las relaciones de dependencias si se modificaron
       if (updatePermissionInput.dependsOn !== undefined) {
-        const updatedPermission = await queryRunner.manager.findOne(Permission, {
-          where: { id },
-          relations: ['dependsOn']
-        });
+        const updatedPermission = await queryRunner.manager.findOne(
+          Permission,
+          {
+            where: { id },
+            relations: ['dependsOn'],
+          },
+        );
 
         updatedPermission.dependsOn = dependentPermissions;
         await queryRunner.manager.save(Permission, updatedPermission);
@@ -437,12 +501,14 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       // 8. Obtener el permiso actualizado completo
       const finalPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Permiso actualizado exitosamente: ${finalPermission.id} - ${finalPermission.name}`);
+      this.logger.log(
+        `Permiso actualizado exitosamente: ${finalPermission.id} - ${finalPermission.name}`,
+      );
 
       // 9. Mapear respuesta usando el mismo patrón que CREATE
       const response: UpdatePermissionResponse = {
@@ -454,21 +520,24 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         isSystem: finalPermission.isSystem,
         label: finalPermission.label,
         group: finalPermission.group,
-        dependsOn: finalPermission.dependsOn?.map(dep => ({
-          id: dep.id,
-          name: dep.name,
-          description: dep.description
-        })) || [],
+        dependsOn:
+          finalPermission.dependsOn?.map((dep) => ({
+            id: dep.id,
+            name: dep.name,
+            description: dep.description,
+          })) || [],
         updatedAt: finalPermission.updatedAt,
         createdAt: finalPermission.createdAt,
       };
 
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
-      this.logger.error(`Error al actualizar permiso '${id}': ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al actualizar permiso '${id}': ${error.message}`,
+        error.stack,
+      );
       if (error instanceof CustomError || error instanceof GraphQLError) {
         throw error;
       }
@@ -477,16 +546,17 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         message: `Error al actualizar el permiso: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la actualización del permiso: ${error.message}`
+        details: `Error técnico durante la actualización del permiso: ${error.message}`,
       });
-
     } finally {
-      this.logger.debug(`Recursos de QueryRunner liberados para actualización del permiso: ${id}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para actualización del permiso: ${id}`,
+      );
       await queryRunner.release();
     }
   }
 
- async remove(id: string): Promise<RemovePermissionResponse> {
+  async remove(id: string): Promise<RemovePermissionResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -495,7 +565,7 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       // 1. Verificar si el permiso existe
       const existingPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       if (!existingPermission) {
@@ -504,29 +574,33 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
           message: `Permiso con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
           errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
-          details: `No se puede eliminar un permiso que no existe: ${id}`
+          details: `No se puede eliminar un permiso que no existe: ${id}`,
         });
       }
 
       // 2. Verificar si ya está eliminado (soft delete)
       if (!existingPermission.status) {
-        this.logger.warn(`Intento de eliminar permiso ya eliminado: ${existingPermission.name} (${id})`);
+        this.logger.warn(
+          `Intento de eliminar permiso ya eliminado: ${existingPermission.name} (${id})`,
+        );
         throw new CustomError({
           message: `El permiso '${existingPermission.name}' ya está eliminado`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: PermissionErrorCode.PERMISSION_ALREADY_DELETED,
-          details: `El permiso ya se encuentra en estado eliminado (status: false)`
+          details: `El permiso ya se encuentra en estado eliminado (status: false)`,
         });
       }
 
       // 3. Verificar si es un permiso del sistema crítico
       if (existingPermission.isSystem) {
-        this.logger.warn(`Intento de eliminar permiso crítico del sistema: ${existingPermission.name}`);
+        this.logger.warn(
+          `Intento de eliminar permiso crítico del sistema: ${existingPermission.name}`,
+        );
         throw new CustomError({
           message: `No se puede eliminar permisos críticos del sistema`,
           statusCode: HttpStatus.FORBIDDEN,
           errorCode: PermissionErrorCode.SYSTEM_PERMISSION_DELETION_NOT_ALLOWED,
-          details: `El permiso '${existingPermission.name}' es crítico para el funcionamiento del sistema y no puede ser eliminado`
+          details: `El permiso '${existingPermission.name}' es crítico para el funcionamiento del sistema y no puede ser eliminado`,
         });
       }
 
@@ -539,36 +613,43 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         .getMany();
 
       if (dependentPermissions.length > 0) {
-        const dependentNames = dependentPermissions.map(p => p.name).join(', ');
+        const dependentNames = dependentPermissions
+          .map((p) => p.name)
+          .join(', ');
         this.logger.warn(
-          `Intento de eliminar permiso con dependencias activas: ${existingPermission.name}. Dependientes: ${dependentNames}`
+          `Intento de eliminar permiso con dependencias activas: ${existingPermission.name}. Dependientes: ${dependentNames}`,
         );
 
         throw new CustomError({
           message: `No se puede eliminar el permiso porque otros permisos dependen de él`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: PermissionErrorCode.PERMISSION_HAS_ACTIVE_DEPENDENCIES,
-          details: `Los siguientes permisos activos dependen de '${existingPermission.name}': ${dependentNames}. Elimine o modifique estas dependencias primero.`
+          details: `Los siguientes permisos activos dependen de '${existingPermission.name}': ${dependentNames}. Elimine o modifique estas dependencias primero.`,
         });
       }
 
       // 5. Verificar si hay usuarios o roles que tengan este permiso asignado
-      const activeAssignments = await this.checkActivePermissionAssignments(queryRunner, id);
+      const activeAssignments = await this.checkActivePermissionAssignments(
+        queryRunner,
+        id,
+      );
       if (activeAssignments.hasActiveAssignments) {
         this.logger.warn(
           `Intento de eliminar permiso con asignaciones activas: ${existingPermission.name}. ` +
-          `Usuarios: ${activeAssignments.userCount}, Roles: ${activeAssignments.roleCount}`
+            `Usuarios: ${activeAssignments.userCount}, Roles: ${activeAssignments.roleCount}`,
         );
 
         throw new CustomError({
           message: `No se puede eliminar el permiso porque está asignado a usuarios o roles activos`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: PermissionErrorCode.PERMISSION_HAS_ACTIVE_ASSIGNMENTS,
-          details: `El permiso '${existingPermission.name}' está asignado a ${activeAssignments.userCount} usuarios y ${activeAssignments.roleCount} roles. Revoque estas asignaciones antes de eliminar el permiso.`
+          details: `El permiso '${existingPermission.name}' está asignado a ${activeAssignments.userCount} usuarios y ${activeAssignments.roleCount} roles. Revoque estas asignaciones antes de eliminar el permiso.`,
         });
       }
 
-      this.logger.log(`Eliminando permiso (soft delete): ${existingPermission.name} (ID: ${id})`);
+      this.logger.log(
+        `Eliminando permiso (soft delete): ${existingPermission.name} (ID: ${id})`,
+      );
 
       // 6. Realizar soft delete cambiando status a false
 
@@ -582,12 +663,14 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
       // 7. Obtener el permiso actualizado
       const deletedPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Permiso eliminado exitosamente (soft delete): ${deletedPermission.id} - ${deletedPermission.name}`);
+      this.logger.log(
+        `Permiso eliminado exitosamente (soft delete): ${deletedPermission.id} - ${deletedPermission.name}`,
+      );
 
       // 8. Mapear respuesta
       const response: RemovePermissionResponse = {
@@ -599,18 +682,18 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         isSystem: deletedPermission.isSystem,
         labbel: deletedPermission.label,
         group: deletedPermission.group,
-        dependsOn: deletedPermission.dependsOn?.map(dep => ({
-          id: dep.id,
-          name: dep.name,
-          description: dep.description
-        })) || [],
+        dependsOn:
+          deletedPermission.dependsOn?.map((dep) => ({
+            id: dep.id,
+            name: dep.name,
+            description: dep.description,
+          })) || [],
         deletedAt: deletedPermission.updatedAt,
         createdAt: deletedPermission.createdAt,
-        message: `Permiso '${deletedPermission.name}' eliminado correctamente`
+        message: `Permiso '${deletedPermission.name}' eliminado correctamente`,
       };
 
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
@@ -618,22 +701,26 @@ async findAll(input: SearchPermissionsInput): Promise<PaginatedPermissionsRespon
         throw error;
       }
 
-      this.logger.error(`Error al eliminar permiso '${id}': ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al eliminar permiso '${id}': ${error.message}`,
+        error.stack,
+      );
 
       throw new CustomError({
         message: `Error al eliminar el permiso: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la eliminación del permiso: ${error.message}`
+        details: `Error técnico durante la eliminación del permiso: ${error.message}`,
       });
-
     } finally {
       await queryRunner.release();
-      this.logger.debug(`Recursos de QueryRunner liberados para eliminación del permiso: ${id}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para eliminación del permiso: ${id}`,
+      );
     }
   }
 
-async restore(id: string): Promise<RestorePermissionResponse> {
+  async restore(id: string): Promise<RestorePermissionResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -642,14 +729,14 @@ async restore(id: string): Promise<RestorePermissionResponse> {
       // 1. Verificar si el permiso existe
       const existingPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       if (!existingPermission) {
         throw new CustomError({
           message: `Permiso con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
-          errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS
+          errorCode: PermissionErrorCode.PERMISSION_NOT_EXISTS,
         });
       }
 
@@ -659,11 +746,13 @@ async restore(id: string): Promise<RestorePermissionResponse> {
           message: `El permiso '${existingPermission.name}' ya está activo`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: PermissionErrorCode.PERMISSION_ALREADY_ACTIVE,
-          details: `El permiso no necesita ser restaurado porque ya está activo`
+          details: `El permiso no necesita ser restaurado porque ya está activo`,
         });
       }
 
-      this.logger.log(`Restaurando permiso: ${existingPermission.name} (ID: ${id})`);
+      this.logger.log(
+        `Restaurando permiso: ${existingPermission.name} (ID: ${id})`,
+      );
 
       // 3. Restaurar el permiso
       const updateData: Partial<Permission> = {
@@ -675,12 +764,14 @@ async restore(id: string): Promise<RestorePermissionResponse> {
 
       const restoredPermission = await queryRunner.manager.findOne(Permission, {
         where: { id },
-        relations: ['dependsOn']
+        relations: ['dependsOn'],
       });
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Permiso restaurado exitosamente: ${restoredPermission.id} - ${restoredPermission.name}`);
+      this.logger.log(
+        `Permiso restaurado exitosamente: ${restoredPermission.id} - ${restoredPermission.name}`,
+      );
 
       const response: RestorePermissionResponse = {
         id: restoredPermission.id,
@@ -691,18 +782,18 @@ async restore(id: string): Promise<RestorePermissionResponse> {
         isSystem: restoredPermission.isSystem,
         label: restoredPermission.label,
         group: restoredPermission.group,
-        dependsOn: restoredPermission.dependsOn?.map(dep => ({
-          id: dep.id,
-          name: dep.name,
-          description: dep.description
-        })) || [],
+        dependsOn:
+          restoredPermission.dependsOn?.map((dep) => ({
+            id: dep.id,
+            name: dep.name,
+            description: dep.description,
+          })) || [],
         restoredAt: restoredPermission.updatedAt,
         createdAt: restoredPermission.createdAt,
-        message: `Permiso '${restoredPermission.name}' restaurado correctamente`
+        message: `Permiso '${restoredPermission.name}' restaurado correctamente`,
       };
 
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
@@ -713,20 +804,21 @@ async restore(id: string): Promise<RestorePermissionResponse> {
       throw new CustomError({
         message: `Error al restaurar el permiso: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR
+        errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
       });
-
     } finally {
       await queryRunner.release();
     }
   }
 
-
   private async checkActivePermissionAssignments(
     queryRunner: any,
-    permissionId: string
-  ): Promise<{ hasActiveAssignments: boolean, userCount: number, roleCount: number }> {
-
+    permissionId: string,
+  ): Promise<{
+    hasActiveAssignments: boolean;
+    userCount: number;
+    roleCount: number;
+  }> {
     //! Verificar asignaciones en usuarios (ajustar según tu esquema de BD)
     // const userAssignments = await queryRunner.manager
     //   .createQueryBuilder()
@@ -751,10 +843,7 @@ async restore(id: string): Promise<RestorePermissionResponse> {
     return {
       hasActiveAssignments: 0 > 0 || 0 > 0, //userCount, roleCount
       userCount: 0,
-      roleCount: 0
+      roleCount: 0,
     };
   }
-
-
-
 }

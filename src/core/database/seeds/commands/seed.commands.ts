@@ -1,11 +1,8 @@
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../../../app.module';
 import { SeedService } from '../seed.service';
 import { runUserSeed } from '../users.seed';
 import { AccountingService } from '../../../../modules/finance/services/accounting.service';
-
-
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);

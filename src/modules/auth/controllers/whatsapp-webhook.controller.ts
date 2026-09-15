@@ -55,11 +55,15 @@ export class WhatsAppWebhookController {
     @Query('hub.challenge') challenge?: string,
   ): string {
     if (!this.webhookService.verifySubscription(mode, token)) {
-      this.logger.warn('Handshake de webhook rechazado: hub.mode o hub.verify_token inválidos');
+      this.logger.warn(
+        'Handshake de webhook rechazado: hub.mode o hub.verify_token inválidos',
+      );
       return 'forbidden';
     }
 
-    this.logger.log('Handshake de webhook de WhatsApp verificado correctamente');
+    this.logger.log(
+      'Handshake de webhook de WhatsApp verificado correctamente',
+    );
 
     return challenge ?? '';
   }
@@ -79,18 +83,25 @@ export class WhatsAppWebhookController {
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async receive(@Req() req: RawBodyRequest, @Body() payload: MetaWebhookPayload): Promise<string> {
+  async receive(
+    @Req() req: RawBodyRequest,
+    @Body() payload: MetaWebhookPayload,
+  ): Promise<string> {
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
     if (!this.webhookService.isSignatureValid(signature, req.rawBody)) {
-      this.logger.warn('Callback de WhatsApp descartado: firma X-Hub-Signature-256 inválida');
+      this.logger.warn(
+        'Callback de WhatsApp descartado: firma X-Hub-Signature-256 inválida',
+      );
       return 'EVENT_RECEIVED';
     }
 
     try {
       await this.webhookService.processPayload(payload);
     } catch (err: any) {
-      this.logger.error(`Error procesando callback de WhatsApp: ${err?.message ?? String(err)}`);
+      this.logger.error(
+        `Error procesando callback de WhatsApp: ${err?.message ?? String(err)}`,
+      );
     }
 
     return 'EVENT_RECEIVED';

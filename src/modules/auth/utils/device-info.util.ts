@@ -12,7 +12,10 @@ import { DeviceInfo } from '../interfaces/jwt-payload.interface';
  * mentir sobre su user-agent o su deviceId, pero no puede fabricar un
  * fingerprint que coincida con el de otro dispositivo ya registrado.
  */
-export function buildDeviceInfo(context: any, fingerprintSecret: string): DeviceInfo {
+export function buildDeviceInfo(
+  context: any,
+  fingerprintSecret: string,
+): DeviceInfo {
   const req = context?.req ?? {};
   const ua = req.headers?.['user-agent'] ?? 'unknown';
   const ip = extractIp(context);
@@ -23,7 +26,14 @@ export function buildDeviceInfo(context: any, fingerprintSecret: string): Device
     .update(`${ua}|${deviceId ?? 'web'}`)
     .digest('hex');
 
-  return { fingerprint, userAgent: ua, ip, platform: detectPlatform(ua), deviceId, appVersion };
+  return {
+    fingerprint,
+    userAgent: ua,
+    ip,
+    platform: detectPlatform(ua),
+    deviceId,
+    appVersion,
+  };
 }
 
 export function extractIp(context: any): string {

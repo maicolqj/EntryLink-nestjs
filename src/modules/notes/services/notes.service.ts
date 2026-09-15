@@ -12,8 +12,8 @@ import { NoteErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AuditService }    from '../../audit/services/audit.service';
-import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 interface CreateNoteData {
@@ -33,8 +33,8 @@ export class NotesService {
     @InjectRepository(Note)
     private readonly noteRepo: Repository<Note>,
     private readonly complexService: ResidentialComplexService,
-    private readonly auditService:   AuditService,
-  ) { }
+    private readonly auditService: AuditService,
+  ) {}
 
   // ================================================================
   // CREAR NOTA
@@ -46,19 +46,24 @@ export class NotesService {
     data: CreateNoteData,
     currentUser: JwtAccessPayload,
   ): Promise<Note> {
-    const isSupervisor = currentUser.roles?.includes(ValidRoles.SUPERVISOR_ROL) ?? false;
+    const isSupervisor =
+      currentUser.roles?.includes(ValidRoles.SUPERVISOR_ROL) ?? false;
 
     if (!this.isSuperAdmin(currentUser) && !isSupervisor) {
-      await this.complexService.assertComplexAccess(data.complexId, currentUser);
+      await this.complexService.assertComplexAccess(
+        data.complexId,
+        currentUser,
+      );
     }
 
     const note = this.noteRepo.create({
-      title:             data.title.trim(),
-      content:           data.content.trim(),
-      imageUrls:         data.imageUrls,
-      complexId:         data.complexId,
-      createdByUserId:   currentUser.entityType === 'user' ? currentUser.sub : null,
-      createdByRole:     data.createdByRole,
+      title: data.title.trim(),
+      content: data.content.trim(),
+      imageUrls: data.imageUrls,
+      complexId: data.complexId,
+      createdByUserId:
+        currentUser.entityType === 'user' ? currentUser.sub : null,
+      createdByRole: data.createdByRole,
       supervisorVisitId: data.supervisorVisitId,
     });
 
@@ -68,15 +73,19 @@ export class NotesService {
     );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Note,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, title: saved.title, complexId: saved.complexId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Note,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        title: saved.title,
+        complexId: saved.complexId,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: data.createdByRole ?? currentUser.roles?.[0] ?? '',
-      complexId:       data.complexId,
-      description:     `Nota creada: "${saved.title}"`,
+      complexId: data.complexId,
+      description: `Nota creada: "${saved.title}"`,
     });
 
     return this.loadRelations(saved.id);
@@ -108,14 +117,20 @@ export class NotesService {
     // Visibilidad por rol: restringe qué created_by_role puede ver cada usuario
     if (!this.isSuperAdmin(currentUser)) {
       const visibleRoles = this.isComplexAdmin(currentUser)
-        ? [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL]
+        ? [
+            ValidRoles.COMPLEX_ROL,
+            ValidRoles.SUPERVISOR_ROL,
+            ValidRoles.SECURITY_ROL,
+          ]
         : [ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL];
       qb.andWhere('n.created_by_role IN (:...visibleRoles)', { visibleRoles });
     }
 
     // Filtro opcional por uno o varios roles (dentro de los roles visibles)
     if (filters?.createdByRoles?.length) {
-      qb.andWhere('n.created_by_role IN (:...filterRoles)', { filterRoles: filters.createdByRoles });
+      qb.andWhere('n.created_by_role IN (:...filterRoles)', {
+        filterRoles: filters.createdByRoles,
+      });
     }
 
     // createdByUserId: solo SUPER_ADMIN y COMPLEX_ROL pueden filtrar por usuario
@@ -125,25 +140,29 @@ export class NotesService {
       });
     }
     if (filters?.dateFrom) {
-      qb.andWhere('n.createdAt >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+      qb.andWhere('n.createdAt >= :dateFrom', {
+        dateFrom: new Date(filters.dateFrom),
+      });
     }
     if (filters?.dateTo) {
-      qb.andWhere('n.createdAt <= :dateTo', { dateTo: new Date(filters.dateTo) });
+      qb.andWhere('n.createdAt <= :dateTo', {
+        dateTo: new Date(filters.dateTo),
+      });
     }
 
     qb.orderBy('n.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(totalItems / limit); 
+    const totalPages = Math.ceil(totalItems / limit);
 
     return {
       items,
       pagination: {
-        currentPage:     page,
-        itemsPerPage:    limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -172,10 +191,17 @@ export class NotesService {
     await this.complexService.assertComplexAccess(note.complexId, currentUser);
 
     const visibleRoles = this.isComplexAdmin(currentUser)
-      ? [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL]
+      ? [
+          ValidRoles.COMPLEX_ROL,
+          ValidRoles.SUPERVISOR_ROL,
+          ValidRoles.SECURITY_ROL,
+        ]
       : [ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL];
 
-    if (note.createdByRole && !visibleRoles.includes(note.createdByRole as ValidRoles)) {
+    if (
+      note.createdByRole &&
+      !visibleRoles.includes(note.createdByRole as ValidRoles)
+    ) {
       throw new CustomError({
         message: 'No tienes permiso para ver esta nota',
         statusCode: HttpStatus.FORBIDDEN,
@@ -210,19 +236,26 @@ export class NotesService {
     }
 
     await this.noteRepo.softDelete(id);
-    this.logger.warn(`Nota eliminada (soft): ${id} por SUPER_ADMIN ${currentUser.sub}`);
+    this.logger.warn(
+      `Nota eliminada (soft): ${id} por SUPER_ADMIN ${currentUser.sub}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Note,
-      entityId:        id,
-      action:          AuditAction.DELETE,
-      previousValue:   { id: note.id, title: note.title, complexId: note.complexId, deletedAt: null },
-      newValue:        { deletedAt: new Date() },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Note,
+      entityId: id,
+      action: AuditAction.DELETE,
+      previousValue: {
+        id: note.id,
+        title: note.title,
+        complexId: note.complexId,
+        deletedAt: null,
+      },
+      newValue: { deletedAt: new Date() },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       note.complexId,
-      description:     `Nota eliminada (soft-delete): "${note.title}"`,
+      complexId: note.complexId,
+      description: `Nota eliminada (soft-delete): "${note.title}"`,
     });
 
     return { ...note, deletedAt: new Date() };
@@ -243,7 +276,8 @@ export class NotesService {
   private isSecurityOrSupervisor(user: JwtAccessPayload): boolean {
     return (
       (user.roles?.includes(ValidRoles.SECURITY_ROL) ||
-        user.roles?.includes(ValidRoles.SUPERVISOR_ROL)) ?? false
+        user.roles?.includes(ValidRoles.SUPERVISOR_ROL)) ??
+      false
     );
   }
 

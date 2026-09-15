@@ -15,7 +15,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * migración de PQRF.
  */
 export class CreateVoting1781004700000 implements MigrationInterface {
-
   public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -136,7 +135,9 @@ export class CreateVoting1781004700000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS "voting_options"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "voting_questions"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "voting_meetings"`);
-    await queryRunner.query(`ALTER TABLE "residential_complexes" DROP COLUMN IF EXISTS "voting_enabled"`);
+    await queryRunner.query(
+      `ALTER TABLE "residential_complexes" DROP COLUMN IF EXISTS "voting_enabled"`,
+    );
     // Los labels de los enums no se revierten: Postgres no permite quitarlos.
   }
 }

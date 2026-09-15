@@ -2,7 +2,6 @@ import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class PrepaidApplicationItem {
-
   @Field()
   unitId: string;
 
@@ -22,7 +21,6 @@ export class PrepaidApplicationItem {
 
 @ObjectType()
 export class PrepaidApplicationResult {
-
   @Field(() => Int)
   unitsProcessed: number;
 

@@ -1,9 +1,13 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsUUID, ArrayMinSize, ArrayNotEmpty, IsOptional } from 'class-validator';
+import {
+  IsUUID,
+  ArrayMinSize,
+  ArrayNotEmpty,
+  IsOptional,
+} from 'class-validator';
 
 @InputType()
 export class MoveResidentsToUnitInput {
-
   @Field(() => [String])
   @ArrayNotEmpty()
   @ArrayMinSize(1)
@@ -22,5 +26,4 @@ export class MoveResidentsToUnitInput {
   @IsOptional()
   @IsUUID()
   newMainResidentId?: string;
-
 }

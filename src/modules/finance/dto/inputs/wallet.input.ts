@@ -1,11 +1,15 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsNumber, IsPositive, IsOptional, Matches,
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsPositive,
+  IsOptional,
+  Matches,
 } from 'class-validator';
 
 @InputType()
 export class CreateWalletCreditInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()
@@ -29,7 +33,6 @@ export class CreateWalletCreditInput {
 
 @InputType()
 export class ApplyWalletToChargeInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()
@@ -58,7 +61,6 @@ export class ApplyWalletToChargeInput {
 
 @InputType()
 export class ApplyMoraInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

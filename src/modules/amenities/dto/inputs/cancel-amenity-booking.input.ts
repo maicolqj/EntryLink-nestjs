@@ -3,7 +3,6 @@ import { IsUUID, IsOptional, IsString, MaxLength } from 'class-validator';
 
 @InputType()
 export class CancelAmenityBookingInput {
-
   @Field()
   @IsUUID()
   bookingId: string;

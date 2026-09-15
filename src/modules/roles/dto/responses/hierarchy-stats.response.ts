@@ -1,5 +1,4 @@
-import { ObjectType, Field, Int } from "@nestjs/graphql";
-
+import { ObjectType, Field, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class HierarchyStats {

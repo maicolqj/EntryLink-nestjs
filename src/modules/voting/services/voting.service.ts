@@ -2,48 +2,57 @@ import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 
-import { VotingMeeting }  from '../entities/voting-meeting.entity';
+import { VotingMeeting } from '../entities/voting-meeting.entity';
 import { VotingQuestion } from '../entities/voting-question.entity';
-import { VotingOption }   from '../entities/voting-option.entity';
-import { VotingBallot }   from '../entities/voting-ballot.entity';
+import { VotingOption } from '../entities/voting-option.entity';
+import { VotingBallot } from '../entities/voting-ballot.entity';
 import {
-  VoteSecrecy, VoteWeighting, VotingAudience, VotingMeetingKind, VotingQuestionStatus,
+  VoteSecrecy,
+  VoteWeighting,
+  VotingAudience,
+  VotingMeetingKind,
+  VotingQuestionStatus,
 } from '../enums/voting.enums';
 import { VotingSettingsResponse } from '../dto/responses/voting-settings.response';
 import {
-  CreateVotingMeetingInput, CreateVotingQuestionInput, UpdateVotingQuestionInput,
+  CreateVotingMeetingInput,
+  CreateVotingQuestionInput,
+  UpdateVotingQuestionInput,
 } from '../dto/inputs/voting.inputs';
-import { VotingResults }       from '../dto/responses/voting-results.response';
+import { VotingResults } from '../dto/responses/voting-results.response';
 import { VotingCouncilMember } from '../dto/responses/voting-council-member.response';
 
-import { CustomError }      from '../../shared/utils/errors.utils';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { ResidentialComplex }        from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }                      from '../../residential-complex/entities/unit.entity';
-import { ComplexModule }             from '../../residential-complex/enums/complex-module.enum';
-import { User }                      from '../../users/entities/user.entity';
-import { ResidentsService }          from '../../residents/services/residents.service';
-import { NotificationsService }      from '../../notifications/services/notifications.service';
-import { NotificationType }          from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
-import { AuditService }              from '../../audit/services/audit.service';
-import { AuditAction }               from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
-import { SocketService }             from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }               from '../../../core/infrastructure/socket/socket.events';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
+import { User } from '../../users/entities/user.entity';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 /** Quienes administran las votaciones del complejo. */
-const ADMIN_ROLES: ValidRoles[] = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
+const ADMIN_ROLES: ValidRoles[] = [
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+];
 
 /** Código de Postgres para una fila que viola un índice único. */
 const UNIQUE_VIOLATION = '23505';
 
 const isAdmin = (user: JwtAccessPayload): boolean =>
-  (user.roles ?? []).some(role => ADMIN_ROLES.includes(role));
+  (user.roles ?? []).some((role) => ADMIN_ROLES.includes(role));
 
 const fullName = (user?: User | null): string | null =>
   user ? `${user.name ?? ''} ${user.lastName ?? ''}`.trim() || null : null;
@@ -57,7 +66,8 @@ const unitLabel = (unit?: Unit | null): string | null => {
   return `${tower} · ${unit.number}`;
 };
 
-const sum = (values: number[]): number => values.reduce((acc, value) => acc + value, 0);
+const sum = (values: number[]): number =>
+  values.reduce((acc, value) => acc + value, 0);
 
 /** Quién vota a efectos del conteo, y con qué peso. */
 interface Voter {
@@ -109,9 +119,12 @@ export class VotingService implements OnModuleInit {
    * residentes se entera al instante: el menú de votaciones aparece o se va.
    */
   onModuleInit(): void {
-    this.complexService.onModulesUpdated(complexId => {
-      this.broadcastAvailability(complexId)
-        .catch(err => this.logger.warn(`Error avisando la disponibilidad de votaciones: ${err?.message}`));
+    this.complexService.onModulesUpdated((complexId) => {
+      this.broadcastAvailability(complexId).catch((err) =>
+        this.logger.warn(
+          `Error avisando la disponibilidad de votaciones: ${err?.message}`,
+        ),
+      );
     });
   }
 
@@ -124,19 +137,25 @@ export class VotingService implements OnModuleInit {
    * las asambleas; el consejero, también si están encendidas las reuniones del
    * consejo. Siempre hace falta el módulo del SUPER_ADMIN.
    */
-  async isEnabled(complexId: string, currentUser: JwtAccessPayload): Promise<boolean> {
+  async isEnabled(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
     await this.complexService.findById(complexId, currentUser);
     return (await this.allowedKinds(complexId, currentUser)).length > 0;
   }
 
   /** Módulo e interruptores del complejo, para la pantalla de la administración. */
-  async getSettings(complexId: string, currentUser: JwtAccessPayload): Promise<VotingSettingsResponse> {
+  async getSettings(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingSettingsResponse> {
     await this.complexService.findById(complexId, currentUser);
     const settings = await this.settingsOf(complexId);
     return {
-      moduleEnabled:    settings.moduleEnabled,
+      moduleEnabled: settings.moduleEnabled,
       residentsEnabled: settings.switchOn,
-      councilEnabled:   settings.councilSwitch,
+      councilEnabled: settings.councilSwitch,
     };
   }
 
@@ -158,16 +177,28 @@ export class VotingService implements OnModuleInit {
     const isCouncil = audience === VotingAudience.COUNCIL;
     await this.complexRepo.update(
       complexId,
-      isCouncil ? { votingCouncilEnabled: enabled } : { votingEnabled: enabled },
+      isCouncil
+        ? { votingCouncilEnabled: enabled }
+        : { votingEnabled: enabled },
     );
 
-    this.broadcastAvailability(complexId)
-      .catch(err => this.logger.warn(`Error avisando la disponibilidad de votaciones: ${err?.message}`));
+    this.broadcastAvailability(complexId).catch((err) =>
+      this.logger.warn(
+        `Error avisando la disponibilidad de votaciones: ${err?.message}`,
+      ),
+    );
 
     const what = isCouncil ? 'Reuniones del consejo' : 'Asambleas';
-    this.audit(currentUser, complexId, AuditEntityType.VotingMeeting, complexId,
+    this.audit(
+      currentUser,
+      complexId,
+      AuditEntityType.VotingMeeting,
+      complexId,
       `${what} ${enabled ? 'visibles' : 'ocultas'} en la app`,
-      isCouncil ? { votingCouncilEnabled: enabled } : { votingEnabled: enabled });
+      isCouncil
+        ? { votingCouncilEnabled: enabled }
+        : { votingEnabled: enabled },
+    );
 
     return enabled;
   }
@@ -177,7 +208,10 @@ export class VotingService implements OnModuleInit {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /** Todas las reuniones del complejo, con borradores. Solo la administración. */
-  async findMeetings(complexId: string, currentUser: JwtAccessPayload): Promise<VotingMeeting[]> {
+  async findMeetings(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingMeeting[]> {
     await this.complexService.findById(complexId, currentUser);
     await this.assertModule(complexId);
 
@@ -187,7 +221,7 @@ export class VotingService implements OnModuleInit {
       order: { scheduledAt: 'DESC' },
     });
 
-    return meetings.map(meeting => this.sortMeeting(meeting));
+    return meetings.map((meeting) => this.sortMeeting(meeting));
   }
 
   /**
@@ -195,12 +229,19 @@ export class VotingService implements OnModuleInit {
    * consejo, sus reuniones. Nunca los borradores —una pregunta en preparación
    * no es de nadie todavía— ni una reunión que solo tenga borradores.
    */
-  async findMyMeetings(complexId: string, currentUser: JwtAccessPayload): Promise<VotingMeeting[]> {
+  async findMyMeetings(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingMeeting[]> {
     await this.complexService.findById(complexId, currentUser);
 
     const kinds = await this.allowedKinds(complexId, currentUser);
     if (kinds.length === 0) {
-      this.fail('Las votaciones no están habilitadas en tu conjunto', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+      this.fail(
+        'Las votaciones no están habilitadas en tu conjunto',
+        HttpStatus.FORBIDDEN,
+        GeneralErrorCode.FORBIDDEN,
+      );
     }
 
     const meetings = await this.meetingRepo.find({
@@ -210,20 +251,24 @@ export class VotingService implements OnModuleInit {
     });
 
     return meetings
-      .map(meeting => this.sortMeeting(meeting))
-      .map(meeting => {
-        meeting.questions = (meeting.questions ?? [])
-          .filter(question => question.status !== VotingQuestionStatus.DRAFT);
+      .map((meeting) => this.sortMeeting(meeting))
+      .map((meeting) => {
+        meeting.questions = (meeting.questions ?? []).filter(
+          (question) => question.status !== VotingQuestionStatus.DRAFT,
+        );
         return meeting;
       })
-      .filter(meeting => meeting.questions!.length > 0);
+      .filter((meeting) => meeting.questions.length > 0);
   }
 
   /**
    * Una pregunta, con control de acceso: la administración ve todo; el
    * residente, lo publicado de su instancia y solo si el módulo está activo.
    */
-  async findQuestion(questionId: string, currentUser: JwtAccessPayload): Promise<VotingQuestion> {
+  async findQuestion(
+    questionId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingQuestion> {
     const question = await this.findQuestionOrFail(questionId);
     await this.complexService.findById(question.complexId, currentUser);
 
@@ -233,20 +278,36 @@ export class VotingService implements OnModuleInit {
     }
 
     if (question.status === VotingQuestionStatus.DRAFT) {
-      this.fail('La votación no existe o todavía no se ha publicado', HttpStatus.NOT_FOUND, GeneralErrorCode.NOT_FOUND);
+      this.fail(
+        'La votación no existe o todavía no se ha publicado',
+        HttpStatus.NOT_FOUND,
+        GeneralErrorCode.NOT_FOUND,
+      );
     }
 
     const kind = question.meeting?.kind ?? VotingMeetingKind.ASAMBLEA;
 
-    if (kind === VotingMeetingKind.CONSEJO
-      && !await this.residentsService.isCouncilUser(currentUser.sub)) {
-      this.fail('Esta votación es del consejo de administración', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+    if (
+      kind === VotingMeetingKind.CONSEJO &&
+      !(await this.residentsService.isCouncilUser(currentUser.sub))
+    ) {
+      this.fail(
+        'Esta votación es del consejo de administración',
+        HttpStatus.FORBIDDEN,
+        GeneralErrorCode.FORBIDDEN,
+      );
     }
 
     // Cada tipo de reunión tiene su interruptor: con las asambleas apagadas, la
     // pregunta de una asamblea no se alcanza aunque las del consejo estén abiertas.
-    if (!(await this.allowedKinds(question.complexId, currentUser)).includes(kind)) {
-      this.fail('Las votaciones no están habilitadas en tu conjunto', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+    if (
+      !(await this.allowedKinds(question.complexId, currentUser)).includes(kind)
+    ) {
+      this.fail(
+        'Las votaciones no están habilitadas en tu conjunto',
+        HttpStatus.FORBIDDEN,
+        GeneralErrorCode.FORBIDDEN,
+      );
     }
 
     return question;
@@ -263,17 +324,26 @@ export class VotingService implements OnModuleInit {
     await this.complexService.findById(input.complexId, currentUser);
     await this.assertModule(input.complexId);
 
-    const saved = await this.meetingRepo.save(this.meetingRepo.create({
-      complexId:       input.complexId,
-      kind:            input.kind,
-      title:           input.title.trim(),
-      description:     input.description?.trim() || null,
-      scheduledAt:     input.scheduledAt,
-      createdByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
-    }));
+    const saved = await this.meetingRepo.save(
+      this.meetingRepo.create({
+        complexId: input.complexId,
+        kind: input.kind,
+        title: input.title.trim(),
+        description: input.description?.trim() || null,
+        scheduledAt: input.scheduledAt,
+        createdByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
+      }),
+    );
 
-    this.audit(currentUser, saved.complexId, AuditEntityType.VotingMeeting, saved.id,
-      `Reunión de votación creada: ${saved.title}`, { kind: saved.kind, title: saved.title });
+    this.audit(
+      currentUser,
+      saved.complexId,
+      AuditEntityType.VotingMeeting,
+      saved.id,
+      `Reunión de votación creada: ${saved.title}`,
+      { kind: saved.kind, title: saved.title },
+    );
 
     saved.questions = [];
     return saved;
@@ -283,10 +353,17 @@ export class VotingService implements OnModuleInit {
    * Solo se borra una reunión en la que nadie ha votado: con votos, es la
    * constancia de una decisión de la copropiedad.
    */
-  async deleteMeeting(meetingId: string, currentUser: JwtAccessPayload): Promise<boolean> {
+  async deleteMeeting(
+    meetingId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
     const meeting = await this.findMeetingForAdmin(meetingId, currentUser);
 
-    if ((meeting.questions ?? []).some(question => question.status !== VotingQuestionStatus.DRAFT)) {
+    if (
+      (meeting.questions ?? []).some(
+        (question) => question.status !== VotingQuestionStatus.DRAFT,
+      )
+    ) {
       this.fail(
         'Esta reunión ya tiene votaciones abiertas o cerradas y queda como constancia: no se puede eliminar',
         HttpStatus.CONFLICT,
@@ -297,8 +374,14 @@ export class VotingService implements OnModuleInit {
     await this.questionRepo.softDelete({ meetingId: meeting.id });
     await this.meetingRepo.softDelete(meeting.id);
 
-    this.audit(currentUser, meeting.complexId, AuditEntityType.VotingMeeting, meeting.id,
-      `Reunión de votación eliminada: ${meeting.title}`, { title: meeting.title });
+    this.audit(
+      currentUser,
+      meeting.complexId,
+      AuditEntityType.VotingMeeting,
+      meeting.id,
+      `Reunión de votación eliminada: ${meeting.title}`,
+      { title: meeting.title },
+    );
 
     return true;
   }
@@ -307,32 +390,49 @@ export class VotingService implements OnModuleInit {
     input: CreateVotingQuestionInput,
     currentUser: JwtAccessPayload,
   ): Promise<VotingQuestion> {
-    const meeting = await this.findMeetingForAdmin(input.meetingId, currentUser);
+    const meeting = await this.findMeetingForAdmin(
+      input.meetingId,
+      currentUser,
+    );
     const options = this.cleanOptions(input.options);
     const weighting = this.weightingFor(meeting.kind, input.weighting);
     const position = (meeting.questions ?? []).length;
 
-    const saved = await this.dataSource.transaction(async manager => {
-      const question = await manager.save(manager.create(VotingQuestion, {
-        meetingId:   meeting.id,
-        complexId:   meeting.complexId,
-        position,
-        text:        input.text.trim(),
-        description: input.description?.trim() || null,
-        weighting,
-        secrecy:     input.secrecy ?? VoteSecrecy.NOMINAL,
-        status:      VotingQuestionStatus.DRAFT,
-      }));
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const question = await manager.save(
+        manager.create(VotingQuestion, {
+          meetingId: meeting.id,
+          complexId: meeting.complexId,
+          position,
+          text: input.text.trim(),
+          description: input.description?.trim() || null,
+          weighting,
+          secrecy: input.secrecy ?? VoteSecrecy.NOMINAL,
+          status: VotingQuestionStatus.DRAFT,
+        }),
+      );
 
-      await manager.save(options.map((text, index) =>
-        manager.create(VotingOption, { questionId: question.id, position: index, text }),
-      ));
+      await manager.save(
+        options.map((text, index) =>
+          manager.create(VotingOption, {
+            questionId: question.id,
+            position: index,
+            text,
+          }),
+        ),
+      );
 
       return question;
     });
 
-    this.audit(currentUser, meeting.complexId, AuditEntityType.VotingQuestion, saved.id,
-      `Pregunta creada en "${meeting.title}": ${saved.text}`, { text: saved.text, options });
+    this.audit(
+      currentUser,
+      meeting.complexId,
+      AuditEntityType.VotingQuestion,
+      saved.id,
+      `Pregunta creada en "${meeting.title}": ${saved.text}`,
+      { text: saved.text, options },
+    );
 
     return this.findQuestionOrFail(saved.id);
   }
@@ -342,19 +442,26 @@ export class VotingService implements OnModuleInit {
     input: UpdateVotingQuestionInput,
     currentUser: JwtAccessPayload,
   ): Promise<VotingQuestion> {
-    const question = await this.findQuestionForAdmin(input.questionId, currentUser);
+    const question = await this.findQuestionForAdmin(
+      input.questionId,
+      currentUser,
+    );
     this.assertDraft(question);
 
     const options = input.options ? this.cleanOptions(input.options) : null;
 
-    if (input.text !== undefined)        question.text = input.text.trim();
-    if (input.description !== undefined) question.description = input.description?.trim() || null;
-    if (input.secrecy)                   question.secrecy = input.secrecy;
+    if (input.text !== undefined) question.text = input.text.trim();
+    if (input.description !== undefined)
+      question.description = input.description?.trim() || null;
+    if (input.secrecy) question.secrecy = input.secrecy;
     if (input.weighting) {
-      question.weighting = this.weightingFor(question.meeting!.kind, input.weighting);
+      question.weighting = this.weightingFor(
+        question.meeting.kind,
+        input.weighting,
+      );
     }
 
-    await this.dataSource.transaction(async manager => {
+    await this.dataSource.transaction(async (manager) => {
       // Sin las opciones: si viajan con la entidad, TypeORM intenta
       // desvincularlas en vez de dejarlas a la transacción.
       const { options: _options, meeting: _meeting, ...row } = question;
@@ -362,16 +469,25 @@ export class VotingService implements OnModuleInit {
 
       if (options) {
         await manager.delete(VotingOption, { questionId: question.id });
-        await manager.save(options.map((text, index) =>
-          manager.create(VotingOption, { questionId: question.id, position: index, text }),
-        ));
+        await manager.save(
+          options.map((text, index) =>
+            manager.create(VotingOption, {
+              questionId: question.id,
+              position: index,
+              text,
+            }),
+          ),
+        );
       }
     });
 
     return this.findQuestionOrFail(question.id);
   }
 
-  async deleteQuestion(questionId: string, currentUser: JwtAccessPayload): Promise<boolean> {
+  async deleteQuestion(
+    questionId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
     const question = await this.findQuestionForAdmin(questionId, currentUser);
     this.assertDraft(question);
 
@@ -386,7 +502,10 @@ export class VotingService implements OnModuleInit {
    * unidad votaría con peso cero y el porcentaje del acta saldría mal sin que
    * nadie lo note. En el consejo, no se abre si ningún consejero tiene voto.
    */
-  async openQuestion(questionId: string, currentUser: JwtAccessPayload): Promise<VotingQuestion> {
+  async openQuestion(
+    questionId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingQuestion> {
     const question = await this.findQuestionForAdmin(questionId, currentUser);
     this.assertDraft(question);
 
@@ -396,7 +515,8 @@ export class VotingService implements OnModuleInit {
 
     // Cada tipo de reunión exige su propio interruptor: sin él, nadie la ve.
     const settings = await this.settingsOf(question.complexId);
-    const isCouncilMeeting = question.meeting?.kind === VotingMeetingKind.CONSEJO;
+    const isCouncilMeeting =
+      question.meeting?.kind === VotingMeetingKind.CONSEJO;
 
     if (isCouncilMeeting ? !settings.councilSwitch : !settings.switchOn) {
       this.fail(
@@ -425,8 +545,10 @@ export class VotingService implements OnModuleInit {
       }
     }
 
-    if (question.weighting === VoteWeighting.MEMBER
-      && (await this.councilVoters(question.complexId)).length === 0) {
+    if (
+      question.weighting === VoteWeighting.MEMBER &&
+      (await this.councilVoters(question.complexId)).length === 0
+    ) {
       this.fail(
         'Ningún consejero tiene voto. Configúralo en "Consejo: voz y voto".',
         HttpStatus.CONFLICT,
@@ -434,16 +556,25 @@ export class VotingService implements OnModuleInit {
       );
     }
 
-    question.status   = VotingQuestionStatus.OPEN;
+    question.status = VotingQuestionStatus.OPEN;
     question.openedAt = new Date();
     await this.saveQuestion(question);
 
     this.emitUpdated(question, true);
-    this.notifyOpened(question)
-      .catch(err => this.logger.warn(`Error al avisar la votación ${question.id}: ${err?.message}`));
+    this.notifyOpened(question).catch((err) =>
+      this.logger.warn(
+        `Error al avisar la votación ${question.id}: ${err?.message}`,
+      ),
+    );
 
-    this.audit(currentUser, question.complexId, AuditEntityType.VotingQuestion, question.id,
-      `Votación abierta: ${question.text}`, { status: question.status });
+    this.audit(
+      currentUser,
+      question.complexId,
+      AuditEntityType.VotingQuestion,
+      question.id,
+      `Votación abierta: ${question.text}`,
+      { status: question.status },
+    );
 
     return this.findQuestionOrFail(question.id);
   }
@@ -452,25 +583,38 @@ export class VotingService implements OnModuleInit {
    * Cierra la pregunta. Es definitivo: el resultado va al acta. Aquí se congela
    * quiénes podían votar, para que la participación no cambie después.
    */
-  async closeQuestion(questionId: string, currentUser: JwtAccessPayload): Promise<VotingQuestion> {
+  async closeQuestion(
+    questionId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingQuestion> {
     const question = await this.findQuestionForAdmin(questionId, currentUser);
 
     if (question.status !== VotingQuestionStatus.OPEN) {
-      this.fail('Solo se puede cerrar una votación abierta', HttpStatus.CONFLICT, GeneralErrorCode.CONFLICT);
+      this.fail(
+        'Solo se puede cerrar una votación abierta',
+        HttpStatus.CONFLICT,
+        GeneralErrorCode.CONFLICT,
+      );
     }
 
     const eligible = await this.computeEligible(question);
 
-    question.status         = VotingQuestionStatus.CLOSED;
-    question.closedAt       = new Date();
-    question.eligibleCount  = eligible.count;
+    question.status = VotingQuestionStatus.CLOSED;
+    question.closedAt = new Date();
+    question.eligibleCount = eligible.count;
     question.eligibleWeight = eligible.weight;
     await this.saveQuestion(question);
 
     this.emitUpdated(question, true);
 
-    this.audit(currentUser, question.complexId, AuditEntityType.VotingQuestion, question.id,
-      `Votación cerrada: ${question.text}`, { status: question.status });
+    this.audit(
+      currentUser,
+      question.complexId,
+      AuditEntityType.VotingQuestion,
+      question.id,
+      `Votación cerrada: ${question.text}`,
+      { status: question.status },
+    );
 
     return this.findQuestionOrFail(question.id);
   }
@@ -492,11 +636,11 @@ export class VotingService implements OnModuleInit {
       this.settingsOf(complexId),
     ]);
 
-    return residents.map(resident => ({
-      userId:    resident.userId,
-      name:      fullName(resident.user) ?? resident.user?.email ?? 'Consejero',
+    return residents.map((resident) => ({
+      userId: resident.userId,
+      name: fullName(resident.user) ?? resident.user?.email ?? 'Consejero',
       unitLabel: unitLabel(resident.unit),
-      hasVote:   !settings.voiceOnly.includes(resident.userId),
+      hasVote: !settings.voiceOnly.includes(resident.userId),
     }));
   }
 
@@ -516,17 +660,24 @@ export class VotingService implements OnModuleInit {
     const members = await this.residentsService.findCouncilUserIds(complexId);
     const chosen = [...new Set(voiceOnlyUserIds)];
 
-    if (chosen.some(userId => !members.includes(userId))) {
+    if (chosen.some((userId) => !members.includes(userId))) {
       this.fail('Solo puedes marcar a miembros actuales del consejo');
     }
 
-    await this.complexRepo.update(complexId, { votingCouncilVoiceOnlyUserIds: chosen });
+    await this.complexRepo.update(complexId, {
+      votingCouncilVoiceOnlyUserIds: chosen,
+    });
 
-    this.audit(currentUser, complexId, AuditEntityType.VotingMeeting, complexId,
+    this.audit(
+      currentUser,
+      complexId,
+      AuditEntityType.VotingMeeting,
+      complexId,
       chosen.length === 0
         ? 'Todo el consejo tiene voz y voto'
         : `${chosen.length} consejero(s) con voz pero sin voto`,
-      { votingCouncilVoiceOnlyUserIds: chosen });
+      { votingCouncilVoiceOnlyUserIds: chosen },
+    );
 
     return this.findCouncilMembers(complexId, currentUser);
   }
@@ -548,10 +699,14 @@ export class VotingService implements OnModuleInit {
     const question = await this.findQuestion(questionId, currentUser);
 
     if (question.status !== VotingQuestionStatus.OPEN) {
-      this.fail('Esta votación no está abierta', HttpStatus.CONFLICT, GeneralErrorCode.CONFLICT);
+      this.fail(
+        'Esta votación no está abierta',
+        HttpStatus.CONFLICT,
+        GeneralErrorCode.CONFLICT,
+      );
     }
 
-    if (!(question.options ?? []).some(option => option.id === optionId)) {
+    if (!(question.options ?? []).some((option) => option.id === optionId)) {
       this.fail('Esa opción no pertenece a la pregunta');
     }
 
@@ -561,12 +716,12 @@ export class VotingService implements OnModuleInit {
       await this.ballotRepo.insert({
         questionId: question.id,
         optionId,
-        complexId:  question.complexId,
-        voterKey:   voter.voterKey,
-        unitId:     voter.unitId,
+        complexId: question.complexId,
+        voterKey: voter.voterKey,
+        unitId: voter.unitId,
         residentId: voter.residentId,
-        userId:     currentUser.sub,
-        weight:     voter.weight,
+        userId: currentUser.sub,
+        weight: voter.weight,
       });
     } catch (err: any) {
       if ((err?.code ?? err?.driverError?.code) === UNIQUE_VIOLATION) {
@@ -608,11 +763,21 @@ export class VotingService implements OnModuleInit {
    * ¿Es del consejo pero solo tiene voz? La app lo usa para explicar por qué
    * no le aparecen las opciones, en vez de dejarlo adivinando.
    */
-  async isVoiceOnly(question: VotingQuestion, currentUser: JwtAccessPayload): Promise<boolean> {
-    if (question.weighting !== VoteWeighting.MEMBER || currentUser.entityType !== 'user') return false;
-    if (!await this.residentsService.isCouncilUser(currentUser.sub)) return false;
+  async isVoiceOnly(
+    question: VotingQuestion,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    if (
+      question.weighting !== VoteWeighting.MEMBER ||
+      currentUser.entityType !== 'user'
+    )
+      return false;
+    if (!(await this.residentsService.isCouncilUser(currentUser.sub)))
+      return false;
 
-    return !(await this.councilVoters(question.complexId)).includes(currentUser.sub);
+    return !(await this.councilVoters(question.complexId)).includes(
+      currentUser.sub,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -627,7 +792,10 @@ export class VotingService implements OnModuleInit {
    * siempre; en una pregunta nominal, además, qué votó cada unidad; en una
    * secreta, solo quiénes participaron.
    */
-  async results(question: VotingQuestion, currentUser: JwtAccessPayload): Promise<VotingResults | null> {
+  async results(
+    question: VotingQuestion,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingResults | null> {
     const admin = isAdmin(currentUser);
     if (!admin && question.status !== VotingQuestionStatus.CLOSED) return null;
 
@@ -637,48 +805,61 @@ export class VotingService implements OnModuleInit {
       order: { createdAt: 'ASC' },
     });
 
-    const eligible = question.status === VotingQuestionStatus.CLOSED && question.eligibleCount != null
-      ? { count: question.eligibleCount, weight: Number(question.eligibleWeight ?? 0) }
-      : await this.computeEligible(question);
+    const eligible =
+      question.status === VotingQuestionStatus.CLOSED &&
+      question.eligibleCount != null
+        ? {
+            count: question.eligibleCount,
+            weight: Number(question.eligibleWeight ?? 0),
+          }
+        : await this.computeEligible(question);
 
-    const votedWeight = sum(ballots.map(ballot => Number(ballot.weight)));
-    const options = [...(question.options ?? [])].sort((a, b) => a.position - b.position);
-    const optionText = new Map(options.map(option => [option.id, option.text]));
+    const votedWeight = sum(ballots.map((ballot) => Number(ballot.weight)));
+    const options = [...(question.options ?? [])].sort(
+      (a, b) => a.position - b.position,
+    );
+    const optionText = new Map(
+      options.map((option) => [option.id, option.text]),
+    );
 
     const labelOf = (ballot: VotingBallot): string =>
       unitLabel(ballot.unit) ?? fullName(ballot.user) ?? 'Votante';
 
     return {
-      weighting:      question.weighting,
-      eligibleCount:  eligible.count,
+      weighting: question.weighting,
+      eligibleCount: eligible.count,
       eligibleWeight: eligible.weight,
-      votedCount:     ballots.length,
+      votedCount: ballots.length,
       votedWeight,
-      participation:  eligible.weight > 0 ? votedWeight / eligible.weight : 0,
-      options: options.map(option => {
-        const chosen = ballots.filter(ballot => ballot.optionId === option.id);
-        const weight = sum(chosen.map(ballot => Number(ballot.weight)));
+      participation: eligible.weight > 0 ? votedWeight / eligible.weight : 0,
+      options: options.map((option) => {
+        const chosen = ballots.filter(
+          (ballot) => ballot.optionId === option.id,
+        );
+        const weight = sum(chosen.map((ballot) => Number(ballot.weight)));
         return {
           optionId: option.id,
-          text:     option.text,
-          votes:    chosen.length,
+          text: option.text,
+          votes: chosen.length,
           weight,
-          share:           votedWeight > 0 ? weight / votedWeight : 0,
+          share: votedWeight > 0 ? weight / votedWeight : 0,
           shareOfEligible: eligible.weight > 0 ? weight / eligible.weight : 0,
         };
       }),
-      ballots: admin && question.secrecy === VoteSecrecy.NOMINAL
-        ? ballots.map(ballot => ({
-            voterLabel: labelOf(ballot),
-            voterName:  fullName(ballot.user),
-            optionText: optionText.get(ballot.optionId) ?? '—',
-            weight:     Number(ballot.weight),
-            votedAt:    ballot.createdAt,
-          }))
-        : null,
-      participants: admin && question.secrecy === VoteSecrecy.SECRET
-        ? ballots.map(labelOf).sort((a, b) => a.localeCompare(b, 'es'))
-        : null,
+      ballots:
+        admin && question.secrecy === VoteSecrecy.NOMINAL
+          ? ballots.map((ballot) => ({
+              voterLabel: labelOf(ballot),
+              voterName: fullName(ballot.user),
+              optionText: optionText.get(ballot.optionId) ?? '—',
+              weight: Number(ballot.weight),
+              votedAt: ballot.createdAt,
+            }))
+          : null,
+      participants:
+        admin && question.secrecy === VoteSecrecy.SECRET
+          ? ballots.map(labelOf).sort((a, b) => a.localeCompare(b, 'es'))
+          : null,
     };
   }
 
@@ -704,10 +885,13 @@ export class VotingService implements OnModuleInit {
 
     const modules = complex?.enabledModules;
     return {
-      moduleEnabled: !modules || modules.length === 0 || modules.includes(ComplexModule.VOTACIONES),
-      switchOn:      !!complex?.votingEnabled,
+      moduleEnabled:
+        !modules ||
+        modules.length === 0 ||
+        modules.includes(ComplexModule.VOTACIONES),
+      switchOn: !!complex?.votingEnabled,
       councilSwitch: !!complex?.votingCouncilEnabled,
-      voiceOnly:     complex?.votingCouncilVoiceOnlyUserIds ?? [],
+      voiceOnly: complex?.votingCouncilVoiceOnlyUserIds ?? [],
     };
   }
 
@@ -716,16 +900,21 @@ export class VotingService implements OnModuleInit {
    * para los residentes, y las del consejo si es consejero y están encendidas
    * para el consejo. Vacío = el módulo no existe para esta persona.
    */
-  private async allowedKinds(complexId: string, currentUser: JwtAccessPayload): Promise<VotingMeetingKind[]> {
+  private async allowedKinds(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingMeetingKind[]> {
     const settings = await this.settingsOf(complexId);
     if (!settings.moduleEnabled) return [];
 
     const kinds: VotingMeetingKind[] = [];
     if (settings.switchOn) kinds.push(VotingMeetingKind.ASAMBLEA);
 
-    if (settings.councilSwitch
-      && currentUser.entityType === 'user'
-      && await this.residentsService.isCouncilUser(currentUser.sub)) {
+    if (
+      settings.councilSwitch &&
+      currentUser.entityType === 'user' &&
+      (await this.residentsService.isCouncilUser(currentUser.sub))
+    ) {
       kinds.push(VotingMeetingKind.CONSEJO);
     }
 
@@ -758,19 +947,25 @@ export class VotingService implements OnModuleInit {
     const settings = await this.settingsOf(complexId);
     const payload = {
       complexId,
-      moduleEnabled:    settings.moduleEnabled,
+      moduleEnabled: settings.moduleEnabled,
       residentsEnabled: settings.switchOn,
-      councilEnabled:   settings.councilSwitch,
+      councilEnabled: settings.councilSwitch,
     };
 
-    this.socketService.emitToComplex(complexId, SocketEvent.VOTING_AVAILABILITY, payload);
+    this.socketService.emitToComplex(
+      complexId,
+      SocketEvent.VOTING_AVAILABILITY,
+      payload,
+    );
 
     const [residents, council] = await Promise.all([
       this.residentsService.findActiveUserIdsByComplexInternal(complexId),
       this.residentsService.findCouncilUserIds(complexId),
     ]);
     this.socketService.emitToUsers(
-      [...new Set([...residents, ...council])], SocketEvent.VOTING_AVAILABILITY, payload,
+      [...new Set([...residents, ...council])],
+      SocketEvent.VOTING_AVAILABILITY,
+      payload,
     );
   }
 
@@ -780,59 +975,97 @@ export class VotingService implements OnModuleInit {
       this.residentsService.findCouncilUserIds(complexId),
       this.settingsOf(complexId),
     ]);
-    return members.filter(userId => !settings.voiceOnly.includes(userId));
+    return members.filter((userId) => !settings.voiceOnly.includes(userId));
   }
 
   /**
    * Quién vota y con qué peso. En asamblea, la unidad del residente con su
    * coeficiente (o 1); en el consejo, el consejero con voto, con 1.
    */
-  private async voterFor(question: VotingQuestion, currentUser: JwtAccessPayload): Promise<Voter> {
+  private async voterFor(
+    question: VotingQuestion,
+    currentUser: JwtAccessPayload,
+  ): Promise<Voter> {
     if (question.weighting === VoteWeighting.MEMBER) {
-      if (!await this.residentsService.isCouncilUser(currentUser.sub)) {
-        this.fail('Solo los miembros del consejo votan en sus reuniones', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+      if (!(await this.residentsService.isCouncilUser(currentUser.sub))) {
+        this.fail(
+          'Solo los miembros del consejo votan en sus reuniones',
+          HttpStatus.FORBIDDEN,
+          GeneralErrorCode.FORBIDDEN,
+        );
       }
-      if (!(await this.councilVoters(question.complexId)).includes(currentUser.sub)) {
-        this.fail('En el consejo tienes voz pero no voto', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+      if (
+        !(await this.councilVoters(question.complexId)).includes(
+          currentUser.sub,
+        )
+      ) {
+        this.fail(
+          'En el consejo tienes voz pero no voto',
+          HttpStatus.FORBIDDEN,
+          GeneralErrorCode.FORBIDDEN,
+        );
       }
-      return { voterKey: `user:${currentUser.sub}`, unitId: null, residentId: null, weight: 1 };
+      return {
+        voterKey: `user:${currentUser.sub}`,
+        unitId: null,
+        residentId: null,
+        weight: 1,
+      };
     }
 
-    const resident = await this.residentsService
-      .findActiveResidentByUserIdInternal(currentUser.sub, question.complexId);
+    const resident =
+      await this.residentsService.findActiveResidentByUserIdInternal(
+        currentUser.sub,
+        question.complexId,
+      );
 
     if (!resident?.unitId) {
-      this.fail('Para votar tienes que ser residente activo de una unidad', HttpStatus.FORBIDDEN, GeneralErrorCode.FORBIDDEN);
+      this.fail(
+        'Para votar tienes que ser residente activo de una unidad',
+        HttpStatus.FORBIDDEN,
+        GeneralErrorCode.FORBIDDEN,
+      );
     }
 
-    const weight = question.weighting === VoteWeighting.COEFFICIENT
-      ? Number(resident!.unit?.coefficient ?? 0)
-      : 1;
+    const weight =
+      question.weighting === VoteWeighting.COEFFICIENT
+        ? Number(resident.unit?.coefficient ?? 0)
+        : 1;
 
     if (weight <= 0) {
-      this.fail('Tu unidad no tiene coeficiente de copropiedad cargado. Avísale a la administración.');
+      this.fail(
+        'Tu unidad no tiene coeficiente de copropiedad cargado. Avísale a la administración.',
+      );
     }
 
     return {
-      voterKey:   `unit:${resident!.unitId}`,
-      unitId:     resident!.unitId,
-      residentId: resident!.id,
+      voterKey: `unit:${resident.unitId}`,
+      unitId: resident.unitId,
+      residentId: resident.id,
       weight,
     };
   }
 
   /** Como `voterFor`, sin lanzar: null si a esta persona no le toca votar. */
-  private async voterKeyOf(question: VotingQuestion, currentUser: JwtAccessPayload): Promise<string | null> {
+  private async voterKeyOf(
+    question: VotingQuestion,
+    currentUser: JwtAccessPayload,
+  ): Promise<string | null> {
     if (currentUser.entityType !== 'user') return null;
 
     if (question.weighting === VoteWeighting.MEMBER) {
-      return (await this.councilVoters(question.complexId)).includes(currentUser.sub)
+      return (await this.councilVoters(question.complexId)).includes(
+        currentUser.sub,
+      )
         ? `user:${currentUser.sub}`
         : null;
     }
 
-    const resident = await this.residentsService
-      .findActiveResidentByUserIdInternal(currentUser.sub, question.complexId);
+    const resident =
+      await this.residentsService.findActiveResidentByUserIdInternal(
+        currentUser.sub,
+        question.complexId,
+      );
     return resident?.unitId ? `unit:${resident.unitId}` : null;
   }
 
@@ -841,7 +1074,9 @@ export class VotingService implements OnModuleInit {
    * residentes en ellas: el derecho es del propietario) o los consejeros con
    * voto.
    */
-  private async computeEligible(question: VotingQuestion): Promise<{ count: number; weight: number }> {
+  private async computeEligible(
+    question: VotingQuestion,
+  ): Promise<{ count: number; weight: number }> {
     if (question.weighting === VoteWeighting.MEMBER) {
       const voters = await this.councilVoters(question.complexId);
       return { count: voters.length, weight: voters.length };
@@ -854,18 +1089,24 @@ export class VotingService implements OnModuleInit {
 
     return {
       count: units.length,
-      weight: question.weighting === VoteWeighting.COEFFICIENT
-        ? sum(units.map(unit => Number(unit.coefficient ?? 0)))
-        : units.length,
+      weight:
+        question.weighting === VoteWeighting.COEFFICIENT
+          ? sum(units.map((unit) => Number(unit.coefficient ?? 0)))
+          : units.length,
     };
   }
 
   /** En el consejo vota cada miembro; en asamblea, por coeficiente salvo que pidan lo contrario. */
-  private weightingFor(kind: VotingMeetingKind, requested?: VoteWeighting | null): VoteWeighting {
+  private weightingFor(
+    kind: VotingMeetingKind,
+    requested?: VoteWeighting | null,
+  ): VoteWeighting {
     if (kind === VotingMeetingKind.CONSEJO) return VoteWeighting.MEMBER;
 
     if (requested === VoteWeighting.MEMBER) {
-      this.fail('En una asamblea el voto es por coeficiente o por unidad, no por consejero');
+      this.fail(
+        'En una asamblea el voto es por coeficiente o por unidad, no por consejero',
+      );
     }
     return requested ?? VoteWeighting.COEFFICIENT;
   }
@@ -883,7 +1124,8 @@ export class VotingService implements OnModuleInit {
       clean.push(text);
     }
 
-    if (clean.length < 2) this.fail('La pregunta necesita al menos dos opciones distintas');
+    if (clean.length < 2)
+      this.fail('La pregunta necesita al menos dos opciones distintas');
     return clean;
   }
 
@@ -897,22 +1139,32 @@ export class VotingService implements OnModuleInit {
     }
   }
 
-  private async findMeetingForAdmin(meetingId: string, currentUser: JwtAccessPayload): Promise<VotingMeeting> {
+  private async findMeetingForAdmin(
+    meetingId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingMeeting> {
     const meeting = await this.meetingRepo.findOne({
       where: { id: meetingId },
       relations: ['questions'],
     });
 
     if (!meeting) {
-      this.fail('La reunión no existe o fue eliminada', HttpStatus.NOT_FOUND, GeneralErrorCode.NOT_FOUND);
+      this.fail(
+        'La reunión no existe o fue eliminada',
+        HttpStatus.NOT_FOUND,
+        GeneralErrorCode.NOT_FOUND,
+      );
     }
 
-    await this.complexService.findById(meeting!.complexId, currentUser);
-    await this.assertModule(meeting!.complexId);
-    return meeting!;
+    await this.complexService.findById(meeting.complexId, currentUser);
+    await this.assertModule(meeting.complexId);
+    return meeting;
   }
 
-  private async findQuestionForAdmin(questionId: string, currentUser: JwtAccessPayload): Promise<VotingQuestion> {
+  private async findQuestionForAdmin(
+    questionId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<VotingQuestion> {
     const question = await this.findQuestionOrFail(questionId);
     await this.complexService.findById(question.complexId, currentUser);
     await this.assertModule(question.complexId);
@@ -926,11 +1178,17 @@ export class VotingService implements OnModuleInit {
     });
 
     if (!question) {
-      this.fail('La votación no existe o fue eliminada', HttpStatus.NOT_FOUND, GeneralErrorCode.NOT_FOUND);
+      this.fail(
+        'La votación no existe o fue eliminada',
+        HttpStatus.NOT_FOUND,
+        GeneralErrorCode.NOT_FOUND,
+      );
     }
 
-    question!.options = [...(question!.options ?? [])].sort((a, b) => a.position - b.position);
-    return question!;
+    question.options = [...(question.options ?? [])].sort(
+      (a, b) => a.position - b.position,
+    );
+    return question;
   }
 
   /** Guarda solo las columnas de la pregunta, sin arrastrar opciones ni reunión. */
@@ -941,10 +1199,12 @@ export class VotingService implements OnModuleInit {
 
   private sortMeeting(meeting: VotingMeeting): VotingMeeting {
     meeting.questions = (meeting.questions ?? [])
-      .filter(question => !question.deletedAt)
+      .filter((question) => !question.deletedAt)
       .sort((a, b) => a.position - b.position)
-      .map(question => {
-        question.options = [...(question.options ?? [])].sort((a, b) => a.position - b.position);
+      .map((question) => {
+        question.options = [...(question.options ?? [])].sort(
+          (a, b) => a.position - b.position,
+        );
         return question;
       });
     return meeting;
@@ -961,19 +1221,33 @@ export class VotingService implements OnModuleInit {
   private emitUpdated(question: VotingQuestion, toVoters = false): void {
     const payload = {
       questionId: question.id,
-      meetingId:  question.meetingId,
-      complexId:  question.complexId,
-      status:     question.status,
+      meetingId: question.meetingId,
+      complexId: question.complexId,
+      status: question.status,
       // La app solo recarga con 'status'; con cada 'vote' repinta la web.
-      change:     toVoters ? 'status' : 'vote',
+      change: toVoters ? 'status' : 'vote',
     };
 
-    this.socketService.emitToComplex(question.complexId, SocketEvent.VOTING_UPDATED, payload);
+    this.socketService.emitToComplex(
+      question.complexId,
+      SocketEvent.VOTING_UPDATED,
+      payload,
+    );
 
     if (toVoters) {
       this.audienceOf(question)
-        .then(userIds => this.socketService.emitToUsers(userIds, SocketEvent.VOTING_UPDATED, payload))
-        .catch(err => this.logger.warn(`Error avisando el cambio de ${question.id}: ${err?.message}`));
+        .then((userIds) =>
+          this.socketService.emitToUsers(
+            userIds,
+            SocketEvent.VOTING_UPDATED,
+            payload,
+          ),
+        )
+        .catch((err) =>
+          this.logger.warn(
+            `Error avisando el cambio de ${question.id}: ${err?.message}`,
+          ),
+        );
     }
   }
 
@@ -982,9 +1256,12 @@ export class VotingService implements OnModuleInit {
    * (también quien solo tiene voz: asiste a la reunión aunque no vote).
    */
   private async audienceOf(question: VotingQuestion): Promise<string[]> {
-    const userIds = question.meeting?.kind === VotingMeetingKind.CONSEJO
-      ? await this.residentsService.findCouncilUserIds(question.complexId)
-      : await this.residentsService.findActiveUserIdsByComplexInternal(question.complexId);
+    const userIds =
+      question.meeting?.kind === VotingMeetingKind.CONSEJO
+        ? await this.residentsService.findCouncilUserIds(question.complexId)
+        : await this.residentsService.findActiveUserIdsByComplexInternal(
+            question.complexId,
+          );
     return [...new Set(userIds)];
   }
 

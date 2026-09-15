@@ -3,7 +3,7 @@ import { registerEnumType } from '@nestjs/graphql';
 /** Tipo de reunión. Decide quién vota: la copropiedad o el consejo. */
 export enum VotingMeetingKind {
   ASAMBLEA = 'ASAMBLEA',
-  CONSEJO  = 'CONSEJO',
+  CONSEJO = 'CONSEJO',
 }
 
 /**
@@ -15,20 +15,20 @@ export enum VotingMeetingKind {
  */
 export enum VoteWeighting {
   COEFFICIENT = 'COEFFICIENT',
-  UNIT        = 'UNIT',
-  MEMBER      = 'MEMBER',
+  UNIT = 'UNIT',
+  MEMBER = 'MEMBER',
 }
 
 /** NOMINAL: la administración ve qué votó cada quien. SECRET: solo totales. */
 export enum VoteSecrecy {
   NOMINAL = 'NOMINAL',
-  SECRET  = 'SECRET',
+  SECRET = 'SECRET',
 }
 
 /** DRAFT se edita; OPEN recibe votos; CLOSED es definitivo. */
 export enum VotingQuestionStatus {
-  DRAFT  = 'DRAFT',
-  OPEN   = 'OPEN',
+  DRAFT = 'DRAFT',
+  OPEN = 'OPEN',
   CLOSED = 'CLOSED',
 }
 
@@ -38,7 +38,7 @@ export enum VotingQuestionStatus {
  */
 export enum VotingAudience {
   RESIDENTS = 'RESIDENTS',
-  COUNCIL   = 'COUNCIL',
+  COUNCIL = 'COUNCIL',
 }
 
 registerEnumType(VotingAudience, {
@@ -53,7 +53,8 @@ registerEnumType(VotingMeetingKind, {
 
 registerEnumType(VoteWeighting, {
   name: 'VoteWeighting',
-  description: 'Peso del voto: coeficiente, una unidad un voto, o un consejero un voto',
+  description:
+    'Peso del voto: coeficiente, una unidad un voto, o un consejero un voto',
 });
 
 registerEnumType(VoteSecrecy, {

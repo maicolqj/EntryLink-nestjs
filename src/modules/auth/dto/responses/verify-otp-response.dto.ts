@@ -1,7 +1,5 @@
-
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { UserBasicResponse } from './user-basic.response';
-
 
 @ObjectType()
 export class BasicResponse {

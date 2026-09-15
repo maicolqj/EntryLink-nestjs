@@ -1,31 +1,32 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { AmenityBooking }         from '../entities/amenity-booking.entity';
+import { AmenityBooking } from '../entities/amenity-booking.entity';
 import { AmenityBookingsService } from '../services/amenity-bookings.service';
 
-import { CreateAmenityBookingInput }  from '../dto/inputs/create-amenity-booking.input';
-import { CancelAmenityBookingInput }  from '../dto/inputs/cancel-amenity-booking.input';
-import { RejectAmenityBookingInput }  from '../dto/inputs/reject-amenity-booking.input';
-import { ChargeAmenityDamageInput }   from '../dto/inputs/charge-amenity-damage.input';
+import { CreateAmenityBookingInput } from '../dto/inputs/create-amenity-booking.input';
+import { CancelAmenityBookingInput } from '../dto/inputs/cancel-amenity-booking.input';
+import { RejectAmenityBookingInput } from '../dto/inputs/reject-amenity-booking.input';
+import { ChargeAmenityDamageInput } from '../dto/inputs/charge-amenity-damage.input';
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
-import { PaginationInput }            from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 /** Quien administra las reservas de todo el complejo. */
 const STAFF_ROLES = [
-  ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL,
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+  ValidRoles.SUPERVISOR_ROL,
 ];
 
 @Resolver(() => AmenityBooking)
 export class AmenityBookingsResolver {
-
   constructor(private readonly bookingsService: AmenityBookingsService) {}
 
   // ================================================================
@@ -49,7 +50,10 @@ export class AmenityBookingsResolver {
   }
 
   @Mutation(() => AmenityBooking, { name: 'approveAmenityBooking' })
-  @Auth({ roles: STAFF_ROLES, permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING] })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
   approve(
     @Args('bookingId') bookingId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -58,7 +62,10 @@ export class AmenityBookingsResolver {
   }
 
   @Mutation(() => AmenityBooking, { name: 'rejectAmenityBooking' })
-  @Auth({ roles: STAFF_ROLES, permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING] })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
   reject(
     @Args('input') input: RejectAmenityBookingInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -90,7 +97,7 @@ export class AmenityBookingsResolver {
     permissions: [ValidPermissions.CHECK_IN_AMENITY_BOOKING],
   })
   checkIn(
-    @Args('complexId')  complexId: string,
+    @Args('complexId') complexId: string,
     @Args('accessCode') accessCode: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
@@ -119,7 +126,10 @@ export class AmenityBookingsResolver {
    * una decisión que impacta su cartera.
    */
   @Mutation(() => AmenityBooking, { name: 'chargeAmenityDamage' })
-  @Auth({ roles: STAFF_ROLES, permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING] })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
   chargeDamage(
     @Args('input') input: ChargeAmenityDamageInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -138,27 +148,43 @@ export class AmenityBookingsResolver {
     permissions: [ValidPermissions.VIEW_AMENITY_BOOKINGS],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterAmenityBookingsInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true })
+    filters: FilterAmenityBookingsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedAmenityBookingsResponse> {
-    return this.bookingsService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.bookingsService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /** Reservas de la unidad del residente autenticado. */
-  @Query(() => PaginatedAmenityBookingsResponse, { name: 'myUnitAmenityBookings' })
+  @Query(() => PaginatedAmenityBookingsResponse, {
+    name: 'myUnitAmenityBookings',
+  })
   @Auth({
     roles: [ValidRoles.RESIDENT_ROL],
     permissions: [ValidPermissions.VIEW_AMENITY_BOOKINGS],
   })
   findMyUnitBookings(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterAmenityBookingsInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true })
+    filters: FilterAmenityBookingsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedAmenityBookingsResponse> {
-    return this.bookingsService.findMyUnitBookings(complexId, pagination, filters, currentUser);
+    return this.bookingsService.findMyUnitBookings(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**

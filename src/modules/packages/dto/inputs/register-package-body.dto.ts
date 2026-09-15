@@ -1,12 +1,19 @@
 import {
-  IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { PackageType } from '../../enums/package-type.enum';
 
 export class RegisterPackageBodyDto {
-
   @IsUUID()
   @IsNotEmpty()
   unitId: string;

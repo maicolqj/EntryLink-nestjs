@@ -17,7 +17,10 @@ export class AddGraceWindowToRefreshTokens1780012800000 implements MigrationInte
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropColumn('refresh_tokens', 'previous_token_valid_until');
+    await queryRunner.dropColumn(
+      'refresh_tokens',
+      'previous_token_valid_until',
+    );
     await queryRunner.dropColumn('refresh_tokens', 'previous_token_hash');
   }
 }

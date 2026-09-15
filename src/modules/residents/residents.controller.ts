@@ -17,9 +17,9 @@ import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { unlink } from 'fs/promises';
 
-import { Auth }       from '../shared/decorators/auth.decorator';
+import { Auth } from '../shared/decorators/auth.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
-import { ResidentsImportService }  from './services/residents-import.service';
+import { ResidentsImportService } from './services/residents-import.service';
 import { ResidentsImportProducer } from './queues/residents-import.producer';
 
 const MAX_ROWS = 1000;
@@ -31,7 +31,7 @@ export class ResidentsController {
   private readonly logger = new Logger(ResidentsController.name);
 
   constructor(
-    private readonly importService:  ResidentsImportService,
+    private readonly importService: ResidentsImportService,
     private readonly importProducer: ResidentsImportProducer,
   ) {}
 
@@ -47,7 +47,7 @@ export class ResidentsController {
         destination: join(process.cwd(), 'tmp', 'resident-imports'),
         filename: (_req, file, cb) => {
           const unique = randomBytes(8).toString('hex');
-          const ext    = extname(file.originalname).toLowerCase();
+          const ext = extname(file.originalname).toLowerCase();
           cb(null, `resident-import-${unique}${ext}`);
         },
       }),
@@ -79,8 +79,8 @@ export class ResidentsController {
       throw new BadRequestException('El campo complexId es requerido');
     }
 
-    const callerRoles: string[]       = req.user?.roles ?? [];
-    const callerComplexId: string     = req.user?.complexId;
+    const callerRoles: string[] = req.user?.roles ?? [];
+    const callerComplexId: string = req.user?.complexId;
     const isSuperAdmin = callerRoles.includes(ValidRoles.SUPER_ADMIN_ROL);
 
     if (!isSuperAdmin && callerComplexId !== complexId) {
@@ -119,7 +119,12 @@ export class ResidentsController {
       );
     }
 
-    const jobId = await this.importProducer.enqueue(file.path, complexId, adminUserId, approvedByUserId);
+    const jobId = await this.importProducer.enqueue(
+      file.path,
+      complexId,
+      adminUserId,
+      approvedByUserId,
+    );
 
     this.logger.log(
       `Importación iniciada — jobId: ${jobId} | filas: ${rowCount} | complex: ${complexId}`,

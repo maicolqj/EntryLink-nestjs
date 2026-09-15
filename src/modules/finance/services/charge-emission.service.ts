@@ -2,33 +2,32 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
 
-import { ChargeEmission }            from '../entities/charge-emission.entity';
-import { FeeCharge }                 from '../entities/fee-charge.entity';
-import { ChargeEmissionStatus }      from '../enums/charge-emission-status.enum';
-import { ChargeStatus }              from '../enums/charge-status.enum';
-import { ChargeRuleTargetType }      from '../enums/charge-rule-target-type.enum';
-import { FeeConfigBillingMode }      from '../enums/fee-config-billing-mode.enum';
+import { ChargeEmission } from '../entities/charge-emission.entity';
+import { FeeCharge } from '../entities/fee-charge.entity';
+import { ChargeEmissionStatus } from '../enums/charge-emission-status.enum';
+import { ChargeStatus } from '../enums/charge-status.enum';
+import { ChargeRuleTargetType } from '../enums/charge-rule-target-type.enum';
+import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 import { CreateChargeEmissionInput } from '../dto/inputs/create-charge-emission.input';
-import { ChargeRule }                from '../dto/inputs/charge-rule.input';
+import { ChargeRule } from '../dto/inputs/charge-rule.input';
+import { ChargeEmissionPreviewResponse } from '../dto/responses/charge-emission-preview.response';
 import {
-  ChargeEmissionPreviewResponse,
-} from '../dto/responses/charge-emission-preview.response';
-import {
-  ChargeCalculatorService, ResolvedChargeRule,
+  ChargeCalculatorService,
+  ResolvedChargeRule,
 } from './charge-calculator.service';
 
-import { Unit }     from '../../residential-complex/entities/unit.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { UnitType } from '../../residential-complex/enums/unit-type.enum';
-import { Vehicle }  from '../../vehicles/entities/vehicle.entity';
-import { UnitService }              from '../../residential-complex/services/unit.service';
+import { Vehicle } from '../../vehicles/entities/vehicle.entity';
+import { UnitService } from '../../residential-complex/services/unit.service';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AccountingService }        from './accounting.service';
+import { AccountingService } from './accounting.service';
 
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { CustomError }      from '../../shared/utils/errors.utils';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode } from '../../shared/constans/error-codes.constants';
-import { SocketService }    from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }      from '../../../core/infrastructure/socket/socket.events';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 /**
  * Orquesta el ciclo de vida de una emisión de cargos (DRAFT → preview →
@@ -39,7 +38,6 @@ import { SocketEvent }      from '../../../core/infrastructure/socket/socket.eve
  */
 @Injectable()
 export class ChargeEmissionService {
-
   private readonly logger = new Logger(ChargeEmissionService.name);
 
   constructor(
@@ -68,7 +66,11 @@ export class ChargeEmissionService {
     await this.complexService.findById(input.complexId, currentUser);
 
     const exists = await this.emissionRepo.findOne({
-      where: { complexId: input.complexId, conceptName: input.conceptName.trim(), period: input.period },
+      where: {
+        complexId: input.complexId,
+        conceptName: input.conceptName.trim(),
+        period: input.period,
+      },
     });
     if (exists && exists.status !== ChargeEmissionStatus.CANCELLED) {
       throw new CustomError({
@@ -78,7 +80,10 @@ export class ChargeEmissionService {
       });
     }
 
-    const dueDate = this.buildDueDate(input.period, input.billingMode ?? FeeConfigBillingMode.ADVANCE);
+    const dueDate = this.buildDueDate(
+      input.period,
+      input.billingMode ?? FeeConfigBillingMode.ADVANCE,
+    );
 
     const emission = this.emissionRepo.create({
       complexId: input.complexId,
@@ -105,26 +110,30 @@ export class ChargeEmissionService {
     currentUser: JwtAccessPayload,
   ): Promise<ChargeEmissionPreviewResponse> {
     const emission = await this.findEmissionOrFail(emissionId, currentUser);
-    const allUnits = await this.unitService.findAllByComplexInternal(emission.complexId);
+    const allUnits = await this.unitService.findAllByComplexInternal(
+      emission.complexId,
+    );
 
     const result = await this.runCalculation(emission, allUnits);
 
-    const unitById = new Map(allUnits.map(u => [u.id, u]));
+    const unitById = new Map(allUnits.map((u) => [u.id, u]));
 
     return {
       emissionId: emission.id,
       period: emission.period,
       conceptName: emission.conceptName,
-      lines: result.lines.map(l => ({
+      lines: result.lines.map((l) => ({
         unitId: l.unitId,
         unitNumber: unitById.get(l.unitId)?.number ?? l.unitId,
         ruleIndex: l.ruleIndex,
         amount: l.amount,
       })),
-      unitsCharged: new Set(result.lines.map(l => l.unitId)).size,
+      unitsCharged: new Set(result.lines.map((l) => l.unitId)).size,
       total: result.total,
       conflicts: result.conflicts,
-      uncoveredUnits: result.uncoveredUnitIds.map(id => unitById.get(id)?.number ?? id),
+      uncoveredUnits: result.uncoveredUnitIds.map(
+        (id) => unitById.get(id)?.number ?? id,
+      ),
       warnings: result.warnings,
     };
   }
@@ -147,13 +156,15 @@ export class ChargeEmissionService {
       });
     }
 
-    const allUnits = await this.unitService.findAllByComplexInternal(emission.complexId);
+    const allUnits = await this.unitService.findAllByComplexInternal(
+      emission.complexId,
+    );
     const result = await this.runCalculation(emission, allUnits);
 
     // Solapamiento: una unidad NO puede estar en dos reglas de la misma emisión.
     if (result.conflicts.length > 0) {
       const detail = result.conflicts
-        .map(c => `${c.unitNumber} (reglas ${c.ruleIndexes.join(', ')})`)
+        .map((c) => `${c.unitNumber} (reglas ${c.ruleIndexes.join(', ')})`)
         .join('; ');
       throw new CustomError({
         message: `Reglas en conflicto: las siguientes unidades están cubiertas por más de una regla → ${detail}.`,
@@ -164,7 +175,8 @@ export class ChargeEmissionService {
 
     if (result.lines.length === 0) {
       throw new CustomError({
-        message: 'La emisión no produce ningún cargo (ninguna unidad cumple las reglas).',
+        message:
+          'La emisión no produce ningún cargo (ninguna unidad cumple las reglas).',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: FinanceErrorCode.CHARGE_EMISSION_NO_LINES,
       });
@@ -181,27 +193,39 @@ export class ChargeEmissionService {
       for (const line of result.lines) {
         // Idempotencia: no duplicar el mismo concepto+período+unidad.
         const existing = await chargeRepo.findOne({
-          where: { complexId, unitId: line.unitId, period, description, feeConfigId: IsNull() as any },
+          where: {
+            complexId,
+            unitId: line.unitId,
+            period,
+            description,
+            feeConfigId: IsNull() as any,
+          },
         });
         if (existing) continue;
 
-        await chargeRepo.save(chargeRepo.create({
-          complexId,
-          unitId: line.unitId,
-          period,
-          dueDate,
-          amount: line.amount,
-          paidAmount: 0,
-          description,
-          status: ChargeStatus.PENDING,
-        }));
+        await chargeRepo.save(
+          chargeRepo.create({
+            complexId,
+            unitId: line.unitId,
+            period,
+            dueDate,
+            amount: line.amount,
+            paidAmount: 0,
+            description,
+            status: ChargeStatus.PENDING,
+          }),
+        );
         affectedUnitIds.add(line.unitId);
         generated++;
       }
 
       // Reconciliar saldo materializado de cada unidad afectada.
       for (const unitId of affectedUnitIds) {
-        await this.accountingService.recomputeUnitStatus(manager, complexId, unitId);
+        await this.accountingService.recomputeUnitStatus(
+          manager,
+          complexId,
+          unitId,
+        );
       }
 
       emission.status = ChargeEmissionStatus.CONFIRMED;
@@ -215,9 +239,16 @@ export class ChargeEmissionService {
     );
 
     if (generated > 0) {
-      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, {
-        complexId, period, description, created: generated,
-      });
+      this.socketService.emitToComplex(
+        complexId,
+        SocketEvent.FINANCE_CHARGE_NEW,
+        {
+          complexId,
+          period,
+          description,
+          created: generated,
+        },
+      );
     }
 
     return emission;
@@ -236,7 +267,8 @@ export class ChargeEmissionService {
 
     if (emission.status === ChargeEmissionStatus.CONFIRMED) {
       throw new CustomError({
-        message: 'No se puede cancelar una emisión ya confirmada; reverse los cargos individualmente.',
+        message:
+          'No se puede cancelar una emisión ya confirmada; reverse los cargos individualmente.',
         statusCode: HttpStatus.CONFLICT,
         errorCode: FinanceErrorCode.CHARGE_EMISSION_NOT_DRAFT,
       });
@@ -283,7 +315,9 @@ export class ChargeEmissionService {
     emissionId: string,
     currentUser: JwtAccessPayload,
   ): Promise<ChargeEmission> {
-    const emission = await this.emissionRepo.findOne({ where: { id: emissionId } });
+    const emission = await this.emissionRepo.findOne({
+      where: { id: emissionId },
+    });
     if (!emission) {
       throw new CustomError({
         message: 'Emisión de cargos no encontrada.',
@@ -301,7 +335,11 @@ export class ChargeEmissionService {
     const resolved: ResolvedChargeRule[] = [];
     for (let i = 0; i < emission.rules.length; i++) {
       const rule = emission.rules[i];
-      const units = await this.resolveRuleUnits(rule, allUnits, emission.complexId);
+      const units = await this.resolveRuleUnits(
+        rule,
+        allUnits,
+        emission.complexId,
+      );
       resolved.push({
         ruleIndex: i,
         calculationMethod: rule.calculationMethod,
@@ -331,23 +369,35 @@ export class ChargeEmissionService {
         const unitType = tv.unitType as UnitType;
         if (unitType === UnitType.VEHICLE_UNIT) {
           const ids = await this.unitsWithActiveVehicle(complexId);
-          return allUnits.filter(u => ids.has(u.id));
+          return allUnits.filter((u) => ids.has(u.id));
         }
-        return allUnits.filter(u => u.type === unitType);
+        return allUnits.filter((u) => u.type === unitType);
       }
 
       case ChargeRuleTargetType.SPECIFIC_UNITS: {
-        const ids = new Set<string>(Array.isArray(tv.unitIds) ? tv.unitIds : []);
-        return allUnits.filter(u => ids.has(u.id));
+        const ids = new Set<string>(
+          Array.isArray(tv.unitIds) ? tv.unitIds : [],
+        );
+        return allUnits.filter((u) => ids.has(u.id));
       }
 
       case ChargeRuleTargetType.TARGET_RULES:
-        return allUnits.filter(unit => {
+        return allUnits.filter((unit) => {
           if (tv.excludeFloor1 && unit.floor === 1) return false;
           if (tv.floorMin != null && unit.floor < tv.floorMin) return false;
           if (tv.floorMax != null && unit.floor > tv.floorMax) return false;
-          if (Array.isArray(tv.buildingIds) && tv.buildingIds.length && !tv.buildingIds.includes(unit.buildingId)) return false;
-          if (Array.isArray(tv.unitTypes) && tv.unitTypes.length && !tv.unitTypes.includes(unit.type)) return false;
+          if (
+            Array.isArray(tv.buildingIds) &&
+            tv.buildingIds.length &&
+            !tv.buildingIds.includes(unit.buildingId)
+          )
+            return false;
+          if (
+            Array.isArray(tv.unitTypes) &&
+            tv.unitTypes.length &&
+            !tv.unitTypes.includes(unit.type)
+          )
+            return false;
           return true;
         });
 
@@ -356,7 +406,9 @@ export class ChargeEmissionService {
     }
   }
 
-  private async unitsWithActiveVehicle(complexId: string): Promise<Set<string>> {
+  private async unitsWithActiveVehicle(
+    complexId: string,
+  ): Promise<Set<string>> {
     const rows = await this.vehicleRepo
       .createQueryBuilder('v')
       .select('DISTINCT v.unitId', 'unitId')
@@ -372,12 +424,20 @@ export class ChargeEmissionService {
    * ARREARS: el siguiente). El cargo vence recién el día 1 del mes posterior, que
    * es cuando pasa a OVERDUE y arranca la mora. `dueDayOfMonth` no lo adelanta.
    */
-  private buildDueDate(period: string, billingMode: FeeConfigBillingMode): Date {
+  private buildDueDate(
+    period: string,
+    billingMode: FeeConfigBillingMode,
+  ): Date {
     const [year, month] = period.split('-').map(Number);
     let dueYear = year;
     let dueMonth = month;
     if (billingMode === FeeConfigBillingMode.ARREARS) {
-      if (dueMonth === 12) { dueMonth = 1; dueYear += 1; } else { dueMonth += 1; }
+      if (dueMonth === 12) {
+        dueMonth = 1;
+        dueYear += 1;
+      } else {
+        dueMonth += 1;
+      }
     }
     const lastDay = new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, lastDay, 23, 59, 59, 999);

@@ -1,10 +1,10 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 export enum MessageType {
-  COMUNICADO   = 'COMUNICADO',
-  ALERTA       = 'ALERTA',
-  INFORMATIVO  = 'INFORMATIVO',
-  URGENTE      = 'URGENTE',
+  COMUNICADO = 'COMUNICADO',
+  ALERTA = 'ALERTA',
+  INFORMATIVO = 'INFORMATIVO',
+  URGENTE = 'URGENTE',
   RECORDATORIO = 'RECORDATORIO',
 }
 

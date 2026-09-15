@@ -11,7 +11,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente (ADD VALUE IF NOT EXISTS).
  */
 export class AddNewDeviceLinkedNotificationType1781003300000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const [{ exists }] = await queryRunner.query(
       `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notifications_type_enum') AS exists`,

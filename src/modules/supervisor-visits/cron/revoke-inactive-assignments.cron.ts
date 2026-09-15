@@ -1,17 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron }               from '@nestjs/schedule';
-import { InjectRepository }   from '@nestjs/typeorm';
-import { In, Repository }     from 'typeorm';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 
-import { UserComplexAssignment, AssignmentStatus } from '../../users/entities/user-complex-assignment.entity';
-import { ValidRoles }             from '../../roles/enums/valid-roles';
-import { NotificationsService }   from '../../notifications/services/notifications.service';
-import { NotificationType }       from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }   from '../../notifications/enums/notification-priority.enum';
+import {
+  UserComplexAssignment,
+  AssignmentStatus,
+} from '../../users/entities/user-complex-assignment.entity';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 
 interface ExpiredRow {
-  id:         string;
-  user_id:    string;
+  id: string;
+  user_id: string;
   complex_id: string;
 }
 
@@ -75,7 +78,7 @@ export class RevokeInactiveAssignmentsCron {
     );
 
     const now = new Date();
-    const ids  = expired.map(r => r.id);
+    const ids = expired.map((r) => r.id);
 
     await this.assignmentRepo.update(
       { id: In(ids) },
@@ -85,20 +88,20 @@ export class RevokeInactiveAssignmentsCron {
     for (const row of expired) {
       void this.notificationsService
         .notify({
-          complexId:  row.complex_id,
-          userIds:    [row.user_id],
-          type:       NotificationType.ACCESS_REVOKED_INACTIVITY,
-          priority:   NotificationPriority.HIGH,
-          title:      'Acceso revocado por inactividad',
-          body:       'Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos 30 días. Para recuperar el acceso debes solicitar autorización nuevamente.',
+          complexId: row.complex_id,
+          userIds: [row.user_id],
+          type: NotificationType.ACCESS_REVOKED_INACTIVITY,
+          priority: NotificationPriority.HIGH,
+          title: 'Acceso revocado por inactividad',
+          body: 'Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos 30 días. Para recuperar el acceso debes solicitar autorización nuevamente.',
           entityType: 'ACCESS_REQUEST',
-          metadata:   {
+          metadata: {
             complexId: row.complex_id,
             revokedAt: now.toISOString(),
-            reason:    'INACTIVITY_30_DAYS',
+            reason: 'INACTIVITY_30_DAYS',
           },
         })
-        .catch(err =>
+        .catch((err) =>
           this.logger.warn(
             `Error al notificar revocación supervisor=${row.user_id} complejo=${row.complex_id}: ${err?.message}`,
           ),

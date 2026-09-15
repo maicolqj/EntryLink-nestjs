@@ -32,15 +32,24 @@ import { CreateDirectChargesInput } from '../dto/inputs/create-direct-charges.in
 import { CreateDirectChargesResponse } from '../dto/responses/create-direct-charges.response';
 import { RegisterExpenseInput } from '../dto/inputs/register-expense.input';
 import { FilterExpensesInput } from '../dto/inputs/filter-expenses.input';
-import { PaginatedExpensesResponse, ExpenseCategoryBreakdown } from '../dto/responses/paginated-expenses.response';
+import {
+  PaginatedExpensesResponse,
+  ExpenseCategoryBreakdown,
+} from '../dto/responses/paginated-expenses.response';
 import { RegisterDirectIncomeInput } from '../dto/inputs/register-direct-income.input';
 import { FilterIncomesInput } from '../dto/inputs/filter-incomes.input';
-import { PaginatedIncomesResponse, IncomeCategoryBreakdown } from '../dto/responses/paginated-incomes.response';
+import {
+  PaginatedIncomesResponse,
+  IncomeCategoryBreakdown,
+} from '../dto/responses/paginated-incomes.response';
 import { RegisterBulkPaymentInput } from '../dto/inputs/register-bulk-payment.input';
 import { RegisterBulkPaymentResponse } from '../dto/responses/register-bulk-payment.response';
 import { PaginatedChargesResponse } from '../dto/responses/paginated-charges.response';
 import { GenerateChargesResponse } from '../dto/responses/generate-charges.response';
-import { UnitBalanceResponse, ComplexFinancialSummaryResponse } from '../dto/responses/unit-balance.response';
+import {
+  UnitBalanceResponse,
+  ComplexFinancialSummaryResponse,
+} from '../dto/responses/unit-balance.response';
 import {
   CreateWalletCreditInput,
   ApplyWalletToChargeInput,
@@ -63,7 +72,11 @@ import {
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { FinanceErrorCode, ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  FinanceErrorCode,
+  ComplexErrorCode,
+  GeneralErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { ExpenseCategory } from '../enums/expense-category.enum';
 import { IncomeCategory } from '../enums/income-category.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
@@ -121,7 +134,7 @@ export class FinanceService {
     private readonly auditService: AuditService,
     private readonly socketService: SocketService,
     private readonly cacheService: CacheService,
-  ) { }
+  ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // CHARGE CATEGORIES
@@ -134,14 +147,20 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
 
     const cacheKey = BK.finance.categories(complexId);
-    const cached = await this.cacheService.get<ChargeCategory[]>({ key: cacheKey });
+    const cached = await this.cacheService.get<ChargeCategory[]>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const categories = await this.categoryRepo.find({
       where: { complexId },
       order: { createdAt: 'ASC' },
     });
-    await this.cacheService.set({ key: cacheKey, data: categories, options: { ttl: BK.finance.TTL_CATS } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: categories,
+      options: { ttl: BK.finance.TTL_CATS },
+    });
     return categories;
   }
 
@@ -165,15 +184,22 @@ export class FinanceService {
     const { id, ...fields } = input;
     Object.assign(category, fields);
     const saved = await this.categoryRepo.save(category);
-    await this.cacheService.deleteByPrefix(BK.finance.prefix(category.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.finance.prefix(category.complexId),
+    );
     return saved;
   }
 
-  async deleteCategory(id: string, currentUser: JwtAccessPayload): Promise<boolean> {
+  async deleteCategory(
+    id: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
     const category = await this.findCategoryOrFail(id);
     await this.complexService.findById(category.complexId, currentUser);
     await this.categoryRepo.remove(category);
-    await this.cacheService.deleteByPrefix(BK.finance.prefix(category.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.finance.prefix(category.complexId),
+    );
     return true;
   }
 
@@ -193,12 +219,20 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
 
     const cacheKey = BK.finance.config(complexId);
-    const cached = await this.cacheService.get<ComplexFinanceConfig>({ key: cacheKey });
+    const cached = await this.cacheService.get<ComplexFinanceConfig>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
-    const existing = await this.financeConfigRepo.findOne({ where: { complexId } });
+    const existing = await this.financeConfigRepo.findOne({
+      where: { complexId },
+    });
     if (existing) {
-      await this.cacheService.set({ key: cacheKey, data: existing, options: { ttl: BK.finance.TTL_CONFIG } });
+      await this.cacheService.set({
+        key: cacheKey,
+        data: existing,
+        options: { ttl: BK.finance.TTL_CONFIG },
+      });
       return existing;
     }
 
@@ -214,7 +248,11 @@ export class FinanceService {
     });
     const saved = await this.financeConfigRepo.save(created);
 
-    await this.cacheService.set({ key: cacheKey, data: saved, options: { ttl: BK.finance.TTL_CONFIG } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: saved,
+      options: { ttl: BK.finance.TTL_CONFIG },
+    });
     return saved;
   }
 
@@ -224,7 +262,9 @@ export class FinanceService {
   ): Promise<ComplexFinanceConfig> {
     await this.complexService.findById(input.complexId, currentUser);
 
-    let config = await this.financeConfigRepo.findOne({ where: { complexId: input.complexId } });
+    let config = await this.financeConfigRepo.findOne({
+      where: { complexId: input.complexId },
+    });
 
     if (!config) {
       config = this.financeConfigRepo.create({
@@ -237,11 +277,16 @@ export class FinanceService {
     }
 
     if (input.moraRate !== undefined) config.moraRate = input.moraRate;
-    if (input.moraGraceDays !== undefined) config.moraGraceDays = input.moraGraceDays;
-    if (input.autoApplyMora !== undefined) config.autoApplyMora = input.autoApplyMora;
-    if (input.autoGenerateCharges !== undefined) config.autoGenerateCharges = input.autoGenerateCharges;
-    if (input.earlyDiscountPct !== undefined) config.earlyDiscountPct = input.earlyDiscountPct;
-    if (input.earlyDiscountDay !== undefined) config.earlyDiscountDay = input.earlyDiscountDay;
+    if (input.moraGraceDays !== undefined)
+      config.moraGraceDays = input.moraGraceDays;
+    if (input.autoApplyMora !== undefined)
+      config.autoApplyMora = input.autoApplyMora;
+    if (input.autoGenerateCharges !== undefined)
+      config.autoGenerateCharges = input.autoGenerateCharges;
+    if (input.earlyDiscountPct !== undefined)
+      config.earlyDiscountPct = input.earlyDiscountPct;
+    if (input.earlyDiscountDay !== undefined)
+      config.earlyDiscountDay = input.earlyDiscountDay;
 
     const saved = await this.financeConfigRepo.save(config);
     await this.cacheService.deleteByPrefix(BK.finance.prefix(input.complexId));
@@ -279,7 +324,9 @@ export class FinanceService {
       .getRawOne<{ period: string | null }>();
 
     const lastPeriod = lastRow?.period ?? null;
-    const startPeriod = lastPeriod ? this.nextPeriod(lastPeriod) : currentPeriod;
+    const startPeriod = lastPeriod
+      ? this.nextPeriod(lastPeriod)
+      : currentPeriod;
 
     const pending: string[] = [];
     for (let p = startPeriod; p <= currentPeriod; p = this.nextPeriod(p)) {
@@ -292,7 +339,7 @@ export class FinanceService {
     if (pending.length > 1) {
       this.logger.warn(
         `[catch-up] Complejo ${complexId}: ${pending.length} períodos sin facturar ` +
-        `(${pending[0]} → ${pending[pending.length - 1]}); recuperando.`,
+          `(${pending[0]} → ${pending[pending.length - 1]}); recuperando.`,
       );
     }
 
@@ -326,7 +373,7 @@ export class FinanceService {
     this.assertValidPeriod(period);
 
     const activeConfigs = await this.feeConfigRepo.find({
-      where: { complexId, isActive: true, deletedAt: null as any },
+      where: { complexId, isActive: true, deletedAt: null },
     });
 
     const allUnits = await this.unitService.findAllByComplexInternal(complexId);
@@ -335,10 +382,12 @@ export class FinanceService {
     // Si un FeeConfig comparte concepto (name) con un recurrente activo, se omite
     // para no causar el mismo cobro por ambos caminos.
     const recurringConcepts = new Set(
-      (await this.dataSource.getRepository(RecurringCharge).find({
-        where: { complexId, isActive: true },
-        select: ['concept'],
-      })).map(r => r.concept.trim().toLowerCase()),
+      (
+        await this.dataSource.getRepository(RecurringCharge).find({
+          where: { complexId, isActive: true },
+          select: ['concept'],
+        })
+      ).map((r) => r.concept.trim().toLowerCase()),
     );
 
     let totalGenerated = 0;
@@ -348,7 +397,7 @@ export class FinanceService {
       if (recurringConcepts.has(config.name.trim().toLowerCase())) {
         this.logger.warn(
           `[candado] FeeConfig "${config.name}" coincide con un RecurringCharge activo ` +
-          `del complejo ${complexId}; omitido para evitar doble facturación`,
+            `del complejo ${complexId}; omitido para evitar doble facturación`,
         );
         totalSkipped++;
         continue;
@@ -381,14 +430,18 @@ export class FinanceService {
             .andWhere('v.deleted_at IS NULL')
             .getRawMany();
           const vehicleUnitIds = new Set(vehicleRows.map((r: any) => r.unitId));
-          targetUnits = allUnits.filter(u => vehicleUnitIds.has(u.id));
+          targetUnits = allUnits.filter((u) => vehicleUnitIds.has(u.id));
         } else if (config.targetRules) {
           targetUnits = this.applyTargetRules(allUnits, config.targetRules);
         } else {
           continue;
         }
       } else {
-        targetUnits = await this.resolveTargetUnitsAdvanced(config, allUnits, complexId);
+        targetUnits = await this.resolveTargetUnitsAdvanced(
+          config,
+          allUnits,
+          complexId,
+        );
       }
 
       let configGenerated = 0;
@@ -401,12 +454,18 @@ export class FinanceService {
           const existingOnce = await this.chargeRepo.findOne({
             where: { feeConfigId: config.id, unitId: unit.id },
           });
-          if (existingOnce) { totalSkipped++; continue; }
+          if (existingOnce) {
+            totalSkipped++;
+            continue;
+          }
         } else {
           const existing = await this.chargeRepo.findOne({
             where: { feeConfigId: config.id, unitId: unit.id, period },
           });
-          if (existing) { totalSkipped++; continue; }
+          if (existing) {
+            totalSkipped++;
+            continue;
+          }
         }
 
         // Guardia anti-doble-cobro (red de seguridad): ya existe un cargo del
@@ -415,12 +474,18 @@ export class FinanceService {
         // <período>"). Evita facturar dos veces la misma cuota. Determinista por
         // descripción; conceptos con nombres distintos no se consideran colisión.
         const crossSource = await this.chargeRepo.findOne({
-          where: { complexId, unitId: unit.id, period, description, deletedAt: null as any },
+          where: {
+            complexId,
+            unitId: unit.id,
+            period,
+            description,
+            deletedAt: null,
+          },
         });
         if (crossSource) {
           this.logger.warn(
             `[anti-doble-cobro] cargo "${description}" ya existe para unidad ${unit.id} ` +
-            `(generado por otro motor); FeeConfig ${config.id} omitido`,
+              `(generado por otro motor); FeeConfig ${config.id} omitido`,
           );
           totalSkipped++;
           continue;
@@ -440,7 +505,11 @@ export class FinanceService {
             .andWhere('c.unitId = :unitId', { unitId: unit.id })
             .andWhere('c.period < :period', { period })
             .andWhere('c.status IN (:...statuses)', {
-              statuses: [ChargeStatus.OVERDUE, ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID],
+              statuses: [
+                ChargeStatus.OVERDUE,
+                ChargeStatus.PENDING,
+                ChargeStatus.PARTIALLY_PAID,
+              ],
             })
             .andWhere('c.deletedAt IS NULL')
             .getOne();
@@ -458,8 +527,15 @@ export class FinanceService {
 
         await this.chargeRepo.save(
           this.chargeRepo.create({
-            complexId, unitId: unit.id, feeConfigId: config.id,
-            period, dueDate, amount: chargeAmount, normalAmount, earlyPaymentDueDate, paidAmount: 0,
+            complexId,
+            unitId: unit.id,
+            feeConfigId: config.id,
+            period,
+            dueDate,
+            amount: chargeAmount,
+            normalAmount,
+            earlyPaymentDueDate,
+            paidAmount: 0,
             description,
             status: ChargeStatus.PENDING,
             prelacionConcept: config.prelacionConcept,
@@ -468,14 +544,23 @@ export class FinanceService {
         configGenerated++;
         totalGenerated++;
 
-        this.notifyChargeGeneratedToUnit(complexId, unit.id, config.name, chargeAmount, period).catch(err =>
-          this.logger.warn(`Error al notificar cargo generado en unidad ${unit.id} (config ${config.id}): ${err?.message}`),
+        this.notifyChargeGeneratedToUnit(
+          complexId,
+          unit.id,
+          config.name,
+          chargeAmount,
+          period,
+        ).catch((err) =>
+          this.logger.warn(
+            `Error al notificar cargo generado en unidad ${unit.id} (config ${config.id}): ${err?.message}`,
+          ),
         );
       }
 
       if (config.chargeType === ChargeType.LIMITED && configGenerated > 0) {
         config.installmentsPaid = (config.installmentsPaid ?? 0) + 1;
-        if (config.installmentsPaid >= (config.installments ?? 0)) config.isActive = false;
+        if (config.installmentsPaid >= (config.installments ?? 0))
+          config.isActive = false;
         await this.feeConfigRepo.save(config);
       } else if (config.chargeType === ChargeType.ONCE && configGenerated > 0) {
         config.isActive = false;
@@ -486,9 +571,17 @@ export class FinanceService {
     if (totalGenerated > 0) {
       // Reconciliar el saldo materializado de las unidades del complejo
       for (const u of allUnits) {
-        await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, u.id);
+        await this.accountingService.recomputeUnitStatus(
+          this.dataSource.manager,
+          complexId,
+          u.id,
+        );
       }
-      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, { period, created: totalGenerated });
+      this.socketService.emitToComplex(
+        complexId,
+        SocketEvent.FINANCE_CHARGE_NEW,
+        { period, created: totalGenerated },
+      );
     }
 
     return { generated: totalGenerated, skipped: totalSkipped, period };
@@ -498,11 +591,18 @@ export class FinanceService {
    * Crea cargos inmediatos para configs con triggerType=VEHICLE cuando un vehículo pasa a ACTIVE.
    * Idempotente: omite si ya existe cargo para la misma config+unidad+período.
    */
-  async triggerVehicleCharges(unitId: string, complexId: string): Promise<void> {
+  async triggerVehicleCharges(
+    unitId: string,
+    complexId: string,
+  ): Promise<void> {
     // Best-effort: la causación de cargos NUNCA debe tumbar el registro del vehículo.
     try {
       // Modelo nuevo (canónico): cargos por vehículo vía RecurringCharge triggerType=VEHICLE.
-      await this.accountingService.causeVehicleChargesForUnit(complexId, unitId, SYSTEM_USER_ID);
+      await this.accountingService.causeVehicleChargesForUnit(
+        complexId,
+        unitId,
+        SYSTEM_USER_ID,
+      );
 
       const vehicleConfigs = await this.feeConfigRepo.find({
         where: {
@@ -510,7 +610,7 @@ export class FinanceService {
           isActive: true,
           isOptional: true,
           triggerType: FeeConfigTriggerType.VEHICLE,
-          deletedAt: null as any,
+          deletedAt: null,
         },
       });
 
@@ -543,7 +643,11 @@ export class FinanceService {
       }
 
       // Reconciliar el saldo materializado de la unidad
-      await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, unitId);
+      await this.accountingService.recomputeUnitStatus(
+        this.dataSource.manager,
+        complexId,
+        unitId,
+      );
     } catch (e: any) {
       this.logger.error(
         `triggerVehicleCharges(unit=${unitId}, complex=${complexId}): ${e?.message}`,
@@ -564,7 +668,13 @@ export class FinanceService {
     graceDays: number,
   ): Promise<MoraApplicationResult> {
     this.assertValidPeriod(period);
-    return this.applyMoraCore(complexId, period, rate, graceDays, SYSTEM_USER_ID);
+    return this.applyMoraCore(
+      complexId,
+      period,
+      rate,
+      graceDays,
+      SYSTEM_USER_ID,
+    );
   }
 
   /**
@@ -578,7 +688,7 @@ export class FinanceService {
     const cfg = await this.financeConfigRepo.findOne({ where: { complexId } });
     const rate = cfg ? Number(cfg.moraRate) : 0;
     if (!rate || rate <= 0) return null;
-    return this.applyMoraInternal(complexId, period, rate, cfg!.moraGraceDays);
+    return this.applyMoraInternal(complexId, period, rate, cfg.moraGraceDays);
   }
 
   /**
@@ -609,15 +719,21 @@ export class FinanceService {
     const overdueCharges = await this.chargeRepo.find({
       where: {
         complexId,
-        status: In([ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID, ChargeStatus.OVERDUE]),
-        deletedAt: null as any,
+        status: In([
+          ChargeStatus.PENDING,
+          ChargeStatus.PARTIALLY_PAID,
+          ChargeStatus.OVERDUE,
+        ]),
+        deletedAt: null,
       },
     });
 
     // Procesar solo cargos de períodos ANTERIORES al mes actual.
     // Excluir cargos que YA son de mora para no generar interés sobre interés.
     const chargesToProcess = overdueCharges.filter(
-      c => c.period < currentPeriod && c.prelacionConcept !== PrelacionConcept.INTEREST_MORA,
+      (c) =>
+        c.period < currentPeriod &&
+        c.prelacionConcept !== PrelacionConcept.INTEREST_MORA,
     );
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -628,7 +744,12 @@ export class FinanceService {
     let totalMoraAmount = 0;
     let skipped = 0;
 
-    const moraNotifications: Array<{ unitId: string; complexId: string; amount: number; description: string }> = [];
+    const moraNotifications: Array<{
+      unitId: string;
+      complexId: string;
+      amount: number;
+      description: string;
+    }> = [];
 
     try {
       for (const charge of chargesToProcess) {
@@ -640,21 +761,40 @@ export class FinanceService {
         const refDate = charge.dueDate
           ? new Date(charge.dueDate)
           : new Date(chargeYear, chargeMonth, 1); // chargeMonth 1-indexed → mes siguiente en Date
-        const diasVencidos = Math.floor((now.getTime() - refDate.getTime()) / 86_400_000);
+        const diasVencidos = Math.floor(
+          (now.getTime() - refDate.getTime()) / 86_400_000,
+        );
 
-        if (diasVencidos <= graceDays) { skipped++; continue; }
+        if (diasVencidos <= graceDays) {
+          skipped++;
+          continue;
+        }
 
         const diasEfectivos = diasVencidos - graceDays;
         const chargeBalance = Number(charge.amount) - Number(charge.paidAmount);
-        const mora = Math.round(chargeBalance * (rate / 100) * (diasEfectivos / 30) * 100) / 100;
+        const mora =
+          Math.round(
+            chargeBalance * (rate / 100) * (diasEfectivos / 30) * 100,
+          ) / 100;
 
-        if (mora <= 0) { skipped++; continue; }
+        if (mora <= 0) {
+          skipped++;
+          continue;
+        }
 
         const moraDescription = `Interés mora — ${charge.description} (${charge.period})`;
         const existingMora = await queryRunner.manager.findOne(FeeCharge, {
-          where: { complexId: charge.complexId, unitId: charge.unitId, period, description: moraDescription },
+          where: {
+            complexId: charge.complexId,
+            unitId: charge.unitId,
+            period,
+            description: moraDescription,
+          },
         });
-        if (existingMora) { skipped++; continue; }
+        if (existingMora) {
+          skipped++;
+          continue;
+        }
 
         // La nota de mora vence como cualquier otro cargo de su período: el último
         // día del mes en curso. Antes eran 5 días fijos desde la corrida, lo que
@@ -665,9 +805,14 @@ export class FinanceService {
         await queryRunner.manager.save(
           FeeCharge,
           queryRunner.manager.create(FeeCharge, {
-            complexId: charge.complexId, unitId: charge.unitId,
-            period, dueDate: moraDueDate, amount: mora, paidAmount: 0,
-            description: moraDescription, status: ChargeStatus.PENDING,
+            complexId: charge.complexId,
+            unitId: charge.unitId,
+            period,
+            dueDate: moraDueDate,
+            amount: mora,
+            paidAmount: 0,
+            description: moraDescription,
+            status: ChargeStatus.PENDING,
             prelacionConcept: PrelacionConcept.INTEREST_MORA,
             sourceChargeId: charge.id,
           }),
@@ -697,14 +842,25 @@ export class FinanceService {
       const moraUnits = new Map<string, string>(); // unitId -> complexId
       for (const m of moraNotifications) moraUnits.set(m.unitId, m.complexId);
       for (const [uid, cid] of moraUnits) {
-        await this.accountingService.recomputeUnitStatus(queryRunner.manager, cid, uid);
+        await this.accountingService.recomputeUnitStatus(
+          queryRunner.manager,
+          cid,
+          uid,
+        );
       }
 
       await queryRunner.commitTransaction();
 
       for (const m of moraNotifications) {
-        this.notifyMoraApplied(m.unitId, m.complexId, m.amount, m.description).catch(err =>
-          this.logger.warn(`Error al notificar mora en unidad ${m.unitId}: ${err?.message}`),
+        this.notifyMoraApplied(
+          m.unitId,
+          m.complexId,
+          m.amount,
+          m.description,
+        ).catch((err) =>
+          this.logger.warn(
+            `Error al notificar mora en unidad ${m.unitId}: ${err?.message}`,
+          ),
         );
       }
 
@@ -714,7 +870,6 @@ export class FinanceService {
         skipped,
         totalMoraAmount: Math.round(totalMoraAmount * 100) / 100,
       };
-
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;
@@ -751,7 +906,12 @@ export class FinanceService {
       entityType: AuditEntityType.FeeConfig,
       entityId: savedConfig.id,
       action: AuditAction.CREATE,
-      newValue: { id: savedConfig.id, name: savedConfig.name, amount: savedConfig.amount, complexId: input.complexId },
+      newValue: {
+        id: savedConfig.id,
+        name: savedConfig.name,
+        amount: savedConfig.amount,
+        complexId: input.complexId,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -815,10 +975,14 @@ export class FinanceService {
     if (cached) return cached;
 
     const configs = await this.feeConfigRepo.find({
-      where: { complexId, deletedAt: null as any },
+      where: { complexId, deletedAt: null },
       order: { createdAt: 'DESC' },
     });
-    await this.cacheService.set({ key: cacheKey, data: configs, options: { ttl: BK.finance.TTL_FEES } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: configs,
+      options: { ttl: BK.finance.TTL_FEES },
+    });
     return configs;
   }
 
@@ -854,7 +1018,7 @@ export class FinanceService {
 
     this.logger.log(
       `generateCharges — período ${period}, complejo ${complexId}: ` +
-      `${result.generated} generados, ${result.skipped} omitidos.`,
+        `${result.generated} generados, ${result.skipped} omitidos.`,
     );
 
     if (result.generated > 0) {
@@ -862,7 +1026,12 @@ export class FinanceService {
         entityType: AuditEntityType.FeeCharge,
         entityId: complexId,
         action: AuditAction.CREATE,
-        newValue: { period, generated: result.generated, skipped: result.skipped, complexId },
+        newValue: {
+          period,
+          generated: result.generated,
+          skipped: result.skipped,
+          complexId,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -897,7 +1066,13 @@ export class FinanceService {
 
     for (const unitId of unitIds) {
       const existing = await this.chargeRepo.findOne({
-        where: { complexId, unitId, period, description, feeConfigId: IsNull() as any },
+        where: {
+          complexId,
+          unitId,
+          period,
+          description,
+          feeConfigId: IsNull() as any,
+        },
       });
 
       if (existing) {
@@ -919,32 +1094,58 @@ export class FinanceService {
       );
       created++;
 
-      this.notifyDirectChargeAdded(complexId, unitId, description, amount, period).catch(err =>
-        this.logger.warn(`Error al notificar cargo directo en unidad ${unitId}: ${err?.message}`),
+      this.notifyDirectChargeAdded(
+        complexId,
+        unitId,
+        description,
+        amount,
+        period,
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar cargo directo en unidad ${unitId}: ${err?.message}`,
+        ),
       );
     }
 
-    this.logger.log(`createDirectCharges: ${created} creados, ${skipped} omitidos.`);
+    this.logger.log(
+      `createDirectCharges: ${created} creados, ${skipped} omitidos.`,
+    );
 
     if (created > 0) {
       // Reconciliar el saldo materializado de las unidades afectadas
       for (const uid of unitIds) {
-        await this.accountingService.recomputeUnitStatus(this.dataSource.manager, complexId, uid);
+        await this.accountingService.recomputeUnitStatus(
+          this.dataSource.manager,
+          complexId,
+          uid,
+        );
       }
 
-      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_CHARGE_NEW, {
+      this.socketService.emitToComplex(
         complexId,
-        period,
-        description,
-        amount,
-        created,
-      });
+        SocketEvent.FINANCE_CHARGE_NEW,
+        {
+          complexId,
+          period,
+          description,
+          amount,
+          created,
+        },
+      );
 
       void this.auditService.log({
         entityType: AuditEntityType.FeeCharge,
         entityId: complexId,
         action: AuditAction.CREATE,
-        newValue: { period, created, skipped, description, amount, unitIds, complexId },
+        newValue: {
+          period,
+          created,
+          skipped,
+          description,
+          amount,
+          unitIds,
+          complexId,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -972,19 +1173,24 @@ export class FinanceService {
     if (!charge) return null;
 
     const untouchable: ChargeStatus[] = [
-      ChargeStatus.PAID, ChargeStatus.CANCELLED, ChargeStatus.WAIVED,
+      ChargeStatus.PAID,
+      ChargeStatus.CANCELLED,
+      ChargeStatus.WAIVED,
     ];
-    if (untouchable.includes(charge.status) || Number(charge.paidAmount) > 0) return null;
+    if (untouchable.includes(charge.status) || Number(charge.paidAmount) > 0)
+      return null;
 
-    charge.status             = ChargeStatus.CANCELLED;
+    charge.status = ChargeStatus.CANCELLED;
     charge.cancellationReason = reason;
-    charge.cancelledByUserId  = performedByUserId;
-    charge.cancelledAt        = new Date();
+    charge.cancelledByUserId = performedByUserId;
+    charge.cancelledAt = new Date();
 
     const saved = await this.chargeRepo.save(charge);
 
     await this.accountingService.recomputeUnitStatus(
-      this.dataSource.manager, charge.complexId, charge.unitId,
+      this.dataSource.manager,
+      charge.complexId,
+      charge.unitId,
     );
 
     return saved;
@@ -1054,10 +1260,16 @@ export class FinanceService {
     const savedWaive = await this.chargeRepo.save(charge);
 
     // Reconciliar el saldo materializado: el cargo exonerado deja de ser deuda
-    await this.accountingService.recomputeUnitStatus(this.dataSource.manager, charge.complexId, charge.unitId);
+    await this.accountingService.recomputeUnitStatus(
+      this.dataSource.manager,
+      charge.complexId,
+      charge.unitId,
+    );
 
-    this.notifyChargeWaived(savedWaive, reason).catch(err =>
-      this.logger.warn(`Error al notificar exoneración de cargo ${chargeId}: ${err?.message}`),
+    this.notifyChargeWaived(savedWaive, reason).catch((err) =>
+      this.logger.warn(
+        `Error al notificar exoneración de cargo ${chargeId}: ${err?.message}`,
+      ),
     );
 
     void this.auditService.log({
@@ -1065,7 +1277,11 @@ export class FinanceService {
       entityId: chargeId,
       action: AuditAction.UPDATE,
       previousValue: { status: charge.status },
-      newValue: { status: ChargeStatus.WAIVED, reason, cancelledAt: charge.cancelledAt },
+      newValue: {
+        status: ChargeStatus.WAIVED,
+        reason,
+        cancelledAt: charge.cancelledAt,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -1093,7 +1309,8 @@ export class FinanceService {
 
     if ([ChargeStatus.CANCELLED, ChargeStatus.WAIVED].includes(charge.status)) {
       throw new CustomError({
-        message: 'No se puede registrar un pago sobre un cargo cancelado o exonerado',
+        message:
+          'No se puede registrar un pago sobre un cargo cancelado o exonerado',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: FinanceErrorCode.FEE_CHARGE_CANCELLED,
       });
@@ -1131,38 +1348,50 @@ export class FinanceService {
         receiptUrl: input.receiptUrl,
         notes: input.notes,
         paidAt: new Date(input.paidAt),
-        registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+        registeredByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
         isReversed: false,
       });
       const savedPayment = await queryRunner.manager.save(Payment, payment);
 
       const newPaid = Number(charge.paidAmount) + Number(input.amount);
       charge.paidAmount = newPaid;
-      charge.status = newPaid >= Number(charge.amount) - 0.01
-        ? ChargeStatus.PAID
-        : ChargeStatus.PARTIALLY_PAID;
+      charge.status =
+        newPaid >= Number(charge.amount) - 0.01
+          ? ChargeStatus.PAID
+          : ChargeStatus.PARTIALLY_PAID;
 
       await queryRunner.manager.save(FeeCharge, charge);
 
       // Nota crédito por descuento de pronto pago: si el cargo queda PAID y se
       // facturó el valor pleno (normalAmount > amount), se acredita el descuento
       // para cuadrar el ledger (best-effort, misma TX).
-      const discount = charge.normalAmount != null
-        ? Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100
-        : 0;
+      const discount =
+        charge.normalAmount != null
+          ? Math.round(
+              (Number(charge.normalAmount) - Number(charge.amount)) * 100,
+            ) / 100
+          : 0;
       if (charge.status === ChargeStatus.PAID && discount > 0) {
-        await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
-          complexId: charge.complexId,
-          unitId: charge.unitId,
-          incomeAccountId: charge.incomeAccountId ?? null,
-          amount: discount,
-          period: charge.period,
-          createdByUserId: currentUser.sub,
-        });
+        await this.accountingService.emitEarlyDiscountCreditNote(
+          queryRunner.manager,
+          {
+            complexId: charge.complexId,
+            unitId: charge.unitId,
+            incomeAccountId: charge.incomeAccountId ?? null,
+            amount: discount,
+            period: charge.period,
+            createdByUserId: currentUser.sub,
+          },
+        );
       }
 
       // Reconciliar el saldo materializado de la unidad (misma TX)
-      await this.accountingService.recomputeUnitStatus(queryRunner.manager, charge.complexId, charge.unitId);
+      await this.accountingService.recomputeUnitStatus(
+        queryRunner.manager,
+        charge.complexId,
+        charge.unitId,
+      );
 
       // Recibo de caja contable (best-effort; omitido si la copropiedad no tiene PUC)
       await this.accountingService.emitCashReceipt(queryRunner.manager, {
@@ -1183,7 +1412,13 @@ export class FinanceService {
         entityType: AuditEntityType.Payment,
         entityId: savedPayment.id,
         action: AuditAction.CREATE,
-        newValue: { id: savedPayment.id, chargeId: input.chargeId, amount: input.amount, method: input.method, chargeStatus: charge.status },
+        newValue: {
+          id: savedPayment.id,
+          chargeId: input.chargeId,
+          amount: input.amount,
+          method: input.method,
+          chargeStatus: charge.status,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -1191,17 +1426,27 @@ export class FinanceService {
         description: `Pago registrado: $${input.amount} sobre cargo de ${charge.period} — método: ${PAYMENT_METHOD_LABELS[input.method] ?? input.method}`,
       });
 
-      this.notifyPaymentConfirmed(charge, input.amount, new Date(input.paidAt)).catch(err =>
-        this.logger.warn(`Error al notificar pago ${savedPayment.id}: ${err?.message}`),
+      this.notifyPaymentConfirmed(
+        charge,
+        input.amount,
+        new Date(input.paidAt),
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar pago ${savedPayment.id}: ${err?.message}`,
+        ),
       );
 
-      this.socketService.emitToComplex(charge.complexId, SocketEvent.FINANCE_PAYMENT_REGISTERED, {
-        paymentId: savedPayment.id,
-        chargeId: charge.id,
-        unitId: charge.unitId,
-        amount: input.amount,
-        chargeStatus: charge.status,
-      });
+      this.socketService.emitToComplex(
+        charge.complexId,
+        SocketEvent.FINANCE_PAYMENT_REGISTERED,
+        {
+          paymentId: savedPayment.id,
+          chargeId: charge.id,
+          unitId: charge.unitId,
+          amount: input.amount,
+          chargeStatus: charge.status,
+        },
+      );
 
       return savedPayment;
     } catch (err) {
@@ -1221,7 +1466,8 @@ export class FinanceService {
     input: RegisterBulkPaymentInput,
     currentUser: JwtAccessPayload,
   ): Promise<RegisterBulkPaymentResponse> {
-    const { unitId, complexId, amount, method, reference, notes, paidAt } = input;
+    const { unitId, complexId, amount, method, reference, notes, paidAt } =
+      input;
 
     await this.complexService.findById(complexId, currentUser);
 
@@ -1229,8 +1475,12 @@ export class FinanceService {
       where: {
         unitId,
         complexId,
-        status: In([ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID]),
-        deletedAt: null as any,
+        status: In([
+          ChargeStatus.PENDING,
+          ChargeStatus.OVERDUE,
+          ChargeStatus.PARTIALLY_PAID,
+        ]),
+        deletedAt: null,
       },
       order: { dueDate: 'ASC' },
     });
@@ -1244,7 +1494,11 @@ export class FinanceService {
     let created = 0;
     let remaining = amount;
 
-    const paidNotifications: Array<{ charge: FeeCharge; paymentAmount: number; paymentDate: Date }> = [];
+    const paidNotifications: Array<{
+      charge: FeeCharge;
+      paymentAmount: number;
+      paymentDate: Date;
+    }> = [];
 
     try {
       for (const charge of pendingCharges) {
@@ -1264,7 +1518,8 @@ export class FinanceService {
             reference,
             notes,
             paidAt: paymentDate,
-            registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+            registeredByUserId:
+              currentUser.entityType === 'user' ? currentUser.sub : null,
             isReversed: false,
           }),
         );
@@ -1272,9 +1527,10 @@ export class FinanceService {
 
         const newPaid = Number(charge.paidAmount) + paymentAmount;
         charge.paidAmount = newPaid;
-        charge.status = newPaid >= Number(charge.amount) - 0.01
-          ? ChargeStatus.PAID
-          : ChargeStatus.PARTIALLY_PAID;
+        charge.status =
+          newPaid >= Number(charge.amount) - 0.01
+            ? ChargeStatus.PAID
+            : ChargeStatus.PARTIALLY_PAID;
 
         if (charge.status === ChargeStatus.PAID) paid++;
 
@@ -1283,17 +1539,26 @@ export class FinanceService {
         await queryRunner.manager.save(FeeCharge, charge);
 
         // Nota crédito por descuento pronto pago si el cargo quedó PAID con descuento.
-        if (charge.status === ChargeStatus.PAID && charge.normalAmount != null) {
-          const bulkDiscount = Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100;
+        if (
+          charge.status === ChargeStatus.PAID &&
+          charge.normalAmount != null
+        ) {
+          const bulkDiscount =
+            Math.round(
+              (Number(charge.normalAmount) - Number(charge.amount)) * 100,
+            ) / 100;
           if (bulkDiscount > 0) {
-            await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
-              complexId,
-              unitId,
-              incomeAccountId: charge.incomeAccountId ?? null,
-              amount: bulkDiscount,
-              period: charge.period,
-              createdByUserId: currentUser.sub,
-            });
+            await this.accountingService.emitEarlyDiscountCreditNote(
+              queryRunner.manager,
+              {
+                complexId,
+                unitId,
+                incomeAccountId: charge.incomeAccountId ?? null,
+                amount: bulkDiscount,
+                period: charge.period,
+                createdByUserId: currentUser.sub,
+              },
+            );
           }
         }
 
@@ -1316,7 +1581,11 @@ export class FinanceService {
       }
 
       // Reconciliar el saldo materializado de la unidad (misma TX)
-      await this.accountingService.recomputeUnitStatus(queryRunner.manager, complexId, unitId);
+      await this.accountingService.recomputeUnitStatus(
+        queryRunner.manager,
+        complexId,
+        unitId,
+      );
 
       // Recibo de caja contable: parte imputada a cargos + excedente a anticipo (2805)
       const appliedToCharges = Math.round((amount - remaining) * 100) / 100;
@@ -1327,7 +1596,8 @@ export class FinanceService {
         documentDate: receiptDate,
         period: `${receiptDate.getFullYear()}-${String(receiptDate.getMonth() + 1).padStart(2, '0')}`,
         appliedToCharges,
-        prepaidExcess: remaining > 0.001 ? Math.round(remaining * 100) / 100 : 0,
+        prepaidExcess:
+          remaining > 0.001 ? Math.round(remaining * 100) / 100 : 0,
         method,
         createdByUserId: currentUser.sub,
         reference,
@@ -1335,11 +1605,15 @@ export class FinanceService {
 
       await queryRunner.commitTransaction();
 
-      this.socketService.emitToComplex(complexId, SocketEvent.FINANCE_PAYMENT_REGISTERED, {
-        unitId,
-        totalAmount: amount,
-        chargesSettled: paid,
-      });
+      this.socketService.emitToComplex(
+        complexId,
+        SocketEvent.FINANCE_PAYMENT_REGISTERED,
+        {
+          unitId,
+          totalAmount: amount,
+          chargesSettled: paid,
+        },
+      );
 
       void this.auditService.log({
         entityType: AuditEntityType.Payment,
@@ -1355,13 +1629,15 @@ export class FinanceService {
       });
 
       for (const { charge, paymentAmount, paymentDate } of paidNotifications) {
-        this.notifyPaymentConfirmed(charge, paymentAmount, paymentDate).catch(err =>
-          this.logger.warn(`Error al notificar pago bulk en cargo ${charge.id}: ${err?.message}`),
+        this.notifyPaymentConfirmed(charge, paymentAmount, paymentDate).catch(
+          (err) =>
+            this.logger.warn(
+              `Error al notificar pago bulk en cargo ${charge.id}: ${err?.message}`,
+            ),
         );
       }
 
       return { paid, created };
-
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;
@@ -1402,14 +1678,18 @@ export class FinanceService {
       payment.reversedAt = new Date();
       await queryRunner.manager.save(Payment, payment);
 
-      const newPaid = Math.max(0, Number(charge.paidAmount) - Number(payment.amount));
+      const newPaid = Math.max(
+        0,
+        Number(charge.paidAmount) - Number(payment.amount),
+      );
       charge.paidAmount = newPaid;
 
       if (newPaid === 0) {
         const dueDate = charge.dueDate ? new Date(charge.dueDate) : null;
-        charge.status = (dueDate && dueDate < new Date())
-          ? ChargeStatus.OVERDUE
-          : ChargeStatus.PENDING;
+        charge.status =
+          dueDate && dueDate < new Date()
+            ? ChargeStatus.OVERDUE
+            : ChargeStatus.PENDING;
       } else {
         charge.status = ChargeStatus.PARTIALLY_PAID;
       }
@@ -1417,7 +1697,11 @@ export class FinanceService {
       await queryRunner.manager.save(FeeCharge, charge);
 
       // Reconciliar el saldo materializado de la unidad (misma TX)
-      await this.accountingService.recomputeUnitStatus(queryRunner.manager, charge.complexId, charge.unitId);
+      await this.accountingService.recomputeUnitStatus(
+        queryRunner.manager,
+        charge.complexId,
+        charge.unitId,
+      );
 
       await queryRunner.commitTransaction();
 
@@ -1426,7 +1710,12 @@ export class FinanceService {
         entityId: paymentId,
         action: AuditAction.UPDATE,
         previousValue: { isReversed: false },
-        newValue: { isReversed: true, reason, reversedAt: payment.reversedAt, newChargeStatus: charge.status },
+        newValue: {
+          isReversed: true,
+          reason,
+          reversedAt: payment.reversedAt,
+          newChargeStatus: charge.status,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -1434,8 +1723,11 @@ export class FinanceService {
         description: `Pago anulado: $${payment.amount} sobre cargo de ${charge.period} — razón: ${reason}`,
       });
 
-      this.notifyPaymentReversed(charge, Number(payment.amount), reason).catch(err =>
-        this.logger.warn(`Error al notificar anulación de pago ${paymentId}: ${err?.message}`),
+      this.notifyPaymentReversed(charge, Number(payment.amount), reason).catch(
+        (err) =>
+          this.logger.warn(
+            `Error al notificar anulación de pago ${paymentId}: ${err?.message}`,
+          ),
       );
 
       return payment;
@@ -1482,12 +1774,23 @@ export class FinanceService {
         }),
       );
       // Reconciliar el saldo materializado de la unidad (misma TX)
-      await this.accountingService.recomputeUnitStatus(em, input.complexId, input.unitId);
+      await this.accountingService.recomputeUnitStatus(
+        em,
+        input.complexId,
+        input.unitId,
+      );
       return saved;
     });
 
-    this.notifyWalletCredit(input.unitId, input.complexId, Number(input.amount), input.description).catch(err =>
-      this.logger.warn(`Error al notificar saldo a favor en unidad ${input.unitId}: ${err?.message}`),
+    this.notifyWalletCredit(
+      input.unitId,
+      input.complexId,
+      Number(input.amount),
+      input.description,
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar saldo a favor en unidad ${input.unitId}: ${err?.message}`,
+      ),
     );
 
     return this.toWalletEntryObject(entry);
@@ -1508,7 +1811,10 @@ export class FinanceService {
     await queryRunner.startTransaction();
 
     try {
-      const walletBalance = await this.calcWalletBalance(input.unitId, input.complexId);
+      const walletBalance = await this.calcWalletBalance(
+        input.unitId,
+        input.complexId,
+      );
 
       if (walletBalance <= 0) {
         throw new CustomError({
@@ -1518,7 +1824,11 @@ export class FinanceService {
         });
       }
 
-      if (input.amount !== undefined && input.amount !== null && input.amount > walletBalance + 0.01) {
+      if (
+        input.amount !== undefined &&
+        input.amount !== null &&
+        input.amount > walletBalance + 0.01
+      ) {
         throw new CustomError({
           message: `El monto a aplicar (${input.amount}) supera el saldo disponible en wallet (${walletBalance.toFixed(2)})`,
           statusCode: HttpStatus.BAD_REQUEST,
@@ -1546,7 +1856,11 @@ export class FinanceService {
         });
       }
 
-      const eligibleStatuses = [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID];
+      const eligibleStatuses = [
+        ChargeStatus.PENDING,
+        ChargeStatus.OVERDUE,
+        ChargeStatus.PARTIALLY_PAID,
+      ];
       if (!eligibleStatuses.includes(charge.status)) {
         throw new CustomError({
           message: `No se puede aplicar saldo a un cargo en estado ${charge.status}`,
@@ -1556,16 +1870,20 @@ export class FinanceService {
       }
 
       const chargeBalance = Number(charge.amount) - Number(charge.paidAmount);
-      const requestedAmount = (input.amount !== undefined && input.amount !== null)
-        ? input.amount
-        : Infinity;
-      const montoAplicado = Math.min(walletBalance, chargeBalance, requestedAmount);
+      const requestedAmount =
+        input.amount !== undefined && input.amount !== null
+          ? input.amount
+          : Infinity;
+      const montoAplicado = Math.min(
+        walletBalance,
+        chargeBalance,
+        requestedAmount,
+      );
 
       charge.paidAmount = Number(charge.paidAmount) + montoAplicado;
       const newBalance = Number(charge.amount) - charge.paidAmount;
-      charge.status = newBalance <= 0.001
-        ? ChargeStatus.PAID
-        : ChargeStatus.PARTIALLY_PAID;
+      charge.status =
+        newBalance <= 0.001 ? ChargeStatus.PAID : ChargeStatus.PARTIALLY_PAID;
 
       await queryRunner.manager.save(FeeCharge, charge);
 
@@ -1582,37 +1900,55 @@ export class FinanceService {
       );
 
       // Reconciliar el saldo materializado de la unidad (misma TX)
-      await this.accountingService.recomputeUnitStatus(queryRunner.manager, input.complexId, input.unitId);
+      await this.accountingService.recomputeUnitStatus(
+        queryRunner.manager,
+        input.complexId,
+        input.unitId,
+      );
 
       // Nota contable de aplicación de anticipo (best-effort; 2805 → 1311)
-      await this.accountingService.emitPrepaidApplicationNote(queryRunner.manager, {
-        complexId: input.complexId,
-        unitId: input.unitId,
-        amount: montoAplicado,
-        period: charge.period,
-        createdByUserId: currentUser.sub,
-        memo: `Aplicación manual de anticipo — ${charge.description}`,
-      });
-
-      // Nota crédito por descuento pronto pago si el cargo quedó PAID con descuento.
-      const walletDiscount = charge.normalAmount != null
-        ? Math.round((Number(charge.normalAmount) - Number(charge.amount)) * 100) / 100
-        : 0;
-      if (charge.status === ChargeStatus.PAID && walletDiscount > 0) {
-        await this.accountingService.emitEarlyDiscountCreditNote(queryRunner.manager, {
+      await this.accountingService.emitPrepaidApplicationNote(
+        queryRunner.manager,
+        {
           complexId: input.complexId,
           unitId: input.unitId,
-          incomeAccountId: charge.incomeAccountId ?? null,
-          amount: walletDiscount,
+          amount: montoAplicado,
           period: charge.period,
           createdByUserId: currentUser.sub,
-        });
+          memo: `Aplicación manual de anticipo — ${charge.description}`,
+        },
+      );
+
+      // Nota crédito por descuento pronto pago si el cargo quedó PAID con descuento.
+      const walletDiscount =
+        charge.normalAmount != null
+          ? Math.round(
+              (Number(charge.normalAmount) - Number(charge.amount)) * 100,
+            ) / 100
+          : 0;
+      if (charge.status === ChargeStatus.PAID && walletDiscount > 0) {
+        await this.accountingService.emitEarlyDiscountCreditNote(
+          queryRunner.manager,
+          {
+            complexId: input.complexId,
+            unitId: input.unitId,
+            incomeAccountId: charge.incomeAccountId ?? null,
+            amount: walletDiscount,
+            period: charge.period,
+            createdByUserId: currentUser.sub,
+          },
+        );
       }
 
       await queryRunner.commitTransaction();
 
-      this.notifyWalletApplied(charge, Math.round(montoAplicado * 100) / 100).catch(err =>
-        this.logger.warn(`Error al notificar aplicación de saldo en cargo ${charge.id}: ${err?.message}`),
+      this.notifyWalletApplied(
+        charge,
+        Math.round(montoAplicado * 100) / 100,
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar aplicación de saldo en cargo ${charge.id}: ${err?.message}`,
+        ),
       );
 
       const remainingWalletBalance = walletBalance - montoAplicado;
@@ -1623,7 +1959,6 @@ export class FinanceService {
         remainingWalletBalance: Math.round(remainingWalletBalance * 100) / 100,
         chargeStatus: charge.status,
       };
-
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;
@@ -1645,12 +1980,16 @@ export class FinanceService {
     this.assertValidPeriod(input.period);
 
     const result = await this.applyMoraCore(
-      input.complexId, input.period, input.rate, input.graceDays, currentUser.sub,
+      input.complexId,
+      input.period,
+      input.rate,
+      input.graceDays,
+      currentUser.sub,
     );
 
     this.logger.log(
       `applyMoraToPeriod — período ${input.period}, complejo ${input.complexId}: ` +
-      `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
+        `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
     );
     return result;
   }
@@ -1667,26 +2006,35 @@ export class FinanceService {
   ): Promise<MoraApplicationResult> {
     await this.complexService.findById(complexId, currentUser);
 
-    const config = await this.financeConfigRepo.findOne({ where: { complexId } });
-    const rate      = config ? Number(config.moraRate) : 0;
+    const config = await this.financeConfigRepo.findOne({
+      where: { complexId },
+    });
+    const rate = config ? Number(config.moraRate) : 0;
     const graceDays = config ? config.moraGraceDays : 0;
 
     if (rate <= 0) {
       throw new CustomError({
-        message: 'La copropiedad no tiene una tasa de mora (moraRate) configurada',
+        message:
+          'La copropiedad no tiene una tasa de mora (moraRate) configurada',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: FinanceErrorCode.INVALID_AMOUNT,
       });
     }
 
-    const now    = new Date();
+    const now = new Date();
     const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const result = await this.applyMoraCore(complexId, period, rate, graceDays, currentUser.sub);
+    const result = await this.applyMoraCore(
+      complexId,
+      period,
+      rate,
+      graceDays,
+      currentUser.sub,
+    );
 
     this.logger.log(
       `applyMoraAllPeriods — complejo ${complexId}, período ${period}: ` +
-      `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
+        `${result.applied} cargos de mora creados, ${result.skipped} omitidos.`,
     );
     return result;
   }
@@ -1733,9 +2081,14 @@ export class FinanceService {
     } else if (filters.status) {
       qb.andWhere('c.status = :status', { status: filters.status });
     }
-    if (filters.unitId) qb.andWhere('c.unitId = :unitId', { unitId: filters.unitId });
-    if (filters.period) qb.andWhere('c.period = :period', { period: filters.period });
-    if (filters.feeConfigId) qb.andWhere('c.feeConfigId = :feeConfigId', { feeConfigId: filters.feeConfigId });
+    if (filters.unitId)
+      qb.andWhere('c.unitId = :unitId', { unitId: filters.unitId });
+    if (filters.period)
+      qb.andWhere('c.period = :period', { period: filters.period });
+    if (filters.feeConfigId)
+      qb.andWhere('c.feeConfigId = :feeConfigId', {
+        feeConfigId: filters.feeConfigId,
+      });
     if (filters.unitSearch) {
       qb.andWhere(
         '(unit.number ILIKE :search OR building.name ILIKE :search)',
@@ -1746,7 +2099,10 @@ export class FinanceService {
     qb.orderBy('c.dueDate', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
     await this.populateMoraAmount(items);
@@ -1762,8 +2118,12 @@ export class FinanceService {
     return {
       items,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }
@@ -1775,22 +2135,30 @@ export class FinanceService {
    */
   private async populateMoraAmount(charges: FeeCharge[]): Promise<void> {
     if (!charges.length) return;
-    const ids = charges.map(c => c.id);
+    const ids = charges.map((c) => c.id);
 
     const rows = await this.chargeRepo
       .createQueryBuilder('m')
       .select('m.sourceChargeId', 'sourceChargeId')
       .addSelect('SUM(m.amount - m.paidAmount)', 'mora')
       .where('m.sourceChargeId IN (:...ids)', { ids })
-      .andWhere('m.prelacionConcept = :concept', { concept: PrelacionConcept.INTEREST_MORA })
+      .andWhere('m.prelacionConcept = :concept', {
+        concept: PrelacionConcept.INTEREST_MORA,
+      })
       .andWhere('m.status NOT IN (:...closed)', {
-        closed: [ChargeStatus.PAID, ChargeStatus.CANCELLED, ChargeStatus.WAIVED],
+        closed: [
+          ChargeStatus.PAID,
+          ChargeStatus.CANCELLED,
+          ChargeStatus.WAIVED,
+        ],
       })
       .andWhere('m.deletedAt IS NULL')
       .groupBy('m.sourceChargeId')
       .getRawMany<{ sourceChargeId: string; mora: string }>();
 
-    const byParent = new Map(rows.map(r => [r.sourceChargeId, Number(r.mora)]));
+    const byParent = new Map(
+      rows.map((r) => [r.sourceChargeId, Number(r.mora)]),
+    );
     for (const c of charges) {
       c.moraAmount = byParent.get(c.id) ?? 0;
     }
@@ -1818,16 +2186,25 @@ export class FinanceService {
     const unit = await this.unitService.findById(unitId, currentUser);
 
     const charges = await this.chargeRepo.find({
-      where: { unitId, complexId, deletedAt: null as any },
+      where: { unitId, complexId, deletedAt: null },
     });
 
-    const pendingCharges = charges.filter(c =>
-      [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID].includes(c.status),
+    const pendingCharges = charges.filter((c) =>
+      [
+        ChargeStatus.PENDING,
+        ChargeStatus.OVERDUE,
+        ChargeStatus.PARTIALLY_PAID,
+      ].includes(c.status),
     );
 
-    const totalDebt = pendingCharges.reduce((sum, c) => sum + (Number(c.amount) - Number(c.paidAmount)), 0);
+    const totalDebt = pendingCharges.reduce(
+      (sum, c) => sum + (Number(c.amount) - Number(c.paidAmount)),
+      0,
+    );
     const totalPaid = charges.reduce((sum, c) => sum + Number(c.paidAmount), 0);
-    const overdueCount = charges.filter(c => c.effectiveStatus === ChargeStatus.OVERDUE).length;
+    const overdueCount = charges.filter(
+      (c) => c.effectiveStatus === ChargeStatus.OVERDUE,
+    ).length;
     // "Pendientes" = total de cargos por pagar (incluye vencidos); overdue es el subconjunto.
     const pendingCount = pendingCharges.length;
 
@@ -1881,7 +2258,11 @@ export class FinanceService {
       .where('c.complexId = :complexId', { complexId })
       .andWhere('c.amount - c.paidAmount > 0')
       .andWhere('c.status IN (:...debtStatuses)', {
-        debtStatuses: [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID],
+        debtStatuses: [
+          ChargeStatus.PENDING,
+          ChargeStatus.OVERDUE,
+          ChargeStatus.PARTIALLY_PAID,
+        ],
       })
       .andWhere('c.deletedAt IS NULL')
       .getRawOne<{ total: string }>();
@@ -1895,7 +2276,11 @@ export class FinanceService {
       .andWhere('c.period = :period', { period })
       .andWhere('c.amount - c.paidAmount > 0')
       .andWhere('c.status IN (:...debtStatuses)', {
-        debtStatuses: [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID],
+        debtStatuses: [
+          ChargeStatus.PENDING,
+          ChargeStatus.OVERDUE,
+          ChargeStatus.PARTIALLY_PAID,
+        ],
       })
       .andWhere('c.deletedAt IS NULL')
       .getRawOne<{ total: string }>();
@@ -1907,7 +2292,9 @@ export class FinanceService {
       .select('COALESCE(SUM(c.amount), 0)', 'total')
       .where('c.complexId = :complexId', { complexId })
       .andWhere('c.period = :period', { period })
-      .andWhere('c.prelacionConcept = :mora', { mora: PrelacionConcept.INTEREST_MORA })
+      .andWhere('c.prelacionConcept = :mora', {
+        mora: PrelacionConcept.INTEREST_MORA,
+      })
       .andWhere('c.status NOT IN (:...excluded)', {
         excluded: [ChargeStatus.WAIVED, ChargeStatus.CANCELLED],
       })
@@ -1917,8 +2304,12 @@ export class FinanceService {
 
     // unitsWithDebt / unitsFullyPaid: misma lógica que getUnitsFinancialStatus
     const allUnitStatuses = await this.getAllUnitStatusItems(complexId);
-    const unitsWithDebt = allUnitStatuses.filter(u => u.status === 'OVERDUE' || u.status === 'IN_DEBT').length;
-    const unitsFullyPaid = allUnitStatuses.filter(u => u.status === 'UP_TO_DATE' || u.status === 'CREDIT').length;
+    const unitsWithDebt = allUnitStatuses.filter(
+      (u) => u.status === 'OVERDUE' || u.status === 'IN_DEBT',
+    ).length;
+    const unitsFullyPaid = allUnitStatuses.filter(
+      (u) => u.status === 'UP_TO_DATE' || u.status === 'CREDIT',
+    ).length;
 
     // totalExpenses: comprobantes de egreso del LEDGER (EXPENSE_VOUCHER) del período,
     // excluyendo los reversados. Es el mecanismo canónico (createExpenseVoucher);
@@ -1952,12 +2343,16 @@ export class FinanceService {
       totalOutstanding: Math.round(totalOutstanding * 100) / 100,
       periodOutstanding: Math.round(periodOutstanding * 100) / 100,
       totalMora: Math.round(totalMora * 100) / 100,
-      collectionRate: totalCharged > 0 ? Math.round((totalCollected / totalCharged) * 10000) / 100 : 0,
+      collectionRate:
+        totalCharged > 0
+          ? Math.round((totalCollected / totalCharged) * 10000) / 100
+          : 0,
       unitsWithDebt,
       unitsFullyPaid,
       totalExpenses: Math.round(totalExpenses * 100) / 100,
       directIncome: Math.round(directIncome * 100) / 100,
-      netCashFlow: Math.round((totalCollected + directIncome - totalExpenses) * 100) / 100,
+      netCashFlow:
+        Math.round((totalCollected + directIncome - totalExpenses) * 100) / 100,
     };
   }
 
@@ -1977,8 +2372,12 @@ export class FinanceService {
       order: { createdAt: 'DESC' },
     });
 
-    const totalCredits = entries.filter(e => e.type === 'CREDIT').reduce((s, e) => s + Number(e.amount), 0);
-    const totalDebits = entries.filter(e => e.type === 'DEBIT').reduce((s, e) => s + Number(e.amount), 0);
+    const totalCredits = entries
+      .filter((e) => e.type === 'CREDIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const totalDebits = entries
+      .filter((e) => e.type === 'DEBIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
     const currentBalance = totalCredits - totalDebits;
 
     const unitInfo = await this.getUnitWithBuilding(unitId);
@@ -1990,7 +2389,7 @@ export class FinanceService {
       currentBalance: Math.round(currentBalance * 100) / 100,
       totalCredits: Math.round(totalCredits * 100) / 100,
       totalDebits: Math.round(totalDebits * 100) / 100,
-      entries: entries.map(e => this.toWalletEntryObject(e)),
+      entries: entries.map((e) => this.toWalletEntryObject(e)),
     };
   }
 
@@ -2006,8 +2405,14 @@ export class FinanceService {
     const walletAgg = await this.walletEntryRepo
       .createQueryBuilder('we')
       .select('we.unitId', 'unitId')
-      .addSelect(`SUM(CASE WHEN we.type = 'CREDIT' THEN we.amount ELSE 0 END)`, 'totalCredits')
-      .addSelect(`SUM(CASE WHEN we.type = 'DEBIT' THEN we.amount ELSE 0 END)`, 'totalDebits')
+      .addSelect(
+        `SUM(CASE WHEN we.type = 'CREDIT' THEN we.amount ELSE 0 END)`,
+        'totalCredits',
+      )
+      .addSelect(
+        `SUM(CASE WHEN we.type = 'DEBIT' THEN we.amount ELSE 0 END)`,
+        'totalDebits',
+      )
       .where('we.complexId = :complexId', { complexId })
       .groupBy('we.unitId')
       .getRawMany();
@@ -2016,8 +2421,12 @@ export class FinanceService {
       return {
         items: [],
         pagination: {
-          currentPage: page, itemsPerPage: limit, totalItems: 0,
-          totalPages: 0, hasNextPage: false, hasPreviousPage: false,
+          currentPage: page,
+          itemsPerPage: limit,
+          totalItems: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
         },
       };
     }
@@ -2027,12 +2436,13 @@ export class FinanceService {
       where: { id: In(unitIds) },
       relations: ['building'],
     });
-    const unitMap = new Map(units.map(u => [u.id, u]));
+    const unitMap = new Map(units.map((u) => [u.id, u]));
 
     const allItems = walletAgg
       .map((r: any) => {
         const unit = unitMap.get(r.unitId);
-        const totalCredits = Math.round(Number(r.totalCredits ?? 0) * 100) / 100;
+        const totalCredits =
+          Math.round(Number(r.totalCredits ?? 0) * 100) / 100;
         const totalDebits = Math.round(Number(r.totalDebits ?? 0) * 100) / 100;
         return {
           unitId: r.unitId,
@@ -2052,8 +2462,12 @@ export class FinanceService {
     return {
       items: sliced,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }
@@ -2074,160 +2488,169 @@ export class FinanceService {
     limit?: number | null,
     offset?: number | null,
   ): Promise<UnitAccountStatementResponse> {
-   try {
-    await this.complexService.findById(complexId, currentUser);
+    try {
+      await this.complexService.findById(complexId, currentUser);
 
-    let periodYear: number | null = null;
-    let periodMonth: number | null = null;
-    if (period) {
-      this.assertValidPeriod(period);
-      [periodYear, periodMonth] = period.split('-').map(Number);
-    }
+      let periodYear: number | null = null;
+      let periodMonth: number | null = null;
+      if (period) {
+        this.assertValidPeriod(period);
+        [periodYear, periodMonth] = period.split('-').map(Number);
+      }
 
-    const chargeQb = this.chargeRepo
-      .createQueryBuilder('c')
-      .where('c.unitId = :unitId', { unitId })
-      .andWhere('c.complexId = :complexId', { complexId })
-      .andWhere('c.deletedAt IS NULL');
-    if (period) chargeQb.andWhere('c.period = :period', { period });
-    const charges = await chargeQb.getMany();
+      const chargeQb = this.chargeRepo
+        .createQueryBuilder('c')
+        .where('c.unitId = :unitId', { unitId })
+        .andWhere('c.complexId = :complexId', { complexId })
+        .andWhere('c.deletedAt IS NULL');
+      if (period) chargeQb.andWhere('c.period = :period', { period });
+      const charges = await chargeQb.getMany();
 
-    let payments: Payment[] = [];
-    if (charges.length) {
-      const chargeIds = charges.map(c => c.id);
-      payments = await this.paymentRepo.find({
-        where: { chargeId: In(chargeIds) },
-        order: { paidAt: 'ASC' },
-      });
-    }
-
-    let walletEntries = await this.walletEntryRepo.find({
-      where: { unitId, complexId },
-      order: { createdAt: 'ASC' },
-    });
-    if (period && periodYear !== null && periodMonth !== null) {
-      walletEntries = walletEntries.filter(e => {
-        const d = new Date(e.createdAt);
-        return d.getFullYear() === periodYear && d.getMonth() + 1 === periodMonth;
-      });
-    }
-
-    const movements: AccountMovement[] = [];
-
-    const toIso = (d: Date | null | undefined): string => (d ? new Date(d) : new Date()).toISOString();
-
-    for (const charge of charges) {
-      movements.push({
-        id: `charge-${charge.id}`,
-        date: toIso(charge.createdAt),
-        type: 'CHARGE',
-        description: charge.description ?? '',
-        debit: Number(charge.amount) || 0,
-        credit: 0,
-        balance: 0,
-        reference: undefined,
-      });
-    }
-
-    for (const p of payments) {
-      const methodRef = p.reference ? ` — ${p.reference}` : '';
-      movements.push({
-        id: `payment-${p.id}`,
-        date: toIso(p.paidAt),
-        type: 'PAYMENT',
-        description: `Pago — ${p.method ?? ''}${methodRef}`,
-        debit: 0,
-        credit: Number(p.amount) || 0,
-        balance: 0,
-        reference: p.reference ?? undefined,
-      });
-    }
-
-    for (const entry of walletEntries) {
-      if (entry.type === 'CREDIT') {
-        movements.push({
-          id: `wallet-${entry.id}`,
-          date: toIso(entry.createdAt),
-          type: 'CREDIT',
-          description: entry.description ?? '',
-          debit: 0,
-          credit: Number(entry.amount) || 0,
-          balance: 0,
-          reference: undefined,
+      let payments: Payment[] = [];
+      if (charges.length) {
+        const chargeIds = charges.map((c) => c.id);
+        payments = await this.paymentRepo.find({
+          where: { chargeId: In(chargeIds) },
+          order: { paidAt: 'ASC' },
         });
-      } else if (entry.type === 'DEBIT') {
+      }
+
+      let walletEntries = await this.walletEntryRepo.find({
+        where: { unitId, complexId },
+        order: { createdAt: 'ASC' },
+      });
+      if (period && periodYear !== null && periodMonth !== null) {
+        walletEntries = walletEntries.filter((e) => {
+          const d = new Date(e.createdAt);
+          return (
+            d.getFullYear() === periodYear && d.getMonth() + 1 === periodMonth
+          );
+        });
+      }
+
+      const movements: AccountMovement[] = [];
+
+      const toIso = (d: Date | null | undefined): string =>
+        (d ? new Date(d) : new Date()).toISOString();
+
+      for (const charge of charges) {
         movements.push({
-          id: `wallet-${entry.id}`,
-          date: toIso(entry.createdAt),
-          type: 'DEBIT',
-          description: 'Aplicación saldo a favor',
-          debit: Number(entry.amount) || 0,
+          id: `charge-${charge.id}`,
+          date: toIso(charge.createdAt),
+          type: 'CHARGE',
+          description: charge.description ?? '',
+          debit: Number(charge.amount) || 0,
           credit: 0,
           balance: 0,
           reference: undefined,
         });
       }
-    }
 
-    // Orden cronológico ascendente (antiguo→nuevo) con desempate estable por id,
-    // para acumular el balance corriente correctamente sobre todo el período.
-    movements.sort((a, b) => {
-      const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
-      return diff !== 0 ? diff : a.id.localeCompare(b.id);
-    });
+      for (const p of payments) {
+        const methodRef = p.reference ? ` — ${p.reference}` : '';
+        movements.push({
+          id: `payment-${p.id}`,
+          date: toIso(p.paidAt),
+          type: 'PAYMENT',
+          description: `Pago — ${p.method ?? ''}${methodRef}`,
+          debit: 0,
+          credit: Number(p.amount) || 0,
+          balance: 0,
+          reference: p.reference ?? undefined,
+        });
+      }
 
-    let runningBalance = 0;
-    for (const mov of movements) {
-      runningBalance += mov.debit - mov.credit;
-      mov.balance = Math.round(runningBalance * 100) / 100;
-    }
+      for (const entry of walletEntries) {
+        if (entry.type === 'CREDIT') {
+          movements.push({
+            id: `wallet-${entry.id}`,
+            date: toIso(entry.createdAt),
+            type: 'CREDIT',
+            description: entry.description ?? '',
+            debit: 0,
+            credit: Number(entry.amount) || 0,
+            balance: 0,
+            reference: undefined,
+          });
+        } else if (entry.type === 'DEBIT') {
+          movements.push({
+            id: `wallet-${entry.id}`,
+            date: toIso(entry.createdAt),
+            type: 'DEBIT',
+            description: 'Aplicación saldo a favor',
+            debit: Number(entry.amount) || 0,
+            credit: 0,
+            balance: 0,
+            reference: undefined,
+          });
+        }
+      }
 
-    // Los agregados se calculan sobre TODO el período, nunca sobre la página.
-    const totalDebits = movements.reduce((s, m) => s + m.debit, 0);
-    const totalCredits = movements.reduce((s, m) => s + m.credit, 0);
-    const totalMovements = movements.length;
+      // Orden cronológico ascendente (antiguo→nuevo) con desempate estable por id,
+      // para acumular el balance corriente correctamente sobre todo el período.
+      movements.sort((a, b) => {
+        const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+        return diff !== 0 ? diff : a.id.localeCompare(b.id);
+      });
 
-    // Vista para el front: más reciente → más antiguo (desempate estable por id).
-    // El snapshot de balance por fila ya quedó fijado arriba; aquí solo reordenamos.
-    const orderedDesc = [...movements].sort((a, b) => {
-      const diff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      return diff !== 0 ? diff : b.id.localeCompare(a.id);
-    });
+      let runningBalance = 0;
+      for (const mov of movements) {
+        runningBalance += mov.debit - mov.credit;
+        mov.balance = Math.round(runningBalance * 100) / 100;
+      }
 
-    // Paginación offset-based opcional: si limit/offset vienen null/ausentes, devolver todo.
-    const safeOffset = offset != null && offset > 0 ? offset : 0;
-    const pagedMovements =
-      limit != null
-        ? orderedDesc.slice(safeOffset, safeOffset + limit)
-        : orderedDesc.slice(safeOffset);
-    const hasMore = safeOffset + pagedMovements.length < totalMovements;
+      // Los agregados se calculan sobre TODO el período, nunca sobre la página.
+      const totalDebits = movements.reduce((s, m) => s + m.debit, 0);
+      const totalCredits = movements.reduce((s, m) => s + m.credit, 0);
+      const totalMovements = movements.length;
 
-    const activeCharges = charges.filter(c =>
-      [ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID].includes(c.status),
-    );
-    const currentBalance = activeCharges.reduce(
-      (s, c) => s + (Number(c.amount) - Number(c.paidAmount)),
-      0,
-    );
+      // Vista para el front: más reciente → más antiguo (desempate estable por id).
+      // El snapshot de balance por fila ya quedó fijado arriba; aquí solo reordenamos.
+      const orderedDesc = [...movements].sort((a, b) => {
+        const diff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        return diff !== 0 ? diff : b.id.localeCompare(a.id);
+      });
 
-    const allWalletEntries = await this.walletEntryRepo.find({ where: { unitId, complexId } });
-    const walletBalance = this.calcWalletBalanceFromEntries(allWalletEntries);
+      // Paginación offset-based opcional: si limit/offset vienen null/ausentes, devolver todo.
+      const safeOffset = offset != null && offset > 0 ? offset : 0;
+      const pagedMovements =
+        limit != null
+          ? orderedDesc.slice(safeOffset, safeOffset + limit)
+          : orderedDesc.slice(safeOffset);
+      const hasMore = safeOffset + pagedMovements.length < totalMovements;
 
-    const unitInfo = await this.getUnitWithBuilding(unitId);
+      const activeCharges = charges.filter((c) =>
+        [
+          ChargeStatus.PENDING,
+          ChargeStatus.OVERDUE,
+          ChargeStatus.PARTIALLY_PAID,
+        ].includes(c.status),
+      );
+      const currentBalance = activeCharges.reduce(
+        (s, c) => s + (Number(c.amount) - Number(c.paidAmount)),
+        0,
+      );
 
-    return {
-      unitId,
-      unitNumber: unitInfo.number ?? '',
-      building: unitInfo.building ?? undefined,
-      totalDebits: Math.round(totalDebits * 100) / 100,
-      totalCredits: Math.round(totalCredits * 100) / 100,
-      currentBalance: Math.round(currentBalance * 100) / 100,
-      walletBalance: Math.round(walletBalance * 100) / 100,
-      movements: pagedMovements,
-      totalMovements,
-      hasMore,
-    };
-   } catch (err: any) {
+      const allWalletEntries = await this.walletEntryRepo.find({
+        where: { unitId, complexId },
+      });
+      const walletBalance = this.calcWalletBalanceFromEntries(allWalletEntries);
+
+      const unitInfo = await this.getUnitWithBuilding(unitId);
+
+      return {
+        unitId,
+        unitNumber: unitInfo.number ?? '',
+        building: unitInfo.building ?? undefined,
+        totalDebits: Math.round(totalDebits * 100) / 100,
+        totalCredits: Math.round(totalCredits * 100) / 100,
+        currentBalance: Math.round(currentBalance * 100) / 100,
+        walletBalance: Math.round(walletBalance * 100) / 100,
+        movements: pagedMovements,
+        totalMovements,
+        hasMore,
+      };
+    } catch (err: any) {
       this.logger.error(
         `getUnitAccountStatement(unit=${unitId}, complex=${complexId}, period=${period ?? 'null'}): ${err?.message}`,
         err?.stack,
@@ -2241,7 +2664,8 @@ export class FinanceService {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private async getAllUnitStatusItems(complexId: string) {
-    const allRows = await this.dataSource.getRepository(Unit)
+    const allRows = await this.dataSource
+      .getRepository(Unit)
       .createQueryBuilder('u')
       .select('u.id', 'unitId')
       .addSelect('u.number', 'unitNumber')
@@ -2252,42 +2676,44 @@ export class FinanceService {
       .addSelect('COALESCE(wl.wallet_balance, 0)', 'walletBalance')
       .leftJoin('u.building', 'b')
       .leftJoin(
-        qb => qb
-          .select('c.unitId', 'unit_id')
-          .addSelect(
-            `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.OVERDUE}','${ChargeStatus.PARTIALLY_PAID}') THEN c.amount - c.paidAmount ELSE 0 END)`,
-            'total_debt',
-          )
-          .addSelect(
-            `SUM(CASE WHEN c.status = '${ChargeStatus.OVERDUE}'
+        (qb) =>
+          qb
+            .select('c.unitId', 'unit_id')
+            .addSelect(
+              `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.OVERDUE}','${ChargeStatus.PARTIALLY_PAID}') THEN c.amount - c.paidAmount ELSE 0 END)`,
+              'total_debt',
+            )
+            .addSelect(
+              `SUM(CASE WHEN c.status = '${ChargeStatus.OVERDUE}'
                        OR (c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.PARTIALLY_PAID}')
                            AND c.dueDate < NOW() AND (c.amount - c.paidAmount) > 0)
                      THEN 1 ELSE 0 END)`,
-            'overdue_count',
-          )
-          .addSelect(
-            `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.OVERDUE}','${ChargeStatus.PARTIALLY_PAID}')
+              'overdue_count',
+            )
+            .addSelect(
+              `SUM(CASE WHEN c.status IN ('${ChargeStatus.PENDING}','${ChargeStatus.OVERDUE}','${ChargeStatus.PARTIALLY_PAID}')
                        AND (c.amount - c.paidAmount) > 0
                      THEN 1 ELSE 0 END)`,
-            'pending_count',
-          )
-          .from(FeeCharge, 'c')
-          .where('c.complexId = :complexId', { complexId })
-          .andWhere('c.deletedAt IS NULL')
-          .groupBy('c.unitId'),
+              'pending_count',
+            )
+            .from(FeeCharge, 'c')
+            .where('c.complexId = :complexId', { complexId })
+            .andWhere('c.deletedAt IS NULL')
+            .groupBy('c.unitId'),
         'ch',
         'ch.unit_id = u.id',
       )
       .leftJoin(
-        qb => qb
-          .select('we.unitId', 'unit_id')
-          .addSelect(
-            `SUM(CASE WHEN we.type = 'CREDIT' THEN we.amount WHEN we.type = 'DEBIT' THEN -we.amount ELSE 0 END)`,
-            'wallet_balance',
-          )
-          .from(WalletEntry, 'we')
-          .where('we.complexId = :complexId', { complexId })
-          .groupBy('we.unitId'),
+        (qb) =>
+          qb
+            .select('we.unitId', 'unit_id')
+            .addSelect(
+              `SUM(CASE WHEN we.type = 'CREDIT' THEN we.amount WHEN we.type = 'DEBIT' THEN -we.amount ELSE 0 END)`,
+              'wallet_balance',
+            )
+            .from(WalletEntry, 'we')
+            .where('we.complexId = :complexId', { complexId })
+            .groupBy('we.unitId'),
         'wl',
         'wl.unit_id = u.id',
       )
@@ -2336,12 +2762,19 @@ export class FinanceService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
-    const statusOrder: Record<string, number> = { OVERDUE: 0, IN_DEBT: 1, UP_TO_DATE: 2, CREDIT: 3 };
+    const statusOrder: Record<string, number> = {
+      OVERDUE: 0,
+      IN_DEBT: 1,
+      UP_TO_DATE: 2,
+      CREDIT: 3,
+    };
 
     let items = await this.getAllUnitStatusItems(complexId);
 
-    if (status) items = items.filter(item => item.status === status);
-    items.sort((a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4));
+    if (status) items = items.filter((item) => item.status === status);
+    items.sort(
+      (a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4),
+    );
 
     const totalItems = items.length;
     const totalPages = Math.ceil(totalItems / limit);
@@ -2350,8 +2783,12 @@ export class FinanceService {
     return {
       items: sliced,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }
@@ -2382,7 +2819,8 @@ export class FinanceService {
         receiptUrl: input.receiptUrl ?? null,
         notes: input.notes ?? null,
         isReversed: false,
-        registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+        registeredByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
       }),
     );
 
@@ -2390,7 +2828,13 @@ export class FinanceService {
       entityType: AuditEntityType.FeeCharge,
       entityId: expense.id,
       action: AuditAction.CREATE,
-      newValue: { id: expense.id, amount: expense.amount, category: expense.category, period: expense.period, complexId: input.complexId },
+      newValue: {
+        id: expense.id,
+        amount: expense.amount,
+        category: expense.category,
+        period: expense.period,
+        complexId: input.complexId,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -2473,7 +2917,9 @@ export class FinanceService {
       qb.andWhere('e.period = :period', { period: filters.period });
     } else {
       if (filters.startDate) {
-        qb.andWhere('e.expenseDate >= :startDate', { startDate: filters.startDate });
+        qb.andWhere('e.expenseDate >= :startDate', {
+          startDate: filters.startDate,
+        });
       }
       if (filters.endDate) {
         qb.andWhere('e.expenseDate <= :endDate', { endDate: filters.endDate });
@@ -2483,13 +2929,19 @@ export class FinanceService {
     qb.orderBy('e.expenseDate', 'DESC').addOrderBy('e.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
-    const activeItems = items.filter(e => !e.isReversed);
+    const activeItems = items.filter((e) => !e.isReversed);
     const totalAmount = activeItems.reduce((s, e) => s + Number(e.amount), 0);
 
-    const categoryMap = new Map<ExpenseCategory, { total: number; count: number }>();
+    const categoryMap = new Map<
+      ExpenseCategory,
+      { total: number; count: number }
+    >();
     for (const e of activeItems) {
       const entry = categoryMap.get(e.category) ?? { total: 0, count: 0 };
       entry.total += Number(e.amount);
@@ -2497,7 +2949,9 @@ export class FinanceService {
       categoryMap.set(e.category, entry);
     }
 
-    const byCategory: ExpenseCategoryBreakdown[] = Array.from(categoryMap.entries())
+    const byCategory: ExpenseCategoryBreakdown[] = Array.from(
+      categoryMap.entries(),
+    )
       .map(([category, { total, count }]) => ({
         category,
         total: Math.round(total * 100) / 100,
@@ -2508,8 +2962,12 @@ export class FinanceService {
     return {
       items,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
       totalAmount: Math.round(totalAmount * 100) / 100,
       byCategory,
@@ -2538,7 +2996,8 @@ export class FinanceService {
         receiptUrl: input.receiptUrl ?? null,
         notes: input.notes ?? null,
         isReversed: false,
-        registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+        registeredByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
       }),
     );
 
@@ -2546,7 +3005,13 @@ export class FinanceService {
       entityType: AuditEntityType.FeeCharge,
       entityId: income.id,
       action: AuditAction.CREATE,
-      newValue: { id: income.id, amount: income.amount, category: income.category, period: income.period, complexId: input.complexId },
+      newValue: {
+        id: income.id,
+        amount: income.amount,
+        category: income.category,
+        period: income.period,
+        complexId: input.complexId,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -2620,20 +3085,30 @@ export class FinanceService {
     if (filters.period) {
       qb.andWhere('i.period = :period', { period: filters.period });
     } else {
-      if (filters.startDate) qb.andWhere('i.incomeDate >= :startDate', { startDate: filters.startDate });
-      if (filters.endDate)   qb.andWhere('i.incomeDate <= :endDate',   { endDate: filters.endDate });
+      if (filters.startDate)
+        qb.andWhere('i.incomeDate >= :startDate', {
+          startDate: filters.startDate,
+        });
+      if (filters.endDate)
+        qb.andWhere('i.incomeDate <= :endDate', { endDate: filters.endDate });
     }
 
     qb.orderBy('i.incomeDate', 'DESC').addOrderBy('i.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
-    const activeItems = items.filter(i => !i.isReversed);
+    const activeItems = items.filter((i) => !i.isReversed);
     const totalAmount = activeItems.reduce((s, i) => s + Number(i.amount), 0);
 
-    const categoryMap = new Map<IncomeCategory, { total: number; count: number }>();
+    const categoryMap = new Map<
+      IncomeCategory,
+      { total: number; count: number }
+    >();
     for (const i of activeItems) {
       const entry = categoryMap.get(i.category) ?? { total: 0, count: 0 };
       entry.total += Number(i.amount);
@@ -2641,7 +3116,9 @@ export class FinanceService {
       categoryMap.set(i.category, entry);
     }
 
-    const byCategory: IncomeCategoryBreakdown[] = Array.from(categoryMap.entries())
+    const byCategory: IncomeCategoryBreakdown[] = Array.from(
+      categoryMap.entries(),
+    )
       .map(([category, { total, count }]) => ({
         category,
         total: Math.round(total * 100) / 100,
@@ -2652,8 +3129,12 @@ export class FinanceService {
     return {
       items,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
       totalAmount: Math.round(totalAmount * 100) / 100,
       byCategory,
@@ -2677,7 +3158,9 @@ export class FinanceService {
   }
 
   private async findFeeConfigOrFail(id: string): Promise<FeeConfig> {
-    const config = await this.feeConfigRepo.findOne({ where: { id, deletedAt: null as any } });
+    const config = await this.feeConfigRepo.findOne({
+      where: { id, deletedAt: null },
+    });
     if (!config) {
       throw new CustomError({
         message: 'Configuración de cuota no encontrada',
@@ -2689,7 +3172,9 @@ export class FinanceService {
   }
 
   private async findChargeOrFail(id: string): Promise<FeeCharge> {
-    const charge = await this.chargeRepo.findOne({ where: { id, deletedAt: null as any } });
+    const charge = await this.chargeRepo.findOne({
+      where: { id, deletedAt: null },
+    });
     if (!charge) {
       throw new CustomError({
         message: 'Cargo no encontrado',
@@ -2713,7 +3198,9 @@ export class FinanceService {
   }
 
   private async findExpenseOrFail(id: string): Promise<ComplexExpense> {
-    const expense = await this.expenseRepo.findOne({ where: { id, deletedAt: null as any } });
+    const expense = await this.expenseRepo.findOne({
+      where: { id, deletedAt: null },
+    });
     if (!expense) {
       throw new CustomError({
         message: 'Gasto no encontrado',
@@ -2725,7 +3212,9 @@ export class FinanceService {
   }
 
   private async findIncomeOrFail(id: string): Promise<DirectIncome> {
-    const income = await this.incomeRepo.findOne({ where: { id, deletedAt: null as any } });
+    const income = await this.incomeRepo.findOne({
+      where: { id, deletedAt: null },
+    });
     if (!income) {
       throw new CustomError({
         message: 'Ingreso no encontrado',
@@ -2755,17 +3244,20 @@ export class FinanceService {
         return periodMonth % 2 === 0;
 
       case FeeFrequency.QUARTERLY: {
-        const monthsDiff = (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
+        const monthsDiff =
+          (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
         return monthsDiff >= 0 && monthsDiff % 3 === 0;
       }
 
       case FeeFrequency.SEMIANNUAL: {
-        const monthsDiff = (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
+        const monthsDiff =
+          (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
         return monthsDiff >= 0 && monthsDiff % 6 === 0;
       }
 
       case FeeFrequency.ANNUAL: {
-        const monthsDiff = (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
+        const monthsDiff =
+          (periodYear - createdYear) * 12 + (periodMonth - createdMonth);
         return monthsDiff >= 0 && monthsDiff % 12 === 0;
       }
 
@@ -2790,7 +3282,7 @@ export class FinanceService {
     allUnits: Unit[],
     complexId: string,
   ): Promise<Unit[]> {
-    if (config.unitId) return allUnits.filter(u => u.id === config.unitId);
+    if (config.unitId) return allUnits.filter((u) => u.id === config.unitId);
 
     if (!config.unitType) return allUnits;
 
@@ -2804,19 +3296,24 @@ export class FinanceService {
         .getRawMany();
 
       const activeUnitIds = new Set(vehicleRows.map((r: any) => r.unitId));
-      return allUnits.filter(u => activeUnitIds.has(u.id));
+      return allUnits.filter((u) => activeUnitIds.has(u.id));
     }
 
-    return allUnits.filter(u => u.type === config.unitType);
+    return allUnits.filter((u) => u.type === config.unitType);
   }
 
   private applyTargetRules(units: Unit[], rules: FeeConfigTargetRules): Unit[] {
-    return units.filter(unit => {
+    return units.filter((unit) => {
       if (rules.excludeFloor1 && unit.floor === 1) return false;
       if (rules.floorMin != null && unit.floor < rules.floorMin) return false;
       if (rules.floorMax != null && unit.floor > rules.floorMax) return false;
-      if (rules.buildingIds?.length && !rules.buildingIds.includes(unit.buildingId)) return false;
-      if (rules.unitTypes?.length && !rules.unitTypes.includes(unit.type)) return false;
+      if (
+        rules.buildingIds?.length &&
+        !rules.buildingIds.includes(unit.buildingId)
+      )
+        return false;
+      if (rules.unitTypes?.length && !rules.unitTypes.includes(unit.type))
+        return false;
       return true;
     });
   }
@@ -2863,7 +3360,9 @@ export class FinanceService {
   ): { year: number; month: number } {
     const [year, month] = period.split('-').map(Number);
     if (billingMode !== FeeConfigBillingMode.ARREARS) return { year, month };
-    return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+    return month === 12
+      ? { year: year + 1, month: 1 }
+      : { year, month: month + 1 };
   }
 
   /**
@@ -2897,25 +3396,39 @@ export class FinanceService {
   }
 
   /** Calcula el saldo actual del wallet para una unidad. */
-  private async calcWalletBalance(unitId: string, complexId: string): Promise<number> {
-    const entries = await this.walletEntryRepo.find({ where: { unitId, complexId } });
+  private async calcWalletBalance(
+    unitId: string,
+    complexId: string,
+  ): Promise<number> {
+    const entries = await this.walletEntryRepo.find({
+      where: { unitId, complexId },
+    });
     return this.calcWalletBalanceFromEntries(entries);
   }
 
   private calcWalletBalanceFromEntries(entries: WalletEntry[]): number {
-    const credits = entries.filter(e => e.type === 'CREDIT').reduce((s, e) => s + Number(e.amount), 0);
-    const debits = entries.filter(e => e.type === 'DEBIT').reduce((s, e) => s + Number(e.amount), 0);
+    const credits = entries
+      .filter((e) => e.type === 'CREDIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const debits = entries
+      .filter((e) => e.type === 'DEBIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
     return credits - debits;
   }
 
   /** Obtiene número y nombre de edificio de una unidad. */
-  private async getUnitWithBuilding(unitId: string): Promise<{ number: string; building: string | null }> {
+  private async getUnitWithBuilding(
+    unitId: string,
+  ): Promise<{ number: string; building: string | null }> {
     const unit = await this.dataSource.getRepository(Unit).findOne({
       where: { id: unitId },
       relations: ['building'],
     });
     if (!unit) return { number: '', building: null };
-    return { number: unit.number, building: (unit as any).building?.name ?? null };
+    return {
+      number: unit.number,
+      building: (unit as any).building?.name ?? null,
+    };
   }
 
   private toWalletEntryObject(entry: WalletEntry): WalletEntryObject {
@@ -2959,8 +3472,10 @@ export class FinanceService {
     amount: number,
     paidAt: Date,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(charge.unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents = await this.residentsService.findActiveByUnitInternal(
+      charge.unitId,
+    );
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
@@ -3003,8 +3518,9 @@ export class FinanceService {
     amount: number,
     period: string,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents =
+      await this.residentsService.findActiveByUnitInternal(unitId);
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
@@ -3020,12 +3536,17 @@ export class FinanceService {
 
   /** Resuelve los userId de los residentes activos de una unidad. */
   private async resolveUnitUserIds(unitId: string): Promise<string[]> {
-    const residents = await this.residentsService.findActiveByUnitInternal(unitId);
-    return residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents =
+      await this.residentsService.findActiveByUnitInternal(unitId);
+    return residents.map((r) => r.userId).filter(Boolean);
   }
 
   /** Notifica a la unidad que un pago fue anulado. */
-  private async notifyPaymentReversed(charge: FeeCharge, amount: number, reason: string): Promise<void> {
+  private async notifyPaymentReversed(
+    charge: FeeCharge,
+    amount: number,
+    reason: string,
+  ): Promise<void> {
     const userIds = await this.resolveUnitUserIds(charge.unitId);
     if (userIds.length === 0) return;
 
@@ -3041,7 +3562,10 @@ export class FinanceService {
   }
 
   /** Notifica a la unidad que un cargo fue exonerado. */
-  private async notifyChargeWaived(charge: FeeCharge, reason: string): Promise<void> {
+  private async notifyChargeWaived(
+    charge: FeeCharge,
+    reason: string,
+  ): Promise<void> {
     const userIds = await this.resolveUnitUserIds(charge.unitId);
     if (userIds.length === 0) return;
 
@@ -3078,7 +3602,10 @@ export class FinanceService {
   }
 
   /** Notifica a la unidad que se aplicó saldo a favor a un cargo. */
-  private async notifyWalletApplied(charge: FeeCharge, amount: number): Promise<void> {
+  private async notifyWalletApplied(
+    charge: FeeCharge,
+    amount: number,
+  ): Promise<void> {
     const userIds = await this.resolveUnitUserIds(charge.unitId);
     if (userIds.length === 0) return;
 

@@ -10,8 +10,8 @@ import { registerEnumType } from '@nestjs/graphql';
  */
 export enum PqrfAddressee {
   ADMINISTRACION = 'ADMINISTRACION',
-  CONSEJO        = 'CONSEJO',
-  AMBOS          = 'AMBOS',
+  CONSEJO = 'CONSEJO',
+  AMBOS = 'AMBOS',
 }
 
 registerEnumType(PqrfAddressee, {
@@ -21,7 +21,8 @@ registerEnumType(PqrfAddressee, {
 
 /** ¿Le corresponde a la administración? */
 export const isForAdministration = (addressee: PqrfAddressee): boolean =>
-  addressee === PqrfAddressee.ADMINISTRACION || addressee === PqrfAddressee.AMBOS;
+  addressee === PqrfAddressee.ADMINISTRACION ||
+  addressee === PqrfAddressee.AMBOS;
 
 /** ¿Le corresponde al consejo? */
 export const isForCouncil = (addressee: PqrfAddressee): boolean =>

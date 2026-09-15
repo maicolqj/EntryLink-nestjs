@@ -22,7 +22,6 @@ import { generateSystemCode } from '../../../modules/users/utils/system-code.uti
  * Idempotente: re-ejecutar no cambia nada si todo ya cumple el formato.
  */
 export class NormalizeUserSystemCodes1781001700000 implements MigrationInterface {
-
   // Debe coincidir con SYSTEM_CODE_REGEX. Sintaxis POSIX de Postgres.
   private static readonly CANONICAL_PATTERN = '^RES-[A-Za-z0-9]{5}$';
 

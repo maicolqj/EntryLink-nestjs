@@ -11,10 +11,10 @@ import { registerEnumType } from '@nestjs/graphql';
  *  - PER_ATTRIBUTE:  monto = (atributo[attributeKey] ?? 0) × `amount`.
  */
 export enum ChargeCalculationMethod {
-  FIXED          = 'FIXED',
+  FIXED = 'FIXED',
   BY_COEFFICIENT = 'BY_COEFFICIENT',
-  BY_AREA        = 'BY_AREA',
-  PER_ATTRIBUTE  = 'PER_ATTRIBUTE',
+  BY_AREA = 'BY_AREA',
+  PER_ATTRIBUTE = 'PER_ATTRIBUTE',
 }
 
 registerEnumType(ChargeCalculationMethod, {

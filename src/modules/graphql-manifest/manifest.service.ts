@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { CacheService } from '../../core/infrastructure/cache/cache.service';
 
-const CACHE_PREFIX  = 'graphql';
-const CACHE_KEY     = 'manifest';
+const CACHE_PREFIX = 'graphql';
+const CACHE_KEY = 'manifest';
 const MANIFEST_FILE = 'query-manifest.json';
 
 @Injectable()
@@ -24,15 +24,20 @@ export class ManifestService implements OnApplicationBootstrap {
     if (persisted && Object.keys(persisted).length > 0) {
       // Merge: file entries take precedence so new deployments always add queries.
       const merged = { ...persisted, ...fileEntries };
-      const added  = Object.keys(merged).length - Object.keys(persisted).length;
+      const added = Object.keys(merged).length - Object.keys(persisted).length;
       this.store = merged;
       if (added > 0) {
-        await this.cache.set({ key: { prefix: CACHE_PREFIX, key: CACHE_KEY }, data: merged });
+        await this.cache.set({
+          key: { prefix: CACHE_PREFIX, key: CACHE_KEY },
+          data: merged,
+        });
         this.logger.log(
           `Loaded ${Object.keys(persisted).length} trusted queries from Redis + merged ${added} new from ${MANIFEST_FILE} (total: ${Object.keys(merged).length})`,
         );
       } else {
-        this.logger.log(`Loaded ${Object.keys(persisted).length} trusted queries from Redis`);
+        this.logger.log(
+          `Loaded ${Object.keys(persisted).length} trusted queries from Redis`,
+        );
       }
       return;
     }
@@ -40,8 +45,13 @@ export class ManifestService implements OnApplicationBootstrap {
     // Redis empty — seed from file.
     if (Object.keys(fileEntries).length > 0) {
       this.store = fileEntries;
-      await this.cache.set({ key: { prefix: CACHE_PREFIX, key: CACHE_KEY }, data: fileEntries });
-      this.logger.log(`Seeded ${Object.keys(fileEntries).length} trusted queries from ${MANIFEST_FILE} into Redis`);
+      await this.cache.set({
+        key: { prefix: CACHE_PREFIX, key: CACHE_KEY },
+        data: fileEntries,
+      });
+      this.logger.log(
+        `Seeded ${Object.keys(fileEntries).length} trusted queries from ${MANIFEST_FILE} into Redis`,
+      );
     } else {
       this.logger.warn(
         `Redis empty and ${MANIFEST_FILE} not found or empty. All queries will be rejected in production until POST /graphql-manifest/sync is called.`,
@@ -53,10 +63,12 @@ export class ManifestService implements OnApplicationBootstrap {
     const filePath = join(process.cwd(), MANIFEST_FILE);
     if (!existsSync(filePath)) return {};
     try {
-      const raw    = readFileSync(filePath, 'utf-8');
+      const raw = readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       return Object.fromEntries(
-        Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string'),
+        Object.entries(parsed).filter(
+          (e): e is [string, string] => typeof e[1] === 'string',
+        ),
       );
     } catch (err: any) {
       this.logger.error(`Failed to parse ${MANIFEST_FILE}: ${err.message}`);
@@ -73,11 +85,13 @@ export class ManifestService implements OnApplicationBootstrap {
     const before = Object.keys(this.store).length;
     this.store = { ...this.store, ...manifest };
     await this.cache.set({
-      key:  { prefix: CACHE_PREFIX, key: CACHE_KEY },
+      key: { prefix: CACHE_PREFIX, key: CACHE_KEY },
       data: this.store,
     });
     const added = Object.keys(this.store).length - before;
-    this.logger.log(`Manifest synced — ${Object.keys(manifest).length} incoming, ${added} new, ${Object.keys(this.store).length} total trusted queries`);
+    this.logger.log(
+      `Manifest synced — ${Object.keys(manifest).length} incoming, ${added} new, ${Object.keys(this.store).length} total trusted queries`,
+    );
   }
 
   /** O(1) in-memory lookup. Returns undefined when hash is not trusted. */

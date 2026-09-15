@@ -1,7 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
@@ -19,7 +24,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Entity('complex_finance_configs')
 @Index(['complexId'], { unique: true })
 export class ComplexFinanceConfig {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,10 +1,16 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 
-@ObjectType({ description: 'Solicitud de ingreso pendiente de aprobación desde un dispositivo confiable' })
+@ObjectType({
+  description:
+    'Solicitud de ingreso pendiente de aprobación desde un dispositivo confiable',
+})
 export class DeviceApprovalResponse {
   // Secreto del dispositivo solicitante: no viaja en el push y es lo único que
   // canjea la sesión. Guardarlo en memoria, no mostrarlo en pantalla.
-  @Field(() => ID, { description: 'Identificador del intento. Requerido para consultar estado y canjear' })
+  @Field(() => ID, {
+    description:
+      'Identificador del intento. Requerido para consultar estado y canjear',
+  })
   challengeId: string;
 
   @Field(() => String, {
@@ -16,6 +22,8 @@ export class DeviceApprovalResponse {
   @Field(() => Date)
   expiresAt: Date;
 
-  @Field(() => String, { description: 'Texto a mostrar al usuario mientras espera la aprobación' })
+  @Field(() => String, {
+    description: 'Texto a mostrar al usuario mientras espera la aprobación',
+  })
   instructions: string;
 }

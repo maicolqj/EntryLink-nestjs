@@ -10,13 +10,13 @@ import { extname } from 'path';
 
 import type ExcelJS from 'exceljs';
 
-import { FeeCharge }   from '../entities/fee-charge.entity';
+import { FeeCharge } from '../entities/fee-charge.entity';
 import { WalletEntry } from '../entities/wallet-entry.entity';
-import { ChargeStatus }     from '../enums/charge-status.enum';
+import { ChargeStatus } from '../enums/charge-status.enum';
 import { PrelacionConcept } from '../enums/prelacion-concept.enum';
 import { AccountingService } from '../services/accounting.service';
 
-import { Unit }     from '../../residential-complex/entities/unit.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { Building } from '../../residential-complex/entities/building.entity';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 
@@ -24,8 +24,8 @@ import { CustomError } from '../../shared/utils/errors.utils';
 import { FinanceErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 
-import { AuditService }    from '../../audit/services/audit.service';
-import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 import {
@@ -43,14 +43,17 @@ export class OpeningBalancesImportService {
   private readonly logger = new Logger(OpeningBalancesImportService.name);
 
   constructor(
-    @InjectRepository(FeeCharge)   private readonly chargeRepo:      Repository<FeeCharge>,
-    @InjectRepository(WalletEntry) private readonly walletEntryRepo: Repository<WalletEntry>,
-    @InjectRepository(Unit)        private readonly unitRepo:        Repository<Unit>,
-    @InjectRepository(Building)    private readonly buildingRepo:    Repository<Building>,
-    private readonly complexService:   ResidentialComplexService,
+    @InjectRepository(FeeCharge)
+    private readonly chargeRepo: Repository<FeeCharge>,
+    @InjectRepository(WalletEntry)
+    private readonly walletEntryRepo: Repository<WalletEntry>,
+    @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
+    private readonly complexService: ResidentialComplexService,
     private readonly accountingService: AccountingService,
-    private readonly auditService:     AuditService,
-    private readonly dataSource:       DataSource,
+    private readonly auditService: AuditService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -94,17 +97,25 @@ export class OpeningBalancesImportService {
         const plan = await this.planRow(row, complexId, period);
         if (plan) planned.push(plan);
       } catch (err: any) {
-        errors.push({ row: row.rowIndex, identifier, message: err?.message ?? 'Error desconocido' });
+        errors.push({
+          row: row.rowIndex,
+          identifier,
+          message: err?.message ?? 'Error desconocido',
+        });
       }
     }
 
     const totalCartera = planned.reduce((s, p) => s + p.cartera, 0);
-    const totalFavor   = planned.reduce((s, p) => s + p.favor, 0);
-    const chargesToCreate = planned.filter(p => p.cartera > 0 && !p.skipCharge).length;
-    const walletToCreate  = planned.filter(p => p.favor   > 0 && !p.skipWallet).length;
+    const totalFavor = planned.reduce((s, p) => s + p.favor, 0);
+    const chargesToCreate = planned.filter(
+      (p) => p.cartera > 0 && !p.skipCharge,
+    ).length;
+    const walletToCreate = planned.filter(
+      (p) => p.favor > 0 && !p.skipWallet,
+    ).length;
     const skipped =
-      planned.filter(p => p.cartera > 0 && p.skipCharge).length +
-      planned.filter(p => p.favor   > 0 && p.skipWallet).length;
+      planned.filter((p) => p.cartera > 0 && p.skipCharge).length +
+      planned.filter((p) => p.favor > 0 && p.skipWallet).length;
 
     // ── Ejecución (solo si no es preview) ──
     if (!dryRun && planned.length) {
@@ -138,23 +149,33 @@ export class OpeningBalancesImportService {
     }
 
     const cartera = this.parseAmount(row.carteraRaw);
-    const favor   = this.parseAmount(row.favorRaw);
+    const favor = this.parseAmount(row.favorRaw);
 
     if (cartera === null && favor === null) {
       // Fila sin ningún saldo: nada que migrar, se ignora silenciosamente.
       return null;
     }
-    if (cartera !== null && cartera < 0) throw new Error(`saldo de cartera inválido (negativo): '${row.carteraRaw}'`);
-    if (favor   !== null && favor   < 0) throw new Error(`saldo a favor inválido (negativo): '${row.favorRaw}'`);
+    if (cartera !== null && cartera < 0)
+      throw new Error(
+        `saldo de cartera inválido (negativo): '${row.carteraRaw}'`,
+      );
+    if (favor !== null && favor < 0)
+      throw new Error(`saldo a favor inválido (negativo): '${row.favorRaw}'`);
 
     const safeCartera = cartera ?? 0;
-    const safeFavor   = favor ?? 0;
+    const safeFavor = favor ?? 0;
     if (safeCartera === 0 && safeFavor === 0) return null;
 
-    const unit = await this.resolveUnit(complexId, row.unitNumber, row.buildingName);
+    const unit = await this.resolveUnit(
+      complexId,
+      row.unitNumber,
+      row.buildingName,
+    );
 
-    const skipCharge = safeCartera > 0 && (await this.chargeExists(complexId, unit.id, period));
-    const skipWallet = safeFavor   > 0 && (await this.walletExists(complexId, unit.id));
+    const skipCharge =
+      safeCartera > 0 && (await this.chargeExists(complexId, unit.id, period));
+    const skipWallet =
+      safeFavor > 0 && (await this.walletExists(complexId, unit.id));
 
     return {
       rowIndex: row.rowIndex,
@@ -222,20 +243,30 @@ export class OpeningBalancesImportService {
 
       // Re-materializar el saldo (PropertyAccountStatus) de cada unidad tocada.
       for (const unitId of affectedUnitIds) {
-        await this.accountingService.recomputeUnitStatus(manager, complexId, unitId);
+        await this.accountingService.recomputeUnitStatus(
+          manager,
+          complexId,
+          unitId,
+        );
       }
     });
 
     this.logger.log(
       `importOpeningBalances — complejo ${complexId}, período ${period}: ` +
-      `${chargesCreated} cargos y ${walletCreated} créditos creados en ${affectedUnitIds.size} unidades.`,
+        `${chargesCreated} cargos y ${walletCreated} créditos creados en ${affectedUnitIds.size} unidades.`,
     );
 
     void this.auditService.log({
       entityType: AuditEntityType.FeeCharge,
       entityId: complexId,
       action: AuditAction.CREATE,
-      newValue: { period, chargesCreated, walletCreated, units: affectedUnitIds.size, complexId },
+      newValue: {
+        period,
+        chargesCreated,
+        walletCreated,
+        units: affectedUnitIds.size,
+        complexId,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -259,13 +290,24 @@ export class OpeningBalancesImportService {
 
     if (buildingName?.trim()) {
       const building = await this.buildingRepo.findOne({
-        where: { complexId, name: buildingName.trim().toUpperCase(), deletedAt: IsNull() },
+        where: {
+          complexId,
+          name: buildingName.trim().toUpperCase(),
+          deletedAt: IsNull(),
+        },
       });
       if (!building) {
-        throw new Error(`edificio '${buildingName}' no encontrado en el complejo`);
+        throw new Error(
+          `edificio '${buildingName}' no encontrado en el complejo`,
+        );
       }
       const unit = await this.unitRepo.findOne({
-        where: { complexId, buildingId: building.id, number: normalizedNumber, deletedAt: IsNull() },
+        where: {
+          complexId,
+          buildingId: building.id,
+          number: normalizedNumber,
+          deletedAt: IsNull(),
+        },
       });
       if (!unit) {
         throw new Error(`unidad '${buildingName}-${unitNumber}' no encontrada`);
@@ -289,10 +331,16 @@ export class OpeningBalancesImportService {
 
   // ── Detección de duplicados (idempotencia) ────────────────────────────────
 
-  private async chargeExists(complexId: string, unitId: string, period: string): Promise<boolean> {
+  private async chargeExists(
+    complexId: string,
+    unitId: string,
+    period: string,
+  ): Promise<boolean> {
     const found = await this.chargeRepo.findOne({
       where: {
-        complexId, unitId, period,
+        complexId,
+        unitId,
+        period,
         description: OPENING_BALANCE_CHARGE_DESC,
         feeConfigId: IsNull() as any,
       },
@@ -301,9 +349,17 @@ export class OpeningBalancesImportService {
     return !!found;
   }
 
-  private async walletExists(complexId: string, unitId: string): Promise<boolean> {
+  private async walletExists(
+    complexId: string,
+    unitId: string,
+  ): Promise<boolean> {
     const found = await this.walletEntryRepo.findOne({
-      where: { complexId, unitId, type: 'CREDIT', description: OPENING_BALANCE_WALLET_DESC },
+      where: {
+        complexId,
+        unitId,
+        type: 'CREDIT',
+        description: OPENING_BALANCE_WALLET_DESC,
+      },
     });
     return !!found;
   }
@@ -321,10 +377,11 @@ export class OpeningBalancesImportService {
     sheet.eachRow((row, rowIndex) => {
       if (rowIndex === 1) return; // encabezado
 
-      const buildingName = this.cellStr(row.getCell(OPENING_BALANCE_COL.BUILDING)) || undefined;
-      const unitNumber   = this.cellStr(row.getCell(OPENING_BALANCE_COL.UNIT));
-      const carteraRaw   = row.getCell(OPENING_BALANCE_COL.CARTERA).value;
-      const favorRaw     = row.getCell(OPENING_BALANCE_COL.FAVOR).value;
+      const buildingName =
+        this.cellStr(row.getCell(OPENING_BALANCE_COL.BUILDING)) || undefined;
+      const unitNumber = this.cellStr(row.getCell(OPENING_BALANCE_COL.UNIT));
+      const carteraRaw = row.getCell(OPENING_BALANCE_COL.CARTERA).value;
+      const favorRaw = row.getCell(OPENING_BALANCE_COL.FAVOR).value;
 
       // Fila totalmente vacía → ignorar
       if (!unitNumber && carteraRaw == null && favorRaw == null) return;
@@ -361,25 +418,28 @@ export class OpeningBalancesImportService {
       raw = r;
     }
 
-    let s = String(raw).trim().replace(/[^0-9.,\-]/g, '');
+    let s = String(raw)
+      .trim()
+      .replace(/[^0-9.,\-]/g, '');
     if (!s) return null;
 
     const hasComma = s.includes(',');
-    const hasDot   = s.includes('.');
+    const hasDot = s.includes('.');
 
     if (hasComma && hasDot) {
       // El último separador que aparece es el decimal.
       if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
         s = s.replace(/\./g, '').replace(',', '.'); // coma decimal (CO)
       } else {
-        s = s.replace(/,/g, '');                    // punto decimal (EN)
+        s = s.replace(/,/g, ''); // punto decimal (EN)
       }
     } else if (hasComma) {
       const parts = s.split(',');
       // "1234,56" → decimal ; "1,234" o "1,234,567" → miles
-      s = parts.length === 2 && parts[1].length <= 2
-        ? parts[0] + '.' + parts[1]
-        : s.replace(/,/g, '');
+      s =
+        parts.length === 2 && parts[1].length <= 2
+          ? parts[0] + '.' + parts[1]
+          : s.replace(/,/g, '');
     } else if (hasDot) {
       const parts = s.split('.');
       // "1.234" o "1.234.567" → miles ; "1234.56" → decimal
@@ -397,8 +457,10 @@ export class OpeningBalancesImportService {
   private cellStr(cell: ExcelJS.Cell): string {
     const val = cell?.value;
     if (val === null || val === undefined) return '';
-    if (typeof val === 'object' && 'text' in val) return String((val as any).text).trim();
-    if (typeof val === 'object' && 'result' in val) return String((val as any).result ?? '').trim();
+    if (typeof val === 'object' && 'text' in val)
+      return String((val as any).text).trim();
+    if (typeof val === 'object' && 'result' in val)
+      return String((val as any).result ?? '').trim();
     if (val instanceof Date) return val.toISOString();
     return String(val).trim();
   }
@@ -408,7 +470,9 @@ export class OpeningBalancesImportService {
     try {
       ExcelJSModule = await import('exceljs');
     } catch {
-      throw new BadRequestException('El módulo exceljs no está instalado. Ejecuta: yarn add exceljs');
+      throw new BadRequestException(
+        'El módulo exceljs no está instalado. Ejecuta: yarn add exceljs',
+      );
     }
 
     const workbook = new ExcelJSModule.Workbook();

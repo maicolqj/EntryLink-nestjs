@@ -4,7 +4,6 @@ import { AccountingHeader } from '../../entities/accounting-header.entity';
 
 @ObjectType()
 export class PaginatedAccountingDocumentsResponse {
-
   @Field(() => [AccountingHeader])
   items: AccountingHeader[];
 

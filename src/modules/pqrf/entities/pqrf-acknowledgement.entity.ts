@@ -1,5 +1,11 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field } from '@nestjs/graphql';
 
@@ -20,7 +26,6 @@ import { PqrfAddressee } from '../enums/pqrf-addressee.enum';
 @Entity({ name: 'pqrf_acknowledgements' })
 @Index(['pqrfId', 'userId'], { unique: true })
 export class PqrfAcknowledgement {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,7 +34,9 @@ export class PqrfAcknowledgement {
   @Column({ name: 'pqrf_id', type: 'uuid' })
   pqrfId: string;
 
-  @ManyToOne(() => Pqrf, pqrf => pqrf.acknowledgements, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Pqrf, (pqrf) => pqrf.acknowledgements, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'pqrf_id' })
   pqrf?: Pqrf;
 

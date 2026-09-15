@@ -1,7 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
@@ -25,7 +30,6 @@ import { moneyColumn } from '../utils/numeric.transformer';
 @Index(['complexId', 'isActive'])
 @Index(['complexId', 'unitId'])
 export class RecurringCharge {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,7 +43,12 @@ export class RecurringCharge {
   type: RecurringChargeType;
 
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    transformer: moneyColumn,
+  })
   amount: number;
 
   /** Solo diferidos: nº total de cuotas. Null en indefinido / único. */
@@ -66,7 +75,11 @@ export class RecurringCharge {
    * Default ARREARS: un cargo causado hoy no nace vencido.
    */
   @Field(() => FeeConfigBillingMode)
-  @Column({ type: 'enum', enum: FeeConfigBillingMode, default: FeeConfigBillingMode.ARREARS })
+  @Column({
+    type: 'enum',
+    enum: FeeConfigBillingMode,
+    default: FeeConfigBillingMode.ARREARS,
+  })
   billingMode: FeeConfigBillingMode;
 
   /**
@@ -116,7 +129,11 @@ export class RecurringCharge {
    * FIXED_PER_UNIT (el monto es por cada unidad).
    */
   @Field(() => RecurringChargeDistribution)
-  @Column({ type: 'enum', enum: RecurringChargeDistribution, default: RecurringChargeDistribution.FIXED_PER_UNIT })
+  @Column({
+    type: 'enum',
+    enum: RecurringChargeDistribution,
+    default: RecurringChargeDistribution.FIXED_PER_UNIT,
+  })
   distribution: RecurringChargeDistribution;
 
   /**
@@ -124,7 +141,11 @@ export class RecurringCharge {
    * por cada vehículo ACTIVO (parqueadero); ignora segmentación.
    */
   @Field(() => RecurringChargeTrigger)
-  @Column({ type: 'enum', enum: RecurringChargeTrigger, default: RecurringChargeTrigger.MANUAL })
+  @Column({
+    type: 'enum',
+    enum: RecurringChargeTrigger,
+    default: RecurringChargeTrigger.MANUAL,
+  })
   triggerType: RecurringChargeTrigger;
 
   /**

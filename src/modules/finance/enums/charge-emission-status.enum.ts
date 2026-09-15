@@ -8,7 +8,7 @@ import { registerEnumType } from '@nestjs/graphql';
  *  - CANCELLED: descartada antes de confirmar (o anulada manualmente).
  */
 export enum ChargeEmissionStatus {
-  DRAFT     = 'DRAFT',
+  DRAFT = 'DRAFT',
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
 }

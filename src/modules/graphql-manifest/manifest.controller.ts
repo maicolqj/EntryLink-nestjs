@@ -33,13 +33,15 @@ export class ManifestController {
     const expected = this.config.get<string>('GRAPHQL_SYNC_SECRET');
 
     if (!expected || secret !== expected) {
-      throw new UnauthorizedException('Invalid or missing x-sync-secret header');
+      throw new UnauthorizedException(
+        'Invalid or missing x-sync-secret header',
+      );
     }
 
     // Only accept string values — skip metadata or non-query entries
     const manifest = Object.fromEntries(
-      Object.entries(body).filter((entry): entry is [string, string] =>
-        typeof entry[1] === 'string',
+      Object.entries(body).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
       ),
     );
 

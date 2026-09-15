@@ -15,7 +15,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Aditiva y reversible.
  */
 export class AddDevicePushHealth1781003500000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "push_subscriptions"
@@ -63,9 +62,13 @@ export class AddDevicePushHealth1781003500000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_device_push_health_unhealthy"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_device_push_health_unhealthy"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "device_push_health"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_push_subscriptions_manufacturer"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_push_subscriptions_manufacturer"`,
+    );
     await queryRunner.query(`
       ALTER TABLE "push_subscriptions"
         DROP COLUMN IF EXISTS "last_seen_at",

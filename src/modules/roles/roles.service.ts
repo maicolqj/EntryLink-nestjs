@@ -1,31 +1,47 @@
-import { HttpStatus, Injectable, Logger } from "@nestjs/common";
-import { Role } from "./entities/role.entity";
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { Role } from './entities/role.entity';
 
-import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, QueryRunner, Repository, SelectQueryBuilder } from "typeorm";
-import { Permission } from "../permissions/entities/permission.entity";
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import {
+  DataSource,
+  In,
+  QueryRunner,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
+import { Permission } from '../permissions/entities/permission.entity';
 
-import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse } from "./dto/responses";
-import { CreateRoleInput } from "./dto/inputs/create-role.input";
-import { SearchRolesInput } from "./dto/inputs/search-roles.input";
-import { GraphQLError } from "graphql";
-import { AssignedUserRolResponse } from "./dto/responses/assigned-role-user.response";
+import {
+  AssignChildrenResponse,
+  ChangeParentResponse,
+  MoveSubtreeResponse,
+  PaginatedRolesResponse,
+  RemoveRoleResponse,
+  RestoreRoleResponse,
+  RoleHierarchyResponse,
+  SimpleRoleResponse,
+} from './dto/responses';
+import { CreateRoleInput } from './dto/inputs/create-role.input';
+import { SearchRolesInput } from './dto/inputs/search-roles.input';
+import { GraphQLError } from 'graphql';
+import { AssignedUserRolResponse } from './dto/responses/assigned-role-user.response';
 import { validate, v4 as uuid } from 'uuid';
-import { RolesFiltersInput } from "./dto/inputs/roles-filter.input";
-import { UpdateRoleInput } from "./dto/inputs/update-role.input";
-import { ValidRoles } from "./enums/valid-roles";
-import { CustomError } from "../shared/utils/errors.utils";
-import { GeneralErrorCode, RolesErrorCode } from "../shared/constans/error-codes.constants";
-import { PaginationReponse } from "../shared/dto/responses/pagination-object.response";
-import { UserRole } from "../users/entities/user_has_roles.entity";
-
+import { RolesFiltersInput } from './dto/inputs/roles-filter.input';
+import { UpdateRoleInput } from './dto/inputs/update-role.input';
+import { ValidRoles } from './enums/valid-roles';
+import { CustomError } from '../shared/utils/errors.utils';
+import {
+  GeneralErrorCode,
+  RolesErrorCode,
+} from '../shared/constans/error-codes.constants';
+import { PaginationReponse } from '../shared/dto/responses/pagination-object.response';
+import { UserRole } from '../users/entities/user_has_roles.entity';
 
 @Injectable()
 export class RolesService {
   private readonly logger: Logger = new Logger(RolesService.name);
   private defaultUserRole: Role;
   private readonly DEFAULT_USER_ROLE_NAME = ValidRoles.RESIDENT_ROL;
-
 
   constructor(
     @InjectRepository(Role)
@@ -34,20 +50,16 @@ export class RolesService {
     private readonly permissionsRepository: Repository<Permission>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
-
-  ) { }
+  ) {}
 
   async onModuleInit() {
     this.defaultUserRole = await this.findOrCreateDefaultUserRole();
   }
 
-
-
-
   private async findOrCreateDefaultUserRole(): Promise<Role> {
     let userRole = await this.rolesRepository.findOne({
       where: { name: this.DEFAULT_USER_ROLE_NAME },
-      relations: ['permissions']
+      relations: ['permissions'],
     });
 
     if (!userRole) {
@@ -58,7 +70,7 @@ export class RolesService {
         icon: 'person',
         hierarchyLevel: 4,
         status: true,
-        isSystem: true
+        isSystem: true,
       });
       userRole = await this.rolesRepository.save(userRole);
     }
@@ -74,14 +86,14 @@ export class RolesService {
   async getEffectivePermissions(roleId: string): Promise<Permission[]> {
     const role = await this.rolesRepository.findOne({
       where: { id: roleId, status: true },
-      relations: ['permissions', 'children', 'children.permissions']
+      relations: ['permissions', 'children', 'children.permissions'],
     });
 
     if (!role) {
       throw new CustomError({
         message: 'Role not found',
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: GeneralErrorCode.NOT_FOUND
+        errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
 
@@ -89,26 +101,29 @@ export class RolesService {
     const ownPermissions = role.permissions || [];
 
     // Obtener permisos heredados de roles hijos (recursivamente)
-    const inheritedPermissions = await this.getInheritedPermissionsFromChildren(role);
+    const inheritedPermissions =
+      await this.getInheritedPermissionsFromChildren(role);
 
     // Combinar y eliminar duplicados
     const allPermissions = [...ownPermissions, ...inheritedPermissions];
     const uniquePermissions = Array.from(
-      new Map(allPermissions.map(p => [p.id, p])).values()
+      new Map(allPermissions.map((p) => [p.id, p])).values(),
     );
 
     return uniquePermissions;
   }
 
   // 2. Método recursivo para obtener permisos de roles hijos
-  private async getInheritedPermissionsFromChildren(role: SimpleRoleResponse): Promise<Permission[]> {
+  private async getInheritedPermissionsFromChildren(
+    role: SimpleRoleResponse,
+  ): Promise<Permission[]> {
     const inheritedPermissions: Permission[] = [];
 
     // Cargar hijos si no están cargados
     if (!role.children) {
       const roleWithChildren = await this.rolesRepository.findOne({
         where: { id: role.id },
-        relations: ['children', 'children.permissions']
+        relations: ['children', 'children.permissions'],
       });
       role.children = roleWithChildren?.children || [];
     }
@@ -116,11 +131,14 @@ export class RolesService {
     for (const child of role.children) {
       // Agregar permisos directos del hijo
       if (child.permissions) {
-        inheritedPermissions.push(...child.permissions.map(c => ({ ...c } as Permission)));
+        inheritedPermissions.push(
+          ...child.permissions.map((c) => ({ ...c }) as Permission),
+        );
       }
 
       // Recursivamente obtener permisos de los nietos
-      const grandChildPermissions = await this.getInheritedPermissionsFromChildren(child);
+      const grandChildPermissions =
+        await this.getInheritedPermissionsFromChildren(child);
       inheritedPermissions.push(...grandChildPermissions);
     }
 
@@ -128,7 +146,7 @@ export class RolesService {
   }
 
   // 3. Modificación del método create para validar herencia inversa
-  async create(input: CreateRoleInput ): Promise<Role> {
+  async create(input: CreateRoleInput): Promise<Role> {
     // Validaciones existentes...
     await this.validateUniqueName(input.name);
     const permissions = await this.validatePermissions(input.permissionIds);
@@ -139,7 +157,10 @@ export class RolesService {
 
     // 🆕 NUEVA VALIDACIÓN: Verificar que los padres tengan permisos necesarios
     if (parent) {
-      await this.validateParentPermissionsForInverseInheritance(parent, permissions);
+      await this.validateParentPermissionsForInverseInheritance(
+        parent,
+        permissions,
+      );
     }
 
     const role = this.rolesRepository.create({
@@ -159,7 +180,9 @@ export class RolesService {
       // 🆕 ACTUALIZAR PERMISOS DE ROLES PADRE (herencia inversa)
       await this.updateParentRolesWithInheritedPermissions(savedRole);
 
-      console.log(`✅ Rol creado: ${savedRole.name} con herencia inversa aplicada`);
+      console.log(
+        `✅ Rol creado: ${savedRole.name} con herencia inversa aplicada`,
+      );
       return savedRole;
     } catch (error: any) {
       if (error.code === '23505') {
@@ -167,7 +190,7 @@ export class RolesService {
           message: `Role with code '${input.name}' already exists`,
           statusCode: HttpStatus.CONFLICT,
           errorCode: RolesErrorCode.ROL_ALREADY_EXISTS,
-          details: `Role with code '${input.name}' already exists`
+          details: `Role with code '${input.name}' already exists`,
         });
       }
       throw error;
@@ -177,20 +200,20 @@ export class RolesService {
   // 4. Validar que los padres puedan heredar los permisos del hijo
   private async validateParentPermissionsForInverseInheritance(
     parent: Role,
-    childPermissions: Permission[]
+    childPermissions: Permission[],
   ): Promise<void> {
     // Obtener permisos actuales del padre
     const parentWithPermissions = await this.rolesRepository.findOne({
       where: { id: parent.id },
-      relations: ['permissions']
+      relations: ['permissions'],
     });
 
     const parentPermissionIds = new Set(
-      parentWithPermissions?.permissions?.map(p => p.id) || []
+      parentWithPermissions?.permissions?.map((p) => p.id) || [],
     );
 
     // Verificar si hay conflictos (opcional, según reglas de negocio)
-    const conflictingPermissions = childPermissions.filter(childPerm => {
+    const conflictingPermissions = childPermissions.filter((childPerm) => {
       // Aquí puedes agregar lógica de conflictos si es necesaria
       // Por ejemplo, si ciertos permisos no pueden coexistir
       return false; // Por ahora, no hay conflictos
@@ -201,13 +224,15 @@ export class RolesService {
         message: `Permission conflicts detected for parent role inheritance`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
-        details: `Conflicting permissions: ${conflictingPermissions.map(p => p.name).join(', ')}`
+        details: `Conflicting permissions: ${conflictingPermissions.map((p) => p.name).join(', ')}`,
       });
     }
   }
 
   // 5. Actualizar permisos de roles padre cuando se crea un hijo
-  private async updateParentRolesWithInheritedPermissions(childRole: Role): Promise<void> {
+  private async updateParentRolesWithInheritedPermissions(
+    childRole: Role,
+  ): Promise<void> {
     if (!childRole.parent) return;
 
     // Obtener la cadena completa de ancestros
@@ -215,13 +240,16 @@ export class RolesService {
 
     for (const ancestor of ancestors) {
       // Recalcular permisos efectivos para cada ancestro
-      const effectivePermissions = await this.calculateEffectivePermissionsForRole(ancestor.id);
+      const effectivePermissions =
+        await this.calculateEffectivePermissionsForRole(ancestor.id);
 
       // Actualizar la relación muchos a muchos
       ancestor.permissions = effectivePermissions;
       await this.rolesRepository.save(ancestor);
 
-      console.log(`🔄 Actualizado rol padre: ${ancestor.name} con ${effectivePermissions.length} permisos`);
+      console.log(
+        `🔄 Actualizado rol padre: ${ancestor.name} con ${effectivePermissions.length} permisos`,
+      );
     }
   }
 
@@ -230,7 +258,7 @@ export class RolesService {
     const ancestors: Role[] = [];
     let currentRole = await this.rolesRepository.findOne({
       where: { id: roleId },
-      relations: ['parent', 'permissions']
+      relations: ['parent', 'permissions'],
     });
 
     while (currentRole) {
@@ -239,7 +267,7 @@ export class RolesService {
       if (currentRole.parent) {
         currentRole = await this.rolesRepository.findOne({
           where: { id: currentRole.parent.id },
-          relations: ['parent', 'permissions']
+          relations: ['parent', 'permissions'],
         });
       } else {
         currentRole = null;
@@ -250,10 +278,12 @@ export class RolesService {
   }
 
   // 7. Calcular permisos efectivos para un rol específico
-  private async calculateEffectivePermissionsForRole(roleId: string): Promise<Permission[]> {
+  private async calculateEffectivePermissionsForRole(
+    roleId: string,
+  ): Promise<Permission[]> {
     const role = await this.rolesRepository.findOne({
       where: { id: roleId },
-      relations: ['permissions']
+      relations: ['permissions'],
     });
 
     if (!role) return [];
@@ -262,22 +292,25 @@ export class RolesService {
     const ownPermissions = role.permissions || [];
 
     // Obtener permisos de todos los descendientes
-    const descendantPermissions = await this.getPermissionsFromDescendants(roleId);
+    const descendantPermissions =
+      await this.getPermissionsFromDescendants(roleId);
 
     // Combinar y eliminar duplicados
     const allPermissions = [...ownPermissions, ...descendantPermissions];
     const uniquePermissions = Array.from(
-      new Map(allPermissions.map(p => [p.id, p])).values()
+      new Map(allPermissions.map((p) => [p.id, p])).values(),
     );
 
     return uniquePermissions;
   }
 
   // 8. Obtener permisos de todos los descendientes
-  private async getPermissionsFromDescendants(roleId: string): Promise<Permission[]> {
+  private async getPermissionsFromDescendants(
+    roleId: string,
+  ): Promise<Permission[]> {
     const descendants = await this.rolesRepository.find({
       where: { parent: { id: roleId } },
-      relations: ['permissions']
+      relations: ['permissions'],
     });
 
     const descendantPermissions: Permission[] = [];
@@ -289,7 +322,9 @@ export class RolesService {
       }
 
       // Recursivamente obtener permisos de sus hijos
-      const grandChildPermissions = await this.getPermissionsFromDescendants(descendant.id);
+      const grandChildPermissions = await this.getPermissionsFromDescendants(
+        descendant.id,
+      );
       descendantPermissions.push(...grandChildPermissions);
     }
 
@@ -304,7 +339,7 @@ export class RolesService {
     const allRoles = await this.rolesRepository.find({
       where: { status: true },
       relations: ['permissions', 'parent'],
-      order: { hierarchyLevel: 'DESC' } // Empezar por los niveles más bajos
+      order: { hierarchyLevel: 'DESC' }, // Empezar por los niveles más bajos
     });
 
     // Procesar roles desde los hijos hacia los padres
@@ -343,28 +378,29 @@ export class RolesService {
   }> {
     const role = await this.rolesRepository.findOne({
       where: { id: roleId },
-      relations: ['permissions']
+      relations: ['permissions'],
     });
 
     if (!role) {
       throw new CustomError({
         message: 'Role not found',
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: GeneralErrorCode.NOT_FOUND
+        errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
 
     const ownPermissions = role.permissions || [];
-    const inheritedPermissions = await this.getInheritedPermissionsFromChildren(role);
+    const inheritedPermissions =
+      await this.getInheritedPermissionsFromChildren(role);
     const effectivePermissions = await this.getEffectivePermissions(roleId);
 
     return {
       role,
       ownPermissions,
       inheritedPermissions: inheritedPermissions.filter(
-        ip => !ownPermissions.some(op => op.id === ip.id)
+        (ip) => !ownPermissions.some((op) => op.id === ip.id),
       ),
-      effectivePermissions
+      effectivePermissions,
     };
   }
 
@@ -374,8 +410,9 @@ export class RolesService {
   //**************************************************************************************************************************
   //**************************************************************************************************************************
 
-
-  private async validatePermissions(permissionIds: string[]): Promise<Permission[]> {
+  private async validatePermissions(
+    permissionIds: string[],
+  ): Promise<Permission[]> {
     if (!permissionIds || permissionIds.length === 0) {
       throw new CustomError({
         message: `At least one permission is required`,
@@ -386,12 +423,12 @@ export class RolesService {
 
     // Validar que existan los permisos
     const permissions = await this.permissionsRepository.findBy({
-      id: In(permissionIds)
+      id: In(permissionIds),
     });
 
     if (permissions.length !== permissionIds.length) {
-      const foundIds = permissions.map(p => p.id);
-      const missingIds = permissionIds.filter(id => !foundIds.includes(id));
+      const foundIds = permissions.map((p) => p.id);
+      const missingIds = permissionIds.filter((id) => !foundIds.includes(id));
       throw new CustomError({
         message: `Permissions not found: ${missingIds.join(', ')}`,
         statusCode: HttpStatus.NOT_FOUND,
@@ -400,9 +437,9 @@ export class RolesService {
     }
 
     // Validar que los permisos estén activos
-    const inactivePermissions = permissions.filter(p => !p.status);
+    const inactivePermissions = permissions.filter((p) => !p.status);
     if (inactivePermissions.length > 0) {
-      const inactiveNames = inactivePermissions.map(p => p.name).join(', ');
+      const inactiveNames = inactivePermissions.map((p) => p.name).join(', ');
       throw new CustomError({
         message: `Cannot assign inactive permissions: ${inactiveNames}`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -420,14 +457,16 @@ export class RolesService {
     return permissions;
   }
 
-  private async validatePermissionDependencies(permissions: Permission[]): Promise<void> {
+  private async validatePermissionDependencies(
+    permissions: Permission[],
+  ): Promise<void> {
     // Cargar dependencias de los permisos
     const permissionsWithDeps = await this.permissionsRepository.find({
-      where: { id: In(permissions.map(p => p.id)) },
-      relations: ['dependsOn']
+      where: { id: In(permissions.map((p) => p.id)) },
+      relations: ['dependsOn'],
     });
 
-    const assignedPermissionNames = new Set(permissions.map(p => p.name));
+    const assignedPermissionNames = new Set(permissions.map((p) => p.name));
     const missingDependencies: string[] = [];
 
     for (const permission of permissionsWithDeps) {
@@ -435,7 +474,7 @@ export class RolesService {
         for (const dependency of permission.dependsOn) {
           if (!assignedPermissionNames.has(dependency.name)) {
             missingDependencies.push(
-              `${permission.name} requires ${dependency.name}`
+              `${permission.name} requires ${dependency.name}`,
             );
           }
         }
@@ -443,7 +482,6 @@ export class RolesService {
     }
 
     if (missingDependencies.length > 0) {
-
       throw new CustomError({
         message: `Missing required permission dependencies: ${missingDependencies.join(', ')}`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -452,9 +490,12 @@ export class RolesService {
     }
   }
 
-  private async validateParentRole(parentId: string, childHierarchy: number): Promise<Role> {
+  private async validateParentRole(
+    parentId: string,
+    childHierarchy: number,
+  ): Promise<Role> {
     const parent = await this.rolesRepository.findOne({
-      where: { id: parentId, status: true } // Solo padres activos
+      where: { id: parentId, status: true }, // Solo padres activos
     });
 
     if (!parent) {
@@ -469,7 +510,6 @@ export class RolesService {
     // Un hijo debe tener MAYOR número de jerarquía que el padre
     // Ejemplo: ADMIN (nivel 0) > MANAGER (nivel 1) > USER (nivel 2)
     if (parent.hierarchyLevel >= childHierarchy) {
-
       throw new CustomError({
         message: `Child role hierarchy level (${childHierarchy}) must be greater than parent level (${parent.hierarchyLevel})`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -482,7 +522,7 @@ export class RolesService {
 
   private async validateUniqueName(name: ValidRoles): Promise<void> {
     const existingRole = await this.rolesRepository.findOne({
-      where: { name }
+      where: { name },
     });
 
     if (existingRole) {
@@ -490,19 +530,22 @@ export class RolesService {
         message: `Role with code '${name}' already exists`,
         statusCode: HttpStatus.CONFLICT,
         errorCode: RolesErrorCode.ROL_ALREADY_EXISTS,
-        details: `Role with code '${name}' already exists`
+        details: `Role with code '${name}' already exists`,
       });
     }
   }
 
-  private async validateHierarchyLogic(hierarchyLevel: number, parent?: Role): Promise<void> {
+  private async validateHierarchyLogic(
+    hierarchyLevel: number,
+    parent?: Role,
+  ): Promise<void> {
     // Validar rango de jerarquía
     if (hierarchyLevel < 0 || hierarchyLevel > 10) {
       throw new CustomError({
         message: `Hierarchy level must be between 0 and 4`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
-        details: `Hierarchy level must be between 0 and 4`
+        details: `Hierarchy level must be between 0 and 4`,
       });
     }
 
@@ -515,32 +558,27 @@ export class RolesService {
           message: `Roles with hierarchy level ${hierarchyLevel} require a parent role`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: GeneralErrorCode.BAD_REQUEST,
-          details: `Roles with hierarchy level ${hierarchyLevel} require a parent role`
+          details: `Roles with hierarchy level ${hierarchyLevel} require a parent role`,
         });
-
       }
     }
 
     // Validar que no haya saltos de jerarquía muy grandes
-    if (parent && (hierarchyLevel - parent.hierarchyLevel) > 1) {
+    if (parent && hierarchyLevel - parent.hierarchyLevel > 1) {
       throw new CustomError({
         message: `Hierarchy gap too large. Parent level: ${parent.hierarchyLevel}, Child level: ${hierarchyLevel}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
-        details: `Hierarchy gap too large. Parent level: ${parent.hierarchyLevel}, Child level: ${hierarchyLevel}`
+        details: `Hierarchy gap too large. Parent level: ${parent.hierarchyLevel}, Child level: ${hierarchyLevel}`,
       });
-
     }
   }
-
-
 
   async findAll(input: SearchRolesInput): Promise<PaginatedRolesResponse> {
     try {
       const { filters, pagination, sort } = input;
       const { page = 1, limit = 20 } = pagination;
       const { field = 'createdAt', direction = 'DESC' } = sort;
-
 
       const queryBuilder = await this.rolesRepository
         .createQueryBuilder('role')
@@ -550,8 +588,7 @@ export class RolesService {
         .leftJoinAndSelect('role.createdByUser', 'createdByUser')
         .leftJoinAndSelect('role.updatedByUser', 'updatedByUser')
         .leftJoinAndSelect('role.userRoles', 'userRoles')
-        .leftJoinAndSelect('userRoles.user', 'user')
-
+        .leftJoinAndSelect('userRoles.user', 'user');
 
       this.applyFilters(queryBuilder, filters);
 
@@ -572,39 +609,33 @@ export class RolesService {
         totalItems,
         totalPages,
         hasNextPage,
-        hasPreviousPage
+        hasPreviousPage,
       };
 
       return { items, meta };
-
-
     } catch (error: any) {
-      this.logger.error(`Error al realizar la busqueda por filtros ${error.message}`);
+      this.logger.error(
+        `Error al realizar la busqueda por filtros ${error.message}`,
+      );
 
       if (error instanceof CustomError || error instanceof GraphQLError) {
-        throw error
+        throw error;
       }
 
       throw new CustomError({
         message: `Error al buscar los pemrisos por filtros: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la busqueda de permisos: ${error.message}`
+        details: `Error técnico durante la busqueda de permisos: ${error.message}`,
       });
     }
   }
 
   private applyFilters(
     queryBuilder: SelectQueryBuilder<Role>,
-    filters: RolesFiltersInput
+    filters: RolesFiltersInput,
   ): void {
-    const {
-      status,
-      hierarchyLevel,
-      isSystem,
-      createdAt,
-      search
-    } = filters;
+    const { status, hierarchyLevel, isSystem, createdAt, search } = filters;
 
     // Filtro por status
     if (typeof status === 'boolean') {
@@ -614,7 +645,7 @@ export class RolesService {
     // Filtro por level
     if (hierarchyLevel !== undefined && hierarchyLevel !== null) {
       queryBuilder.andWhere('role.hierarchyLevel = :hierarchyLevel', {
-        hierarchyLevel: hierarchyLevel // GraphQL ya convertirá 0,1,2,3,4 correctamente
+        hierarchyLevel: hierarchyLevel, // GraphQL ya convertirá 0,1,2,3,4 correctamente
       });
     }
 
@@ -627,12 +658,12 @@ export class RolesService {
     if (createdAt) {
       if (createdAt.from) {
         queryBuilder.andWhere('role.createdAt >= :fromDate', {
-          fromDate: new Date(createdAt.from)
+          fromDate: new Date(createdAt.from),
         });
       }
       if (createdAt.to) {
         queryBuilder.andWhere('role.createdAt <= :toDate', {
-          toDate: new Date(createdAt.to)
+          toDate: new Date(createdAt.to),
         });
       }
     }
@@ -641,7 +672,7 @@ export class RolesService {
     if (search) {
       queryBuilder.andWhere(
         '(permission.name ILIKE :search OR permission.description ILIKE :search)',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
   }
@@ -699,7 +730,9 @@ export class RolesService {
 
       return role;
     } catch (error: any) {
-      this.logger.error(`Error finding role with term "${term}": ${error.message}`);
+      this.logger.error(
+        `Error finding role with term "${term}": ${error.message}`,
+      );
 
       if (error instanceof CustomError || error instanceof GraphQLError) {
         throw error;
@@ -713,7 +746,6 @@ export class RolesService {
       });
     }
   }
-
 
   async update(id: string, updateRoleInput: UpdateRoleInput): Promise<Role> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -730,8 +762,8 @@ export class RolesService {
           'permissions',
           'createdByUser',
           'updatedByUser',
-          'userRoles'
-        ]
+          'userRoles',
+        ],
       });
 
       if (!existingRole) {
@@ -740,29 +772,36 @@ export class RolesService {
           message: `Role con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
           errorCode: RolesErrorCode.ROL_NOT_FOUND,
-          details: `No se puede actualizar un rol que no existe: ${id}`
+          details: `No se puede actualizar un rol que no existe: ${id}`,
         });
       }
 
       // 2. Validaciones para roles del sistema
       if (existingRole.isSystem) {
-        if (updateRoleInput.name && updateRoleInput.name !== existingRole.name) {
-          this.logger.warn(`Intento de modificar nombre de roles del sistema: ${existingRole.name}`);
+        if (
+          updateRoleInput.name &&
+          updateRoleInput.name !== existingRole.name
+        ) {
+          this.logger.warn(
+            `Intento de modificar nombre de roles del sistema: ${existingRole.name}`,
+          );
           throw new CustomError({
             message: `No se puede modificar el nombre de roles del sistema`,
             statusCode: HttpStatus.BAD_REQUEST,
             errorCode: RolesErrorCode.SYSTEM_ROL_CANNOT_BE_MODIFIED,
-            details: `El ROL '${existingRole.name}' es un rol del sistema y no se puede renombrar`
+            details: `El ROL '${existingRole.name}' es un rol del sistema y no se puede renombrar`,
           });
         }
 
         if (updateRoleInput.isSystem === false) {
-          this.logger.warn(`Intento de cambiar estado de sistema del rol: ${existingRole.name}`);
+          this.logger.warn(
+            `Intento de cambiar estado de sistema del rol: ${existingRole.name}`,
+          );
           throw new CustomError({
             message: `No se puede cambiar el estado de sistema de un rol crítico`,
             statusCode: HttpStatus.BAD_REQUEST,
             errorCode: RolesErrorCode.SYSTEM_ROL_CANNOT_BE_MODIFIED,
-            details: `El rol '${existingRole.name}' debe mantener su estado de sistema`
+            details: `El rol '${existingRole.name}' debe mantener su estado de sistema`,
           });
         }
       }
@@ -770,16 +809,18 @@ export class RolesService {
       // 3. Validar nombre único si se está actualizando
       if (updateRoleInput.name && updateRoleInput.name !== existingRole.name) {
         const duplicateRole = await queryRunner.manager.findOne(Role, {
-          where: { name: updateRoleInput.name }
+          where: { name: updateRoleInput.name },
         });
 
         if (duplicateRole) {
-          this.logger.warn(`Intento de actualizar rol con nombre duplicado: ${updateRoleInput.name}`);
+          this.logger.warn(
+            `Intento de actualizar rol con nombre duplicado: ${updateRoleInput.name}`,
+          );
           throw new CustomError({
             message: `Ya existe un rol con el nombre: ${updateRoleInput.name}`,
             statusCode: HttpStatus.CONFLICT,
             errorCode: RolesErrorCode.ROL_ALREADY_EXISTS,
-            details: `No se puede cambiar el nombre porque ya existe otro rol con ese nombre`
+            details: `No se puede cambiar el nombre porque ya existe otro rol con ese nombre`,
           });
         }
       }
@@ -787,12 +828,15 @@ export class RolesService {
       // 4. Validar permisos si se proporcionaron
       let newPermissions: Permission[] | undefined;
       if (updateRoleInput.permissionIds) {
-        newPermissions = await this.validatePermissions(updateRoleInput.permissionIds);
+        newPermissions = await this.validatePermissions(
+          updateRoleInput.permissionIds,
+        );
       }
 
       // 5. Validar jerarquía y rol padre si se están actualizando
       let newParent: Role | null = existingRole.parent;
-      const newHierarchyLevel = updateRoleInput.hierarchyLevel ?? existingRole.hierarchyLevel;
+      const newHierarchyLevel =
+        updateRoleInput.hierarchyLevel ?? existingRole.hierarchyLevel;
 
       if (updateRoleInput.parentId !== undefined) {
         if (updateRoleInput.parentId === null) {
@@ -809,18 +853,21 @@ export class RolesService {
 
           // Verificar que no se cree un ciclo en la jerarquía
           const descendants = await this.getDescendantChain(id);
-          const descendantIds = descendants.map(d => d.id);
+          const descendantIds = descendants.map((d) => d.id);
 
           if (descendantIds.includes(updateRoleInput.parentId)) {
             throw new CustomError({
               message: `No se puede establecer como padre un rol descendiente`,
               statusCode: HttpStatus.BAD_REQUEST,
               errorCode: GeneralErrorCode.BAD_REQUEST,
-              details: `El rol ${updateRoleInput.parentId} es descendiente del rol ${id}`
+              details: `El rol ${updateRoleInput.parentId} es descendiente del rol ${id}`,
             });
           }
 
-          newParent = await this.validateParentRole(updateRoleInput.parentId, newHierarchyLevel);
+          newParent = await this.validateParentRole(
+            updateRoleInput.parentId,
+            newHierarchyLevel,
+          );
         }
       }
 
@@ -829,7 +876,10 @@ export class RolesService {
 
       // 7. Validar permisos de herencia inversa si hay cambios en padre o permisos
       if (newParent && newPermissions) {
-        await this.validateParentPermissionsForInverseInheritance(newParent, newPermissions);
+        await this.validateParentPermissionsForInverseInheritance(
+          newParent,
+          newPermissions,
+        );
       }
 
       // 8. Preparar datos de actualización
@@ -838,11 +888,16 @@ export class RolesService {
       };
 
       // Aplicar solo los campos que se proporcionaron
-      if (updateRoleInput.name !== undefined) updateData.name = updateRoleInput.name;
-      if (updateRoleInput.description !== undefined) updateData.description = updateRoleInput.description;
-      if (updateRoleInput.hierarchyLevel !== undefined) updateData.hierarchyLevel = updateRoleInput.hierarchyLevel;
-      if (updateRoleInput.isSystem !== undefined) updateData.isSystem = updateRoleInput.isSystem;
-      if (updateRoleInput.metadata !== undefined) updateData.metadata = updateRoleInput.metadata;
+      if (updateRoleInput.name !== undefined)
+        updateData.name = updateRoleInput.name;
+      if (updateRoleInput.description !== undefined)
+        updateData.description = updateRoleInput.description;
+      if (updateRoleInput.hierarchyLevel !== undefined)
+        updateData.hierarchyLevel = updateRoleInput.hierarchyLevel;
+      if (updateRoleInput.isSystem !== undefined)
+        updateData.isSystem = updateRoleInput.isSystem;
+      if (updateRoleInput.metadata !== undefined)
+        updateData.metadata = updateRoleInput.metadata;
 
       // 9. Actualizar el rol base
       await queryRunner.manager.update(Role, { id }, updateData);
@@ -851,7 +906,7 @@ export class RolesService {
       if (updateRoleInput.parentId !== undefined) {
         const updatedRole = await queryRunner.manager.findOne(Role, {
           where: { id },
-          relations: ['parent']
+          relations: ['parent'],
         });
 
         if (updatedRole) {
@@ -864,7 +919,7 @@ export class RolesService {
       if (newPermissions) {
         const updatedRole = await queryRunner.manager.findOne(Role, {
           where: { id },
-          relations: ['permissions']
+          relations: ['permissions'],
         });
 
         if (updatedRole) {
@@ -881,8 +936,8 @@ export class RolesService {
           'children',
           'permissions',
           'createdByUser',
-          'updatedByUser'
-        ]
+          'updatedByUser',
+        ],
       });
 
       if (!finalRole) {
@@ -906,22 +961,32 @@ export class RolesService {
         }
 
         // Si cambió el padre, también actualizar ancestros del padre anterior
-        if (updateRoleInput.parentId !== undefined && existingRole.parent && existingRole.parent.id !== finalRole.parent?.id) {
+        if (
+          updateRoleInput.parentId !== undefined &&
+          existingRole.parent &&
+          existingRole.parent.id !== finalRole.parent?.id
+        ) {
           await this.updateParentRolesWithInheritedPermissions(existingRole);
         }
       }
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Rol actualizado exitosamente: ${finalRole.id} - ${finalRole.name}`);
-      console.log(`✅ Rol actualizado: ${finalRole.name} con herencia inversa aplicada`);
+      this.logger.log(
+        `Rol actualizado exitosamente: ${finalRole.id} - ${finalRole.name}`,
+      );
+      console.log(
+        `✅ Rol actualizado: ${finalRole.name} con herencia inversa aplicada`,
+      );
 
       return finalRole;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
-      this.logger.error(`Error al actualizar rol '${id}': ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al actualizar rol '${id}': ${error.message}`,
+        error.stack,
+      );
 
       if (error instanceof CustomError || error instanceof GraphQLError) {
         throw error;
@@ -931,102 +996,102 @@ export class RolesService {
         message: `Error al actualizar el rol: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la actualización del rol: ${error.message}`
+        details: `Error técnico durante la actualización del rol: ${error.message}`,
       });
-
     } finally {
-      this.logger.debug(`Recursos de QueryRunner liberados para actualización del rol: ${id}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para actualización del rol: ${id}`,
+      );
       await queryRunner.release();
     }
-
   }
 
   /**
-  * Cambia únicamente el padre directo de un rol específico, sin mover necesariamente a sus hijos.
-  * 
-  * Esta función realiza una reasignación de reporte individual, permitiendo flexibilidad en la
-  * reorganización de la estructura jerárquica. A diferencia de moveRoleSubtree, esta operación
-  * puede separar un rol de sus descendientes, creando estructuras más dinámicas.
-  * 
-  * @description
-  * Equivale a cambiar a un empleado de departamento sin mover necesariamente a su equipo de trabajo.
-  * La operación actualiza la herencia de permisos en ambas ramas (la anterior y la nueva) para
-  * mantener la consistencia del sistema.
-  * 
-  * @param roleId - ID del rol cuyo padre será cambiado
-  * @param newParentId - ID del nuevo rol padre, o null para convertirlo en rol raíz
-  * @param options - Opciones adicionales para la operación
-  * @param options.preserveChildren - Si true, mantiene la relación con los hijos actuales
-  * @param options.validateHierarchy - Si true, realiza validaciones adicionales de jerarquía
-  * 
-  * @returns Promise<ChangeParentResponse> Información detallada sobre el cambio realizado
-  * 
-  * @throws {ValidationError} Si la asignación del nuevo padre es inválida
-  * @throws {NotFoundError} Si el rol o el nuevo padre no existen
-  * @throws {HierarchyError} Si la operación violaría las reglas de jerarquía
-  * @throws {PermissionError} Si hay conflictos de permisos en la nueva asignación
-  * 
-  * @example
-  * ```typescript
-  * // Estructura ANTES:
-  * // CEO (nivel 0)
-  * // ├── Gerente A (nivel 1)
-  * // │   └── Empleado A1 (nivel 2)
-  * // └── Gerente B (nivel 1)
-  * //     └── Empleado B1 (nivel 2)
-  * 
-  * const result = await rolesService.changeRoleParent('empleado-b1-id', 'gerente-a-id');
-  * 
-  * // Estructura DESPUÉS:
-  * // CEO (nivel 0)
-  * // ├── Gerente A (nivel 1)
-  * // │   ├── Empleado A1 (nivel 2)
-  * // │   └── Empleado B1 (nivel 2)  ← Solo este rol se movió
-  * // └── Gerente B (nivel 1)         ← Queda sin hijos
-  * 
-  * console.log(result);
-  * // {
-  * //   roleId: 'empleado-b1-id',
-  * //   roleName: 'Empleado B1',
-  * //   oldParent: { id: 'gerente-b-id', name: 'Gerente B' },
-  * //   newParent: { id: 'gerente-a-id', name: 'Gerente A' },
-  * //   affectedRolesCount: 3,
-  * //   message: "Rol 'Empleado B1' movido exitosamente. 3 roles actualizados."
-  * // }
-  * ```
-  * 
-  * @example
-  * ```typescript
-  * // Cambiar un rol con opciones específicas
-  * const result = await rolesService.changeRoleParent(
-  *   'manager-id', 
-  *   'new-director-id',
-  *   { 
-  *     preserveChildren: true,
-  *     validateHierarchy: true 
-  *   }
-  * );
-  * ```
-  * 
-  * @example
-  * ```typescript
-  * // Promover un rol a la raíz organizacional
-  * const result = await rolesService.changeRoleParent('senior-manager-id', null);
-  * // El rol se convierte en independiente, reportando directamente al nivel superior
-  * ```
-  * 
-  * @since 1.0.0
-  * @see {@link moveRoleSubtree} Para mover un rol junto con toda su descendencia
-  * @see {@link validateNewParentAssignment} Para validaciones de compatibilidad de padre
-  * @see {@link updateParentRolesWithInheritedPermissions} Para actualización de herencia de permisos
-  */
+   * Cambia únicamente el padre directo de un rol específico, sin mover necesariamente a sus hijos.
+   *
+   * Esta función realiza una reasignación de reporte individual, permitiendo flexibilidad en la
+   * reorganización de la estructura jerárquica. A diferencia de moveRoleSubtree, esta operación
+   * puede separar un rol de sus descendientes, creando estructuras más dinámicas.
+   *
+   * @description
+   * Equivale a cambiar a un empleado de departamento sin mover necesariamente a su equipo de trabajo.
+   * La operación actualiza la herencia de permisos en ambas ramas (la anterior y la nueva) para
+   * mantener la consistencia del sistema.
+   *
+   * @param roleId - ID del rol cuyo padre será cambiado
+   * @param newParentId - ID del nuevo rol padre, o null para convertirlo en rol raíz
+   * @param options - Opciones adicionales para la operación
+   * @param options.preserveChildren - Si true, mantiene la relación con los hijos actuales
+   * @param options.validateHierarchy - Si true, realiza validaciones adicionales de jerarquía
+   *
+   * @returns Promise<ChangeParentResponse> Información detallada sobre el cambio realizado
+   *
+   * @throws {ValidationError} Si la asignación del nuevo padre es inválida
+   * @throws {NotFoundError} Si el rol o el nuevo padre no existen
+   * @throws {HierarchyError} Si la operación violaría las reglas de jerarquía
+   * @throws {PermissionError} Si hay conflictos de permisos en la nueva asignación
+   *
+   * @example
+   * ```typescript
+   * // Estructura ANTES:
+   * // CEO (nivel 0)
+   * // ├── Gerente A (nivel 1)
+   * // │   └── Empleado A1 (nivel 2)
+   * // └── Gerente B (nivel 1)
+   * //     └── Empleado B1 (nivel 2)
+   *
+   * const result = await rolesService.changeRoleParent('empleado-b1-id', 'gerente-a-id');
+   *
+   * // Estructura DESPUÉS:
+   * // CEO (nivel 0)
+   * // ├── Gerente A (nivel 1)
+   * // │   ├── Empleado A1 (nivel 2)
+   * // │   └── Empleado B1 (nivel 2)  ← Solo este rol se movió
+   * // └── Gerente B (nivel 1)         ← Queda sin hijos
+   *
+   * console.log(result);
+   * // {
+   * //   roleId: 'empleado-b1-id',
+   * //   roleName: 'Empleado B1',
+   * //   oldParent: { id: 'gerente-b-id', name: 'Gerente B' },
+   * //   newParent: { id: 'gerente-a-id', name: 'Gerente A' },
+   * //   affectedRolesCount: 3,
+   * //   message: "Rol 'Empleado B1' movido exitosamente. 3 roles actualizados."
+   * // }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Cambiar un rol con opciones específicas
+   * const result = await rolesService.changeRoleParent(
+   *   'manager-id',
+   *   'new-director-id',
+   *   {
+   *     preserveChildren: true,
+   *     validateHierarchy: true
+   *   }
+   * );
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Promover un rol a la raíz organizacional
+   * const result = await rolesService.changeRoleParent('senior-manager-id', null);
+   * // El rol se convierte en independiente, reportando directamente al nivel superior
+   * ```
+   *
+   * @since 1.0.0
+   * @see {@link moveRoleSubtree} Para mover un rol junto con toda su descendencia
+   * @see {@link validateNewParentAssignment} Para validaciones de compatibilidad de padre
+   * @see {@link updateParentRolesWithInheritedPermissions} Para actualización de herencia de permisos
+   */
   async changeRoleParent(
     roleId: string,
     newParentId: string | null,
     options?: {
       preserveChildren?: boolean;
       validateHierarchy?: boolean;
-    }
+    },
   ): Promise<ChangeParentResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1042,10 +1107,14 @@ export class RolesService {
       }
 
       // Obtener ancestros que se verán afectados (antes del cambio)
-      const oldAncestors = oldParent ? await this.getAncestorChain(oldParent.id) : [];
+      const oldAncestors = oldParent
+        ? await this.getAncestorChain(oldParent.id)
+        : [];
 
       // Realizar el cambio de padre
-      const newParent = newParentId ? await this.validateParentRole(newParentId, role.hierarchyLevel) : null;
+      const newParent = newParentId
+        ? await this.validateParentRole(newParentId, role.hierarchyLevel)
+        : null;
       role.parent = newParent;
 
       await queryRunner.manager.save(Role, role);
@@ -1060,7 +1129,8 @@ export class RolesService {
 
       // Actualizar ancestros de la rama anterior
       for (const ancestor of oldAncestors) {
-        const effectivePermissions = await this.calculateEffectivePermissionsForRole(ancestor.id);
+        const effectivePermissions =
+          await this.calculateEffectivePermissionsForRole(ancestor.id);
         ancestor.permissions = effectivePermissions;
         await queryRunner.manager.save(Role, ancestor);
       }
@@ -1070,12 +1140,15 @@ export class RolesService {
       return {
         roleId: role.id,
         roleName: role.name,
-        oldParent: oldParent ? { id: oldParent.id, name: oldParent.name } : null,
-        newParent: newParent ? { id: newParent.id, name: newParent.name } : null,
+        oldParent: oldParent
+          ? { id: oldParent.id, name: oldParent.name }
+          : null,
+        newParent: newParent
+          ? { id: newParent.id, name: newParent.name }
+          : null,
         affectedRolesCount: affectedRoles.length,
-        message: `Rol '${role.name}' movido exitosamente. ${affectedRoles.length} roles actualizados.`
+        message: `Rol '${role.name}' movido exitosamente. ${affectedRoles.length} roles actualizados.`,
       };
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1086,25 +1159,25 @@ export class RolesService {
 
   /**
    * Mueve un rol completo junto con toda su descendencia a una nueva posición en la jerarquía.
-   * 
+   *
    * Esta función realiza una operación de movimiento de subárbol completo, manteniendo intacta
    * la estructura interna del subárbol mientras lo reubica bajo un nuevo padre. Todos los
    * descendientes (hijos, nietos, bisnietos, etc.) se mueven junto con el rol objetivo.
-   * 
-   * @description 
+   *
+   * @description
    * Equivale a mover un departamento completo con todos sus subdepartamentos en un organigrama empresarial.
    * La operación recalcula automáticamente los niveles jerárquicos de todo el subárbol y actualiza
    * los permisos por herencia en todas las ramas afectadas.
-   * 
+   *
    * @param roleId - ID del rol que será movido junto con toda su descendencia
    * @param newParentId - ID del nuevo rol padre, o null para convertirlo en rol raíz
-   * 
+   *
    * @returns Promise<MoveSubtreeResponse> Información detallada sobre el movimiento realizado
-   * 
+   *
    * @throws {ValidationError} Si el movimiento crearía un ciclo en la jerarquía
    * @throws {NotFoundError} Si el rol o el nuevo padre no existen
    * @throws {HierarchyError} Si la operación violaría las reglas de jerarquía
-   * 
+   *
    * @example
    * ```typescript
    * // Estructura ANTES:
@@ -1115,9 +1188,9 @@ export class RolesService {
    * //     ├── Subgerente B1 (nivel 2)
    * //     │   └── Empleado B1.1 (nivel 3)
    * //     └── Empleado B2 (nivel 2)
-   * 
+   *
    * const result = await rolesService.moveRoleSubtree('gerente-b-id', 'gerente-a-id');
-   * 
+   *
    * // Estructura DESPUÉS:
    * // CEO (nivel 0)
    * // └── Gerente A (nivel 1)
@@ -1126,7 +1199,7 @@ export class RolesService {
    * //         ├── Subgerente B1 (nivel 3)  ← Niveles recalculados automáticamente
    * //         │   └── Empleado B1.1 (nivel 4)
    * //         └── Empleado B2 (nivel 3)
-   * 
+   *
    * console.log(result);
    * // {
    * //   movedRoleId: 'gerente-b-id',
@@ -1137,14 +1210,14 @@ export class RolesService {
    * //   message: "Subárbol de 'Gerente B' movido exitosamente."
    * // }
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Mover un rol a la raíz (sin padre)
    * const result = await rolesService.moveRoleSubtree('subgerente-id', null);
    * // El subgerente y todos sus descendientes se convierten en una rama independiente
    * ```
-   * 
+   *
    * @since 1.0.0
    * @see {@link changeRoleParent} Para mover solo un rol individual sin su descendencia
    * @see {@link validateSubtreeMove} Para validaciones previas al movimiento
@@ -1152,7 +1225,7 @@ export class RolesService {
    */
   async moveRoleSubtree(
     roleId: string,
-    newParentId: string | null
+    newParentId: string | null,
   ): Promise<MoveSubtreeResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1166,18 +1239,27 @@ export class RolesService {
       await this.validateSubtreeMove(roleWithDescendants, newParentId);
 
       // Calcular nuevos niveles de jerarquía para todo el subárbol
-      const newParent = newParentId ? await this.rolesRepository.findOne({ where: { id: newParentId } }) : null;
+      const newParent = newParentId
+        ? await this.rolesRepository.findOne({ where: { id: newParentId } })
+        : null;
       const baseLevel = newParent ? newParent.hierarchyLevel + 1 : 0;
 
       // Actualizar niveles de jerarquía recursivamente
-      await this.updateSubtreeHierarchyLevels(roleWithDescendants, baseLevel, queryRunner);
+      await this.updateSubtreeHierarchyLevels(
+        roleWithDescendants,
+        baseLevel,
+        queryRunner,
+      );
 
       // Cambiar el padre del rol raíz
       roleWithDescendants.parent = newParent;
       await queryRunner.manager.save(Role, roleWithDescendants);
 
       // Actualizar herencia inversa en todas las ramas afectadas
-      const affectedCount = await this.updateAllAffectedBranches(roleWithDescendants, queryRunner);
+      const affectedCount = await this.updateAllAffectedBranches(
+        roleWithDescendants,
+        queryRunner,
+      );
 
       await queryRunner.commitTransaction();
 
@@ -1185,11 +1267,12 @@ export class RolesService {
         movedRoleId: roleId,
         movedRoleName: roleWithDescendants.name,
         descendantsCount: await this.countDescendants(roleId),
-        newParent: newParent ? { id: newParent.id, name: newParent.name } : null,
+        newParent: newParent
+          ? { id: newParent.id, name: newParent.name }
+          : null,
         affectedRolesCount: affectedCount,
-        message: `Subárbol de '${roleWithDescendants.name}' movido exitosamente.`
+        message: `Subárbol de '${roleWithDescendants.name}' movido exitosamente.`,
       };
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1201,19 +1284,21 @@ export class RolesService {
   // 🔗 Asignar múltiples hijos a un padre
   async assignMultipleChildren(
     parentId: string,
-    childrenIds: string[]
+    childrenIds: string[],
   ): Promise<AssignChildrenResponse> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const parent = await this.rolesRepository.findOne({ where: { id: parentId } });
+      const parent = await this.rolesRepository.findOne({
+        where: { id: parentId },
+      });
       if (!parent) {
         throw new CustomError({
           message: `Parent role not found`,
           statusCode: HttpStatus.NOT_FOUND,
-          errorCode: RolesErrorCode.ROL_NOT_FOUND
+          errorCode: RolesErrorCode.ROL_NOT_FOUND,
         });
       }
 
@@ -1223,7 +1308,7 @@ export class RolesService {
       for (const childId of childrenIds) {
         const child = await this.rolesRepository.findOne({
           where: { id: childId },
-          relations: ['parent']
+          relations: ['parent'],
         });
 
         if (!child) {
@@ -1246,23 +1331,28 @@ export class RolesService {
         // Marcar ancestros afectados
         if (oldParent) {
           const oldAncestors = await this.getAncestorChain(oldParent.id);
-          oldAncestors.forEach(a => affectedAncestors.add(a.id));
+          oldAncestors.forEach((a) => affectedAncestors.add(a.id));
         }
 
         const newAncestors = await this.getAncestorChain(parent.id);
-        newAncestors.forEach(a => affectedAncestors.add(a.id));
+        newAncestors.forEach((a) => affectedAncestors.add(a.id));
 
         results.push({
           childId: child.id,
           childName: child.name,
-          success: true
+          success: true,
         });
       }
 
       // Actualizar herencia inversa en todos los ancestros afectados
       for (const ancestorId of affectedAncestors) {
-        const effectivePermissions = await this.calculateEffectivePermissionsForRole(ancestorId);
-        await queryRunner.manager.update(Role, { id: ancestorId }, { permissions: effectivePermissions });
+        const effectivePermissions =
+          await this.calculateEffectivePermissionsForRole(ancestorId);
+        await queryRunner.manager.update(
+          Role,
+          { id: ancestorId },
+          { permissions: effectivePermissions },
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -1272,9 +1362,8 @@ export class RolesService {
         parentName: parent.name,
         assignedChildren: results,
         affectedAncestorsCount: affectedAncestors.size,
-        message: `${results.length} hijos asignados a '${parent.name}'. ${affectedAncestors.size} ancestros actualizados.`
+        message: `${results.length} hijos asignados a '${parent.name}'. ${affectedAncestors.size} ancestros actualizados.`,
       };
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1287,25 +1376,28 @@ export class RolesService {
   async getRoleHierarchy(roleId: string): Promise<RoleHierarchyResponse> {
     const role = await this.rolesRepository.findOne({
       where: { id: roleId },
-      relations: ['parent', 'children', 'permissions']
+      relations: ['parent', 'children', 'permissions'],
     });
 
     if (!role) {
       throw new CustomError({
         message: `Role not found`,
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: RolesErrorCode.ROL_NOT_FOUND
+        errorCode: RolesErrorCode.ROL_NOT_FOUND,
       });
     }
 
     // Obtener ancestros
-    const ancestors = role.parent ? await this.getAncestorChain(role.parent.id) : [];
+    const ancestors = role.parent
+      ? await this.getAncestorChain(role.parent.id)
+      : [];
 
     // Obtener descendientes
     const descendants = await this.getDescendantChain(roleId);
 
     // Calcular permisos efectivos
-    const effectivePermissions = await this.calculateEffectivePermissionsForRole(roleId);
+    const effectivePermissions =
+      await this.calculateEffectivePermissionsForRole(roleId);
 
     return {
       role: {
@@ -1314,36 +1406,37 @@ export class RolesService {
         description: role.description,
         hierarchyLevel: role.hierarchyLevel,
         status: role.status,
-        isSystem: role.isSystem
+        isSystem: role.isSystem,
       },
-      ancestors: ancestors.map(a => ({
+      ancestors: ancestors.map((a) => ({
         id: a.id,
         name: a.name,
         hierarchyLevel: a.hierarchyLevel,
-        distance: role.hierarchyLevel - a.hierarchyLevel
+        distance: role.hierarchyLevel - a.hierarchyLevel,
       })),
-      descendants: descendants.map(d => ({
+      descendants: descendants.map((d) => ({
         id: d.id,
         name: d.name,
         hierarchyLevel: d.hierarchyLevel,
-        distance: d.hierarchyLevel - role.hierarchyLevel
+        distance: d.hierarchyLevel - role.hierarchyLevel,
       })),
-      directPermissions: role.permissions?.map(p => ({
+      directPermissions:
+        role.permissions?.map((p) => ({
+          id: p.id,
+          name: p.name,
+          source: 'DIRECT',
+        })) || [],
+      effectivePermissions: effectivePermissions.map((p) => ({
         id: p.id,
         name: p.name,
-        source: 'DIRECT'
-      })) || [],
-      effectivePermissions: effectivePermissions.map(p => ({
-        id: p.id,
-        name: p.name,
-        source: this.getPermissionSource(p, role.permissions || [])
+        source: this.getPermissionSource(p, role.permissions || []),
       })),
       stats: {
         ancestorCount: ancestors.length,
         descendantCount: descendants.length,
         directPermissionCount: role.permissions?.length || 0,
-        effectivePermissionCount: effectivePermissions.length
-      }
+        effectivePermissionCount: effectivePermissions.length,
+      },
     };
   }
 
@@ -1355,8 +1448,13 @@ export class RolesService {
       .getMany();
   }
 
-  private getPermissionSource(permission: Permission, directPermissions: Permission[]): string {
-    return directPermissions.some(dp => dp.id === permission.id) ? 'DIRECT' : 'INHERITED';
+  private getPermissionSource(
+    permission: Permission,
+    directPermissions: Permission[],
+  ): string {
+    return directPermissions.some((dp) => dp.id === permission.id)
+      ? 'DIRECT'
+      : 'INHERITED';
   }
 
   // Método auxiliar para obtener la cadena de descendientes
@@ -1370,7 +1468,7 @@ export class RolesService {
 
       const children = await this.rolesRepository.find({
         where: { parent: { id: currentRoleId } },
-        relations: ['parent']
+        relations: ['parent'],
       });
 
       for (const child of children) {
@@ -1397,8 +1495,8 @@ export class RolesService {
           'children',
           'permissions',
           'UserRoles',
-          'UserRoles.user'
-        ]
+          'UserRoles.user',
+        ],
       });
 
       if (!existingRole) {
@@ -1407,65 +1505,75 @@ export class RolesService {
           message: `Rol con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
           errorCode: RolesErrorCode.ROL_NOT_FOUND,
-          details: `No se puede eliminar un rol que no existe: ${id}`
+          details: `No se puede eliminar un rol que no existe: ${id}`,
         });
       }
 
       // 2. Verificar si ya está eliminado (soft delete)
       if (!existingRole.status) {
-        this.logger.warn(`Intento de eliminar rol ya eliminado: ${existingRole.name} (${id})`);
+        this.logger.warn(
+          `Intento de eliminar rol ya eliminado: ${existingRole.name} (${id})`,
+        );
         throw new CustomError({
           message: `El rol '${existingRole.name}' ya está eliminado`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.ROL_ALREADY_DELETED,
-          details: `El rol ya se encuentra en estado eliminado (status: false)`
+          details: `El rol ya se encuentra en estado eliminado (status: false)`,
         });
       }
 
       // 3. Verificar si es un rol del sistema crítico
       if (existingRole.isSystem) {
-        this.logger.warn(`Intento de eliminar rol crítico del sistema: ${existingRole.name}`);
+        this.logger.warn(
+          `Intento de eliminar rol crítico del sistema: ${existingRole.name}`,
+        );
         throw new CustomError({
           message: `No se puede eliminar roles críticos del sistema`,
           statusCode: HttpStatus.FORBIDDEN,
           errorCode: RolesErrorCode.SYSTEM_ROL_CANNOT_BE_MODIFIED,
-          details: `El rol '${existingRole.name}' es crítico para el funcionamiento del sistema y no puede ser eliminado`
+          details: `El rol '${existingRole.name}' es crítico para el funcionamiento del sistema y no puede ser eliminado`,
         });
       }
 
       // 4. Verificar si tiene roles hijos activos (impacto jerárquico)
-      const activeChildren = existingRole.children?.filter(child => child.status) || [];
+      const activeChildren =
+        existingRole.children?.filter((child) => child.status) || [];
       if (activeChildren.length > 0) {
-        const childrenNames = activeChildren.map(child => child.name).join(', ');
+        const childrenNames = activeChildren
+          .map((child) => child.name)
+          .join(', ');
         this.logger.warn(
-          `Intento de eliminar rol con hijos activos: ${existingRole.name}. Hijos: ${childrenNames}`
+          `Intento de eliminar rol con hijos activos: ${existingRole.name}. Hijos: ${childrenNames}`,
         );
 
         throw new CustomError({
           message: `No se puede eliminar el rol porque tiene roles hijos activos`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.ROL_HAS_ACTIVE_CHILDREN,
-          details: `Los siguientes roles hijos están activos: ${childrenNames}. Elimine o reasigne estos roles primero.`
+          details: `Los siguientes roles hijos están activos: ${childrenNames}. Elimine o reasigne estos roles primero.`,
         });
       }
 
       // 5. Verificar si hay usuarios activos asignados a este rol
-      const activeUserAssignments = existingRole.userRoles?.filter(
-        UserRole => UserRole.user.status && UserRole.role.status
-      ) || [];
+      const activeUserAssignments =
+        existingRole.userRoles?.filter(
+          (UserRole) => UserRole.user.status && UserRole.role.status,
+        ) || [];
 
       if (activeUserAssignments.length > 0) {
-        const userNames = activeUserAssignments.map(ur => ur.user.name || ur.user.email).join(', ');
+        const userNames = activeUserAssignments
+          .map((ur) => ur.user.name || ur.user.email)
+          .join(', ');
         this.logger.warn(
           `Intento de eliminar rol con usuarios activos: ${existingRole.name}. ` +
-          `Usuarios: ${activeUserAssignments.length}`
+            `Usuarios: ${activeUserAssignments.length}`,
         );
 
         throw new CustomError({
           message: `No se puede eliminar el rol porque tiene usuarios activos asignados`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.ROL_HAS_ACTIVE_USERS,
-          details: `El rol '${existingRole.name}' está asignado a ${activeUserAssignments.length} usuarios activos: ${userNames}. Revoque estas asignaciones antes de eliminar el rol.`
+          details: `El rol '${existingRole.name}' está asignado a ${activeUserAssignments.length} usuarios activos: ${userNames}. Revoque estas asignaciones antes de eliminar el rol.`,
         });
       }
 
@@ -1476,7 +1584,9 @@ export class RolesService {
         affectedAncestors.push(...ancestors);
       }
 
-      this.logger.log(`Eliminando rol (soft delete): ${existingRole.name} (ID: ${id})`);
+      this.logger.log(
+        `Eliminando rol (soft delete): ${existingRole.name} (ID: ${id})`,
+      );
 
       // 7. Realizar soft delete cambiando status a false
       const updateData: Partial<Role> = {
@@ -1488,31 +1598,38 @@ export class RolesService {
           deletedAt: new Date().toISOString(),
           deletedReason: 'SOFT_DELETE_BY_ADMIN',
           previousParentId: existingRole.parent?.id || null,
-          affectedAncestorIds: affectedAncestors.map(a => a.id)
-        }
+          affectedAncestorIds: affectedAncestors.map((a) => a.id),
+        },
       };
 
       await queryRunner.manager.update(Role, { id }, updateData);
 
       // 8. 🆕 ACTUALIZAR HERENCIA INVERSA: Recalcular permisos de ancestros
       for (const ancestor of affectedAncestors) {
-        const effectivePermissions = await this.calculateEffectivePermissionsForRole(ancestor.id);
+        const effectivePermissions =
+          await this.calculateEffectivePermissionsForRole(ancestor.id);
         ancestor.permissions = effectivePermissions;
         await queryRunner.manager.save(Role, ancestor);
 
-        console.log(`🔄 Actualizado rol ancestro tras eliminación: ${ancestor.name} con ${effectivePermissions.length} permisos`);
+        console.log(
+          `🔄 Actualizado rol ancestro tras eliminación: ${ancestor.name} con ${effectivePermissions.length} permisos`,
+        );
       }
 
       // 9. Obtener el rol actualizado
       const deletedRole = await queryRunner.manager.findOne(Role, {
         where: { id },
-        relations: ['parent', 'permissions']
+        relations: ['parent', 'permissions'],
       });
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Rol eliminado exitosamente (soft delete): ${deletedRole.id} - ${deletedRole.name}`);
-      console.log(`❌ Rol eliminado: ${deletedRole.name} con herencia inversa actualizada`);
+      this.logger.log(
+        `Rol eliminado exitosamente (soft delete): ${deletedRole.id} - ${deletedRole.name}`,
+      );
+      console.log(
+        `❌ Rol eliminado: ${deletedRole.name} con herencia inversa actualizada`,
+      );
 
       // 10. Mapear respuesta
       const response: RemoveRoleResponse = {
@@ -1523,24 +1640,26 @@ export class RolesService {
         hierarchyLevel: deletedRole.hierarchyLevel,
         isSystem: deletedRole.isSystem,
         metadata: deletedRole.metadata,
-        parent: deletedRole.parent ? {
-          id: deletedRole.parent.id,
-          name: deletedRole.parent.name,
-          description: deletedRole.parent.description
-        } : null,
-        permissions: deletedRole.permissions?.map(perm => ({
-          id: perm.id,
-          name: perm.name,
-          description: perm.description
-        })) || [],
+        parent: deletedRole.parent
+          ? {
+              id: deletedRole.parent.id,
+              name: deletedRole.parent.name,
+              description: deletedRole.parent.description,
+            }
+          : null,
+        permissions:
+          deletedRole.permissions?.map((perm) => ({
+            id: perm.id,
+            name: perm.name,
+            description: perm.description,
+          })) || [],
         deletedAt: deletedRole.updatedAt,
         createdAt: deletedRole.createdAt,
         affectedAncestorsCount: affectedAncestors.length,
-        message: `Rol '${deletedRole.name}' eliminado correctamente. ${affectedAncestors.length} roles ancestros actualizados.`
+        message: `Rol '${deletedRole.name}' eliminado correctamente. ${affectedAncestors.length} roles ancestros actualizados.`,
       };
 
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
@@ -1548,18 +1667,22 @@ export class RolesService {
         throw error;
       }
 
-      this.logger.error(`Error al eliminar rol '${id}': ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al eliminar rol '${id}': ${error.message}`,
+        error.stack,
+      );
 
       throw new CustomError({
         message: `Error al eliminar el rol: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la eliminación del rol: ${error.message}`
+        details: `Error técnico durante la eliminación del rol: ${error.message}`,
       });
-
     } finally {
       await queryRunner.release();
-      this.logger.debug(`Recursos de QueryRunner liberados para eliminación del rol: ${id}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para eliminación del rol: ${id}`,
+      );
     }
   }
 
@@ -1572,14 +1695,14 @@ export class RolesService {
       // 1. Verificar si el rol existe
       const existingRole = await queryRunner.manager.findOne(Role, {
         where: { id },
-        relations: ['parent', 'permissions']
+        relations: ['parent', 'permissions'],
       });
 
       if (!existingRole) {
         throw new CustomError({
           message: `Rol con ID ${id} no encontrado`,
           statusCode: HttpStatus.NOT_FOUND,
-          errorCode: RolesErrorCode.ROL_NOT_FOUND
+          errorCode: RolesErrorCode.ROL_NOT_FOUND,
         });
       }
 
@@ -1589,7 +1712,7 @@ export class RolesService {
           message: `El rol '${existingRole.name}' ya está activo`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.ROL_IS_ACTIVE,
-          details: `El rol no necesita ser restaurado porque ya está activo`
+          details: `El rol no necesita ser restaurado porque ya está activo`,
         });
       }
 
@@ -1599,24 +1722,25 @@ export class RolesService {
           message: `No se puede restaurar el rol porque su rol padre está inactivo`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.PARENT_ROL_INACTIVE,
-          details: `El rol padre '${existingRole.parent.name}' debe estar activo antes de restaurar este rol`
+          details: `El rol padre '${existingRole.parent.name}' debe estar activo antes de restaurar este rol`,
         });
       }
 
       // 4. Validar que todos los permisos asignados estén activos
-      const inactivePermissions = existingRole.permissions?.filter(perm => !perm.status) || [];
+      const inactivePermissions =
+        existingRole.permissions?.filter((perm) => !perm.status) || [];
       if (inactivePermissions.length > 0) {
-        const inactiveNames = inactivePermissions.map(p => p.name).join(', ');
+        const inactiveNames = inactivePermissions.map((p) => p.name).join(', ');
         this.logger.warn(
           `Intento de restaurar rol con permisos inactivos: ${existingRole.name}. ` +
-          `Permisos inactivos: ${inactiveNames}`
+            `Permisos inactivos: ${inactiveNames}`,
         );
 
         throw new CustomError({
           message: `No se puede restaurar el rol porque tiene permisos inactivos asignados`,
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: RolesErrorCode.ROL_HAS_INACTIVE_PERMISSIONS,
-          details: `Los siguientes permisos están inactivos: ${inactiveNames}. Active estos permisos primero o revíselos antes de restaurar el rol.`
+          details: `Los siguientes permisos están inactivos: ${inactiveNames}. Active estos permisos primero o revíselos antes de restaurar el rol.`,
         });
       }
 
@@ -1637,8 +1761,8 @@ export class RolesService {
           ...existingRole.metadata,
           restoredAt: new Date().toISOString(),
           restoredReason: 'RESTORED_BY_ADMIN',
-          affectedAncestorIds: affectedAncestors.map(a => a.id)
-        }
+          affectedAncestorIds: affectedAncestors.map((a) => a.id),
+        },
       };
 
       await queryRunner.manager.update(Role, { id }, updateData);
@@ -1646,7 +1770,7 @@ export class RolesService {
       // 7. 🆕 ACTUALIZAR HERENCIA INVERSA: Recalcular permisos de ancestros
       const restoredRole = await queryRunner.manager.findOne(Role, {
         where: { id },
-        relations: ['parent', 'permissions']
+        relations: ['parent', 'permissions'],
       });
 
       // Aplicar herencia inversa si el rol restaurado tiene padre
@@ -1656,8 +1780,12 @@ export class RolesService {
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Rol restaurado exitosamente: ${restoredRole.id} - ${restoredRole.name}`);
-      console.log(`✅ Rol restaurado: ${restoredRole.name} con herencia inversa aplicada`);
+      this.logger.log(
+        `Rol restaurado exitosamente: ${restoredRole.id} - ${restoredRole.name}`,
+      );
+      console.log(
+        `✅ Rol restaurado: ${restoredRole.name} con herencia inversa aplicada`,
+      );
 
       // 8. Mapear respuesta
       const response: RestoreRoleResponse = {
@@ -1668,30 +1796,31 @@ export class RolesService {
         hierarchyLevel: restoredRole.hierarchyLevel,
         isSystem: restoredRole.isSystem,
         metadata: restoredRole.metadata,
-        parent: restoredRole.parent ? {
-          id: restoredRole.parent.id,
-          name: restoredRole.parent.name,
-          description: restoredRole.parent.description,
-          hierarchyLevel: restoredRole.parent.hierarchyLevel,
-          isSystem: restoredRole.parent.isSystem,
-          status: restoredRole.parent.status
-        } : null,
-        permissions: restoredRole.permissions?.map(perm => ({
-          id: perm.id,
-          name: perm.name,
-          description: perm.description,
-          // level: perm.level,
-          group: perm.group,
-
-        })) || [],
+        parent: restoredRole.parent
+          ? {
+              id: restoredRole.parent.id,
+              name: restoredRole.parent.name,
+              description: restoredRole.parent.description,
+              hierarchyLevel: restoredRole.parent.hierarchyLevel,
+              isSystem: restoredRole.parent.isSystem,
+              status: restoredRole.parent.status,
+            }
+          : null,
+        permissions:
+          restoredRole.permissions?.map((perm) => ({
+            id: perm.id,
+            name: perm.name,
+            description: perm.description,
+            // level: perm.level,
+            group: perm.group,
+          })) || [],
         restoredAt: restoredRole.updatedAt,
         createdAt: restoredRole.createdAt,
         affectedAncestorsCount: affectedAncestors.length,
-        message: `Rol '${restoredRole.name}' restaurado correctamente. ${affectedAncestors.length} roles ancestros actualizados.`
+        message: `Rol '${restoredRole.name}' restaurado correctamente. ${affectedAncestors.length} roles ancestros actualizados.`,
       };
 
       return response;
-
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
 
@@ -1699,18 +1828,22 @@ export class RolesService {
         throw error;
       }
 
-      this.logger.error(`Error al restaurar rol '${id}': ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al restaurar rol '${id}': ${error.message}`,
+        error.stack,
+      );
 
       throw new CustomError({
         message: `Error al restaurar el rol: ${error.message}`,
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-        details: `Error técnico durante la restauración del rol: ${error.message}`
+        details: `Error técnico durante la restauración del rol: ${error.message}`,
       });
-
     } finally {
       await queryRunner.release();
-      this.logger.debug(`Recursos de QueryRunner liberados para restauración del rol: ${id}`);
+      this.logger.debug(
+        `Recursos de QueryRunner liberados para restauración del rol: ${id}`,
+      );
     }
   }
 
@@ -1728,32 +1861,35 @@ export class RolesService {
         'children',
         'permissions',
         'userRoles',
-        'userRoles.user'
-      ]
+        'userRoles.user',
+      ],
     });
 
     if (!role) {
       throw new CustomError({
         message: `Role not found`,
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: RolesErrorCode.ROL_NOT_FOUND
+        errorCode: RolesErrorCode.ROL_NOT_FOUND,
       });
     }
 
     return role;
   }
 
-  private async validateNewParentAssignment(role: Role, newParentId: string): Promise<void> {
+  private async validateNewParentAssignment(
+    role: Role,
+    newParentId: string,
+  ): Promise<void> {
     // Validar que no se cree un ciclo
     const descendants = await this.getDescendantChain(role.id);
-    const descendantIds = descendants.map(d => d.id);
+    const descendantIds = descendants.map((d) => d.id);
 
     if (descendantIds.includes(newParentId)) {
       throw new CustomError({
         message: `Cannot assign descendant as parent`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
-        details: `The role ${newParentId} is a descendant of ${role.id}`
+        details: `The role ${newParentId} is a descendant of ${role.id}`,
       });
     }
 
@@ -1762,20 +1898,20 @@ export class RolesService {
       throw new CustomError({
         message: `Role cannot be parent of itself`,
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: GeneralErrorCode.BAD_REQUEST
+        errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
     // Validar que el nuevo padre exista y esté activo
     const newParent = await this.rolesRepository.findOne({
-      where: { id: newParentId, status: true }
+      where: { id: newParentId, status: true },
     });
 
     if (!newParent) {
       throw new CustomError({
         message: `New parent role not found or inactive`,
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: RolesErrorCode.ROL_NOT_FOUND
+        errorCode: RolesErrorCode.ROL_NOT_FOUND,
       });
     }
 
@@ -1785,7 +1921,7 @@ export class RolesService {
         message: `Parent hierarchy level must be lower than child level`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
-        details: `Parent level: ${newParent.hierarchyLevel}, Child level: ${role.hierarchyLevel}`
+        details: `Parent level: ${newParent.hierarchyLevel}, Child level: ${role.hierarchyLevel}`,
       });
     }
   }
@@ -1794,7 +1930,10 @@ export class RolesService {
     return await this.getRoleWithFullHierarchy(roleId);
   }
 
-  private async validateSubtreeMove(role: Role, newParentId: string | null): Promise<void> {
+  private async validateSubtreeMove(
+    role: Role,
+    newParentId: string | null,
+  ): Promise<void> {
     if (!newParentId) return; // Moving to root is always valid
 
     await this.validateNewParentAssignment(role, newParentId);
@@ -1803,29 +1942,41 @@ export class RolesService {
   private async updateSubtreeHierarchyLevels(
     role: Role,
     baseLevel: number,
-    queryRunner: QueryRunner
+    queryRunner: QueryRunner,
   ): Promise<void> {
     // Actualizar nivel del rol actual
-    await queryRunner.manager.update(Role, { id: role.id }, { hierarchyLevel: baseLevel });
+    await queryRunner.manager.update(
+      Role,
+      { id: role.id },
+      { hierarchyLevel: baseLevel },
+    );
 
     // Obtener y actualizar hijos recursivamente
     const children = await queryRunner.manager.find(Role, {
-      where: { parent: { id: role.id } }
+      where: { parent: { id: role.id } },
     });
 
     for (const child of children) {
-      await this.updateSubtreeHierarchyLevels(child, baseLevel + 1, queryRunner);
+      await this.updateSubtreeHierarchyLevels(
+        child,
+        baseLevel + 1,
+        queryRunner,
+      );
     }
   }
 
-  private async updateAllAffectedBranches(role: Role, queryRunner: QueryRunner): Promise<number> {
+  private async updateAllAffectedBranches(
+    role: Role,
+    queryRunner: QueryRunner,
+  ): Promise<number> {
     let affectedCount = 0;
 
     // Actualizar rama actual (hacia arriba)
     if (role.parent) {
       const ancestors = await this.getAncestorChain(role.parent.id);
       for (const ancestor of ancestors) {
-        const effectivePermissions = await this.calculateEffectivePermissionsForRole(ancestor.id);
+        const effectivePermissions =
+          await this.calculateEffectivePermissionsForRole(ancestor.id);
         ancestor.permissions = effectivePermissions;
         await queryRunner.manager.save(Role, ancestor);
         affectedCount++;
@@ -1840,11 +1991,13 @@ export class RolesService {
     return descendants.length;
   }
 
-  private async validateParentChildAssignment(parent: Role, child: Role): Promise<void> {
+  private async validateParentChildAssignment(
+    parent: Role,
+    child: Role,
+  ): Promise<void> {
     // Reutilizar la validación existente
     await this.validateNewParentAssignment(child, parent.id);
   }
-
 
   createVirtualUserRole(userId: string): UserRole {
     const userRole = new UserRole();
@@ -1865,9 +2018,9 @@ export class RolesService {
     userId: string,
     roleName: ValidRoles,
   ): Promise<AssignedUserRolResponse> {
-    const queryRunner = this.dataSource.createQueryRunner()
+    const queryRunner = this.dataSource.createQueryRunner();
     queryRunner.connect();
-    queryRunner.startTransaction()
+    queryRunner.startTransaction();
 
     try {
       // 1) Buscar el rol por nombre y estado activo
@@ -1898,10 +2051,13 @@ export class RolesService {
         }
 
         // Si tiene un rol diferente → no permitir asignación (solo un rol permitido)
-        this.logger.warn(`⚠️ El usuario ${userId} ya tiene otro rol asignado: ${existingUserRole.role?.name || existingUserRole.role.id}`);
+        this.logger.warn(
+          `⚠️ El usuario ${userId} ya tiene otro rol asignado: ${existingUserRole.role?.name || existingUserRole.role.id}`,
+        );
 
         throw new CustomError({
-          message: 'El usuario ya tiene un rol asignado y no puede tener más de uno',
+          message:
+            'El usuario ya tiene un rol asignado y no puede tener más de uno',
           statusCode: HttpStatus.CONFLICT,
           errorCode: GeneralErrorCode.CONFLICT,
         });
@@ -1919,34 +2075,30 @@ export class RolesService {
 
       await queryRunner.commitTransaction();
 
-
       this.logger.log(`✅ Rol "${roleName}" asignado al usuario: ${userId}`);
 
       return {
         success: true,
-        message: `✅ Rol "${roleName}" asignado al usuario: ${userId}`
-      }
+        message: `✅ Rol "${roleName}" asignado al usuario: ${userId}`,
+      };
     } catch (error) {
       // Registrar el error y relanzarlo (útil si estás en una transacción externa)
-      this.logger.error(`❌ Error al asignar rol "${roleName}" al usuario ${userId}:`, error);
+      this.logger.error(
+        `❌ Error al asignar rol "${roleName}" al usuario ${userId}:`,
+        error,
+      );
       throw error; // Re-lanzar para que lo maneje el llamador (ej. rollback en transacción)
     } finally {
       await queryRunner.release();
     }
   }
 
-
   //  Verificar si Usuario tiene Rol
-  async userHasRole(
-    userId: string,
-    roleName: string,
-  ): Promise<boolean> {
-
+  async userHasRole(userId: string, roleName: string): Promise<boolean> {
     const queryRunner = await this.dataSource.createQueryRunner();
-    queryRunner.connect()
-    queryRunner.startTransaction()
+    queryRunner.connect();
+    queryRunner.startTransaction();
     try {
-
       const count = await queryRunner.manager
         .createQueryBuilder(UserRole, 'UserRole')
         .innerJoin('UserRole.role', 'role')
@@ -1957,9 +2109,11 @@ export class RolesService {
       await queryRunner.commitTransaction();
 
       return count > 0;
-
     } catch (error) {
-      this.logger.error(`❌ Error al asignar rol "${roleName}" al usuario ${userId}:`, error);
+      this.logger.error(
+        `❌ Error al asignar rol "${roleName}" al usuario ${userId}:`,
+        error,
+      );
       throw error; // Re-lanzar para que lo maneje el llamador (ej. rollback en transacción)
     } finally {
       await queryRunner.release();
@@ -1986,10 +2140,10 @@ export class RolesService {
     const userRole = await queryRunner.manager.findOne(UserRole, {
       where: {
         user: {
-          id: userId
+          id: userId,
         },
         role: {
-          id: role.id
+          id: role.id,
         },
       },
     });
@@ -2004,6 +2158,4 @@ export class RolesService {
 
     this.logger.log(`🗑️ Rol "${roleName}" removido de usuario: ${userId}`);
   }
-
-
 }

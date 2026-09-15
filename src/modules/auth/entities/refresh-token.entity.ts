@@ -1,4 +1,11 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import { ObjectType, Field, ID, HideField } from '@nestjs/graphql';
 import { User } from '../../users/entities/user.entity';
 
@@ -79,7 +86,11 @@ export class RefreshToken {
   previousTokenHash?: string;
 
   @Field({ nullable: true })
-  @Column({ name: 'previous_token_valid_until', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'previous_token_valid_until',
+    type: 'timestamp',
+    nullable: true,
+  })
   previousTokenValidUntil?: Date;
 
   @Field()
@@ -93,6 +104,11 @@ export class RefreshToken {
    * Nula en tokens emitidos antes de esta columna: se cae a rememberMe.
    */
   @Field({ nullable: true })
-  @Column({ name: 'refresh_expiry', type: 'varchar', length: 10, nullable: true })
+  @Column({
+    name: 'refresh_expiry',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+  })
   refreshExpiry?: string;
 }

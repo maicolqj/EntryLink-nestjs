@@ -3,7 +3,6 @@ import { IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 @InputType()
 export class BlacklistVisitorInput {
-
   @Field(() => String, { description: 'ID del visitante a bloquear' })
   @IsUUID()
   visitorId: string;

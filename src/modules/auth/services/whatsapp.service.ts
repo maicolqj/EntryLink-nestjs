@@ -37,11 +37,20 @@ export class WhatsAppService {
     const accessToken = this.config.get<string>('WHATSAPP_ACCESS_TOKEN');
     const apiVersion = this.config.get<string>('WHATSAPP_API_VERSION', 'v21.0');
 
-    this.otpTemplate = this.config.get<string>('WHATSAPP_OTP_TEMPLATE_NAME', 'remotelink_otp');
-    this.systemCodeTemplate = this.config.get<string>('WHATSAPP_CODE_TEMPLATE_NAME', 'remotelink_access_code');
+    this.otpTemplate = this.config.get<string>(
+      'WHATSAPP_OTP_TEMPLATE_NAME',
+      'remotelink_otp',
+    );
+    this.systemCodeTemplate = this.config.get<string>(
+      'WHATSAPP_CODE_TEMPLATE_NAME',
+      'remotelink_access_code',
+    );
     // Default es_CO, no es: las plantillas están aprobadas en "Español (Colombia)"
     // y un idioma que no coincide EXACTO da error 132001 en Meta.
-    this.templateLang = this.config.get<string>('WHATSAPP_TEMPLATE_LANG', 'es_CO');
+    this.templateLang = this.config.get<string>(
+      'WHATSAPP_TEMPLATE_LANG',
+      'es_CO',
+    );
 
     if (phoneNumberId && accessToken) {
       this.accessToken = accessToken;
@@ -64,14 +73,24 @@ export class WhatsAppService {
 
   /** Envía el código de sistema del residente (RES-XXXXX) para login identidad+código. */
   async sendSystemCode(phoneNumber: string, systemCode: string): Promise<void> {
-    await this.sendAuthTemplate(phoneNumber, this.systemCodeTemplate, systemCode);
+    await this.sendAuthTemplate(
+      phoneNumber,
+      this.systemCodeTemplate,
+      systemCode,
+    );
   }
 
   // ── Privados ──────────────────────────────────────────────────────────────
 
-  private async sendAuthTemplate(phoneNumber: string, templateName: string, code: string): Promise<void> {
+  private async sendAuthTemplate(
+    phoneNumber: string,
+    templateName: string,
+    code: string,
+  ): Promise<void> {
     if (!this.baseUrl || !this.accessToken) {
-      throw new Error('WhatsApp Cloud API no está configurado (faltan variables WHATSAPP_*)');
+      throw new Error(
+        'WhatsApp Cloud API no está configurado (faltan variables WHATSAPP_*)',
+      );
     }
 
     const to = normalizeColombianPhone(phoneNumber);
@@ -113,27 +132,32 @@ export class WhatsAppService {
       if (data?.error) {
         throw new Error(
           `Meta API error ${data.error.code}: ${data.error.message}` +
-          (data.error.fbtrace_id ? ` [trace: ${data.error.fbtrace_id}]` : ''),
+            (data.error.fbtrace_id ? ` [trace: ${data.error.fbtrace_id}]` : ''),
         );
       }
 
       const msgId = data?.messages?.[0]?.id ?? 'unknown';
       // "accepted" solo significa encolado en Meta; la entrega real la confirma
       // el webhook de statuses (WhatsAppWebhookController).
-      this.logger.log(`WhatsApp "${templateName}" aceptado → ${maskPhone(to)} | msgId: ${msgId}`);
+      this.logger.log(
+        `WhatsApp "${templateName}" aceptado → ${maskPhone(to)} | msgId: ${msgId}`,
+      );
     } catch (err: any) {
       const metaError = err?.response?.data?.error;
       const detail = metaError
         ? `code ${metaError.code}` +
           (metaError.error_subcode ? `/${metaError.error_subcode}` : '') +
           `: ${metaError.message}` +
-          (metaError.error_data?.details ? ` — ${metaError.error_data.details}` : '') +
+          (metaError.error_data?.details
+            ? ` — ${metaError.error_data.details}`
+            : '') +
           (metaError.fbtrace_id ? ` [trace: ${metaError.fbtrace_id}]` : '')
-        : err?.message ?? String(err);
+        : (err?.message ?? String(err));
 
-      this.logger.error(`Error enviando WhatsApp "${templateName}" a ${maskPhone(to)}: ${detail}`);
+      this.logger.error(
+        `Error enviando WhatsApp "${templateName}" a ${maskPhone(to)}: ${detail}`,
+      );
       throw err;
     }
   }
-
 }

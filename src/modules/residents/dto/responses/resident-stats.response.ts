@@ -17,9 +17,13 @@ export class ResidentTypeBreakdown {
   @Field(() => Int) caretakers: number;
 }
 
-@ObjectType({ description: 'Estadísticas del módulo de residentes para un complejo' })
+@ObjectType({
+  description: 'Estadísticas del módulo de residentes para un complejo',
+})
 export class ResidentStatsResponse {
-  @Field(() => Int, { description: 'Total de registros activos (no eliminados)' })
+  @Field(() => Int, {
+    description: 'Total de registros activos (no eliminados)',
+  })
   total: number;
 
   @Field(() => Int, { description: 'Residentes activos y verificados' })
@@ -37,9 +41,13 @@ export class ResidentStatsResponse {
   @Field(() => Int, { description: 'Solicitudes rechazadas' })
   rejected: number;
 
-  @Field(() => Int, { description: 'Residentes principales activos (uno por unidad)' })
+  @Field(() => Int, {
+    description: 'Residentes principales activos (uno por unidad)',
+  })
   mainResidents: number;
 
-  @Field(() => ResidentTypeBreakdown, { description: 'Desglose por tipo de residente (solo activos)' })
+  @Field(() => ResidentTypeBreakdown, {
+    description: 'Desglose por tipo de residente (solo activos)',
+  })
   byType: ResidentTypeBreakdown;
 }

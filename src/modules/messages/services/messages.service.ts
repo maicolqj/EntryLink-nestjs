@@ -2,19 +2,19 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { SentMessage }                    from '../entities/sent-message.entity';
-import { SaveSentMessageInput }           from '../dto/inputs/save-sent-message.input';
-import { PaginatedSentMessagesResponse }  from '../dto/responses/paginated-sent-messages.response';
+import { SentMessage } from '../entities/sent-message.entity';
+import { SaveSentMessageInput } from '../dto/inputs/save-sent-message.input';
+import { PaginatedSentMessagesResponse } from '../dto/responses/paginated-sent-messages.response';
 
-import { PaginationInput }        from '../../shared/dto/inputs/pagination.input';
-import { CustomError }            from '../../shared/utils/errors.utils';
-import { MessageErrorCode }       from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }       from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }             from '../../roles/enums/valid-roles';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { MessageErrorCode } from '../../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AuditService }           from '../../audit/services/audit.service';
-import { AuditAction }            from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }        from '../../audit/enums/audit-entity-type.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 @Injectable()
 export class MessagesService {
@@ -23,8 +23,8 @@ export class MessagesService {
   constructor(
     @InjectRepository(SentMessage)
     private readonly sentMessageRepo: Repository<SentMessage>,
-    private readonly complexService:  ResidentialComplexService,
-    private readonly auditService:    AuditService,
+    private readonly complexService: ResidentialComplexService,
+    private readonly auditService: AuditService,
   ) {}
 
   // ================================================================
@@ -37,20 +37,23 @@ export class MessagesService {
     currentUser: JwtAccessPayload,
   ): Promise<SentMessage> {
     if (!this.isSuperAdmin(currentUser)) {
-      await this.complexService.assertComplexAccess(input.complexId, currentUser);
+      await this.complexService.assertComplexAccess(
+        input.complexId,
+        currentUser,
+      );
     }
 
     const message = this.sentMessageRepo.create({
-      complexId:       input.complexId,
-      sentByUserId:    currentUser.sub,
-      unitId:          input.unitId,
-      unitNumber:      input.unitNumber,
-      channel:         input.channel,
-      messageType:     input.messageType,
-      body:            input.body.trim(),
-      recipientCount:  input.recipientCount,
+      complexId: input.complexId,
+      sentByUserId: currentUser.sub,
+      unitId: input.unitId,
+      unitNumber: input.unitNumber,
+      channel: input.channel,
+      messageType: input.messageType,
+      body: input.body.trim(),
+      recipientCount: input.recipientCount,
       recipientPhones: input.recipientPhones,
-      sentAt:          new Date(),
+      sentAt: new Date(),
     });
 
     const saved = await this.sentMessageRepo.save(message);
@@ -59,15 +62,20 @@ export class MessagesService {
     );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.SentMessage,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, channel: saved.channel, messageType: saved.messageType, complexId: saved.complexId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.SentMessage,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        channel: saved.channel,
+        messageType: saved.messageType,
+        complexId: saved.complexId,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       saved.complexId,
-      description:     `Mensaje enviado vía ${saved.channel} a ${saved.recipientCount} destinatario(s) — unidad ${saved.unitNumber}`,
+      complexId: saved.complexId,
+      description: `Mensaje enviado vía ${saved.channel} a ${saved.recipientCount} destinatario(s) — unidad ${saved.unitNumber}`,
     });
 
     return this.loadRelations(saved.id);
@@ -103,11 +111,11 @@ export class MessagesService {
     return {
       items,
       pagination: {
-        currentPage:     page,
-        itemsPerPage:    limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };

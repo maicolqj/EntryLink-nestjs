@@ -15,7 +15,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * seed a continuación.
  */
 export class CreatePqrf1781004200000 implements MigrationInterface {
-
   public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {

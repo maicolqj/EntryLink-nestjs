@@ -33,7 +33,6 @@ const numeric = {
 @Entity({ name: 'voting_ballots' })
 @Index('UQ_voting_ballots_voter', ['questionId', 'voterKey'], { unique: true })
 export class VotingBallot {
-
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -76,7 +75,13 @@ export class VotingBallot {
   residentId?: string | null;
 
   /** Coeficiente de la unidad o 1, congelado al votar. */
-  @Column({ name: 'weight', type: 'numeric', precision: 14, scale: 6, transformer: numeric })
+  @Column({
+    name: 'weight',
+    type: 'numeric',
+    precision: 14,
+    scale: 6,
+    transformer: numeric,
+  })
   weight: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

@@ -12,7 +12,7 @@ import {
 import { User } from './user.entity';
 
 export enum AssignmentStatus {
-  ACTIVE  = 'ACTIVE',
+  ACTIVE = 'ACTIVE',
   REMOVED = 'REMOVED',
 }
 
@@ -34,7 +34,6 @@ registerEnumType(AssignmentStatus, {
 @Index(['userId', 'complexId', 'role', 'status'])
 @Index(['userId', 'role', 'status'])
 export class UserComplexAssignment {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -54,9 +53,9 @@ export class UserComplexAssignment {
 
   @Field(() => AssignmentStatus)
   @Column({
-    name:    'status',
-    type:    'varchar',
-    length:  20,
+    name: 'status',
+    type: 'varchar',
+    length: 20,
     default: AssignmentStatus.ACTIVE,
   })
   status: AssignmentStatus;

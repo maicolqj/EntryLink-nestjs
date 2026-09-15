@@ -5,7 +5,6 @@ import { AccountingDocumentType } from '../../enums/accounting-document-type.enu
 
 @InputType()
 export class FilterAccountingDocumentsInput {
-
   @Field()
   @IsUUID()
   complexId: string;
@@ -18,7 +17,9 @@ export class FilterAccountingDocumentsInput {
   /** YYYY-MM */
   @Field({ nullable: true })
   @IsOptional()
-  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'El período debe tener el formato YYYY-MM' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'El período debe tener el formato YYYY-MM',
+  })
   period?: string;
 
   @Field(() => String, { nullable: true })

@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * `synchronize` previo en dev, así que la operación es idempotente.
  */
 export class MakeVisitorVehicleRegisteredByNullable1781002100000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Eliminar la FK existente (cualquiera sea su nombre conocido)
     await queryRunner.query(`

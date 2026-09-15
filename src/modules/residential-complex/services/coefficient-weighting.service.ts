@@ -8,13 +8,18 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { ResidentialComplexService } from './residential-complex.service';
 
 const ASSIGNABLE = [
-  'base', 'typeMultipliers', 'perBedroom', 'perBathroom',
-  'perParking', 'perStorage', 'elevatorPoints', 'houseFloorPoints',
+  'base',
+  'typeMultipliers',
+  'perBedroom',
+  'perBathroom',
+  'perParking',
+  'perStorage',
+  'elevatorPoints',
+  'houseFloorPoints',
 ] as const;
 
 @Injectable()
 export class CoefficientWeightingService {
-
   constructor(
     @InjectRepository(CoefficientWeighting)
     private readonly repo: Repository<CoefficientWeighting>,
@@ -37,7 +42,9 @@ export class CoefficientWeightingService {
   ): Promise<CoefficientWeighting> {
     await this.complexService.findById(input.complexId, currentUser);
 
-    let row = await this.repo.findOne({ where: { complexId: input.complexId } });
+    let row = await this.repo.findOne({
+      where: { complexId: input.complexId },
+    });
     if (!row) row = this.repo.create({ complexId: input.complexId });
 
     for (const key of ASSIGNABLE) {

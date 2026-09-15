@@ -3,33 +3,36 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { Visit }                  from '../entities/visit.entity';
-import { VisitStatus }            from '../enums/visit-status.enum';
-import { VisitType }              from '../enums/visit-type.enum';
-import { RegisterWalkInInput }    from '../dto/inputs/register-walk-in.input';
-import { ScheduleVisitInput }     from '../dto/inputs/schedule-visit.input';
-import { FilterVisitsInput }      from '../dto/inputs/filter-visits.input';
+import { Visit } from '../entities/visit.entity';
+import { VisitStatus } from '../enums/visit-status.enum';
+import { VisitType } from '../enums/visit-type.enum';
+import { RegisterWalkInInput } from '../dto/inputs/register-walk-in.input';
+import { ScheduleVisitInput } from '../dto/inputs/schedule-visit.input';
+import { FilterVisitsInput } from '../dto/inputs/filter-visits.input';
 import { PaginatedVisitsResponse } from '../dto/responses/paginated-visits.response';
-import { QrValidationResponse }   from '../dto/responses/qr-validation.response';
+import { QrValidationResponse } from '../dto/responses/qr-validation.response';
 
-import { PaginationInput }         from '../../shared/dto/inputs/pagination.input';
-import { CustomError }             from '../../shared/utils/errors.utils';
-import { AccessErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }        from '../../shared/interfaces/jwt-payload.interface';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import {
+  AccessErrorCode,
+  GeneralErrorCode,
+} from '../../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { UnitService }              from '../../residential-complex/services/unit.service';
-import { VisitorsService }         from './visitors.service';
+import { UnitService } from '../../residential-complex/services/unit.service';
+import { VisitorsService } from './visitors.service';
 import { VisitAccessTokenService } from './visit-access-token.service';
-import { ResidentsService }        from '../../residents/services/residents.service';
-import { ResidentStatus }          from '../../residents/enums/resident-status.enum';
-import { NotificationsService }    from '../../notifications/services/notifications.service';
-import { NotificationType }        from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }    from '../../notifications/enums/notification-priority.enum';
-import { AuditService }            from '../../audit/services/audit.service';
-import { AuditAction }             from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }         from '../../audit/enums/audit-entity-type.enum';
-import { SocketService }           from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }             from '../../../core/infrastructure/socket/socket.events';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { ResidentStatus } from '../../residents/enums/resident-status.enum';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 // Duración por defecto del QR: 48 horas
 const QR_DEFAULT_TTL_HOURS = 48;
@@ -43,12 +46,12 @@ export class VisitsService {
     private readonly visitRepo: Repository<Visit>,
     private readonly visitorsService: VisitorsService,
     private readonly visitAccessTokenService: VisitAccessTokenService,
-    private readonly complexService:  ResidentialComplexService,
-    private readonly unitService:     UnitService,
+    private readonly complexService: ResidentialComplexService,
+    private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
     private readonly notificationsService: NotificationsService,
-    private readonly auditService:    AuditService,
-    private readonly socketService:   SocketService,
+    private readonly auditService: AuditService,
+    private readonly socketService: SocketService,
   ) {}
 
   // ================================================================
@@ -63,20 +66,26 @@ export class VisitsService {
     title: string,
     body: string,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(visit.unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents = await this.residentsService.findActiveByUnitInternal(
+      visit.unitId,
+    );
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
-      complexId:  visit.complexId,
+      complexId: visit.complexId,
       userIds,
       type,
       priority,
       title,
       body,
-      entityId:   visit.id,
+      entityId: visit.id,
       entityType: 'visit',
-      metadata:   { visitId: visit.id, unitId: visit.unitId, visitorId: visit.visitorId },
+      metadata: {
+        visitId: visit.id,
+        unitId: visit.unitId,
+        visitorId: visit.visitorId,
+      },
     });
   }
 
@@ -100,19 +109,22 @@ export class VisitsService {
     // describen a la persona, no a esta visita concreta: van al visitante, donde
     // se conservan entre visitas en vez de duplicarse en cada entrada.
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
-      name:      input.visitorName,
-      lastName:  input.visitorLastName,
-      identity:  input.visitorIdentity,
-      phone:     input.visitorPhone,
-      photoUrl:  input.visitorPhotoUrl,
-      metadata:  input.metadata,
+      name: input.visitorName,
+      lastName: input.visitorLastName,
+      identity: input.visitorIdentity,
+      phone: input.visitorPhone,
+      photoUrl: input.visitorPhotoUrl,
+      metadata: input.metadata,
     });
 
     // 4. Verificar lista negra ANTES de crear la visita
     await this.visitorsService.assertNotBlacklisted(visitor);
 
     // 5. Verificar que el residente anfitrión existe y está ACTIVO
-    const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
+    const resident = await this.residentsService.findById(
+      input.hostResidentId,
+      currentUser,
+    );
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
         message: 'El residente anfitrión no está activo en el complejo',
@@ -123,16 +135,17 @@ export class VisitsService {
 
     // 6. Crear visita en PENDING_APPROVAL
     const visit = this.visitRepo.create({
-      visitorId:          visitor.id,
-      hostResidentId:     input.hostResidentId,
-      unitId:             input.unitId,
-      complexId:          input.complexId,
-      type:               input.type ?? VisitType.WALK_IN,
-      status:             VisitStatus.PENDING_APPROVAL,
-      purpose:            input.purpose,
-      vehiclePlate:       input.vehiclePlate?.toUpperCase().trim(),
-      notes:              input.notes,
-      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
+      visitorId: visitor.id,
+      hostResidentId: input.hostResidentId,
+      unitId: input.unitId,
+      complexId: input.complexId,
+      type: input.type ?? VisitType.WALK_IN,
+      status: VisitStatus.PENDING_APPROVAL,
+      purpose: input.purpose,
+      vehiclePlate: input.vehiclePlate?.toUpperCase().trim(),
+      notes: input.notes,
+      registeredByUserId:
+        currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.visitRepo.save(visit);
@@ -141,15 +154,20 @@ export class VisitsService {
     );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, visitorId: visitor.id, unitId: input.unitId, status: saved.status },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        visitorId: visitor.id,
+        unitId: input.unitId,
+        status: saved.status,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Walk-in registrado: ${visitor.fullName} → unidad ${input.unitId}`,
+      complexId: input.complexId,
+      description: `Walk-in registrado: ${visitor.fullName} → unidad ${input.unitId}`,
     });
 
     this.notifyUnit(
@@ -158,7 +176,11 @@ export class VisitsService {
       NotificationPriority.HIGH,
       'Visitante en portería',
       `${visitor.fullName} llegó a portería para visitar tu unidad.`,
-    ).catch(err => this.logger.warn(`Error al notificar walk-in ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar walk-in ${saved.id}: ${err?.message}`,
+      ),
+    );
 
     return this.loadRelations(saved.id);
   }
@@ -178,7 +200,10 @@ export class VisitsService {
     await this.unitService.findById(input.unitId, currentUser);
 
     // 3. Verificar que el residente existe y está activo
-    const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
+    const resident = await this.residentsService.findById(
+      input.hostResidentId,
+      currentUser,
+    );
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
         message: 'Solo residentes activos pueden agendar visitas',
@@ -189,11 +214,11 @@ export class VisitsService {
 
     // 4. Obtener o crear visitante
     const visitor = await this.visitorsService.findOrCreate(input.complexId, {
-      name:         input.visitorName,
-      lastName:     input.visitorLastName,
-      identity:     input.visitorIdentity,
+      name: input.visitorName,
+      lastName: input.visitorLastName,
+      identity: input.visitorIdentity,
       identityType: input.identityType,
-      phone:        input.visitorPhone,
+      phone: input.visitorPhone,
     });
 
     // 5. Verificar lista negra
@@ -207,37 +232,44 @@ export class VisitsService {
 
     // 7. Crear visita pre-aprobada con QR
     const visit = this.visitRepo.create({
-      visitorId:             visitor.id,
-      hostResidentId:        input.hostResidentId,
-      unitId:                input.unitId,
-      complexId:             input.complexId,
-      type:                  VisitType.SCHEDULED,
-      status:                VisitStatus.APPROVED,
-      purpose:               input.purpose,
-      vehiclePlate:          input.vehiclePlate?.toUpperCase().trim(),
-      notes:                 input.notes,
-      expectedArrivalAt:     expectedAt,
-      expectedArrivalUntil:  qrExpiresAt,
-      qrToken:               uuidv4(), // Token único para el QR
-      qrUsed:                false,
+      visitorId: visitor.id,
+      hostResidentId: input.hostResidentId,
+      unitId: input.unitId,
+      complexId: input.complexId,
+      type: VisitType.SCHEDULED,
+      status: VisitStatus.APPROVED,
+      purpose: input.purpose,
+      vehiclePlate: input.vehiclePlate?.toUpperCase().trim(),
+      notes: input.notes,
+      expectedArrivalAt: expectedAt,
+      expectedArrivalUntil: qrExpiresAt,
+      qrToken: uuidv4(), // Token único para el QR
+      qrUsed: false,
       qrExpiresAt,
-      approvedByResidentAt:  new Date(),
-      registeredByUserId:    currentUser.entityType === 'user' ? currentUser.sub : undefined,
+      approvedByResidentAt: new Date(),
+      registeredByUserId:
+        currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.visitRepo.save(visit);
     this.logger.log(`Visita agendada: ${saved.id} con QR ${saved.qrToken}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, visitorId: visitor.id, unitId: input.unitId, type: 'SCHEDULED', status: saved.status },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        visitorId: visitor.id,
+        unitId: input.unitId,
+        type: 'SCHEDULED',
+        status: saved.status,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Visita agendada con QR: ${visitor.fullName} → unidad ${input.unitId}`,
+      complexId: input.complexId,
+      description: `Visita agendada con QR: ${visitor.fullName} → unidad ${input.unitId}`,
     });
 
     return this.loadRelations(saved.id);
@@ -261,26 +293,33 @@ export class VisitsService {
       });
     }
 
-    visit.status               = VisitStatus.APPROVED;
+    visit.status = VisitStatus.APPROVED;
     visit.approvedByResidentAt = new Date();
 
     const saved = await this.visitRepo.save(visit);
     this.logger.log(`Visita aprobada por residente: ${visitId}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visitId,
-      action:          AuditAction.APPROVE,
-      previousValue:   { status: VisitStatus.PENDING_APPROVAL },
-      newValue:        { status: VisitStatus.APPROVED, approvedByResidentAt: saved.approvedByResidentAt },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: visitId,
+      action: AuditAction.APPROVE,
+      previousValue: { status: VisitStatus.PENDING_APPROVAL },
+      newValue: {
+        status: VisitStatus.APPROVED,
+        approvedByResidentAt: saved.approvedByResidentAt,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Visita aprobada por residente`,
+      complexId: visit.complexId,
+      description: `Visita aprobada por residente`,
     });
 
-    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_APPROVED, { visitId, unitId: visit.unitId });
+    this.socketService.emitToComplex(
+      visit.complexId,
+      SocketEvent.VISITOR_APPROVED,
+      { visitId, unitId: visit.unitId },
+    );
     return this.loadRelations(saved.id);
   }
 
@@ -303,27 +342,33 @@ export class VisitsService {
       });
     }
 
-    visit.status              = VisitStatus.DENIED;
-    visit.deniedByResidentAt  = new Date();
-    visit.denialReason        = reason;
+    visit.status = VisitStatus.DENIED;
+    visit.deniedByResidentAt = new Date();
+    visit.denialReason = reason;
 
-    this.logger.warn(`Visita denegada por residente: ${visitId} — razón: ${reason}`);
+    this.logger.warn(
+      `Visita denegada por residente: ${visitId} — razón: ${reason}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visitId,
-      action:          AuditAction.REJECT,
-      previousValue:   { status: VisitStatus.PENDING_APPROVAL },
-      newValue:        { status: VisitStatus.DENIED, denialReason: reason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: visitId,
+      action: AuditAction.REJECT,
+      previousValue: { status: VisitStatus.PENDING_APPROVAL },
+      newValue: { status: VisitStatus.DENIED, denialReason: reason },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Visita denegada — razón: ${reason}`,
+      complexId: visit.complexId,
+      description: `Visita denegada — razón: ${reason}`,
     });
 
     const denied = await this.visitRepo.save(visit);
-    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_DENIED, { visitId, reason });
+    this.socketService.emitToComplex(
+      visit.complexId,
+      SocketEvent.VISITOR_DENIED,
+      { visitId, reason },
+    );
     return denied;
   }
 
@@ -374,9 +419,10 @@ export class VisitsService {
 
     if (visit.status !== VisitStatus.APPROVED) {
       throw new CustomError({
-        message: visit.type === VisitType.SCHEDULED
-          ? 'La visita no está en estado válido para ingresar'
-          : `Solo se puede registrar entrada de visitas APPROVED. Estado: ${visit.status}`,
+        message:
+          visit.type === VisitType.SCHEDULED
+            ? 'La visita no está en estado válido para ingresar'
+            : `Solo se puede registrar entrada de visitas APPROVED. Estado: ${visit.status}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AccessErrorCode.VISIT_NOT_AUTHORIZED,
       });
@@ -389,26 +435,32 @@ export class VisitsService {
       visit.qrUsed = true;
     }
 
-    visit.status    = VisitStatus.INSIDE;
+    visit.status = VisitStatus.INSIDE;
     visit.entryTime = new Date();
 
-    this.logger.log(`Entrada registrada: ${visitId} a las ${visit.entryTime.toISOString()}`);
+    this.logger.log(
+      `Entrada registrada: ${visitId} a las ${visit.entryTime.toISOString()}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visitId,
-      action:          AuditAction.UPDATE,
-      previousValue:   { status: VisitStatus.APPROVED },
-      newValue:        { status: VisitStatus.INSIDE, entryTime: visit.entryTime },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: visitId,
+      action: AuditAction.UPDATE,
+      previousValue: { status: VisitStatus.APPROVED },
+      newValue: { status: VisitStatus.INSIDE, entryTime: visit.entryTime },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Entrada de visitante registrada en unidad ${visit.unitId}`,
+      complexId: visit.complexId,
+      description: `Entrada de visitante registrada en unidad ${visit.unitId}`,
     });
 
     const entered = await this.visitRepo.save(visit);
-    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_ENTRY, { visitId, unitId: visit.unitId, entryTime: visit.entryTime });
+    this.socketService.emitToComplex(
+      visit.complexId,
+      SocketEvent.VISITOR_ENTRY,
+      { visitId, unitId: visit.unitId, entryTime: visit.entryTime },
+    );
 
     this.notifyUnit(
       entered,
@@ -416,7 +468,11 @@ export class VisitsService {
       NotificationPriority.HIGH,
       'Visitante ingresó',
       `${visit.visitor?.fullName ?? 'Un visitante'} ingresó al complejo hacia tu unidad.`,
-    ).catch(err => this.logger.warn(`Error al notificar entrada de visita ${visitId}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar entrada de visita ${visitId}: ${err?.message}`,
+      ),
+    );
 
     return entered;
   }
@@ -434,32 +490,54 @@ export class VisitsService {
     _currentUser: JwtAccessPayload,
   ): Promise<QrValidationResponse> {
     const visit = await this.visitRepo.findOne({
-      where:     { qrToken },
-      relations: ['visitor', 'unit', 'unit.building', 'hostResident', 'hostResident.user'],
+      where: { qrToken },
+      relations: [
+        'visitor',
+        'unit',
+        'unit.building',
+        'hostResident',
+        'hostResident.user',
+      ],
     });
 
     // QR no existe
     if (!visit) {
-      return { isValid: false, message: 'QR inválido o no encontrado', accessToken: null };
+      return {
+        isValid: false,
+        message: 'QR inválido o no encontrado',
+        accessToken: null,
+      };
     }
 
     // QR ya fue usado
     if (visit.qrUsed) {
-      return { isValid: false, message: 'Este QR ya fue utilizado', accessToken: null, visit, visitor: visit.visitor };
+      return {
+        isValid: false,
+        message: 'Este QR ya fue utilizado',
+        accessToken: null,
+        visit,
+        visitor: visit.visitor,
+      };
     }
 
     // QR expirado
     if (visit.qrExpiresAt && new Date() > visit.qrExpiresAt) {
       visit.status = VisitStatus.EXPIRED;
       await this.visitRepo.save(visit);
-      return { isValid: false, message: 'El QR de acceso ha expirado', accessToken: null, visit, visitor: visit.visitor };
+      return {
+        isValid: false,
+        message: 'El QR de acceso ha expirado',
+        accessToken: null,
+        visit,
+        visitor: visit.visitor,
+      };
     }
 
     // Visita en estado inválido para ingreso
     if (visit.status !== VisitStatus.APPROVED) {
       return {
         isValid: false,
-        message:  `La visita no está en estado APPROVED. Estado: ${visit.status}`,
+        message: `La visita no está en estado APPROVED. Estado: ${visit.status}`,
         accessToken: null,
         visit,
         visitor: visit.visitor,
@@ -470,22 +548,27 @@ export class VisitsService {
     if (visit.visitor?.isBlacklisted) {
       return {
         isValid: false,
-        message:  `Visitante en lista negra: ${visit.visitor.blacklistReason}`,
+        message: `Visitante en lista negra: ${visit.visitor.blacklistReason}`,
         accessToken: null,
-        visitor:  visit.visitor,
+        visitor: visit.visitor,
       };
     }
 
     // ✅ QR válido — emitir token de acceso de un solo uso (NO registra entrada aún)
-    const accessToken = await this.visitAccessTokenService.issue(visit.id, visit.visitorId);
-    this.logger.log(`QR validado y token de acceso emitido: visita ${visit.id}`);
+    const accessToken = await this.visitAccessTokenService.issue(
+      visit.id,
+      visit.visitorId,
+    );
+    this.logger.log(
+      `QR validado y token de acceso emitido: visita ${visit.id}`,
+    );
 
     return {
-      isValid:  true,
-      message:  `QR válido. Confirma el ingreso de ${visit.visitor?.fullName}`,
+      isValid: true,
+      message: `QR válido. Confirma el ingreso de ${visit.visitor?.fullName}`,
       accessToken,
       visit,
-      visitor:  visit.visitor,
+      visitor: visit.visitor,
     };
   }
 
@@ -508,28 +591,35 @@ export class VisitsService {
       });
     }
 
-    visit.status                  = VisitStatus.COMPLETED;
-    visit.exitTime                = new Date();
-    visit.exitRegisteredByUserId  = currentUser.entityType === 'user' ? currentUser.sub : undefined;
-    if (notes) visit.notes        = notes;
+    visit.status = VisitStatus.COMPLETED;
+    visit.exitTime = new Date();
+    visit.exitRegisteredByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : undefined;
+    if (notes) visit.notes = notes;
 
-    this.logger.log(`Salida registrada: ${visitId} a las ${visit.exitTime.toISOString()}`);
+    this.logger.log(
+      `Salida registrada: ${visitId} a las ${visit.exitTime.toISOString()}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visitId,
-      action:          AuditAction.UPDATE,
-      previousValue:   { status: VisitStatus.INSIDE },
-      newValue:        { status: VisitStatus.COMPLETED, exitTime: visit.exitTime },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: visitId,
+      action: AuditAction.UPDATE,
+      previousValue: { status: VisitStatus.INSIDE },
+      newValue: { status: VisitStatus.COMPLETED, exitTime: visit.exitTime },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Salida de visitante registrada desde unidad ${visit.unitId}`,
+      complexId: visit.complexId,
+      description: `Salida de visitante registrada desde unidad ${visit.unitId}`,
     });
 
     const exited = await this.visitRepo.save(visit);
-    this.socketService.emitToComplex(visit.complexId, SocketEvent.VISITOR_EXIT, { visitId, unitId: visit.unitId, exitTime: visit.exitTime });
+    this.socketService.emitToComplex(
+      visit.complexId,
+      SocketEvent.VISITOR_EXIT,
+      { visitId, unitId: visit.unitId, exitTime: visit.exitTime },
+    );
     return exited;
   }
 
@@ -543,7 +633,10 @@ export class VisitsService {
   ): Promise<Visit> {
     const visit = await this.findById(visitId, currentUser);
 
-    const cancellableStates = [VisitStatus.PENDING_APPROVAL, VisitStatus.APPROVED];
+    const cancellableStates = [
+      VisitStatus.PENDING_APPROVAL,
+      VisitStatus.APPROVED,
+    ];
     if (!cancellableStates.includes(visit.status)) {
       throw new CustomError({
         message: `No se puede cancelar una visita en estado ${visit.status}`,
@@ -557,16 +650,16 @@ export class VisitsService {
     this.logger.log(`Visita cancelada: ${visitId} por ${currentUser.sub}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Visit,
-      entityId:        visitId,
-      action:          AuditAction.DELETE,
-      previousValue:   { status: prevStatus },
-      newValue:        { status: VisitStatus.CANCELLED },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Visit,
+      entityId: visitId,
+      action: AuditAction.DELETE,
+      previousValue: { status: prevStatus },
+      newValue: { status: VisitStatus.CANCELLED },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       visit.complexId,
-      description:     `Visita cancelada`,
+      complexId: visit.complexId,
+      description: `Visita cancelada`,
     });
 
     return this.visitRepo.save(visit);
@@ -597,26 +690,31 @@ export class VisitsService {
       .leftJoinAndSelect('v.registeredByUser', 'guard')
       .where('v.complex_id = :complexId', { complexId });
 
-    if (filters?.status)         qb.andWhere('v.status = :status',           { status: filters.status });
-    if (filters?.type)           qb.andWhere('v.type = :type',               { type: filters.type });
-    if (filters?.unitId)         qb.andWhere('v.unit_id = :unitId',          { unitId: filters.unitId });
-    if (filters?.hostResidentId) qb.andWhere('v.host_resident_id = :rid',    { rid: filters.hostResidentId });
-    if (filters?.dateFrom)       qb.andWhere('v.createdAt >= :from',        { from: filters.dateFrom });
-    if (filters?.dateTo)         qb.andWhere('v.createdAt <= :to',          { to: filters.dateTo });
+    if (filters?.status)
+      qb.andWhere('v.status = :status', { status: filters.status });
+    if (filters?.type) qb.andWhere('v.type = :type', { type: filters.type });
+    if (filters?.unitId)
+      qb.andWhere('v.unit_id = :unitId', { unitId: filters.unitId });
+    if (filters?.hostResidentId)
+      qb.andWhere('v.host_resident_id = :rid', { rid: filters.hostResidentId });
+    if (filters?.dateFrom)
+      qb.andWhere('v.createdAt >= :from', { from: filters.dateFrom });
+    if (filters?.dateTo)
+      qb.andWhere('v.createdAt <= :to', { to: filters.dateTo });
 
     qb.orderBy('v.createdAt', 'DESC').skip(skip).take(limit);
 
     const [items, totalItems] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(totalItems / limit); 
+    const totalPages = Math.ceil(totalItems / limit);
 
     return {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
@@ -643,10 +741,11 @@ export class VisitsService {
       });
     }
 
-    const resident = await this.residentsService.findActiveResidentByUserIdInternal(
-      currentUser.sub,
-      currentUser.complexId,
-    );
+    const resident =
+      await this.residentsService.findActiveResidentByUserIdInternal(
+        currentUser.sub,
+        currentUser.complexId,
+      );
 
     if (!resident) {
       throw new CustomError({
@@ -670,9 +769,15 @@ export class VisitsService {
 
   async findActiveVisits(complexId: string): Promise<Visit[]> {
     return this.visitRepo.find({
-      where:     { complexId, status: VisitStatus.INSIDE },
-      relations: ['visitor', 'unit', 'unit.building', 'hostResident', 'hostResident.user'],
-      order:     { entryTime: 'DESC' },
+      where: { complexId, status: VisitStatus.INSIDE },
+      relations: [
+        'visitor',
+        'unit',
+        'unit.building',
+        'hostResident',
+        'hostResident.user',
+      ],
+      order: { entryTime: 'DESC' },
     });
   }
 
@@ -682,9 +787,9 @@ export class VisitsService {
 
   async findPendingApproval(complexId: string): Promise<Visit[]> {
     return this.visitRepo.find({
-      where:     { complexId, status: VisitStatus.PENDING_APPROVAL },
+      where: { complexId, status: VisitStatus.PENDING_APPROVAL },
       relations: ['visitor', 'unit', 'hostResident', 'hostResident.user'],
-      order:     { createdAt: 'ASC' },
+      order: { createdAt: 'ASC' },
     });
   }
 
@@ -693,9 +798,9 @@ export class VisitsService {
   // ================================================================
 
   async findScheduledToday(complexId: string): Promise<Visit[]> {
-    const today     = new Date();
+    const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow  = new Date(today);
+    const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     return this.visitRepo
@@ -717,7 +822,7 @@ export class VisitsService {
 
   async findById(id: string, currentUser: JwtAccessPayload): Promise<Visit> {
     const visit = await this.visitRepo.findOne({
-      where:     { id },
+      where: { id },
       relations: ['visitor', 'unit', 'hostResident', 'registeredByUser'],
     });
 
@@ -738,10 +843,13 @@ export class VisitsService {
 
   private async loadRelations(id: string): Promise<Visit> {
     return this.visitRepo.findOne({
-      where:     { id },
+      where: { id },
       relations: [
-        'visitor', 'unit', 'unit.building',
-        'hostResident', 'hostResident.user',
+        'visitor',
+        'unit',
+        'unit.building',
+        'hostResident',
+        'hostResident.user',
         'registeredByUser',
       ],
     });

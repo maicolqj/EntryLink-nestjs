@@ -1,19 +1,26 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { PqrfStatus } from '../enums/pqrf-status.enum';
 
-import { Pqrf }        from '../entities/pqrf.entity';
+import { Pqrf } from '../entities/pqrf.entity';
 import { PqrfService } from '../services/pqrf.service';
 
 import { CreatePqrfInput } from '../dto/inputs/create-pqrf.input';
 import { FilterPqrfInput } from '../dto/inputs/filter-pqrf.input';
 import { PaginatedPqrfResponse } from '../dto/responses/paginated-pqrf.response';
-import { PqrfCouncilMember }     from '../dto/responses/pqrf-council-member.response';
+import { PqrfCouncilMember } from '../dto/responses/pqrf-council-member.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 /**
@@ -36,7 +43,6 @@ const INBOX_ROLES = [
 
 @Resolver(() => Pqrf)
 export class PqrfResolver {
-
   constructor(private readonly pqrfService: PqrfService) {}
 
   /**
@@ -46,7 +52,9 @@ export class PqrfResolver {
    * radicado y de si quien mira pertenece a ella, algo que el cliente no puede
    * saber sin replicar la regla. Quien lo radicó nunca puede.
    */
-  @ResolveField(() => Boolean, { description: 'Quien consulta puede marcarlo como resuelto' })
+  @ResolveField(() => Boolean, {
+    description: 'Quien consulta puede marcarlo como resuelto',
+  })
   async viewerCanResolve(
     @Parent() pqrf: Pqrf,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -61,7 +69,9 @@ export class PqrfResolver {
    * ¿Es del consejo pero la administración no lo designó para responder este
    * radicado? Sin esto el consejero lo ve sin botón y no sabe por qué.
    */
-  @ResolveField(() => Boolean, { description: 'Quien consulta es del consejo pero no le toca responderlo' })
+  @ResolveField(() => Boolean, {
+    description: 'Quien consulta es del consejo pero no le toca responderlo',
+  })
   async viewerIsCouncilObserver(
     @Parent() pqrf: Pqrf,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -71,7 +81,9 @@ export class PqrfResolver {
   }
 
   /** ¿Ya marcó su parte? Sirve para explicar por qué no hay botón. */
-  @ResolveField(() => Boolean, { description: 'Quien consulta ya marcó su parte' })
+  @ResolveField(() => Boolean, {
+    description: 'Quien consulta ya marcó su parte',
+  })
   viewerHasResolved(
     @Parent() pqrf: Pqrf,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -81,7 +93,7 @@ export class PqrfResolver {
 
   private hasResolved(pqrf: Pqrf, currentUser: JwtAccessPayload): boolean {
     return (pqrf.acknowledgements ?? []).some(
-      ack => ack.userId === currentUser.sub && !!ack.resolvedAt,
+      (ack) => ack.userId === currentUser.sub && !!ack.resolvedAt,
     );
   }
 
@@ -104,12 +116,18 @@ export class PqrfResolver {
     permissions: [ValidPermissions.VIEW_PQRF],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterPqrfInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterPqrfInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedPqrfResponse> {
-    return this.pqrfService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.pqrfService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /** Los radicados del propio residente. */
@@ -119,12 +137,18 @@ export class PqrfResolver {
     permissions: [ValidPermissions.CREATE_PQRF],
   })
   findMine(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterPqrfInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterPqrfInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedPqrfResponse> {
-    return this.pqrfService.findMine(complexId, pagination, filters, currentUser);
+    return this.pqrfService.findMine(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -132,7 +156,10 @@ export class PqrfResolver {
    * TRÁMITE. La ficha la llama al montarse: que alguien lo haya leído es un
    * hecho, no algo que quien atiende deba reportar a mano.
    */
-  @Mutation(() => Pqrf, { name: 'openPqrf', description: 'Marca el radicado como abierto por quien lo atiende' })
+  @Mutation(() => Pqrf, {
+    name: 'openPqrf',
+    description: 'Marca el radicado como abierto por quien lo atiende',
+  })
   @Auth({
     roles: INBOX_ROLES,
     permissions: [ValidPermissions.VIEW_PQRF],
@@ -145,7 +172,10 @@ export class PqrfResolver {
   }
 
   /** Solo pasa a RESUELTO cuando TODOS los destinatarios lo marcan. */
-  @Mutation(() => Pqrf, { name: 'resolvePqrf', description: 'Marca el radicado como resuelto por quien lo atiende' })
+  @Mutation(() => Pqrf, {
+    name: 'resolvePqrf',
+    description: 'Marca el radicado como resuelto por quien lo atiende',
+  })
   @Auth({
     roles: INBOX_ROLES,
     permissions: [ValidPermissions.VIEW_PQRF],
@@ -185,7 +215,11 @@ export class PqrfResolver {
     @Args('userIds', { type: () => [String] }) userIds: string[],
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PqrfCouncilMember[]> {
-    return this.pqrfService.updateCouncilResolvers(complexId, userIds, currentUser);
+    return this.pqrfService.updateCouncilResolvers(
+      complexId,
+      userIds,
+      currentUser,
+    );
   }
 
   @Query(() => Pqrf, { name: 'pqrfRequest' })

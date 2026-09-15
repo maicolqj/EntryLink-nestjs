@@ -13,10 +13,10 @@ import { registerEnumType } from '@nestjs/graphql';
  * segmentación reutiliza `TARGET_RULES` (no se persiste una entidad de grupo).
  */
 export enum ChargeRuleTargetType {
-  ALL           = 'ALL',
-  UNIT_TYPE     = 'UNIT_TYPE',
+  ALL = 'ALL',
+  UNIT_TYPE = 'UNIT_TYPE',
   SPECIFIC_UNITS = 'SPECIFIC_UNITS',
-  TARGET_RULES  = 'TARGET_RULES',
+  TARGET_RULES = 'TARGET_RULES',
 }
 
 registerEnumType(ChargeRuleTargetType, {

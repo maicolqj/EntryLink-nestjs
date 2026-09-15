@@ -1,15 +1,20 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
 import {
-  IsString, IsOptional,
-  MaxLength, MinLength, IsInt, Min, Max,
+  IsString,
+  IsOptional,
+  MaxLength,
+  MinLength,
+  IsInt,
+  Min,
+  Max,
   IsUUID,
 } from 'class-validator';
 
-
 @InputType()
 export class CreateBuildingInput {
-
-  @Field(() => String, { description: 'Nombre de la torre. Ej: "Torre A", "Edificio Norte"' })
+  @Field(() => String, {
+    description: 'Nombre de la torre. Ej: "Torre A", "Edificio Norte"',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(100)
@@ -31,5 +36,4 @@ export class CreateBuildingInput {
   @Field(() => String, { description: 'ID del complejo' })
   @IsUUID()
   complexId: string;
-
 }

@@ -16,7 +16,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * módulo de notificaciones enseguida.
  */
 export class PqrfAcknowledgements1781004300000 implements MigrationInterface {
-
   public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -61,7 +60,9 @@ export class PqrfAcknowledgements1781004300000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "pqrf_acknowledgements"`);
-    await queryRunner.query(`ALTER TABLE "pqrf_requests" DROP COLUMN IF EXISTS "resolved_at"`);
+    await queryRunner.query(
+      `ALTER TABLE "pqrf_requests" DROP COLUMN IF EXISTS "resolved_at"`,
+    );
     await queryRunner.query(`
       UPDATE "pqrf_requests" SET "status" = 'RESPONDIDO' WHERE "status" = 'RESUELTO'
     `);

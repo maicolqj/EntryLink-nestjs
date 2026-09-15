@@ -14,9 +14,9 @@ import { registerEnumType } from '@nestjs/graphql';
  * la otra.
  */
 export enum PqrfStatus {
-  RADICADO   = 'RADICADO',
+  RADICADO = 'RADICADO',
   EN_TRAMITE = 'EN_TRAMITE',
-  RESUELTO   = 'RESUELTO',
+  RESUELTO = 'RESUELTO',
 }
 
 registerEnumType(PqrfStatus, {

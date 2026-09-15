@@ -33,17 +33,18 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
   } as any;
 
   /** Construye una visita base con relaciones mínimas para notifyUnit. */
-  const makeVisit = (over: Partial<Visit>): Visit => ({
-    id: 'visit-1',
-    type: VisitType.SCHEDULED,
-    status: VisitStatus.APPROVED,
-    complexId: 'cpx-1',
-    unitId: 'unit-1',
-    visitorId: 'vtr-1',
-    qrUsed: false,
-    visitor: { fullName: 'JUAN PEREZ' } as any,
-    ...over,
-  }) as Visit;
+  const makeVisit = (over: Partial<Visit>): Visit =>
+    ({
+      id: 'visit-1',
+      type: VisitType.SCHEDULED,
+      status: VisitStatus.APPROVED,
+      complexId: 'cpx-1',
+      unitId: 'unit-1',
+      visitorId: 'vtr-1',
+      qrUsed: false,
+      visitor: { fullName: 'JUAN PEREZ' } as any,
+      ...over,
+    }) as Visit;
 
   beforeEach(async () => {
     visitRepo = {
@@ -65,8 +66,16 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
         { provide: ResidentialComplexService, useValue: {} },
         { provide: UnitService, useValue: {} },
         // notifyUnit consulta residentes activos; lista vacía → no notifica
-        { provide: ResidentsService, useValue: { findActiveByUnitInternal: jest.fn().mockResolvedValue([]) } },
-        { provide: NotificationsService, useValue: { notify: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: ResidentsService,
+          useValue: {
+            findActiveByUnitInternal: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: AuditService, useValue: { log: jest.fn() } },
         { provide: SocketService, useValue: { emitToComplex: jest.fn() } },
       ],
@@ -78,8 +87,9 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
   it('(a) SCHEDULED sin token → rechaza y no transiciona', async () => {
     visitRepo.findOne.mockResolvedValue(makeVisit({}));
 
-    await expect(service.registerEntry('visit-1', currentUser))
-      .rejects.toBeInstanceOf(CustomError);
+    await expect(
+      service.registerEntry('visit-1', currentUser),
+    ).rejects.toBeInstanceOf(CustomError);
 
     expect(accessTokens.verify).not.toHaveBeenCalled();
     expect(visitRepo.save).not.toHaveBeenCalled();
@@ -87,10 +97,15 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
 
   it('(b) token de otra visita → rechaza', async () => {
     visitRepo.findOne.mockResolvedValue(makeVisit({}));
-    accessTokens.verify.mockResolvedValue({ visitId: 'otra-visita', visitorId: 'vtr-1', jti: 'jti-1' });
+    accessTokens.verify.mockResolvedValue({
+      visitId: 'otra-visita',
+      visitorId: 'vtr-1',
+      jti: 'jti-1',
+    });
 
-    await expect(service.registerEntry('visit-1', currentUser, 'tok'))
-      .rejects.toBeInstanceOf(CustomError);
+    await expect(
+      service.registerEntry('visit-1', currentUser, 'tok'),
+    ).rejects.toBeInstanceOf(CustomError);
 
     expect(accessTokens.consume).not.toHaveBeenCalled();
     expect(visitRepo.save).not.toHaveBeenCalled();
@@ -100,8 +115,9 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
     visitRepo.findOne.mockResolvedValue(makeVisit({}));
     accessTokens.verify.mockResolvedValue(null);
 
-    await expect(service.registerEntry('visit-1', currentUser, 'tok-consumido'))
-      .rejects.toBeInstanceOf(CustomError);
+    await expect(
+      service.registerEntry('visit-1', currentUser, 'tok-consumido'),
+    ).rejects.toBeInstanceOf(CustomError);
 
     expect(accessTokens.consume).not.toHaveBeenCalled();
     expect(visitRepo.save).not.toHaveBeenCalled();
@@ -110,9 +126,17 @@ describe('VisitsService.registerEntry — gate de QR para visitas SCHEDULED', ()
   it('(d) token válido → consume, marca qrUsed y transiciona a INSIDE', async () => {
     const visit = makeVisit({});
     visitRepo.findOne.mockResolvedValue(visit);
-    accessTokens.verify.mockResolvedValue({ visitId: 'visit-1', visitorId: 'vtr-1', jti: 'jti-1' });
+    accessTokens.verify.mockResolvedValue({
+      visitId: 'visit-1',
+      visitorId: 'vtr-1',
+      jti: 'jti-1',
+    });
 
-    const result = await service.registerEntry('visit-1', currentUser, 'tok-valido');
+    const result = await service.registerEntry(
+      'visit-1',
+      currentUser,
+      'tok-valido',
+    );
 
     expect(accessTokens.consume).toHaveBeenCalledWith('jti-1');
     expect(result.status).toBe(VisitStatus.INSIDE);

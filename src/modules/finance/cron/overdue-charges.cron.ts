@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron }               from '@nestjs/schedule';
-import { InjectRepository }   from '@nestjs/typeorm';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, In, Repository } from 'typeorm';
 
-import { FeeCharge }    from '../entities/fee-charge.entity';
+import { FeeCharge } from '../entities/fee-charge.entity';
 import { ChargeStatus } from '../enums/charge-status.enum';
 
 /**
@@ -56,7 +56,9 @@ export class OverdueChargesCron {
 
     const affected = result.affected ?? 0;
     if (affected > 0) {
-      this.logger.log(`markOverdueCharges: ${affected} cargos marcados como OVERDUE`);
+      this.logger.log(
+        `markOverdueCharges: ${affected} cargos marcados como OVERDUE`,
+      );
     }
   }
 }

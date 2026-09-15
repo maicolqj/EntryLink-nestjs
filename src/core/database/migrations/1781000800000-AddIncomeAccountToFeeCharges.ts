@@ -6,7 +6,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * del descuento por pronto pago. Idempotente.
  */
 export class AddIncomeAccountToFeeCharges1781000800000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "fee_charges"
@@ -15,6 +14,8 @@ export class AddIncomeAccountToFeeCharges1781000800000 implements MigrationInter
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "incomeAccountId"`);
+    await queryRunner.query(
+      `ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "incomeAccountId"`,
+    );
   }
 }

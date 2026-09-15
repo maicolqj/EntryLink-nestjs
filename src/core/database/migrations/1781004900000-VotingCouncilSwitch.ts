@@ -7,7 +7,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * solo del consejo no debe obligar a abrirle el módulo a toda la copropiedad.
  */
 export class VotingCouncilSwitch1781004900000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "residential_complexes"

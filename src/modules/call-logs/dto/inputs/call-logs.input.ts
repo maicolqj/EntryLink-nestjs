@@ -1,35 +1,46 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
 
-import { CallDirection }  from '../../enums/call-direction.enum';
-import { CallOutcome }    from '../../enums/call-outcome.enum';
+import { CallDirection } from '../../enums/call-direction.enum';
+import { CallOutcome } from '../../enums/call-outcome.enum';
 import { PaginationInput } from '../../../shared/dto/inputs/pagination.input';
 
 @InputType()
 export class CallLogsInput {
-
   @Field(() => String)
-  @IsString() @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   complexId: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   agentUserId?: string;
 
   @Field(() => CallDirection, { nullable: true })
-  @IsOptional() @IsEnum(CallDirection)
+  @IsOptional()
+  @IsEnum(CallDirection)
   direction?: CallDirection;
 
   @Field(() => CallOutcome, { nullable: true })
-  @IsOptional() @IsEnum(CallOutcome)
+  @IsOptional()
+  @IsEnum(CallOutcome)
   outcome?: CallOutcome;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   dateFrom?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   dateTo?: string;
 
   @Field(() => PaginationInput, { nullable: true })

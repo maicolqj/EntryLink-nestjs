@@ -1,6 +1,19 @@
-import { HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, IsNull, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { generateSystemCode } from '../../users/utils/system-code.util';
@@ -26,20 +39,27 @@ import { Role } from '../../roles/entities/role.entity';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { ResidentErrorCode, GeneralErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  ResidentErrorCode,
+  GeneralErrorCode,
+  ComplexErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
-import { AuditService }    from '../../audit/services/audit.service';
-import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { NotificationsService } from '../../notifications/services/notifications.service';
-import { NotificationType }     from '../../notifications/enums/notification-type.enum';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
-import { CacheService }    from '../../../core/infrastructure/cache/cache.service';
-import { BK, filterKey }   from '../../../core/infrastructure/cache/business-cache.constants';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import {
+  BK,
+  filterKey,
+} from '../../../core/infrastructure/cache/business-cache.constants';
 
 @Injectable()
 export class ResidentsService {
@@ -65,7 +85,7 @@ export class ResidentsService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly cacheService: CacheService,
-  ) { }
+  ) {}
 
   // ================================================================
   // HELPER — notificar al residente (usuario destinatario)
@@ -82,15 +102,15 @@ export class ResidentsService {
     if (!resident.userId) return;
 
     await this.notificationsService.notify({
-      complexId:  resident.complexId,
-      userIds:    [resident.userId],
+      complexId: resident.complexId,
+      userIds: [resident.userId],
       type,
       priority,
       title,
       body,
-      entityId:   resident.id,
+      entityId: resident.id,
       entityType: 'resident',
-      metadata:   { residentId: resident.id, unitId: resident.unitId },
+      metadata: { residentId: resident.id, unitId: resident.unitId },
     });
   }
 
@@ -117,7 +137,10 @@ export class ResidentsService {
       });
     }
 
-    if (unit.status === UnitStatus.MAINTENANCE || unit.status === UnitStatus.DISABLED) {
+    if (
+      unit.status === UnitStatus.MAINTENANCE ||
+      unit.status === UnitStatus.DISABLED
+    ) {
       throw new CustomError({
         message: `La unidad N°${unit.number} está en estado "${unit.status}" y no puede recibir residentes`,
         statusCode: HttpStatus.CONFLICT,
@@ -155,7 +178,8 @@ export class ResidentsService {
 
       if (alreadyInUnit) {
         throw new CustomError({
-          message: 'Este usuario ya figura como residente activo en esta unidad',
+          message:
+            'Este usuario ya figura como residente activo en esta unidad',
           statusCode: HttpStatus.CONFLICT,
           errorCode: ResidentErrorCode.USER_ALREADY_RESIDENT_IN_COMPLEX,
         });
@@ -178,7 +202,9 @@ export class ResidentsService {
       if (existingUser) {
         // Usar el usuario existente
         resolvedUserId = existingUser.id;
-        this.logger.log(`Residente vinculado a usuario existente: ${resolvedUserId}`);
+        this.logger.log(
+          `Residente vinculado a usuario existente: ${resolvedUserId}`,
+        );
       } else {
         // Crear nuevo usuario con contraseña aleatoria y rol RESIDENTE
         const residentRole = await this.roleRepo.findOne({
@@ -249,7 +275,8 @@ export class ResidentsService {
         // Solo asignar si quien crea es un usuario real.
         // Cuando entityType === 'complex', sub es el UUID del complejo (no existe en users)
         // y causaría una FK violation en approved_by_user_id.
-        approvedByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+        approvedByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
       });
 
       const savedResident = await queryRunner.manager.save(Resident, resident);
@@ -262,22 +289,30 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
-      await this.cacheService.deleteByPrefix(BK.resident.prefix(input.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.resident.prefix(input.complexId),
+      );
 
       this.logger.log(
         `Residente creado y activado: ${savedResident.id} — usuario ${resolvedUserId} en unidad ${input.unitId}`,
       );
 
       void this.auditService.log({
-        entityType:      AuditEntityType.Resident,
-        entityId:        savedResident.id,
-        action:          AuditAction.CREATE,
-        newValue:        { id: savedResident.id, userId: resolvedUserId, unitId: input.unitId, complexId: input.complexId, status: ResidentStatus.ACTIVE },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.Resident,
+        entityId: savedResident.id,
+        action: AuditAction.CREATE,
+        newValue: {
+          id: savedResident.id,
+          userId: resolvedUserId,
+          unitId: input.unitId,
+          complexId: input.complexId,
+          status: ResidentStatus.ACTIVE,
+        },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       input.complexId,
-        description:     `Residente creado: ${input.name} ${input.lastName} — unidad ${input.unitId}`,
+        complexId: input.complexId,
+        description: `Residente creado: ${input.name} ${input.lastName} — unidad ${input.unitId}`,
       });
 
       return this.residentRepo.findOne({
@@ -287,7 +322,10 @@ export class ResidentsService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       if (error instanceof CustomError) throw error;
-      this.logger.error(`Error al crear residente: ${error?.message}`, error?.stack);
+      this.logger.error(
+        `Error al crear residente: ${error?.message}`,
+        error?.stack,
+      );
       throw new CustomError({
         message: 'Error interno al crear el residente',
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -338,22 +376,27 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
-      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.resident.prefix(resident.complexId),
+      );
       this.logger.log(
         `Residente aprobado: ${resident.id} por Compliance Officer ${currentUser.sub}`,
       );
 
       void this.auditService.log({
-        entityType:      AuditEntityType.Resident,
-        entityId:        resident.id,
-        action:          AuditAction.APPROVE,
-        previousValue:   { status: ResidentStatus.PENDING_APPROVAL },
-        newValue:        { status: ResidentStatus.ACTIVE, approvedAt: resident.approvedAt },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.Resident,
+        entityId: resident.id,
+        action: AuditAction.APPROVE,
+        previousValue: { status: ResidentStatus.PENDING_APPROVAL },
+        newValue: {
+          status: ResidentStatus.ACTIVE,
+          approvedAt: resident.approvedAt,
+        },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       resident.complexId,
-        description:     `Residente aprobado: ${resident.id}`,
+        complexId: resident.complexId,
+        description: `Residente aprobado: ${resident.id}`,
       });
 
       this.notifyResident(
@@ -362,7 +405,11 @@ export class ResidentsService {
         NotificationPriority.HIGH,
         'Solicitud de residencia aprobada',
         'Tu solicitud de residencia fue aprobada. Ya puedes acceder a los servicios de tu unidad.',
-      ).catch(err => this.logger.warn(`Error al notificar aprobación de residente ${resident.id}: ${err?.message}`));
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar aprobación de residente ${resident.id}: ${err?.message}`,
+        ),
+      );
 
       return resident;
     } catch (error) {
@@ -401,20 +448,27 @@ export class ResidentsService {
     resident.approvedByUserId = currentUser.sub;
 
     const saved = await this.residentRepo.save(resident);
-    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
-    this.logger.warn(`Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`);
+    await this.cacheService.deleteByPrefix(
+      BK.resident.prefix(resident.complexId),
+    );
+    this.logger.warn(
+      `Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Resident,
-      entityId:        resident.id,
-      action:          AuditAction.REJECT,
-      previousValue:   { status: ResidentStatus.PENDING_APPROVAL },
-      newValue:        { status: ResidentStatus.REJECTED, rejectionReason: input.rejectionReason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Resident,
+      entityId: resident.id,
+      action: AuditAction.REJECT,
+      previousValue: { status: ResidentStatus.PENDING_APPROVAL },
+      newValue: {
+        status: ResidentStatus.REJECTED,
+        rejectionReason: input.rejectionReason,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       resident.complexId,
-      description:     `Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`,
+      complexId: resident.complexId,
+      description: `Residente rechazado: ${resident.id} — razón: ${input.rejectionReason}`,
     });
 
     this.notifyResident(
@@ -423,7 +477,11 @@ export class ResidentsService {
       NotificationPriority.HIGH,
       'Solicitud de residencia rechazada',
       `Tu solicitud de residencia fue rechazada. Motivo: ${input.rejectionReason}.`,
-    ).catch(err => this.logger.warn(`Error al notificar rechazo de residente ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar rechazo de residente ${saved.id}: ${err?.message}`,
+      ),
+    );
 
     return saved;
   }
@@ -439,7 +497,10 @@ export class ResidentsService {
   ): Promise<Resident> {
     const resident = await this.findById(input.residentId, currentUser);
 
-    if (resident.status !== ResidentStatus.ACTIVE && resident.status !== ResidentStatus.SUSPENDED) {
+    if (
+      resident.status !== ResidentStatus.ACTIVE &&
+      resident.status !== ResidentStatus.SUSPENDED
+    ) {
       throw new CustomError({
         message: `No se puede registrar mudanza para un residente en estado ${resident.status}`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -453,7 +514,9 @@ export class ResidentsService {
 
     try {
       resident.status = ResidentStatus.MOVED_OUT;
-      resident.moveOutDate = input.moveOutDate ? new Date(input.moveOutDate) : new Date();
+      resident.moveOutDate = input.moveOutDate
+        ? new Date(input.moveOutDate)
+        : new Date();
       resident.moveOutReason = input.moveOutReason ?? null;
 
       await queryRunner.manager.save(Resident, resident);
@@ -475,24 +538,32 @@ export class ResidentsService {
           { id: resident.unitId },
           { status: UnitStatus.AVAILABLE },
         );
-        this.logger.log(`Unidad ${resident.unitId} liberada (sin residentes activos)`);
+        this.logger.log(
+          `Unidad ${resident.unitId} liberada (sin residentes activos)`,
+        );
       }
 
       await queryRunner.commitTransaction();
-      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.resident.prefix(resident.complexId),
+      );
       this.logger.log(`Residente ${resident.id} registrado como MOVED_OUT`);
 
       void this.auditService.log({
-        entityType:      AuditEntityType.Resident,
-        entityId:        resident.id,
-        action:          AuditAction.UPDATE,
-        previousValue:   { status: ResidentStatus.ACTIVE },
-        newValue:        { status: ResidentStatus.MOVED_OUT, moveOutDate: resident.moveOutDate, moveOutReason: resident.moveOutReason },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.Resident,
+        entityId: resident.id,
+        action: AuditAction.UPDATE,
+        previousValue: { status: ResidentStatus.ACTIVE },
+        newValue: {
+          status: ResidentStatus.MOVED_OUT,
+          moveOutDate: resident.moveOutDate,
+          moveOutReason: resident.moveOutReason,
+        },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       resident.complexId,
-        description:     `Residente dado de baja (MOVED_OUT): ${resident.id}`,
+        complexId: resident.complexId,
+        description: `Residente dado de baja (MOVED_OUT): ${resident.id}`,
       });
 
       return resident;
@@ -546,7 +617,9 @@ export class ResidentsService {
       );
 
       await queryRunner.commitTransaction();
-      await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.resident.prefix(resident.complexId),
+      );
       this.logger.log(`Baja del residente ${resident.id} revertida → ACTIVE`);
 
       return this.residentRepo.findOne({
@@ -555,7 +628,10 @@ export class ResidentsService {
       });
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error al deshacer la baja del residente: ${error?.message}`, error?.stack);
+      this.logger.error(
+        `Error al deshacer la baja del residente: ${error?.message}`,
+        error?.stack,
+      );
       throw new CustomError({
         message: 'Error interno al deshacer la baja del residente',
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -588,19 +664,21 @@ export class ResidentsService {
     resident.status = ResidentStatus.SUSPENDED;
     resident.notes = reason;
     const savedSuspend = await this.residentRepo.save(resident);
-    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.resident.prefix(resident.complexId),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Resident,
-      entityId:        residentId,
-      action:          AuditAction.SUSPEND,
-      previousValue:   { status: ResidentStatus.ACTIVE },
-      newValue:        { status: ResidentStatus.SUSPENDED, reason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Resident,
+      entityId: residentId,
+      action: AuditAction.SUSPEND,
+      previousValue: { status: ResidentStatus.ACTIVE },
+      newValue: { status: ResidentStatus.SUSPENDED, reason },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       resident.complexId,
-      description:     `Residente suspendido: ${residentId} — razón: ${reason}`,
+      complexId: resident.complexId,
+      description: `Residente suspendido: ${residentId} — razón: ${reason}`,
     });
 
     return savedSuspend;
@@ -622,19 +700,21 @@ export class ResidentsService {
 
     resident.status = ResidentStatus.ACTIVE;
     const savedReactivate = await this.residentRepo.save(resident);
-    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.resident.prefix(resident.complexId),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Resident,
-      entityId:        residentId,
-      action:          AuditAction.ACTIVATE,
-      previousValue:   { status: ResidentStatus.SUSPENDED },
-      newValue:        { status: ResidentStatus.ACTIVE },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Resident,
+      entityId: residentId,
+      action: AuditAction.ACTIVATE,
+      previousValue: { status: ResidentStatus.SUSPENDED },
+      newValue: { status: ResidentStatus.ACTIVE },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       resident.complexId,
-      description:     `Residente reactivado: ${residentId}`,
+      complexId: resident.complexId,
+      description: `Residente reactivado: ${residentId}`,
     });
 
     return savedReactivate;
@@ -655,7 +735,8 @@ export class ResidentsService {
       resident.status === ResidentStatus.REJECTED
     ) {
       throw new CustomError({
-        message: 'No se puede actualizar un residente que ya salió o fue rechazado',
+        message:
+          'No se puede actualizar un residente que ya salió o fue rechazado',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
@@ -663,7 +744,8 @@ export class ResidentsService {
 
     if (input.isMainResident === false && resident.isMainResident === true) {
       throw new CustomError({
-        message: 'Debe asignar un nuevo residente principal antes de quitar esta designación',
+        message:
+          'Debe asignar un nuevo residente principal antes de quitar esta designación',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
@@ -672,19 +754,44 @@ export class ResidentsService {
     // La pertenencia al consejo no es una columna del residente: es el rol
     // COUNCIL_ROL sobre su usuario. Se saca del patch para que no viaje al
     // `Object.assign` de abajo, y se sincroniza aparte.
-    const { name, lastName, phoneNumber, isCouncilMember, ...residentFields } = input;
-    const hasUserFields = name !== undefined || lastName !== undefined || phoneNumber !== undefined;
+    const { name, lastName, phoneNumber, isCouncilMember, ...residentFields } =
+      input;
+    const hasUserFields =
+      name !== undefined || lastName !== undefined || phoneNumber !== undefined;
 
     // Detecta cambios reales (antes de mutar) para avisar al residente.
     const norm = (s?: string | null) => (s ?? '').trim().toUpperCase();
-    const trimEq = (a?: string | null, b?: string | null) => (a ?? '').trim() === (b ?? '').trim();
+    const trimEq = (a?: string | null, b?: string | null) =>
+      (a ?? '').trim() === (b ?? '').trim();
     const changedSet = new Set<string>();
-    if (name !== undefined && norm(name) !== norm(resident.user?.name)) changedSet.add('nombre');
-    if (lastName !== undefined && norm(lastName) !== norm(resident.user?.lastName)) changedSet.add('apellido');
-    if (phoneNumber !== undefined && !trimEq(phoneNumber, resident.user?.phoneNumber)) changedSet.add('teléfono');
-    if (input.emergencyContactName !== undefined && norm(input.emergencyContactName) !== norm(resident.emergencyContactName)) changedSet.add('contacto de emergencia');
-    if (input.emergencyContactLastName !== undefined && norm(input.emergencyContactLastName) !== norm(resident.emergencyContactLastName)) changedSet.add('contacto de emergencia');
-    if (input.emergencyContactPhone !== undefined && !trimEq(input.emergencyContactPhone, resident.emergencyContactPhone)) changedSet.add('teléfono del contacto de emergencia');
+    if (name !== undefined && norm(name) !== norm(resident.user?.name))
+      changedSet.add('nombre');
+    if (
+      lastName !== undefined &&
+      norm(lastName) !== norm(resident.user?.lastName)
+    )
+      changedSet.add('apellido');
+    if (
+      phoneNumber !== undefined &&
+      !trimEq(phoneNumber, resident.user?.phoneNumber)
+    )
+      changedSet.add('teléfono');
+    if (
+      input.emergencyContactName !== undefined &&
+      norm(input.emergencyContactName) !== norm(resident.emergencyContactName)
+    )
+      changedSet.add('contacto de emergencia');
+    if (
+      input.emergencyContactLastName !== undefined &&
+      norm(input.emergencyContactLastName) !==
+        norm(resident.emergencyContactLastName)
+    )
+      changedSet.add('contacto de emergencia');
+    if (
+      input.emergencyContactPhone !== undefined &&
+      !trimEq(input.emergencyContactPhone, resident.emergencyContactPhone)
+    )
+      changedSet.add('teléfono del contacto de emergencia');
 
     const savedUpdate = await this.dataSource.transaction(async (manager) => {
       if (input.isMainResident === true) {
@@ -703,8 +810,8 @@ export class ResidentsService {
 
       if (hasUserFields) {
         await manager.update(User, resident.userId, {
-          ...(name       !== undefined && { name }),
-          ...(lastName   !== undefined && { lastName }),
+          ...(name !== undefined && { name }),
+          ...(lastName !== undefined && { lastName }),
           ...(phoneNumber !== undefined && { phoneNumber }),
         });
       }
@@ -719,7 +826,9 @@ export class ResidentsService {
       return updated;
     });
 
-    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.resident.prefix(resident.complexId),
+    );
 
     // Aviso de seguridad al residente de los cambios sobre sus datos.
     void this.notificationsService.notifyProfileUpdated({
@@ -756,7 +865,9 @@ export class ResidentsService {
     if (!councilRole) {
       // Sin el rol sembrado no se puede asignar, pero tampoco tiene sentido
       // tumbar la edición del residente por eso.
-      this.logger.warn('COUNCIL_ROL no existe en la base: no se pudo sincronizar el consejo');
+      this.logger.warn(
+        'COUNCIL_ROL no existe en la base: no se pudo sincronizar el consejo',
+      );
       return;
     }
 
@@ -767,11 +878,13 @@ export class ResidentsService {
     if (shouldBelong && !existing) {
       // `isPrimary: false`: el rol principal sigue siendo el de residente, que
       // es con el que inicia sesión.
-      await manager.save(manager.create(UserRole, {
-        user: { id: userId },
-        role: { id: councilRole.id },
-        isPrimary: false,
-      }));
+      await manager.save(
+        manager.create(UserRole, {
+          user: { id: userId },
+          role: { id: councilRole.id },
+          isPrimary: false,
+        }),
+      );
       return;
     }
 
@@ -803,7 +916,7 @@ export class ResidentsService {
       .select('DISTINCT r.user_id', 'userId')
       .getRawMany<{ userId: string }>();
 
-    return rows.map(row => row.userId);
+    return rows.map((row) => row.userId);
   }
 
   /**
@@ -844,7 +957,10 @@ export class ResidentsService {
   ): Promise<Resident[]> {
     const unit = await this.unitService.findById(input.newUnitId, currentUser);
 
-    if (unit.status === UnitStatus.MAINTENANCE || unit.status === UnitStatus.DISABLED) {
+    if (
+      unit.status === UnitStatus.MAINTENANCE ||
+      unit.status === UnitStatus.DISABLED
+    ) {
       throw new CustomError({
         message: `La unidad N°${unit.number} está en estado "${unit.status}" y no puede recibir residentes`,
         statusCode: HttpStatus.CONFLICT,
@@ -857,8 +973,8 @@ export class ResidentsService {
     });
 
     if (residents.length !== input.residentIds.length) {
-      const foundIds = new Set(residents.map(r => r.id));
-      const missing = input.residentIds.filter(id => !foundIds.has(id));
+      const foundIds = new Set(residents.map((r) => r.id));
+      const missing = input.residentIds.filter((id) => !foundIds.has(id));
       throw new CustomError({
         message: `Residentes no encontrados: ${missing.join(', ')}`,
         statusCode: HttpStatus.NOT_FOUND,
@@ -866,30 +982,35 @@ export class ResidentsService {
       });
     }
 
-    const wrongComplex = residents.filter(r => r.complexId !== unit.complexId);
+    const wrongComplex = residents.filter(
+      (r) => r.complexId !== unit.complexId,
+    );
     if (wrongComplex.length > 0) {
       throw new CustomError({
-        message: 'Todos los residentes deben pertenecer al mismo complejo que la unidad destino',
+        message:
+          'Todos los residentes deben pertenecer al mismo complejo que la unidad destino',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
     const nonActive = residents.filter(
-      r => r.status !== ResidentStatus.ACTIVE && r.status !== ResidentStatus.SUSPENDED,
+      (r) =>
+        r.status !== ResidentStatus.ACTIVE &&
+        r.status !== ResidentStatus.SUSPENDED,
     );
     if (nonActive.length > 0) {
       throw new CustomError({
-        message: `Solo se pueden trasladar residentes ACTIVE o SUSPENDED. IDs inválidos: ${nonActive.map(r => r.id).join(', ')}`,
+        message: `Solo se pueden trasladar residentes ACTIVE o SUSPENDED. IDs inválidos: ${nonActive.map((r) => r.id).join(', ')}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
-    const alreadyInUnit = residents.filter(r => r.unitId === input.newUnitId);
+    const alreadyInUnit = residents.filter((r) => r.unitId === input.newUnitId);
     if (alreadyInUnit.length > 0) {
       throw new CustomError({
-        message: `Algunos residentes ya pertenecen a la unidad destino: ${alreadyInUnit.map(r => r.id).join(', ')}`,
+        message: `Algunos residentes ya pertenecen a la unidad destino: ${alreadyInUnit.map((r) => r.id).join(', ')}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
@@ -897,11 +1018,17 @@ export class ResidentsService {
 
     // Residentes activos ya existentes en la unidad destino (para detectar conflicto de residente principal)
     const existingInDestination = await this.residentRepo.find({
-      where: { unitId: input.newUnitId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+      where: {
+        unitId: input.newUnitId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
     });
 
-    const incomingMainCount  = residents.filter(r => r.isMainResident).length;
-    const existingMainCount  = existingInDestination.filter(r => r.isMainResident).length;
+    const incomingMainCount = residents.filter((r) => r.isMainResident).length;
+    const existingMainCount = existingInDestination.filter(
+      (r) => r.isMainResident,
+    ).length;
     const totalMainAfterMove = incomingMainCount + existingMainCount;
 
     if (totalMainAfterMove > 1 && !input.newMainResidentId) {
@@ -914,19 +1041,20 @@ export class ResidentsService {
 
     if (input.newMainResidentId) {
       const allAffectedIds = [
-        ...residents.map(r => r.id),
-        ...existingInDestination.map(r => r.id),
+        ...residents.map((r) => r.id),
+        ...existingInDestination.map((r) => r.id),
       ];
       if (!allAffectedIds.includes(input.newMainResidentId)) {
         throw new CustomError({
-          message: 'newMainResidentId debe corresponder a uno de los residentes trasladados o a un residente activo en la unidad destino',
+          message:
+            'newMainResidentId debe corresponder a uno de los residentes trasladados o a un residente activo en la unidad destino',
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: GeneralErrorCode.BAD_REQUEST,
         });
       }
     }
 
-    const oldUnitIds = [...new Set(residents.map(r => r.unitId))];
+    const oldUnitIds = [...new Set(residents.map((r) => r.unitId))];
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -954,30 +1082,51 @@ export class ResidentsService {
 
       for (const oldUnitId of oldUnitIds) {
         const remainingCount = await queryRunner.manager.count(Resident, {
-          where: { unitId: oldUnitId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+          where: {
+            unitId: oldUnitId,
+            status: ResidentStatus.ACTIVE,
+            deletedAt: IsNull(),
+          },
         });
         if (remainingCount === 0) {
-          await queryRunner.manager.update('units', { id: oldUnitId }, { status: UnitStatus.AVAILABLE });
-          this.logger.log(`Unidad ${oldUnitId} liberada (sin residentes activos)`);
+          await queryRunner.manager.update(
+            'units',
+            { id: oldUnitId },
+            { status: UnitStatus.AVAILABLE },
+          );
+          this.logger.log(
+            `Unidad ${oldUnitId} liberada (sin residentes activos)`,
+          );
         }
       }
 
-      await queryRunner.manager.update('units', { id: input.newUnitId }, { status: UnitStatus.OCCUPIED });
+      await queryRunner.manager.update(
+        'units',
+        { id: input.newUnitId },
+        { status: UnitStatus.OCCUPIED },
+      );
 
       await queryRunner.commitTransaction();
-      await this.cacheService.deleteByPrefix(BK.resident.prefix(unit.complexId));
-      this.logger.log(`${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`);
+      await this.cacheService.deleteByPrefix(
+        BK.resident.prefix(unit.complexId),
+      );
+      this.logger.log(
+        `${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`,
+      );
 
       void this.auditService.log({
-        entityType:      AuditEntityType.Resident,
-        entityId:        input.newUnitId,
-        action:          AuditAction.UPDATE,
-        newValue:        { residentIds: input.residentIds, newUnitId: input.newUnitId },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.Resident,
+        entityId: input.newUnitId,
+        action: AuditAction.UPDATE,
+        newValue: {
+          residentIds: input.residentIds,
+          newUnitId: input.newUnitId,
+        },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       unit.complexId,
-        description:     `${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`,
+        complexId: unit.complexId,
+        description: `${residents.length} residente(s) trasladados a unidad ${input.newUnitId}`,
       });
 
       return this.residentRepo.find({
@@ -987,7 +1136,10 @@ export class ResidentsService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       if (error instanceof CustomError) throw error;
-      this.logger.error(`Error al trasladar residentes: ${error?.message}`, error?.stack);
+      this.logger.error(
+        `Error al trasladar residentes: ${error?.message}`,
+        error?.stack,
+      );
       throw new CustomError({
         message: 'Error interno al trasladar los residentes',
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -1024,8 +1176,8 @@ export class ResidentsService {
     });
 
     if (residents.length !== input.residentIds.length) {
-      const foundIds = new Set(residents.map(r => r.id));
-      const missing = input.residentIds.filter(id => !foundIds.has(id));
+      const foundIds = new Set(residents.map((r) => r.id));
+      const missing = input.residentIds.filter((id) => !foundIds.has(id));
       throw new CustomError({
         message: `Residentes no encontrados: ${missing.join(', ')}`,
         statusCode: HttpStatus.NOT_FOUND,
@@ -1033,7 +1185,7 @@ export class ResidentsService {
       });
     }
 
-    const complexIds = [...new Set(residents.map(r => r.complexId))];
+    const complexIds = [...new Set(residents.map((r) => r.complexId))];
     if (complexIds.length > 1) {
       throw new CustomError({
         message: 'Todos los residentes deben pertenecer al mismo complejo',
@@ -1045,17 +1197,19 @@ export class ResidentsService {
     await this.complexService.findById(complexIds[0], currentUser);
 
     const invalidStatus = residents.filter(
-      r => r.status !== ResidentStatus.ACTIVE && r.status !== ResidentStatus.SUSPENDED,
+      (r) =>
+        r.status !== ResidentStatus.ACTIVE &&
+        r.status !== ResidentStatus.SUSPENDED,
     );
     if (invalidStatus.length > 0) {
       throw new CustomError({
-        message: `Solo se pueden dar de baja residentes ACTIVE o SUSPENDED. IDs inválidos: ${invalidStatus.map(r => r.id).join(', ')}`,
+        message: `Solo se pueden dar de baja residentes ACTIVE o SUSPENDED. IDs inválidos: ${invalidStatus.map((r) => r.id).join(', ')}`,
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
-    const unitIds = [...new Set(residents.map(r => r.unitId))];
+    const unitIds = [...new Set(residents.map((r) => r.unitId))];
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1078,25 +1232,37 @@ export class ResidentsService {
           ],
         });
         if (remainingCount === 0) {
-          await queryRunner.manager.update('units', { id: unitId }, { status: UnitStatus.AVAILABLE });
-          this.logger.log(`Unidad ${unitId} liberada (sin residentes activos/suspendidos)`);
+          await queryRunner.manager.update(
+            'units',
+            { id: unitId },
+            { status: UnitStatus.AVAILABLE },
+          );
+          this.logger.log(
+            `Unidad ${unitId} liberada (sin residentes activos/suspendidos)`,
+          );
         }
       }
 
       await queryRunner.commitTransaction();
       await this.cacheService.deleteByPrefix(BK.resident.prefix(complexIds[0]));
-      this.logger.log(`${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`);
+      this.logger.log(
+        `${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`,
+      );
 
       void this.auditService.log({
-        entityType:      AuditEntityType.Resident,
-        entityId:        complexIds[0],
-        action:          AuditAction.UPDATE,
-        newValue:        { residentIds: input.residentIds, status: ResidentStatus.MOVED_OUT, moveOutDate: input.moveOutDate },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.Resident,
+        entityId: complexIds[0],
+        action: AuditAction.UPDATE,
+        newValue: {
+          residentIds: input.residentIds,
+          status: ResidentStatus.MOVED_OUT,
+          moveOutDate: input.moveOutDate,
+        },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       complexIds[0],
-        description:     `${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`,
+        complexId: complexIds[0],
+        description: `${residents.length} residente(s) dados de baja masiva (MOVED_OUT)`,
       });
 
       return this.residentRepo.find({
@@ -1106,7 +1272,10 @@ export class ResidentsService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       if (error instanceof CustomError) throw error;
-      this.logger.error(`Error en baja masiva de residentes: ${error?.message}`, error?.stack);
+      this.logger.error(
+        `Error en baja masiva de residentes: ${error?.message}`,
+        error?.stack,
+      );
       throw new CustomError({
         message: 'Error interno al registrar la baja masiva de residentes',
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -1130,8 +1299,15 @@ export class ResidentsService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
-    const cacheKey = BK.resident.list(complexId, page, limit, filterKey(filters ?? {}));
-    const cached = await this.cacheService.get<PaginatedResidentsResponse>({ key: cacheKey });
+    const cacheKey = BK.resident.list(
+      complexId,
+      page,
+      limit,
+      filterKey(filters ?? {}),
+    );
+    const cached = await this.cacheService.get<PaginatedResidentsResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const skip = (page - 1) * limit;
@@ -1146,16 +1322,26 @@ export class ResidentsService {
       .leftJoinAndSelect('r.unit', 'unit')
       .leftJoinAndSelect('unit.building', 'building')
       .leftJoinAndSelect('r.approvedByUser', 'approvedByUser')
-      .where('r.complex_id = :complexId', { complexId })
-      // .andWhere('r.createdAt IS NULL');
+      .where('r.complex_id = :complexId', { complexId });
+    // .andWhere('r.createdAt IS NULL');
 
-    if (filters?.status)       qb.andWhere('r.status = :status', { status: filters.status });
-    if (filters?.type)         qb.andWhere('r.type = :type', { type: filters.type });
-    if (filters?.unitId)       qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
-    if (filters?.buildingId)   qb.andWhere('unit.buildingId = :bid', { bid: filters.buildingId });
-    if (filters?.unitType)     qb.andWhere('unit.type = :unitType', { unitType: filters.unitType });
-    if (filters?.unitNumber)   qb.andWhere('UPPER(unit.number) = UPPER(:unitNumber)', { unitNumber: filters.unitNumber.trim() });
-    if (filters?.buildingName) qb.andWhere('UPPER(building.name) = UPPER(:buildingName)', { buildingName: filters.buildingName.trim() });
+    if (filters?.status)
+      qb.andWhere('r.status = :status', { status: filters.status });
+    if (filters?.type) qb.andWhere('r.type = :type', { type: filters.type });
+    if (filters?.unitId)
+      qb.andWhere('r.unit_id = :unitId', { unitId: filters.unitId });
+    if (filters?.buildingId)
+      qb.andWhere('unit.buildingId = :bid', { bid: filters.buildingId });
+    if (filters?.unitType)
+      qb.andWhere('unit.type = :unitType', { unitType: filters.unitType });
+    if (filters?.unitNumber)
+      qb.andWhere('UPPER(unit.number) = UPPER(:unitNumber)', {
+        unitNumber: filters.unitNumber.trim(),
+      });
+    if (filters?.buildingName)
+      qb.andWhere('UPPER(building.name) = UPPER(:buildingName)', {
+        buildingName: filters.buildingName.trim(),
+      });
 
     if (filters?.search) {
       qb.andWhere(
@@ -1184,7 +1370,11 @@ export class ResidentsService {
       },
     };
 
-    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.resident.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: result,
+      options: { ttl: BK.resident.TTL },
+    });
     return result;
   }
 
@@ -1232,10 +1422,7 @@ export class ResidentsService {
   // BUSCAR POR ID
   // ================================================================
 
-  async findById(
-    id: string,
-    currentUser: JwtAccessPayload,
-  ): Promise<Resident> {
+  async findById(id: string, currentUser: JwtAccessPayload): Promise<Resident> {
     const resident = await this.residentRepo.findOne({
       where: { id, deletedAt: IsNull() },
       relations: ['user', 'unit', 'unit.building', 'complex', 'approvedByUser'],
@@ -1252,7 +1439,9 @@ export class ResidentsService {
     // Verificar acceso: COMPLIANCE_OFFICER puede ver todos los pendientes;
     // el resto solo puede ver los de su complejo
     const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isCompliance = currentUser.roles.includes(ValidRoles.COMPILANCE_OFFICER_ROL);
+    const isCompliance = currentUser.roles.includes(
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    );
 
     if (!isSuperAdmin && !isCompliance) {
       await this.complexService.assertAccess(resident.complex, currentUser);
@@ -1273,7 +1462,8 @@ export class ResidentsService {
 
     if (resident.status === ResidentStatus.ACTIVE) {
       throw new CustomError({
-        message: 'No se puede eliminar un residente activo. Regístralo como MOVED_OUT primero.',
+        message:
+          'No se puede eliminar un residente activo. Regístralo como MOVED_OUT primero.',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: ResidentErrorCode.RESIDENT_ALREADY_ACTIVE,
       });
@@ -1281,7 +1471,9 @@ export class ResidentsService {
 
     resident.deletedAt = new Date();
     await this.residentRepo.save(resident);
-    await this.cacheService.deleteByPrefix(BK.resident.prefix(resident.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.resident.prefix(resident.complexId),
+    );
     this.logger.warn(`Residente eliminado (soft): ${id}`);
 
     return {
@@ -1307,7 +1499,8 @@ export class ResidentsService {
 
     if (!resident) {
       throw new CustomError({
-        message: 'No se encontró un registro de residente activo para este usuario',
+        message:
+          'No se encontró un registro de residente activo para este usuario',
         statusCode: HttpStatus.NOT_FOUND,
         errorCode: ResidentErrorCode.RESIDENT_NOT_FOUND,
       });
@@ -1384,22 +1577,51 @@ export class ResidentsService {
     await this.complexService.findById(complexId, currentUser);
 
     const cacheKey = BK.resident.stats(complexId);
-    const cached = await this.cacheService.get<ResidentStatsResponse>({ key: cacheKey });
+    const cached = await this.cacheService.get<ResidentStatsResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const raw = await this.residentRepo
       .createQueryBuilder('r')
       .select('COUNT(*)', 'total')
       .addSelect(`COUNT(CASE WHEN r.status = 'ACTIVE' THEN 1 END)`, 'active')
-      .addSelect(`COUNT(CASE WHEN r.status = 'PENDING_APPROVAL' THEN 1 END)`, 'pendingApproval')
-      .addSelect(`COUNT(CASE WHEN r.status = 'SUSPENDED' THEN 1 END)`, 'suspended')
-      .addSelect(`COUNT(CASE WHEN r.status = 'MOVED_OUT' THEN 1 END)`, 'movedOut')
-      .addSelect(`COUNT(CASE WHEN r.status = 'REJECTED' THEN 1 END)`, 'rejected')
-      .addSelect(`COUNT(CASE WHEN r.is_main_resident = true AND r.status = 'ACTIVE' THEN 1 END)`, 'mainResidents')
-      .addSelect(`COUNT(CASE WHEN r.type = 'OWNER' AND r.status = 'ACTIVE' THEN 1 END)`, 'owners')
-      .addSelect(`COUNT(CASE WHEN r.type = 'TENANT' AND r.status = 'ACTIVE' THEN 1 END)`, 'tenants')
-      .addSelect(`COUNT(CASE WHEN r.type = 'FAMILY_MEMBER' AND r.status = 'ACTIVE' THEN 1 END)`, 'familyMembers')
-      .addSelect(`COUNT(CASE WHEN r.type = 'CARETAKER' AND r.status = 'ACTIVE' THEN 1 END)`, 'caretakers')
+      .addSelect(
+        `COUNT(CASE WHEN r.status = 'PENDING_APPROVAL' THEN 1 END)`,
+        'pendingApproval',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.status = 'SUSPENDED' THEN 1 END)`,
+        'suspended',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.status = 'MOVED_OUT' THEN 1 END)`,
+        'movedOut',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.status = 'REJECTED' THEN 1 END)`,
+        'rejected',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.is_main_resident = true AND r.status = 'ACTIVE' THEN 1 END)`,
+        'mainResidents',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.type = 'OWNER' AND r.status = 'ACTIVE' THEN 1 END)`,
+        'owners',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.type = 'TENANT' AND r.status = 'ACTIVE' THEN 1 END)`,
+        'tenants',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.type = 'FAMILY_MEMBER' AND r.status = 'ACTIVE' THEN 1 END)`,
+        'familyMembers',
+      )
+      .addSelect(
+        `COUNT(CASE WHEN r.type = 'CARETAKER' AND r.status = 'ACTIVE' THEN 1 END)`,
+        'caretakers',
+      )
       .where('r.complex_id = :complexId', { complexId })
       .andWhere('r.deleted_at IS NULL')
       .getRawOne<Record<string, string>>();
@@ -1407,22 +1629,26 @@ export class ResidentsService {
     const n = (key: string) => parseInt(raw[key] ?? '0', 10);
 
     const stats: ResidentStatsResponse = {
-      total:          n('total'),
-      active:         n('active'),
+      total: n('total'),
+      active: n('active'),
       pendingApproval: n('pendingApproval'),
-      suspended:      n('suspended'),
-      movedOut:       n('movedOut'),
-      rejected:       n('rejected'),
-      mainResidents:  n('mainResidents'),
+      suspended: n('suspended'),
+      movedOut: n('movedOut'),
+      rejected: n('rejected'),
+      mainResidents: n('mainResidents'),
       byType: {
-        owners:        n('owners'),
-        tenants:       n('tenants'),
+        owners: n('owners'),
+        tenants: n('tenants'),
         familyMembers: n('familyMembers'),
-        caretakers:    n('caretakers'),
+        caretakers: n('caretakers'),
       },
     };
 
-    await this.cacheService.set({ key: cacheKey, data: stats, options: { ttl: BK.resident.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: stats,
+      options: { ttl: BK.resident.TTL },
+    });
     return stats;
   }
 
@@ -1441,21 +1667,31 @@ export class ResidentsService {
   }
 
   /** Devuelve los userId de todos los residentes activos de un complejo (uso interno). */
-  async findActiveUserIdsByComplexInternal(complexId: string): Promise<string[]> {
+  async findActiveUserIdsByComplexInternal(
+    complexId: string,
+  ): Promise<string[]> {
     const residents = await this.residentRepo.find({
       select: ['userId'],
       where: { complexId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
     });
-    return residents.map(r => r.userId).filter(Boolean) as string[];
+    return residents.map((r) => r.userId).filter(Boolean);
   }
 
   /**
    * Devuelve el residente activo de un usuario en un complejo, con la unidad
    * y el edificio cargados. Retorna null si no existe.
    */
-  async findActiveResidentByUserIdInternal(userId: string, complexId: string): Promise<Resident | null> {
+  async findActiveResidentByUserIdInternal(
+    userId: string,
+    complexId: string,
+  ): Promise<Resident | null> {
     return this.residentRepo.findOne({
-      where:     { userId, complexId, status: ResidentStatus.ACTIVE, deletedAt: IsNull() },
+      where: {
+        userId,
+        complexId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
       relations: ['unit', 'unit.building'],
     });
   }
@@ -1464,7 +1700,9 @@ export class ResidentsService {
    * Devuelve los userId de todos los residentes activos de un edificio (uso interno).
    * Útil para alertas de pánico en edificios/torres.
    */
-  async findActiveUserIdsByBuildingInternal(buildingId: string): Promise<string[]> {
+  async findActiveUserIdsByBuildingInternal(
+    buildingId: string,
+  ): Promise<string[]> {
     const residents = await this.residentRepo
       .createQueryBuilder('r')
       .innerJoin('r.unit', 'u')
@@ -1473,7 +1711,7 @@ export class ResidentsService {
       .andWhere('r.deleted_at IS NULL')
       .select('r.user_id', 'userId')
       .getRawMany<{ userId: string }>();
-    return residents.map(r => r.userId).filter(Boolean);
+    return residents.map((r) => r.userId).filter(Boolean);
   }
 
   // ================================================================
@@ -1484,7 +1722,10 @@ export class ResidentsService {
    * Verifica que no exista ya un residente principal activo en la unidad.
    * @param excludeId ID a excluir de la búsqueda (para updates)
    */
-  private async assertNoMainResident(unitId: string, excludeId?: string): Promise<void> {
+  private async assertNoMainResident(
+    unitId: string,
+    excludeId?: string,
+  ): Promise<void> {
     const qb = this.residentRepo
       .createQueryBuilder('r')
       .where('r.unit_id = :unitId', { unitId })

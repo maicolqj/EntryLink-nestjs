@@ -3,7 +3,6 @@ import { AuditLog } from '../../entities/audit-log.entity';
 
 @ObjectType({ description: 'Lista paginada de registros de auditoría' })
 export class PaginatedAuditLogsResponse {
-
   @Field(() => [AuditLog])
   items: AuditLog[];
 

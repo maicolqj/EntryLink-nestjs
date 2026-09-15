@@ -45,7 +45,9 @@ export class ResidentDevice {
   user: User;
 
   /** Identificador estable enviado por el cliente en el header `x-device-id`. */
-  @Field(() => String, { description: 'Identificador del dispositivo (header x-device-id)' })
+  @Field(() => String, {
+    description: 'Identificador del dispositivo (header x-device-id)',
+  })
   @Column({ name: 'device_id', type: 'varchar', length: 128 })
   deviceId: string;
 
@@ -58,7 +60,10 @@ export class ResidentDevice {
   @Column({ name: 'device_fingerprint', type: 'text' })
   deviceFingerprint: string;
 
-  @Field(() => String, { nullable: true, description: 'Nombre legible del dispositivo' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Nombre legible del dispositivo',
+  })
   @Column({ name: 'label', type: 'varchar', length: 120, nullable: true })
   label?: string;
 
@@ -71,7 +76,12 @@ export class ResidentDevice {
   isRevoked: boolean;
 
   @Field(() => String, { nullable: true })
-  @Column({ name: 'revoked_reason', type: 'varchar', length: 60, nullable: true })
+  @Column({
+    name: 'revoked_reason',
+    type: 'varchar',
+    length: 60,
+    nullable: true,
+  })
   revokedReason?: string;
 
   /**

@@ -12,9 +12,9 @@ import { registerEnumType } from '@nestjs/graphql';
  * alerta se pierde en silencio.
  */
 export enum PanicAlertType {
-  PANIC     = 'PANIC',
-  MEDICAL   = 'MEDICAL',
-  FIRE      = 'FIRE',
+  PANIC = 'PANIC',
+  MEDICAL = 'MEDICAL',
+  FIRE = 'FIRE',
   INTRUSION = 'INTRUSION',
 }
 

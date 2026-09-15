@@ -26,7 +26,6 @@ import { PushPlatform } from '../enums/push-platform.enum';
   where: '"endpoint" IS NOT NULL',
 })
 export class PushSubscription {
-
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

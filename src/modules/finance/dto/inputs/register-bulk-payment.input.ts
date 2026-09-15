@@ -1,7 +1,13 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, IsPositive, IsDateString, MaxLength,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsPositive,
+  IsDateString,
+  MaxLength,
 } from 'class-validator';
 
 import { PaymentMethod } from '../../enums/payment-method.enum';
@@ -14,7 +20,6 @@ import { PaymentMethod } from '../../enums/payment-method.enum';
  */
 @InputType()
 export class RegisterBulkPaymentInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

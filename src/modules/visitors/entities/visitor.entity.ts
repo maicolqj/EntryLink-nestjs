@@ -24,13 +24,17 @@ import GraphQLJSON from 'graphql-type-json';
  * Es reutilizable: la misma persona puede tener N visitas.
  * Scope: por complejo (no comparte registro entre complejos).
  */
-@ObjectType({ description: 'Persona que realiza una o más visitas al complejo' })
+@ObjectType({
+  description: 'Persona que realiza una o más visitas al complejo',
+})
 @Entity({ name: 'visitors' })
-@Index(['complexId', 'identity', 'identityType'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index(['complexId', 'identity', 'identityType'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
 @Index(['complexId', 'isBlacklisted'])
 @Index(['phone'])
 export class Visitor {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -50,14 +54,22 @@ export class Visitor {
   identity: string;
 
   @Field(() => VisitorIdentityType, { description: 'Tipo de documento' })
-  @Column({ name: 'identity_type', type: 'enum', enum: VisitorIdentityType, default: VisitorIdentityType.CC })
+  @Column({
+    name: 'identity_type',
+    type: 'enum',
+    enum: VisitorIdentityType,
+    default: VisitorIdentityType.CC,
+  })
   identityType: VisitorIdentityType;
 
   @Field(() => String, { description: 'Teléfono de contacto', nullable: true })
   @Column({ type: 'varchar', length: 20, nullable: true })
   phone?: string;
 
-  @Field(() => String, { description: 'URL de la foto capturada en portería', nullable: true })
+  @Field(() => String, {
+    description: 'URL de la foto capturada en portería',
+    nullable: true,
+  })
   @Column({ name: 'photo_url', type: 'text', nullable: true })
   photoUrl?: string;
 
@@ -65,11 +77,11 @@ export class Visitor {
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any>;
 
-
-
   // ==================== CONTROL DE ACCESO ====================
 
-  @Field(() => Boolean, { description: 'Visitante en lista negra — no puede ingresar' })
+  @Field(() => Boolean, {
+    description: 'Visitante en lista negra — no puede ingresar',
+  })
   @Column({ name: 'is_blacklisted', type: 'boolean', default: false })
   isBlacklisted: boolean;
 
@@ -77,17 +89,25 @@ export class Visitor {
   @Column({ name: 'blacklist_reason', type: 'text', nullable: true })
   blacklistReason?: string;
 
-  @Field(() => Date, { description: 'Fecha en que fue bloqueado', nullable: true })
+  @Field(() => Date, {
+    description: 'Fecha en que fue bloqueado',
+    nullable: true,
+  })
   @Column({ name: 'blacklisted_at', type: 'timestamptz', nullable: true })
   blacklistedAt?: Date;
 
-  @Field(() => String, { description: 'ID del usuario que lo bloqueó', nullable: true })
+  @Field(() => String, {
+    description: 'ID del usuario que lo bloqueó',
+    nullable: true,
+  })
   @Column({ name: 'blacklisted_by_user_id', type: 'uuid', nullable: true })
   blacklistedByUserId?: string;
 
   // ==================== MULTI-TENANT ====================
 
-  @Field(() => String, { description: 'Complejo al que pertenece este registro' })
+  @Field(() => String, {
+    description: 'Complejo al que pertenece este registro',
+  })
   @Column({ name: 'complex_id', type: 'uuid' })
   complexId: string;
 
@@ -112,7 +132,10 @@ export class Visitor {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { description: 'Supervisor que lo bloqueó', nullable: true })
+  @Field(() => User, {
+    description: 'Supervisor que lo bloqueó',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'blacklisted_by_user_id' })
   blacklistedByUser?: User;

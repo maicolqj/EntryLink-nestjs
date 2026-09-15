@@ -3,7 +3,6 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 /** Ventana continua de apertura dentro de un día, ya descontados los bloqueos. */
 @ObjectType({ description: 'Ventana de apertura de la zona común en un día' })
 export class AmenityTimeWindow {
-
   @Field()
   startAt: Date;
 
@@ -17,7 +16,6 @@ export class AmenityTimeWindow {
  */
 @ObjectType({ description: 'Franja reservable de una zona común' })
 export class AmenitySlot {
-
   @Field()
   startAt: Date;
 
@@ -43,7 +41,6 @@ export class AmenitySlot {
 /** Intervalo ya ocupado por una reserva activa. Sin datos del titular. */
 @ObjectType({ description: 'Intervalo ocupado por una reserva activa' })
 export class AmenityBusyRange {
-
   @Field()
   startAt: Date;
 
@@ -55,9 +52,10 @@ export class AmenityBusyRange {
   bookingsCount: number;
 }
 
-@ObjectType({ description: 'Disponibilidad de una zona común en un día calendario' })
+@ObjectType({
+  description: 'Disponibilidad de una zona común en un día calendario',
+})
 export class AmenityAvailabilityDay {
-
   @Field(() => String, { description: 'Fecha en formato YYYY-MM-DD' })
   date: string;
 
@@ -81,9 +79,10 @@ export class AmenityAvailabilityDay {
   busy: AmenityBusyRange[];
 }
 
-@ObjectType({ description: 'Disponibilidad de una zona común en un rango de días' })
+@ObjectType({
+  description: 'Disponibilidad de una zona común en un rango de días',
+})
 export class AmenityAvailabilityResponse {
-
   @Field()
   amenityId: string;
 

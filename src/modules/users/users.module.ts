@@ -22,22 +22,35 @@ import { Unit } from '../residential-complex/entities/unit.entity';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
 import { Resident } from '../residents/entities/resident.entity';
 import { RolesService } from '../roles/roles.service';
-import { AuditModule }  from '../audit/audit.module';
+import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 
 // Crear directorio temporal si no existe
 const tmpDir = join(process.cwd(), 'tmp', 'excel-imports');
-try { mkdirSync(tmpDir, { recursive: true }); } catch { /* ya existe */ }
+try {
+  mkdirSync(tmpDir, { recursive: true });
+} catch {
+  /* ya existe */
+}
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserRole, UserComplexAssignment, Role, Permission, Unit, Resident, ResidentialComplex]),
+    TypeOrmModule.forFeature([
+      User,
+      UserRole,
+      UserComplexAssignment,
+      Role,
+      Permission,
+      Unit,
+      Resident,
+      ResidentialComplex,
+    ]),
     BullModule.registerQueue({ name: EXCEL_IMPORT_QUEUE }),
     MulterModule.register({ dest: tmpDir }),
     AuditModule,
-    NotificationsModule,   // expone NotificationsService (aviso de cambios de perfil)
-    AuthModule,             // expone TokenService (invalidación de tokens en adminResetUserPassword)
+    NotificationsModule, // expone NotificationsService (aviso de cambios de perfil)
+    AuthModule, // expone TokenService (invalidación de tokens en adminResetUserPassword)
   ],
   controllers: [UsersController],
   providers: [

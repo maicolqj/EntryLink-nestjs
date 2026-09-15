@@ -13,7 +13,6 @@ import { SpecialNumberCategory } from '../enums/special-number-category.enum';
 
 @InputType()
 export class UpdateSpecialNumberInput {
-
   @Field(() => String)
   @IsUUID()
   id: string;

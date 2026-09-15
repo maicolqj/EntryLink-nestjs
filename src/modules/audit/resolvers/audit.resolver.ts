@@ -1,16 +1,16 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { Logger } from '@nestjs/common';
 
-import { AuditLog }                   from '../entities/audit-log.entity';
+import { AuditLog } from '../entities/audit-log.entity';
 import { PaginatedAuditLogsResponse } from '../dto/responses/paginated-audit-logs.response';
-import { RevertAuditResponse }        from '../dto/responses/revert-audit.response';
-import { AuditLogDetailResponse }     from '../dto/responses/audit-log-detail.response';
-import { FilterAuditLogsInput }       from '../dto/inputs/filter-audit-logs.input';
-import { AuditService }               from '../services/audit.service';
+import { RevertAuditResponse } from '../dto/responses/revert-audit.response';
+import { AuditLogDetailResponse } from '../dto/responses/audit-log-detail.response';
+import { FilterAuditLogsInput } from '../dto/inputs/filter-audit-logs.input';
+import { AuditService } from '../services/audit.service';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 @Resolver(() => AuditLog)
@@ -29,10 +29,7 @@ export class AuditResolver {
       'COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.',
   })
   @Auth({
-    roles: [
-      ValidRoles.SUPER_ADMIN_ROL,
-      ValidRoles.COMPLEX_ROL,
-    ],
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
   })
   auditLogs(
     @CurrentUser() payload: JwtAccessPayload,
@@ -48,7 +45,8 @@ export class AuditResolver {
 
   @Query(() => AuditLogDetailResponse, {
     name: 'auditLog',
-    description: 'Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX) con labels enriquecidos.',
+    description:
+      'Obtiene un registro de auditoría por su número de referencia (AUD-YYYYMMDD-XXXX) con labels enriquecidos.',
   })
   @Auth({
     roles: [
@@ -63,7 +61,10 @@ export class AuditResolver {
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<AuditLogDetailResponse> {
     const isSuperAdmin = payload.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
-    return this.auditService.findByReference(referenceNumber, isSuperAdmin ? undefined : payload.complexId);
+    return this.auditService.findByReference(
+      referenceNumber,
+      isSuperAdmin ? undefined : payload.complexId,
+    );
   }
 
   // ── Mutaciones ───────────────────────────────────────────────────

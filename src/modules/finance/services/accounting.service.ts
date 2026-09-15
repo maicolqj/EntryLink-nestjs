@@ -48,8 +48,8 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { WalletAppliedMetadata } from '../../notifications/interfaces/notification-metadata.interface';
-import { AuditService }    from '../../audit/services/audit.service';
-import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { FilterAccountingDocumentsInput } from '../dto/inputs/filter-accounting-documents.input';
 import { PaginatedAccountingDocumentsResponse } from '../dto/responses/paginated-accounting-documents.response';
@@ -59,14 +59,14 @@ import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 
 /** Cuentas PUC estándar usadas por los procesos automáticos. */
 const PUC = {
-  CASH:                '1105', // Caja
-  BANK:                '1110', // Bancos
-  PREPAID_LIABILITY:   '2805', // Ingresos recibidos por anticipado (anticipos)
-  RECEIVABLE:          '1311', // Cuotas de administración por cobrar (CxC)
+  CASH: '1105', // Caja
+  BANK: '1110', // Bancos
+  PREPAID_LIABILITY: '2805', // Ingresos recibidos por anticipado (anticipos)
+  RECEIVABLE: '1311', // Cuotas de administración por cobrar (CxC)
   INTEREST_RECEIVABLE: '1345', // Multas e intereses por cobrar (CxC interés mora)
-  MORA_INCOME:         '4210', // Intereses de mora (ingreso)
+  MORA_INCOME: '4210', // Intereses de mora (ingreso)
   VISITOR_PARKING_INCOME: '4220', // Parqueaderos de visitantes (ingreso)
-  COMMON_AREA_INCOME:     '4295', // Otros ingresos: multas y zonas comunes
+  COMMON_AREA_INCOME: '4295', // Otros ingresos: multas y zonas comunes
 } as const;
 
 /** Convierte a centavos enteros para comparar sin error de coma flotante. */
@@ -119,9 +119,16 @@ export class AccountingService {
   ): Promise<PucAccount[]> {
     await this.complexService.findById(complexId, currentUser);
     await seedPucForComplex(this.dataSource, complexId);
-    void this.auditPuc(currentUser, complexId, AuditAction.CREATE, complexId, {
-      action: 'seedPucAccounts',
-    }, `Siembra del PUC para complejo ${complexId}`);
+    void this.auditPuc(
+      currentUser,
+      complexId,
+      AuditAction.CREATE,
+      complexId,
+      {
+        action: 'seedPucAccounts',
+      },
+      `Siembra del PUC para complejo ${complexId}`,
+    );
     return this.pucRepo.find({ where: { complexId }, order: { code: 'ASC' } });
   }
 
@@ -179,9 +186,14 @@ export class AccountingService {
       await this.pucRepo.save(parent);
     }
 
-    void this.auditPuc(currentUser, input.complexId, AuditAction.CREATE, acc.id,
+    void this.auditPuc(
+      currentUser,
+      input.complexId,
+      AuditAction.CREATE,
+      acc.id,
       { code: acc.code, name: acc.name, accountClass: acc.accountClass },
-      `Cuenta PUC creada: ${acc.code} — ${acc.name}`);
+      `Cuenta PUC creada: ${acc.code} — ${acc.name}`,
+    );
     return acc;
   }
 
@@ -199,23 +211,29 @@ export class AccountingService {
     if (input.nature != null && input.nature !== acc.nature) {
       if (await this.hasMovements(this.dataSource.manager, acc.id)) {
         throw new CustomError({
-          message: 'No se puede cambiar la naturaleza de una cuenta con movimientos',
+          message:
+            'No se puede cambiar la naturaleza de una cuenta con movimientos',
           statusCode: HttpStatus.CONFLICT,
           errorCode: FinanceErrorCode.PUC_ACCOUNT_HAS_MOVEMENTS,
         });
       }
       acc.nature = input.nature;
     }
-    if (input.name != null)     acc.name = input.name;
+    if (input.name != null) acc.name = input.name;
     if (input.isActive != null) {
       if (input.isActive === false) await this.assertCanDeactivate(acc);
       acc.isActive = input.isActive;
     }
 
     const saved = await this.pucRepo.save(acc);
-    void this.auditPuc(currentUser, input.complexId, AuditAction.UPDATE, acc.id,
+    void this.auditPuc(
+      currentUser,
+      input.complexId,
+      AuditAction.UPDATE,
+      acc.id,
       { name: saved.name, nature: saved.nature, isActive: saved.isActive },
-      `Cuenta PUC actualizada: ${saved.code}`);
+      `Cuenta PUC actualizada: ${saved.code}`,
+    );
     return saved;
   }
 
@@ -232,8 +250,14 @@ export class AccountingService {
     acc.isActive = !acc.isActive;
 
     const saved = await this.pucRepo.save(acc);
-    void this.auditPuc(currentUser, complexId, AuditAction.UPDATE, acc.id,
-      { isActive: saved.isActive }, `Cuenta PUC ${saved.isActive ? 'activada' : 'desactivada'}: ${saved.code}`);
+    void this.auditPuc(
+      currentUser,
+      complexId,
+      AuditAction.UPDATE,
+      acc.id,
+      { isActive: saved.isActive },
+      `Cuenta PUC ${saved.isActive ? 'activada' : 'desactivada'}: ${saved.code}`,
+    );
     return saved;
   }
 
@@ -251,7 +275,8 @@ export class AccountingService {
 
     if (await this.hasMovements(this.dataSource.manager, acc.id)) {
       throw new CustomError({
-        message: 'No se puede borrar una cuenta con movimientos contables; desactívela',
+        message:
+          'No se puede borrar una cuenta con movimientos contables; desactívela',
         statusCode: HttpStatus.CONFLICT,
         errorCode: FinanceErrorCode.PUC_ACCOUNT_HAS_MOVEMENTS,
       });
@@ -264,18 +289,27 @@ export class AccountingService {
         errorCode: FinanceErrorCode.PUC_ACCOUNT_IN_USE,
       });
     }
-    const usedByRecurring = await this.recurringRepo.count({ where: { incomeAccountId: acc.id } });
+    const usedByRecurring = await this.recurringRepo.count({
+      where: { incomeAccountId: acc.id },
+    });
     if (usedByRecurring > 0) {
       throw new CustomError({
-        message: 'La cuenta está asignada a un cobro recurrente; reasígnelo antes de borrar',
+        message:
+          'La cuenta está asignada a un cobro recurrente; reasígnelo antes de borrar',
         statusCode: HttpStatus.CONFLICT,
         errorCode: FinanceErrorCode.PUC_ACCOUNT_IN_USE,
       });
     }
 
     await this.pucRepo.remove(acc);
-    void this.auditPuc(currentUser, complexId, AuditAction.DELETE, id,
-      { code: acc.code }, `Cuenta PUC borrada: ${acc.code}`);
+    void this.auditPuc(
+      currentUser,
+      complexId,
+      AuditAction.DELETE,
+      id,
+      { code: acc.code },
+      `Cuenta PUC borrada: ${acc.code}`,
+    );
     return true;
   }
 
@@ -291,12 +325,18 @@ export class AccountingService {
   }
 
   /** true si la cuenta tiene al menos una línea contable imputada. */
-  private async hasMovements(em: EntityManager, pucAccountId: string): Promise<boolean> {
+  private async hasMovements(
+    em: EntityManager,
+    pucAccountId: string,
+  ): Promise<boolean> {
     const n = await em.count(AccountingLine, { where: { pucAccountId } });
     return n > 0;
   }
 
-  private async requirePucAccount(id: string, complexId: string): Promise<PucAccount> {
+  private async requirePucAccount(
+    id: string,
+    complexId: string,
+  ): Promise<PucAccount> {
     const acc = await this.pucRepo.findOne({ where: { id, complexId } });
     if (!acc) {
       throw new CustomError({
@@ -317,11 +357,11 @@ export class AccountingService {
     description: string,
   ): void {
     void this.auditService.log({
-      entityType:      AuditEntityType.PucAccount,
+      entityType: AuditEntityType.PucAccount,
       entityId,
       action,
-      newValue:        value,
-      performedById:   user.sub,
+      newValue: value,
+      performedById: user.sub,
       performedByName: user.email,
       performedByRole: user.roles?.[0] ?? '',
       complexId,
@@ -340,23 +380,29 @@ export class AccountingService {
     const { page, limit } = pagination;
     const where: Record<string, unknown> = { complexId: filter.complexId };
     if (filter.documentType) where.documentType = filter.documentType;
-    if (filter.period)       where.period = filter.period;
-    if (filter.unitId)       where.unitId = filter.unitId;
+    if (filter.period) where.period = filter.period;
+    if (filter.unitId) where.unitId = filter.unitId;
 
-    const [items, totalItems] = await this.dataSource.getRepository(AccountingHeader).findAndCount({
-      where,
-      relations: ['lines'],
-      order: { documentDate: 'DESC', consecutive: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [items, totalItems] = await this.dataSource
+      .getRepository(AccountingHeader)
+      .findAndCount({
+        where,
+        relations: ['lines'],
+        order: { documentDate: 'DESC', consecutive: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
       items,
       pagination: {
-        currentPage: page, itemsPerPage: limit, totalItems, totalPages,
-        hasNextPage: page < totalPages, hasPreviousPage: page > 1,
+        currentPage: page,
+        itemsPerPage: limit,
+        totalItems,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }
@@ -417,7 +463,12 @@ export class AccountingService {
     user: JwtAccessPayload,
   ): Promise<RecurringCharge> {
     const incomeAcc = await this.pucRepo.findOne({
-      where: { id: input.incomeAccountId, complexId: input.complexId, isPostable: true, isActive: true },
+      where: {
+        id: input.incomeAccountId,
+        complexId: input.complexId,
+        isPostable: true,
+        isActive: true,
+      },
     });
     if (!incomeAcc) {
       throw new CustomError({
@@ -426,7 +477,10 @@ export class AccountingService {
         errorCode: FinanceErrorCode.PUC_ACCOUNT_INVALID,
       });
     }
-    if (input.type === RecurringChargeType.DEFERRED && !input.totalInstallments) {
+    if (
+      input.type === RecurringChargeType.DEFERRED &&
+      !input.totalInstallments
+    ) {
       throw new CustomError({
         message: 'Los cobros diferidos requieren totalInstallments',
         statusCode: HttpStatus.BAD_REQUEST,
@@ -437,9 +491,13 @@ export class AccountingService {
     // Distribución: explícita o derivada del flag legacy prorateByCoefficient.
     const distribution =
       input.distribution ??
-      (input.prorateByCoefficient ? RecurringChargeDistribution.COEFFICIENT : RecurringChargeDistribution.FIXED_PER_UNIT);
+      (input.prorateByCoefficient
+        ? RecurringChargeDistribution.COEFFICIENT
+        : RecurringChargeDistribution.FIXED_PER_UNIT);
 
-    const targetUnitIds = input.targetUnitIds?.length ? input.targetUnitIds : null;
+    const targetUnitIds = input.targetUnitIds?.length
+      ? input.targetUnitIds
+      : null;
 
     const rc = this.recurringRepo.create({
       complexId: input.complexId,
@@ -456,7 +514,8 @@ export class AccountingService {
       distribution,
       triggerType: input.triggerType ?? RecurringChargeTrigger.MANUAL,
       vehicleTypes: input.vehicleTypes?.length ? input.vehicleTypes : null,
-      prorateByCoefficient: distribution === RecurringChargeDistribution.COEFFICIENT,
+      prorateByCoefficient:
+        distribution === RecurringChargeDistribution.COEFFICIENT,
       targetRules: input.targetRules ?? null,
       targetUnitIds,
       earlyDiscountPct: input.earlyDiscountPct ?? null,
@@ -483,7 +542,12 @@ export class AccountingService {
 
     if (input.incomeAccountId && input.incomeAccountId !== rc.incomeAccountId) {
       const acc = await this.pucRepo.findOne({
-        where: { id: input.incomeAccountId, complexId: input.complexId, isPostable: true, isActive: true },
+        where: {
+          id: input.incomeAccountId,
+          complexId: input.complexId,
+          isPostable: true,
+          isActive: true,
+        },
       });
       if (!acc) {
         throw new CustomError({
@@ -497,21 +561,29 @@ export class AccountingService {
 
     if (input.concept != null) rc.concept = input.concept;
     if (input.amount != null) rc.amount = input.amount;
-    if (input.totalInstallments != null) rc.totalInstallments = input.totalInstallments;
+    if (input.totalInstallments != null)
+      rc.totalInstallments = input.totalInstallments;
     if (input.billingDay != null) rc.billingDay = input.billingDay;
     if (input.billingMode != null) rc.billingMode = input.billingMode;
     if (input.distribution != null) {
       rc.distribution = input.distribution;
-      rc.prorateByCoefficient = input.distribution === RecurringChargeDistribution.COEFFICIENT;
+      rc.prorateByCoefficient =
+        input.distribution === RecurringChargeDistribution.COEFFICIENT;
     }
     if (input.triggerType != null) rc.triggerType = input.triggerType;
-    if (input.vehicleTypes !== undefined) rc.vehicleTypes = input.vehicleTypes?.length ? input.vehicleTypes : null;
-    if (input.targetRules !== undefined) rc.targetRules = input.targetRules ?? null;
+    if (input.vehicleTypes !== undefined)
+      rc.vehicleTypes = input.vehicleTypes?.length ? input.vehicleTypes : null;
+    if (input.targetRules !== undefined)
+      rc.targetRules = input.targetRules ?? null;
     if (input.targetUnitIds !== undefined) {
-      rc.targetUnitIds = input.targetUnitIds?.length ? input.targetUnitIds : null;
+      rc.targetUnitIds = input.targetUnitIds?.length
+        ? input.targetUnitIds
+        : null;
     }
-    if (input.earlyDiscountPct !== undefined) rc.earlyDiscountPct = input.earlyDiscountPct ?? null;
-    if (input.earlyDiscountDay !== undefined) rc.earlyDiscountDay = input.earlyDiscountDay ?? null;
+    if (input.earlyDiscountPct !== undefined)
+      rc.earlyDiscountPct = input.earlyDiscountPct ?? null;
+    if (input.earlyDiscountDay !== undefined)
+      rc.earlyDiscountDay = input.earlyDiscountDay ?? null;
     if (input.isActive != null) rc.isActive = input.isActive;
 
     return this.recurringRepo.save(rc);
@@ -558,19 +630,33 @@ export class AccountingService {
     fromPeriod: string,
     toPeriod: string,
     user: JwtAccessPayload,
-  ): Promise<{ caused: number; skipped: number; totalAmount: number; periods: string[] }> {
+  ): Promise<{
+    caused: number;
+    skipped: number;
+    totalAmount: number;
+    periods: string[];
+  }> {
     const periods = this.buildPeriodRange(fromPeriod, toPeriod);
     if (periods.length === 0) {
       throw new CustomError({
-        message: 'Rango de períodos inválido (desde debe ser ≤ hasta, formato YYYY-MM)',
+        message:
+          'Rango de períodos inválido (desde debe ser ≤ hasta, formato YYYY-MM)',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: FinanceErrorCode.PERIOD_INVALID_FORMAT,
       });
     }
-    let caused = 0, skipped = 0, totalAmount = 0;
+    let caused = 0,
+      skipped = 0,
+      totalAmount = 0;
     for (const p of periods) {
-      const r = await this.causeRecurringChargesInternal(complexId, p, user.sub);
-      caused += r.caused; skipped += r.skipped; totalAmount += r.totalAmount;
+      const r = await this.causeRecurringChargesInternal(
+        complexId,
+        p,
+        user.sub,
+      );
+      caused += r.caused;
+      skipped += r.skipped;
+      totalAmount += r.totalAmount;
     }
     return { caused, skipped, totalAmount, periods };
   }
@@ -588,38 +674,68 @@ export class AccountingService {
   ): Promise<number> {
     return this.dataSource.transaction(async (em) => {
       const recs = await em.find(RecurringCharge, {
-        where: { complexId, isActive: true, triggerType: RecurringChargeTrigger.VEHICLE },
+        where: {
+          complexId,
+          isActive: true,
+          triggerType: RecurringChargeTrigger.VEHICLE,
+        },
       });
       if (recs.length === 0) return 0;
 
-      const unitVehicles = await em.find(Vehicle, { where: { complexId, unitId, status: VehicleStatus.ACTIVE } });
+      const unitVehicles = await em.find(Vehicle, {
+        where: { complexId, unitId, status: VehicleStatus.ACTIVE },
+      });
       if (unitVehicles.length === 0) return 0;
 
       const conceptByType: Record<RecurringChargeType, PrelacionConcept> = {
         [RecurringChargeType.INDEFINITE]: PrelacionConcept.ORDINARY,
-        [RecurringChargeType.DEFERRED]:   PrelacionConcept.EXTRAORDINARY,
-        [RecurringChargeType.ONE_TIME]:   PrelacionConcept.ORDINARY,
+        [RecurringChargeType.DEFERRED]: PrelacionConcept.EXTRAORDINARY,
+        [RecurringChargeType.ONE_TIME]: PrelacionConcept.ORDINARY,
       };
-      const receivableAcc = await this.requireAccount(em, complexId, PUC.RECEIVABLE);
-      const financeCfg = await em.findOne(ComplexFinanceConfig, { where: { complexId } });
+      const receivableAcc = await this.requireAccount(
+        em,
+        complexId,
+        PUC.RECEIVABLE,
+      );
+      const financeCfg = await em.findOne(ComplexFinanceConfig, {
+        where: { complexId },
+      });
       const now = new Date();
       const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
       let created = 0;
       for (const rc of recs) {
-        const incomeAcc = await this.requireAccountById(em, complexId, rc.incomeAccountId);
+        const incomeAcc = await this.requireAccountById(
+          em,
+          complexId,
+          rc.incomeAccountId,
+        );
         const dueDate = this.buildPeriodDate(period, rc.billingMode);
-        const earlyPct = Number(rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0);
-        const earlyDay = rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
+        const earlyPct = Number(
+          rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0,
+        );
+        const earlyDay =
+          rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
         const matching = rc.vehicleTypes?.length
-          ? unitVehicles.filter(v => rc.vehicleTypes!.includes(v.type))
+          ? unitVehicles.filter((v) => rc.vehicleTypes.includes(v.type))
           : unitVehicles;
         for (const v of matching) {
           const ok = await this.emitRecurringUnitCharge(em, {
-            complexId, unitId, period, description: `${rc.concept} — ${period} — ${v.plate}`,
-            unitAmount: Number(rc.amount), dueDate, prelacion: conceptByType[rc.type], conceptName: rc.concept,
-            receivableAccId: receivableAcc.id, incomeAccId: incomeAcc.id, incomeAccountIdForCharge: rc.incomeAccountId,
-            earlyPct, earlyDay, now, systemUserId,
+            complexId,
+            unitId,
+            period,
+            description: `${rc.concept} — ${period} — ${v.plate}`,
+            unitAmount: Number(rc.amount),
+            dueDate,
+            prelacion: conceptByType[rc.type],
+            conceptName: rc.concept,
+            receivableAccId: receivableAcc.id,
+            incomeAccId: incomeAcc.id,
+            incomeAccountIdForCharge: rc.incomeAccountId,
+            earlyPct,
+            earlyDay,
+            now,
+            systemUserId,
           });
           if (ok) created++;
         }
@@ -639,7 +755,9 @@ export class AccountingService {
     if (cur > end || end - cur > 60) return [];
     const out: string[] = [];
     while (cur <= end) {
-      out.push(`${Math.floor(cur / 12)}-${String((cur % 12) + 1).padStart(2, '0')}`);
+      out.push(
+        `${Math.floor(cur / 12)}-${String((cur % 12) + 1).padStart(2, '0')}`,
+      );
       cur++;
     }
     return out;
@@ -666,17 +784,27 @@ export class AccountingService {
   ): Promise<PropertyAccountStatus> {
     const openCharges = await em.find(FeeCharge, {
       where: {
-        complexId, unitId,
-        status: In([ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID]),
+        complexId,
+        unitId,
+        status: In([
+          ChargeStatus.PENDING,
+          ChargeStatus.OVERDUE,
+          ChargeStatus.PARTIALLY_PAID,
+        ]),
       },
     });
     const debt = openCharges.reduce(
-      (s, c) => s + (Number(c.amount) - Number(c.paidAmount)), 0,
+      (s, c) => s + (Number(c.amount) - Number(c.paidAmount)),
+      0,
     );
 
     const wallet = await em.find(WalletEntry, { where: { complexId, unitId } });
-    const credit = wallet.filter((e) => e.type === 'CREDIT').reduce((s, e) => s + Number(e.amount), 0);
-    const debit  = wallet.filter((e) => e.type === 'DEBIT').reduce((s, e) => s + Number(e.amount), 0);
+    const credit = wallet
+      .filter((e) => e.type === 'CREDIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
+    const debit = wallet
+      .filter((e) => e.type === 'DEBIT')
+      .reduce((s, e) => s + Number(e.amount), 0);
     const prepaid = Math.max(0, credit - debit);
 
     const st = await this.getOrCreateStatus(em, complexId, unitId);
@@ -692,12 +820,15 @@ export class AccountingService {
    * — puede correrse varias veces. Pensado para poblar datos históricos tras
    * introducir el espejo materializado. Si se pasa `complexId`, acota a él.
    */
-  async backfillUnitStatuses(complexId?: string): Promise<{ processed: number }> {
+  async backfillUnitStatuses(
+    complexId?: string,
+  ): Promise<{ processed: number }> {
     // Pares (complexId, unitId) distintos con actividad en cargos o wallet
     const pairs = new Map<string, { complexId: string; unitId: string }>();
 
     const collect = async (table: 'fee_charges' | 'wallet_entries') => {
-      const qb = this.dataSource.createQueryBuilder()
+      const qb = this.dataSource
+        .createQueryBuilder()
         .select('DISTINCT t."complexId" AS "complexId", t."unitId" AS "unitId"')
         .from(table, 't');
       if (complexId) qb.where('t."complexId" = :complexId', { complexId });
@@ -716,7 +847,9 @@ export class AccountingService {
       processed++;
     }
 
-    this.logger.log(`[backfill] PropertyAccountStatus recalculado para ${processed} unidad(es)`);
+    this.logger.log(
+      `[backfill] PropertyAccountStatus recalculado para ${processed} unidad(es)`,
+    );
     return { processed };
   }
 
@@ -747,21 +880,40 @@ export class AccountingService {
     },
   ): Promise<string | null> {
     const applied = round2(params.appliedToCharges);
-    const excess  = round2(params.prepaidExcess);
-    const total   = round2(applied + excess);
+    const excess = round2(params.prepaidExcess);
+    const total = round2(applied + excess);
     if (total <= 0) return null;
 
     // Resolver cuentas; si falta alguna, omitir el recibo sin romper el pago
-    let cashAcc: PucAccount, recvAcc: PucAccount | null = null, prepaidAcc: PucAccount | null = null;
+    let cashAcc: PucAccount,
+      recvAcc: PucAccount | null = null,
+      prepaidAcc: PucAccount | null = null;
     try {
       cashAcc = await this.requireAccount(
-        em, params.complexId, params.method === PaymentMethod.CASH ? PUC.CASH : PUC.BANK,
+        em,
+        params.complexId,
+        params.method === PaymentMethod.CASH ? PUC.CASH : PUC.BANK,
       );
-      if (applied > 0) recvAcc    = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
-      if (excess  > 0) prepaidAcc = await this.requireAccount(em, params.complexId, PUC.PREPAID_LIABILITY);
+      if (applied > 0)
+        recvAcc = await this.requireAccount(
+          em,
+          params.complexId,
+          PUC.RECEIVABLE,
+        );
+      if (excess > 0)
+        prepaidAcc = await this.requireAccount(
+          em,
+          params.complexId,
+          PUC.PREPAID_LIABILITY,
+        );
     } catch (e) {
-      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
-        this.logger.warn(`[cashReceipt] PUC no configurado para complejo ${params.complexId}; recibo omitido`);
+      if (
+        e instanceof CustomError &&
+        e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+      ) {
+        this.logger.warn(
+          `[cashReceipt] PUC no configurado para complejo ${params.complexId}; recibo omitido`,
+        );
         return null;
       }
       throw e;
@@ -769,27 +921,40 @@ export class AccountingService {
 
     const lines: Partial<AccountingLine>[] = [
       {
-        pucAccountId: cashAcc.id, debit: total, credit: 0,
+        pucAccountId: cashAcc.id,
+        debit: total,
+        credit: 0,
         memo: `Recibo de caja${params.reference ? ` ref ${params.reference}` : ''} — ${params.method}`,
-        unitId: params.unitId, complexId: params.complexId,
+        unitId: params.unitId,
+        complexId: params.complexId,
       },
     ];
     if (applied > 0 && recvAcc) {
       lines.push({
-        pucAccountId: recvAcc.id, debit: 0, credit: applied,
+        pucAccountId: recvAcc.id,
+        debit: 0,
+        credit: applied,
         memo: `Abono a cartera período ${params.period}`,
-        unitId: params.unitId, complexId: params.complexId,
+        unitId: params.unitId,
+        complexId: params.complexId,
       });
     }
     if (excess > 0 && prepaidAcc) {
       lines.push({
-        pucAccountId: prepaidAcc.id, debit: 0, credit: excess,
+        pucAccountId: prepaidAcc.id,
+        debit: 0,
+        credit: excess,
         memo: `Anticipo (saldo a favor) — unidad ${params.unitId}`,
-        unitId: params.unitId, complexId: params.complexId,
+        unitId: params.unitId,
+        complexId: params.complexId,
       });
     }
 
-    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.CASH_RECEIPT);
+    const consecutive = await this.nextConsecutive(
+      em,
+      params.complexId,
+      AccountingDocumentType.CASH_RECEIPT,
+    );
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.CASH_RECEIPT,
       consecutive,
@@ -833,30 +998,51 @@ export class AccountingService {
 
     let incomeAcc: PucAccount, recvAcc: PucAccount;
     try {
-      incomeAcc = await this.requireAccountById(em, params.complexId, params.incomeAccountId);
+      incomeAcc = await this.requireAccountById(
+        em,
+        params.complexId,
+        params.incomeAccountId,
+      );
       recvAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
     } catch (e) {
-      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
-        this.logger.warn(`[creditNote] PUC no configurado para complejo ${params.complexId}; nota crédito omitida`);
+      if (
+        e instanceof CustomError &&
+        e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+      ) {
+        this.logger.warn(
+          `[creditNote] PUC no configurado para complejo ${params.complexId}; nota crédito omitida`,
+        );
         return null;
       }
       throw e;
     }
 
-    const memo = params.memo ?? `Descuento pronto pago — período ${params.period}`;
+    const memo =
+      params.memo ?? `Descuento pronto pago — período ${params.period}`;
     const lines: Partial<AccountingLine>[] = [
       {
-        pucAccountId: incomeAcc.id, debit: amount, credit: 0,
-        memo, unitId: params.unitId, complexId: params.complexId,
+        pucAccountId: incomeAcc.id,
+        debit: amount,
+        credit: 0,
+        memo,
+        unitId: params.unitId,
+        complexId: params.complexId,
       },
       {
-        pucAccountId: recvAcc.id, debit: 0, credit: amount,
+        pucAccountId: recvAcc.id,
+        debit: 0,
+        credit: amount,
         memo: `Baja CxC por descuento pronto pago — unidad ${params.unitId}`,
-        unitId: params.unitId, complexId: params.complexId,
+        unitId: params.unitId,
+        complexId: params.complexId,
       },
     ];
 
-    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.CREDIT_NOTE);
+    const consecutive = await this.nextConsecutive(
+      em,
+      params.complexId,
+      AccountingDocumentType.CREDIT_NOTE,
+    );
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.CREDIT_NOTE,
       consecutive,
@@ -898,17 +1084,30 @@ export class AccountingService {
 
     let prepaidAcc: PucAccount, recvAcc: PucAccount;
     try {
-      prepaidAcc = await this.requireAccount(em, params.complexId, PUC.PREPAID_LIABILITY);
-      recvAcc    = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
+      prepaidAcc = await this.requireAccount(
+        em,
+        params.complexId,
+        PUC.PREPAID_LIABILITY,
+      );
+      recvAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
     } catch (e) {
-      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
-        this.logger.warn(`[prepaidNote] PUC no configurado para complejo ${params.complexId}; nota omitida`);
+      if (
+        e instanceof CustomError &&
+        e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+      ) {
+        this.logger.warn(
+          `[prepaidNote] PUC no configurado para complejo ${params.complexId}; nota omitida`,
+        );
         return null;
       }
       throw e;
     }
 
-    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.ACCOUNTING_NOTE);
+    const consecutive = await this.nextConsecutive(
+      em,
+      params.complexId,
+      AccountingDocumentType.ACCOUNTING_NOTE,
+    );
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.ACCOUNTING_NOTE,
       consecutive,
@@ -922,14 +1121,20 @@ export class AccountingService {
       unitId: params.unitId,
       lines: [
         {
-          pucAccountId: prepaidAcc.id, debit: amount, credit: 0,
+          pucAccountId: prepaidAcc.id,
+          debit: amount,
+          credit: 0,
           memo: params.memo ?? 'Aplicación de anticipo a cartera',
-          unitId: params.unitId, complexId: params.complexId,
+          unitId: params.unitId,
+          complexId: params.complexId,
         },
         {
-          pucAccountId: recvAcc.id, debit: 0, credit: amount,
+          pucAccountId: recvAcc.id,
+          debit: 0,
+          credit: amount,
           memo: `Cruce CxC período ${params.period}`,
-          unitId: params.unitId, complexId: params.complexId,
+          unitId: params.unitId,
+          complexId: params.complexId,
         },
       ] as AccountingLine[],
     });
@@ -962,23 +1167,41 @@ export class AccountingService {
 
     let receivableAcc: PucAccount, incomeAcc: PucAccount;
     try {
-      receivableAcc = await this.requireAccount(em, params.complexId, PUC.INTEREST_RECEIVABLE);
-      incomeAcc     = await this.requireAccount(em, params.complexId, PUC.MORA_INCOME);
+      receivableAcc = await this.requireAccount(
+        em,
+        params.complexId,
+        PUC.INTEREST_RECEIVABLE,
+      );
+      incomeAcc = await this.requireAccount(
+        em,
+        params.complexId,
+        PUC.MORA_INCOME,
+      );
     } catch (e) {
-      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
-        this.logger.warn(`[moraNote] PUC no configurado para complejo ${params.complexId}; nota omitida`);
+      if (
+        e instanceof CustomError &&
+        e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+      ) {
+        this.logger.warn(
+          `[moraNote] PUC no configurado para complejo ${params.complexId}; nota omitida`,
+        );
         return null;
       }
       throw e;
     }
 
-    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.INVOICE);
+    const consecutive = await this.nextConsecutive(
+      em,
+      params.complexId,
+      AccountingDocumentType.INVOICE,
+    );
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.INVOICE,
       consecutive,
       documentDate: new Date(),
       period: params.period,
-      memo: params.memo ?? `Causación interés de mora — unidad ${params.unitId}`,
+      memo:
+        params.memo ?? `Causación interés de mora — unidad ${params.unitId}`,
       totalDebit: amount,
       totalCredit: amount,
       createdByUserId: params.createdByUserId,
@@ -986,14 +1209,20 @@ export class AccountingService {
       unitId: params.unitId,
       lines: [
         {
-          pucAccountId: receivableAcc.id, debit: amount, credit: 0,
+          pucAccountId: receivableAcc.id,
+          debit: amount,
+          credit: 0,
           memo: params.memo ?? `Interés de mora período ${params.period}`,
-          unitId: params.unitId, complexId: params.complexId,
+          unitId: params.unitId,
+          complexId: params.complexId,
         },
         {
-          pucAccountId: incomeAcc.id, debit: 0, credit: amount,
+          pucAccountId: incomeAcc.id,
+          debit: 0,
+          credit: amount,
           memo: `Ingreso interés de mora período ${params.period}`,
-          unitId: params.unitId, complexId: params.complexId,
+          unitId: params.unitId,
+          complexId: params.complexId,
         },
       ] as AccountingLine[],
     });
@@ -1024,7 +1253,8 @@ export class AccountingService {
       select: ['id', 'enabledModules'],
     });
     const mods = complex?.enabledModules;
-    const financeEnabled = !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
+    const financeEnabled =
+      !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
     if (!financeEnabled) return null;
 
     const existing = await em.findOne(PucAccount, {
@@ -1035,21 +1265,28 @@ export class AccountingService {
     }
 
     // Crear 4220 bajo el grupo 42; si no hay PUC base, no forzar (best-effort).
-    const parent = await em.findOne(PucAccount, { where: { complexId, code: '42' } });
+    const parent = await em.findOne(PucAccount, {
+      where: { complexId, code: '42' },
+    });
     if (!parent) return null;
 
-    const created = await em.save(PucAccount, em.create(PucAccount, {
-      complexId,
-      code: PUC.VISITOR_PARKING_INCOME,
-      name: 'Parqueaderos de visitantes',
-      accountClass: parent.accountClass,
-      nature: parent.nature,
-      isPostable: true,
-      isActive: true,
-      level: parent.level + 1,
-      parentId: parent.id,
-    }));
-    this.logger.log(`Cuenta PUC ${PUC.VISITOR_PARKING_INCOME} creada automáticamente para complejo ${complexId}`);
+    const created = await em.save(
+      PucAccount,
+      em.create(PucAccount, {
+        complexId,
+        code: PUC.VISITOR_PARKING_INCOME,
+        name: 'Parqueaderos de visitantes',
+        accountClass: parent.accountClass,
+        nature: parent.nature,
+        isPostable: true,
+        isActive: true,
+        level: parent.level + 1,
+        parentId: parent.id,
+      }),
+    );
+    this.logger.log(
+      `Cuenta PUC ${PUC.VISITOR_PARKING_INCOME} creada automáticamente para complejo ${complexId}`,
+    );
     return created;
   }
 
@@ -1068,7 +1305,8 @@ export class AccountingService {
       select: ['id', 'enabledModules'],
     });
     const mods = complex?.enabledModules;
-    const financeEnabled = !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
+    const financeEnabled =
+      !mods || mods.length === 0 || mods.includes(ComplexModule.FINANZAS);
     if (!financeEnabled) return null;
 
     const existing = await em.findOne(PucAccount, {
@@ -1078,21 +1316,28 @@ export class AccountingService {
       return existing.isPostable && existing.isActive ? existing : null;
     }
 
-    const parent = await em.findOne(PucAccount, { where: { complexId, code: '42' } });
+    const parent = await em.findOne(PucAccount, {
+      where: { complexId, code: '42' },
+    });
     if (!parent) return null;
 
-    const created = await em.save(PucAccount, em.create(PucAccount, {
-      complexId,
-      code: PUC.COMMON_AREA_INCOME,
-      name: 'Otros ingresos (multas, zonas comunes)',
-      accountClass: parent.accountClass,
-      nature: parent.nature,
-      isPostable: true,
-      isActive: true,
-      level: parent.level + 1,
-      parentId: parent.id,
-    }));
-    this.logger.log(`Cuenta PUC ${PUC.COMMON_AREA_INCOME} creada automáticamente para complejo ${complexId}`);
+    const created = await em.save(
+      PucAccount,
+      em.create(PucAccount, {
+        complexId,
+        code: PUC.COMMON_AREA_INCOME,
+        name: 'Otros ingresos (multas, zonas comunes)',
+        accountClass: parent.accountClass,
+        nature: parent.nature,
+        isPostable: true,
+        isActive: true,
+        level: parent.level + 1,
+        parentId: parent.id,
+      }),
+    );
+    this.logger.log(
+      `Cuenta PUC ${PUC.COMMON_AREA_INCOME} creada automáticamente para complejo ${complexId}`,
+    );
     return created;
   }
 
@@ -1124,35 +1369,56 @@ export class AccountingService {
   ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
     const amount = round2(params.amount);
 
-    const incomeAcc = await this.ensureCommonAreaIncomeAccount(em, params.complexId);
+    const incomeAcc = await this.ensureCommonAreaIncomeAccount(
+      em,
+      params.complexId,
+    );
     let receivableAcc: PucAccount | null = null;
     if (incomeAcc) {
       try {
-        receivableAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
+        receivableAcc = await this.requireAccount(
+          em,
+          params.complexId,
+          PUC.RECEIVABLE,
+        );
       } catch (e) {
-        if (!(e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND)) throw e;
-        this.logger.warn(`[amenityUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`);
+        if (!(
+          e instanceof CustomError &&
+          e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+        ))
+          throw e;
+        this.logger.warn(
+          `[amenityUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`,
+        );
       }
     }
 
     const now = new Date();
-    const charge = await em.save(FeeCharge, em.create(FeeCharge, {
-      complexId: params.complexId,
-      unitId: params.unitId,
-      feeConfigId: null as any,
-      period: params.period,
-      dueDate: params.dueDate,
-      amount,
-      paidAmount: 0,
-      description: params.description,
-      status: params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
-      prelacionConcept: PrelacionConcept.ORDINARY,
-      incomeAccountId: incomeAcc?.id ?? null,
-    }));
+    const charge = await em.save(
+      FeeCharge,
+      em.create(FeeCharge, {
+        complexId: params.complexId,
+        unitId: params.unitId,
+        feeConfigId: null as any,
+        period: params.period,
+        dueDate: params.dueDate,
+        amount,
+        paidAmount: 0,
+        description: params.description,
+        status:
+          params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
+        prelacionConcept: PrelacionConcept.ORDINARY,
+        incomeAccountId: incomeAcc?.id ?? null,
+      }),
+    );
 
     let accountingHeaderId: string | null = null;
     if (receivableAcc && incomeAcc && amount > 0) {
-      const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.INVOICE);
+      const consecutive = await this.nextConsecutive(
+        em,
+        params.complexId,
+        AccountingDocumentType.INVOICE,
+      );
       const header = em.create(AccountingHeader, {
         documentType: AccountingDocumentType.INVOICE,
         consecutive,
@@ -1166,14 +1432,20 @@ export class AccountingService {
         unitId: params.unitId,
         lines: [
           {
-            pucAccountId: receivableAcc.id, debit: amount, credit: 0,
+            pucAccountId: receivableAcc.id,
+            debit: amount,
+            credit: 0,
             memo: `Causación zona común — ${params.description}`,
-            unitId: params.unitId, complexId: params.complexId,
+            unitId: params.unitId,
+            complexId: params.complexId,
           },
           {
-            pucAccountId: incomeAcc.id, debit: 0, credit: amount,
+            pucAccountId: incomeAcc.id,
+            debit: 0,
+            credit: amount,
             memo: `Ingreso zona común — ${params.description}`,
-            unitId: params.unitId, complexId: params.complexId,
+            unitId: params.unitId,
+            complexId: params.complexId,
           },
         ] as AccountingLine[],
       });
@@ -1212,21 +1484,37 @@ export class AccountingService {
     if (total <= 0) return null;
 
     // Gate por módulo FINANZAS + autoaprovisiona la cuenta 4220.
-    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(em, params.complexId);
+    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(
+      em,
+      params.complexId,
+    );
     if (!incomeAcc) return null; // sin FINANZAS o sin PUC base → continúa como antes
 
     let cashAcc: PucAccount;
     try {
-      cashAcc = await this.requireAccount(em, params.complexId, params.isCash ? PUC.CASH : PUC.BANK);
+      cashAcc = await this.requireAccount(
+        em,
+        params.complexId,
+        params.isCash ? PUC.CASH : PUC.BANK,
+      );
     } catch (e) {
-      if (e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND) {
-        this.logger.warn(`[parkingReceipt] PUC no configurado para complejo ${params.complexId}; recibo omitido`);
+      if (
+        e instanceof CustomError &&
+        e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+      ) {
+        this.logger.warn(
+          `[parkingReceipt] PUC no configurado para complejo ${params.complexId}; recibo omitido`,
+        );
         return null;
       }
       throw e;
     }
 
-    const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.CASH_RECEIPT);
+    const consecutive = await this.nextConsecutive(
+      em,
+      params.complexId,
+      AccountingDocumentType.CASH_RECEIPT,
+    );
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.CASH_RECEIPT,
       consecutive,
@@ -1240,12 +1528,18 @@ export class AccountingService {
       unitId: null,
       lines: [
         {
-          pucAccountId: cashAcc.id, debit: total, credit: 0,
-          memo: params.memo, complexId: params.complexId,
+          pucAccountId: cashAcc.id,
+          debit: total,
+          credit: 0,
+          memo: params.memo,
+          complexId: params.complexId,
         },
         {
-          pucAccountId: incomeAcc.id, debit: 0, credit: total,
-          memo: params.memo, complexId: params.complexId,
+          pucAccountId: incomeAcc.id,
+          debit: 0,
+          credit: total,
+          memo: params.memo,
+          complexId: params.complexId,
         },
       ] as AccountingLine[],
     });
@@ -1282,35 +1576,56 @@ export class AccountingService {
 
     // Gate por módulo FINANZAS + autoaprovisiona 4220. Sin FINANZAS/PUC base se
     // omite la factura pero igual se crea la CxC (la deuda se rastrea como antes).
-    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(em, params.complexId);
+    const incomeAcc = await this.ensureVisitorParkingIncomeAccount(
+      em,
+      params.complexId,
+    );
     let receivableAcc: PucAccount | null = null;
     if (incomeAcc) {
       try {
-        receivableAcc = await this.requireAccount(em, params.complexId, PUC.RECEIVABLE);
+        receivableAcc = await this.requireAccount(
+          em,
+          params.complexId,
+          PUC.RECEIVABLE,
+        );
       } catch (e) {
-        if (!(e instanceof CustomError && e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND)) throw e;
-        this.logger.warn(`[parkingUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`);
+        if (!(
+          e instanceof CustomError &&
+          e.errorCode === FinanceErrorCode.PUC_ACCOUNT_NOT_FOUND
+        ))
+          throw e;
+        this.logger.warn(
+          `[parkingUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`,
+        );
       }
     }
 
     const now = new Date();
-    const charge = await em.save(FeeCharge, em.create(FeeCharge, {
-      complexId: params.complexId,
-      unitId: params.unitId,
-      feeConfigId: null as any,
-      period: params.period,
-      dueDate: params.dueDate,
-      amount,
-      paidAmount: 0,
-      description: params.description,
-      status: params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
-      prelacionConcept: PrelacionConcept.ORDINARY,
-      incomeAccountId: incomeAcc?.id ?? null,
-    }));
+    const charge = await em.save(
+      FeeCharge,
+      em.create(FeeCharge, {
+        complexId: params.complexId,
+        unitId: params.unitId,
+        feeConfigId: null as any,
+        period: params.period,
+        dueDate: params.dueDate,
+        amount,
+        paidAmount: 0,
+        description: params.description,
+        status:
+          params.dueDate < now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING,
+        prelacionConcept: PrelacionConcept.ORDINARY,
+        incomeAccountId: incomeAcc?.id ?? null,
+      }),
+    );
 
     let accountingHeaderId: string | null = null;
     if (receivableAcc && incomeAcc && amount > 0) {
-      const consecutive = await this.nextConsecutive(em, params.complexId, AccountingDocumentType.INVOICE);
+      const consecutive = await this.nextConsecutive(
+        em,
+        params.complexId,
+        AccountingDocumentType.INVOICE,
+      );
       const header = em.create(AccountingHeader, {
         documentType: AccountingDocumentType.INVOICE,
         consecutive,
@@ -1324,14 +1639,20 @@ export class AccountingService {
         unitId: params.unitId,
         lines: [
           {
-            pucAccountId: receivableAcc.id, debit: amount, credit: 0,
+            pucAccountId: receivableAcc.id,
+            debit: amount,
+            credit: 0,
             memo: `Causación parqueadero visitante — ${params.description}`,
-            unitId: params.unitId, complexId: params.complexId,
+            unitId: params.unitId,
+            complexId: params.complexId,
           },
           {
-            pucAccountId: incomeAcc.id, debit: 0, credit: amount,
+            pucAccountId: incomeAcc.id,
+            debit: 0,
+            credit: amount,
             memo: `Ingreso parqueadero visitante — ${params.description}`,
-            unitId: params.unitId, complexId: params.complexId,
+            unitId: params.unitId,
+            complexId: params.complexId,
           },
         ] as AccountingLine[],
       });
@@ -1351,7 +1672,6 @@ export class AccountingService {
     input: CreateExpenseInput,
     user: JwtAccessPayload,
   ): Promise<AccountingHeader> {
-
     // 0. Validaciones de lectura (fuera de la TX)
     const total = input.lines.reduce((s, l) => s + l.amount, 0);
     if (total <= 0) {
@@ -1363,14 +1683,23 @@ export class AccountingService {
     }
 
     // Todas las cuentas deben existir, ser del tenant y ser posteables (hoja)
-    const accountIds = [input.paymentAccountId, ...input.lines.map((l) => l.pucAccountId)];
+    const accountIds = [
+      input.paymentAccountId,
+      ...input.lines.map((l) => l.pucAccountId),
+    ];
     const uniqueIds = [...new Set(accountIds)];
     const accounts = await this.pucRepo.find({
-      where: { id: In(uniqueIds), complexId: input.complexId, isPostable: true, isActive: true },
+      where: {
+        id: In(uniqueIds),
+        complexId: input.complexId,
+        isPostable: true,
+        isActive: true,
+      },
     });
     if (accounts.length !== uniqueIds.length) {
       throw new CustomError({
-        message: 'Una o más cuentas PUC son inválidas, inactivas o no posteables',
+        message:
+          'Una o más cuentas PUC son inválidas, inactivas o no posteables',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: FinanceErrorCode.PUC_ACCOUNT_INVALID,
       });
@@ -1378,10 +1707,11 @@ export class AccountingService {
 
     // 1. Transacción ACID
     return this.dataSource.transaction(async (em) => {
-
       // 1a. Consecutivo legal con lock pesimista
       const consecutive = await this.nextConsecutive(
-        em, input.complexId, AccountingDocumentType.EXPENSE_VOUCHER,
+        em,
+        input.complexId,
+        AccountingDocumentType.EXPENSE_VOUCHER,
       );
 
       // 1b. Líneas: N débitos (gasto/CxP) + 1 crédito (caja/banco) por el total
@@ -1389,14 +1719,14 @@ export class AccountingService {
         pucAccountId: l.pucAccountId,
         debit: l.amount,
         credit: 0,
-        memo: l.memo,                       // justificación POR LÍNEA
+        memo: l.memo, // justificación POR LÍNEA
         unitId: l.unitId ?? null,
         complexId: input.complexId,
       }));
       lines.push({
         pucAccountId: input.paymentAccountId,
         debit: 0,
-        credit: total,                      // sale el dinero de caja/banco
+        credit: total, // sale el dinero de caja/banco
         memo: `Pago ${input.thirdPartyName ?? 'egreso'} — ${input.memo}`,
         complexId: input.complexId,
       });
@@ -1406,7 +1736,8 @@ export class AccountingService {
       const sumC = lines.reduce((s, l) => s + (l.credit ?? 0), 0);
       if (cents(sumD) !== cents(sumC)) {
         throw new CustomError({
-          message: 'Asiento descuadrado: la suma de débitos no es igual a la de créditos',
+          message:
+            'Asiento descuadrado: la suma de débitos no es igual a la de créditos',
           statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
           errorCode: FinanceErrorCode.UNBALANCED_ENTRY,
         });
@@ -1418,18 +1749,20 @@ export class AccountingService {
         consecutive,
         documentDate: input.documentDate,
         period: input.period,
-        memo: input.memo,                   // justificación CABECERA
+        memo: input.memo, // justificación CABECERA
         thirdPartyName: input.thirdPartyName ?? null,
         totalDebit: sumD,
         totalCredit: sumC,
-        createdByUserId: user.sub,          // LOG estricto de quién asentó
+        createdByUserId: user.sub, // LOG estricto de quién asentó
         complexId: input.complexId,
         unitId: input.lines.find((l) => l.unitId)?.unitId ?? null,
         lines: lines as AccountingLine[],
       });
 
       const saved = await em.save(AccountingHeader, header);
-      this.logger.log(`Egreso ${saved.consecutive} asentado por user=${user.sub} complex=${input.complexId}`);
+      this.logger.log(
+        `Egreso ${saved.consecutive} asentado por user=${user.sub} complex=${input.complexId}`,
+      );
       return saved;
     });
     // Cualquier excepción → ROLLBACK total. Nada queda asentado a medias.
@@ -1444,15 +1777,21 @@ export class AccountingService {
     input: ProcessPrepaidBalancesInput,
     user: JwtAccessPayload,
   ): Promise<PrepaidApplicationResult> {
-
     // Notificaciones por unidad a despachar tras el commit (fire-and-forget).
     const prepaidNotifications: Array<{ unitId: string; amount: number }> = [];
 
     const result = await this.dataSource.transaction(async (em) => {
-
       // Cuentas de cruce del tenant
-      const prepaidAcc    = await this.requireAccount(em, input.complexId, PUC.PREPAID_LIABILITY);
-      const receivableAcc = await this.requireAccount(em, input.complexId, PUC.RECEIVABLE);
+      const prepaidAcc = await this.requireAccount(
+        em,
+        input.complexId,
+        PUC.PREPAID_LIABILITY,
+      );
+      const receivableAcc = await this.requireAccount(
+        em,
+        input.complexId,
+        PUC.RECEIVABLE,
+      );
 
       // 1. Unidades con anticipo disponible, bloqueadas para escritura
       const statuses = await em.find(PropertyAccountStatus, {
@@ -1476,7 +1815,11 @@ export class AccountingService {
           where: {
             complexId: input.complexId,
             unitId: st.unitId,
-            status: In([ChargeStatus.PENDING, ChargeStatus.OVERDUE, ChargeStatus.PARTIALLY_PAID]),
+            status: In([
+              ChargeStatus.PENDING,
+              ChargeStatus.OVERDUE,
+              ChargeStatus.PARTIALLY_PAID,
+            ]),
           },
         });
         if (openCharges.length === 0) continue;
@@ -1485,7 +1828,11 @@ export class AccountingService {
         const originalPrepaid = st.prepaidBalance;
         const originalDebt = Number(st.currentBalance);
         let available = originalPrepaid;
-        const applied: Array<{ concept: PrelacionConcept; period: string; amount: number }> = [];
+        const applied: Array<{
+          concept: PrelacionConcept;
+          period: string;
+          amount: number;
+        }> = [];
 
         // 3. Consumir el anticipo cargo por cargo respetando la prelación
         for (const ch of openCharges) {
@@ -1497,24 +1844,32 @@ export class AccountingService {
 
           if (!input.dryRun) {
             ch.paidAmount = Number(ch.paidAmount) + portion;
-            ch.status = cents(ch.paidAmount) >= cents(Number(ch.amount))
-              ? ChargeStatus.PAID
-              : ChargeStatus.PARTIALLY_PAID;
+            ch.status =
+              cents(ch.paidAmount) >= cents(Number(ch.amount))
+                ? ChargeStatus.PAID
+                : ChargeStatus.PARTIALLY_PAID;
             await em.save(FeeCharge, ch); // FeeCharge = CxC operativa (mutable)
 
             // Wallet = fuente de verdad del anticipo: registrar el consumo (DEBIT)
-            await em.save(WalletEntry, em.create(WalletEntry, {
-              type: 'DEBIT',
-              amount: round2(portion),
-              description: `Aplicación de anticipo (prelación) — ${ch.description}`,
-              unitId: st.unitId,
-              complexId: input.complexId,
-              chargeId: ch.id,
-            }));
+            await em.save(
+              WalletEntry,
+              em.create(WalletEntry, {
+                type: 'DEBIT',
+                amount: round2(portion),
+                description: `Aplicación de anticipo (prelación) — ${ch.description}`,
+                unitId: st.unitId,
+                complexId: input.complexId,
+                chargeId: ch.id,
+              }),
+            );
           }
 
           available -= portion;
-          applied.push({ concept: ch.prelacionConcept, period: ch.period, amount: portion });
+          applied.push({
+            concept: ch.prelacionConcept,
+            period: ch.period,
+            amount: portion,
+          });
         }
 
         const appliedToUnit = originalPrepaid - available;
@@ -1525,20 +1880,30 @@ export class AccountingService {
         if (!input.dryRun) {
           // 4. Asiento de aplicación: Débito 2805 (baja anticipo) = Crédito 1311 (baja CxC)
           const consecutive = await this.nextConsecutive(
-            em, input.complexId, AccountingDocumentType.ACCOUNTING_NOTE,
+            em,
+            input.complexId,
+            AccountingDocumentType.ACCOUNTING_NOTE,
           );
 
-          const detail = applied.map((a) => `${a.concept} ${a.period}: ${a.amount}`).join('; ');
+          const detail = applied
+            .map((a) => `${a.concept} ${a.period}: ${a.amount}`)
+            .join('; ');
           const lines: Partial<AccountingLine>[] = [
             {
-              pucAccountId: prepaidAcc.id, debit: appliedToUnit, credit: 0,
+              pucAccountId: prepaidAcc.id,
+              debit: appliedToUnit,
+              credit: 0,
               memo: `Aplicación de anticipo (prelación) — ${detail}`,
-              unitId: st.unitId, complexId: input.complexId,
+              unitId: st.unitId,
+              complexId: input.complexId,
             },
             {
-              pucAccountId: receivableAcc.id, debit: 0, credit: appliedToUnit,
+              pucAccountId: receivableAcc.id,
+              debit: 0,
+              credit: appliedToUnit,
               memo: `Cruce CxC por anticipo — unidad ${st.unitId}`,
-              unitId: st.unitId, complexId: input.complexId,
+              unitId: st.unitId,
+              complexId: input.complexId,
             },
           ];
 
@@ -1561,7 +1926,10 @@ export class AccountingService {
           await this.recomputeUnitStatus(em, input.complexId, st.unitId);
 
           // Notificar a la unidad que se aplicó su saldo a favor (tras commit)
-          prepaidNotifications.push({ unitId: st.unitId, amount: round2(appliedToUnit) });
+          prepaidNotifications.push({
+            unitId: st.unitId,
+            amount: round2(appliedToUnit),
+          });
         }
 
         totalApplied += appliedToUnit;
@@ -1584,8 +1952,11 @@ export class AccountingService {
 
     // Despacho de notificaciones fuera de la TX (no bloquea ni revierte el cruce).
     for (const n of prepaidNotifications) {
-      this.notifyPrepaidApplied(input.complexId, n.unitId, n.amount).catch(err =>
-        this.logger.warn(`Error al notificar aplicación de anticipo en unidad ${n.unitId}: ${err?.message}`),
+      this.notifyPrepaidApplied(input.complexId, n.unitId, n.amount).catch(
+        (err) =>
+          this.logger.warn(
+            `Error al notificar aplicación de anticipo en unidad ${n.unitId}: ${err?.message}`,
+          ),
       );
     }
 
@@ -1601,8 +1972,9 @@ export class AccountingService {
     unitId: string,
     amount: number,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents =
+      await this.residentsService.findActiveByUnitInternal(unitId);
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     const formatted = new Intl.NumberFormat('es-CO', {
@@ -1639,22 +2011,27 @@ export class AccountingService {
     systemUserId: string,
     dueDay?: number,
   ): Promise<{ caused: number; skipped: number; totalAmount: number }> {
-
     const conceptByType: Record<RecurringChargeType, PrelacionConcept> = {
       [RecurringChargeType.INDEFINITE]: PrelacionConcept.ORDINARY,
-      [RecurringChargeType.DEFERRED]:   PrelacionConcept.EXTRAORDINARY,
-      [RecurringChargeType.ONE_TIME]:   PrelacionConcept.ORDINARY,
+      [RecurringChargeType.DEFERRED]: PrelacionConcept.EXTRAORDINARY,
+      [RecurringChargeType.ONE_TIME]: PrelacionConcept.ORDINARY,
     };
 
     return this.dataSource.transaction(async (em) => {
-      const receivableAcc = await this.requireAccount(em, complexId, PUC.RECEIVABLE);
+      const receivableAcc = await this.requireAccount(
+        em,
+        complexId,
+        PUC.RECEIVABLE,
+      );
 
       const recurrents = await em.find(RecurringCharge, {
         where: { complexId, isActive: true },
       });
 
       // Config global de pronto pago (override por concepto si el RecurringCharge lo define).
-      const financeCfg = await em.findOne(ComplexFinanceConfig, { where: { complexId } });
+      const financeCfg = await em.findOne(ComplexFinanceConfig, {
+        where: { complexId },
+      });
       const now = new Date();
 
       let caused = 0;
@@ -1662,31 +2039,58 @@ export class AccountingService {
       let totalAmount = 0;
 
       for (const rc of recurrents) {
-        if (dueDay != null && rc.billingDay !== dueDay) { skipped++; continue; } // no vence hoy
-        if (rc.lastBilledPeriod === period) { skipped++; continue; }            // idempotencia
+        if (dueDay != null && rc.billingDay !== dueDay) {
+          skipped++;
+          continue;
+        } // no vence hoy
+        if (rc.lastBilledPeriod === period) {
+          skipped++;
+          continue;
+        } // idempotencia
 
-        const incomeAcc = await this.requireAccountById(em, complexId, rc.incomeAccountId);
+        const incomeAcc = await this.requireAccountById(
+          em,
+          complexId,
+          rc.incomeAccountId,
+        );
         const concept = conceptByType[rc.type];
 
         // Pronto pago efectivo: override del concepto o el global del complejo.
-        const earlyPct = Number(rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0);
-        const earlyDay = rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
+        const earlyPct = Number(
+          rc.earlyDiscountPct ?? financeCfg?.earlyDiscountPct ?? 0,
+        );
+        const earlyDay =
+          rc.earlyDiscountDay ?? financeCfg?.earlyDiscountDay ?? null;
 
         const dueDate = this.buildPeriodDate(period, rc.billingMode);
         const common = {
-          complexId, period, dueDate, prelacion: concept, conceptName: rc.concept,
-          receivableAccId: receivableAcc.id, incomeAccId: incomeAcc.id,
-          incomeAccountIdForCharge: rc.incomeAccountId, earlyPct, earlyDay, now, systemUserId,
+          complexId,
+          period,
+          dueDate,
+          prelacion: concept,
+          conceptName: rc.concept,
+          receivableAccId: receivableAcc.id,
+          incomeAccId: incomeAcc.id,
+          incomeAccountIdForCharge: rc.incomeAccountId,
+          earlyPct,
+          earlyDay,
+          now,
+          systemUserId,
         };
         let rcCaused = false;
 
         if (rc.triggerType === RecurringChargeTrigger.VEHICLE) {
           // Un cargo por cada vehículo ACTIVO del/los tipo(s) configurado(s). No segmenta unidades.
-          const allVeh = await em.find(Vehicle, { where: { complexId, status: VehicleStatus.ACTIVE } });
+          const allVeh = await em.find(Vehicle, {
+            where: { complexId, status: VehicleStatus.ACTIVE },
+          });
           const vehicles = rc.vehicleTypes?.length
-            ? allVeh.filter(v => rc.vehicleTypes!.includes(v.type))
+            ? allVeh.filter((v) => rc.vehicleTypes.includes(v.type))
             : allVeh;
-          if (vehicles.length === 0) { skipped++; continue; }
+          if (vehicles.length === 0) {
+            skipped++;
+            continue;
+          }
           for (const v of vehicles) {
             const created = await this.emitRecurringUnitCharge(em, {
               ...common,
@@ -1694,32 +2098,58 @@ export class AccountingService {
               description: `${rc.concept} — ${period} — ${v.plate}`,
               unitAmount: Number(rc.amount),
             });
-            if (created) { caused++; totalAmount += Number(rc.amount); rcCaused = true; }
-            else skipped++;
+            if (created) {
+              caused++;
+              totalAmount += Number(rc.amount);
+              rcCaused = true;
+            } else skipped++;
           }
         } else {
           // Asignación manual / segmentada (prioridad: manual > unidad única > reglas/todas)
           let targetUnits: Unit[];
           if (rc.targetUnitIds?.length) {
-            targetUnits = await em.find(Unit, { where: { id: In(rc.targetUnitIds), complexId } });
+            targetUnits = await em.find(Unit, {
+              where: { id: In(rc.targetUnitIds), complexId },
+            });
           } else if (rc.unitId) {
-            targetUnits = await em.find(Unit, { where: { id: rc.unitId, complexId } });
+            targetUnits = await em.find(Unit, {
+              where: { id: rc.unitId, complexId },
+            });
           } else {
             targetUnits = await em.find(Unit, { where: { complexId } });
-            if (rc.targetRules) targetUnits = this.applyRecurringTargetRules(targetUnits, rc.targetRules);
+            if (rc.targetRules)
+              targetUnits = this.applyRecurringTargetRules(
+                targetUnits,
+                rc.targetRules,
+              );
           }
 
-          if (targetUnits.length === 0) { skipped++; continue; }
+          if (targetUnits.length === 0) {
+            skipped++;
+            continue;
+          }
 
           const description = `${rc.concept} — ${period}`;
-          const dist = rc.distribution
-            ?? (rc.prorateByCoefficient ? RecurringChargeDistribution.COEFFICIENT : RecurringChargeDistribution.FIXED_PER_UNIT);
+          const dist =
+            rc.distribution ??
+            (rc.prorateByCoefficient
+              ? RecurringChargeDistribution.COEFFICIENT
+              : RecurringChargeDistribution.FIXED_PER_UNIT);
           const n = targetUnits.length;
-          const allHaveCoef = targetUnits.every(u => u.coefficient != null && Number(u.coefficient) > 0);
-          const totalCoef = allHaveCoef ? targetUnits.reduce((s, u) => s + Number(u.coefficient), 0) : 0;
-          const useCoef = dist === RecurringChargeDistribution.COEFFICIENT && allHaveCoef && totalCoef > 0;
+          const allHaveCoef = targetUnits.every(
+            (u) => u.coefficient != null && Number(u.coefficient) > 0,
+          );
+          const totalCoef = allHaveCoef
+            ? targetUnits.reduce((s, u) => s + Number(u.coefficient), 0)
+            : 0;
+          const useCoef =
+            dist === RecurringChargeDistribution.COEFFICIENT &&
+            allHaveCoef &&
+            totalCoef > 0;
           if (dist === RecurringChargeDistribution.COEFFICIENT && !useCoef) {
-            this.logger.warn(`[causación] recurrente ${rc.id}: coeficiente incompleto en el subgrupo; reparto en partes iguales`);
+            this.logger.warn(
+              `[causación] recurrente ${rc.id}: coeficiente incompleto en el subgrupo; reparto en partes iguales`,
+            );
           }
 
           let distributed = 0;
@@ -1732,17 +2162,25 @@ export class AccountingService {
             } else if (isLast) {
               unitAmount = round2(Number(rc.amount) - distributed);
             } else if (useCoef) {
-              unitAmount = round2(Number(rc.amount) * Number(unit.coefficient) / totalCoef);
+              unitAmount = round2(
+                (Number(rc.amount) * Number(unit.coefficient)) / totalCoef,
+              );
             } else {
               unitAmount = round2(Number(rc.amount) / n);
             }
             distributed = round2(distributed + unitAmount);
 
             const created = await this.emitRecurringUnitCharge(em, {
-              ...common, unitId: unit.id, description, unitAmount,
+              ...common,
+              unitId: unit.id,
+              description,
+              unitAmount,
             });
-            if (created) { caused++; totalAmount += unitAmount; rcCaused = true; }
-            else skipped++;
+            if (created) {
+              caused++;
+              totalAmount += unitAmount;
+              rcCaused = true;
+            } else skipped++;
           }
         }
 
@@ -1751,9 +2189,11 @@ export class AccountingService {
           rc.currentInstallment += 1;
           if (rc.type === RecurringChargeType.ONE_TIME) {
             rc.isActive = false;
-          } else if (rc.type === RecurringChargeType.DEFERRED &&
-                     rc.totalInstallments != null &&
-                     rc.currentInstallment >= rc.totalInstallments) {
+          } else if (
+            rc.type === RecurringChargeType.DEFERRED &&
+            rc.totalInstallments != null &&
+            rc.currentInstallment >= rc.totalInstallments
+          ) {
             rc.isActive = false;
           }
         }
@@ -1761,7 +2201,11 @@ export class AccountingService {
         await em.save(RecurringCharge, rc);
       }
 
-      return { caused, skipped, totalAmount: Math.round(totalAmount * 100) / 100 };
+      return {
+        caused,
+        skipped,
+        totalAmount: Math.round(totalAmount * 100) / 100,
+      };
     });
   }
 
@@ -1783,7 +2227,11 @@ export class AccountingService {
       lock: { mode: 'pessimistic_write' },
     });
     if (!row) {
-      row = em.create(DocumentSequence, { complexId, documentType, lastNumber: 0 });
+      row = em.create(DocumentSequence, {
+        complexId,
+        documentType,
+        lastNumber: 0,
+      });
     }
     row.lastNumber += 1;
     await em.save(DocumentSequence, row);
@@ -1834,10 +2282,15 @@ export class AccountingService {
     complexId: string,
     unitId: string,
   ): Promise<PropertyAccountStatus> {
-    let st = await em.findOne(PropertyAccountStatus, { where: { complexId, unitId } });
+    let st = await em.findOne(PropertyAccountStatus, {
+      where: { complexId, unitId },
+    });
     if (!st) {
       st = em.create(PropertyAccountStatus, {
-        complexId, unitId, currentBalance: 0, prepaidBalance: 0,
+        complexId,
+        unitId,
+        currentBalance: 0,
+        prepaidBalance: 0,
       });
     }
     return st;
@@ -1853,34 +2306,67 @@ export class AccountingService {
   private async emitRecurringUnitCharge(
     em: EntityManager,
     p: {
-      complexId: string; unitId: string; period: string; description: string;
-      unitAmount: number; dueDate: Date; prelacion: PrelacionConcept; conceptName: string;
-      receivableAccId: string; incomeAccId: string; incomeAccountIdForCharge: string;
-      earlyPct: number; earlyDay: number | null; now: Date; systemUserId: string;
+      complexId: string;
+      unitId: string;
+      period: string;
+      description: string;
+      unitAmount: number;
+      dueDate: Date;
+      prelacion: PrelacionConcept;
+      conceptName: string;
+      receivableAccId: string;
+      incomeAccId: string;
+      incomeAccountIdForCharge: string;
+      earlyPct: number;
+      earlyDay: number | null;
+      now: Date;
+      systemUserId: string;
     },
   ): Promise<boolean> {
     const exists = await em.findOne(FeeCharge, {
-      where: { complexId: p.complexId, unitId: p.unitId, period: p.period, description: p.description },
+      where: {
+        complexId: p.complexId,
+        unitId: p.unitId,
+        period: p.period,
+        description: p.description,
+      },
     });
     if (exists) return false;
 
-    const consecutive = await this.nextConsecutive(em, p.complexId, AccountingDocumentType.INVOICE);
+    const consecutive = await this.nextConsecutive(
+      em,
+      p.complexId,
+      AccountingDocumentType.INVOICE,
+    );
     const lines: Partial<AccountingLine>[] = [
       {
-        pucAccountId: p.receivableAccId, debit: p.unitAmount, credit: 0,
-        memo: `Causación ${p.conceptName} ${p.period}`, unitId: p.unitId, complexId: p.complexId,
+        pucAccountId: p.receivableAccId,
+        debit: p.unitAmount,
+        credit: 0,
+        memo: `Causación ${p.conceptName} ${p.period}`,
+        unitId: p.unitId,
+        complexId: p.complexId,
       },
       {
-        pucAccountId: p.incomeAccId, debit: 0, credit: p.unitAmount,
-        memo: `Ingreso ${p.conceptName} ${p.period}`, unitId: p.unitId, complexId: p.complexId,
+        pucAccountId: p.incomeAccId,
+        debit: 0,
+        credit: p.unitAmount,
+        memo: `Ingreso ${p.conceptName} ${p.period}`,
+        unitId: p.unitId,
+        complexId: p.complexId,
       },
     ];
     const header = em.create(AccountingHeader, {
       documentType: AccountingDocumentType.INVOICE,
-      consecutive, documentDate: new Date(), period: p.period,
+      consecutive,
+      documentDate: new Date(),
+      period: p.period,
       memo: `Factura ${p.conceptName} — ${p.description}`,
-      totalDebit: p.unitAmount, totalCredit: p.unitAmount,
-      createdByUserId: p.systemUserId, complexId: p.complexId, unitId: p.unitId,
+      totalDebit: p.unitAmount,
+      totalCredit: p.unitAmount,
+      createdByUserId: p.systemUserId,
+      complexId: p.complexId,
+      unitId: p.unitId,
       lines: lines as AccountingLine[],
     });
     await em.save(AccountingHeader, header);
@@ -1890,24 +2376,48 @@ export class AccountingService {
     let normalAmount: number | null = null;
     let earlyPaymentDueDate: Date | null = null;
     if (p.earlyPct > 0 && p.earlyDay != null) {
-      const lastDay = new Date(p.dueDate.getFullYear(), p.dueDate.getMonth() + 1, 0).getDate();
+      const lastDay = new Date(
+        p.dueDate.getFullYear(),
+        p.dueDate.getMonth() + 1,
+        0,
+      ).getDate();
       // Fin del día: el descuento vale durante todo el `earlyDay`, no hasta su medianoche.
       const epd = new Date(
-        p.dueDate.getFullYear(), p.dueDate.getMonth(),
-        Math.min(p.earlyDay, lastDay), 23, 59, 59, 999,
+        p.dueDate.getFullYear(),
+        p.dueDate.getMonth(),
+        Math.min(p.earlyDay, lastDay),
+        23,
+        59,
+        59,
+        999,
       );
       const discounted = round2(p.unitAmount * (1 - p.earlyPct / 100));
       if (epd > p.now && discounted < p.unitAmount) {
-        chargeAmount = discounted; normalAmount = p.unitAmount; earlyPaymentDueDate = epd;
+        chargeAmount = discounted;
+        normalAmount = p.unitAmount;
+        earlyPaymentDueDate = epd;
       }
     }
-    const chargeStatus = p.dueDate < p.now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING;
-    await em.save(FeeCharge, em.create(FeeCharge, {
-      complexId: p.complexId, unitId: p.unitId, feeConfigId: null as any,
-      period: p.period, dueDate: p.dueDate, amount: chargeAmount, normalAmount, earlyPaymentDueDate, paidAmount: 0,
-      description: p.description, status: chargeStatus, prelacionConcept: p.prelacion,
-      incomeAccountId: p.incomeAccountIdForCharge,
-    }));
+    const chargeStatus =
+      p.dueDate < p.now ? ChargeStatus.OVERDUE : ChargeStatus.PENDING;
+    await em.save(
+      FeeCharge,
+      em.create(FeeCharge, {
+        complexId: p.complexId,
+        unitId: p.unitId,
+        feeConfigId: null as any,
+        period: p.period,
+        dueDate: p.dueDate,
+        amount: chargeAmount,
+        normalAmount,
+        earlyPaymentDueDate,
+        paidAmount: 0,
+        description: p.description,
+        status: chargeStatus,
+        prelacionConcept: p.prelacion,
+        incomeAccountId: p.incomeAccountIdForCharge,
+      }),
+    );
     await this.recomputeUnitStatus(em, p.complexId, p.unitId);
     return true;
   }
@@ -1930,8 +2440,12 @@ export class AccountingService {
     let dueMonth = month; // 1-indexed
 
     if (billingMode === FeeConfigBillingMode.ARREARS) {
-      if (dueMonth === 12) { dueMonth = 1; dueYear += 1; }
-      else { dueMonth += 1; }
+      if (dueMonth === 12) {
+        dueMonth = 1;
+        dueYear += 1;
+      } else {
+        dueMonth += 1;
+      }
     }
 
     const lastDay = new Date(dueYear, dueMonth, 0).getDate(); // dueMonth es 1-indexed
@@ -1939,13 +2453,21 @@ export class AccountingService {
   }
 
   /** Filtra unidades según las reglas de segmentación de un cobro recurrente. */
-  private applyRecurringTargetRules(units: Unit[], rules: FeeConfigTargetRules): Unit[] {
-    return units.filter(unit => {
+  private applyRecurringTargetRules(
+    units: Unit[],
+    rules: FeeConfigTargetRules,
+  ): Unit[] {
+    return units.filter((unit) => {
       if (rules.excludeFloor1 && unit.floor === 1) return false;
       if (rules.floorMin != null && unit.floor < rules.floorMin) return false;
       if (rules.floorMax != null && unit.floor > rules.floorMax) return false;
-      if (rules.buildingIds?.length && !rules.buildingIds.includes(unit.buildingId)) return false;
-      if (rules.unitTypes?.length && !rules.unitTypes.includes(unit.type)) return false;
+      if (
+        rules.buildingIds?.length &&
+        !rules.buildingIds.includes(unit.buildingId)
+      )
+        return false;
+      if (rules.unitTypes?.length && !rules.unitTypes.includes(unit.type))
+        return false;
       return true;
     });
   }

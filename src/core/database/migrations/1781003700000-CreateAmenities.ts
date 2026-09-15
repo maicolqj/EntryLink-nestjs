@@ -19,9 +19,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * que el residente ve junto al cargo en su estado de cuenta.
  */
 export class CreateAmenities1781003700000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
-
     // ── Zonas comunes ────────────────────────────────────────────────────────
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "amenities" (

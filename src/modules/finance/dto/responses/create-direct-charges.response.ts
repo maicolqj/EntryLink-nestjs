@@ -2,7 +2,6 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class CreateDirectChargesResponse {
-
   @Field(() => Int)
   created: number;
 

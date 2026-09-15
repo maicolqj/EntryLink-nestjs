@@ -19,7 +19,10 @@ import { AuthResponse } from '../dto/responses/auth-response';
 import { WhatsAppLoginChallengeResponse } from '../dto/responses/whatsapp-login-challenge.response';
 import { WhatsAppLoginStatusResponse } from '../dto/responses/whatsapp-login-status.response';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { normalizeColombianPhone, maskPhone } from '../utils/phone.util';
 
 /** Alfabeto sin caracteres ambiguos: el residente puede tener que teclear el nonce. */
@@ -65,7 +68,9 @@ export class WhatsAppLoginService {
   ) {
     const raw = this.config.get<string>('WHATSAPP_BUSINESS_NUMBER');
     this.businessNumber = raw ? normalizeColombianPhone(raw) : undefined;
-    this.keyword = (this.config.get<string>('WHATSAPP_LOGIN_KEYWORD') ?? 'INGRESAR').toUpperCase();
+    this.keyword = (
+      this.config.get<string>('WHATSAPP_LOGIN_KEYWORD') ?? 'INGRESAR'
+    ).toUpperCase();
 
     if (!this.businessNumber) {
       this.logger.warn(
@@ -113,7 +118,9 @@ export class WhatsAppLoginService {
     );
 
     const nonce = await this.generateUniqueNonce();
-    const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.WA_LOGIN_CHALLENGE_EXPIRY_SECONDS * 1_000);
+    const expiresAt = new Date(
+      Date.now() + AUTH_CONSTANTS.WA_LOGIN_CHALLENGE_EXPIRY_SECONDS * 1_000,
+    );
 
     const challenge = await this.challengeRepo.save(
       this.challengeRepo.create({
@@ -154,7 +161,10 @@ export class WhatsAppLoginService {
    * responder 200 a Meta pase lo que pase (un no-2xx repetido hace que Meta
    * deshabilite la suscripción).
    */
-  async confirmFromInboundMessage(fromPhone: string, text: string): Promise<void> {
+  async confirmFromInboundMessage(
+    fromPhone: string,
+    text: string,
+  ): Promise<void> {
     const nonce = this.extractNonce(text);
     if (!nonce) return;
 
@@ -168,21 +178,31 @@ export class WhatsAppLoginService {
     }
 
     if (new Date() > challenge.expiresAt) {
-      await this.challengeRepo.update(challenge.id, { status: WhatsAppLoginStatus.EXPIRED });
-      this.logger.warn(`[WA-LOGIN] Nonce entrante vencido — id: ${challenge.id}`);
+      await this.challengeRepo.update(challenge.id, {
+        status: WhatsAppLoginStatus.EXPIRED,
+      });
+      this.logger.warn(
+        `[WA-LOGIN] Nonce entrante vencido — id: ${challenge.id}`,
+      );
       return;
     }
 
     // Identidad inexistente: el challenge se emitió solo para no filtrar
     // información. Nunca puede confirmarse.
     if (!challenge.userId) {
-      this.logger.warn(`[WA-LOGIN] Nonce de identidad no registrada — id: ${challenge.id}`);
+      this.logger.warn(
+        `[WA-LOGIN] Nonce de identidad no registrada — id: ${challenge.id}`,
+      );
       return;
     }
 
-    const user = await this.userRepo.findOne({ where: { id: challenge.userId } });
+    const user = await this.userRepo.findOne({
+      where: { id: challenge.userId },
+    });
     if (!user?.phoneNumber) {
-      this.logger.warn(`[WA-LOGIN] Usuario del challenge sin teléfono — id: ${challenge.id}`);
+      this.logger.warn(
+        `[WA-LOGIN] Usuario del challenge sin teléfono — id: ${challenge.id}`,
+      );
       return;
     }
 
@@ -205,21 +225,34 @@ export class WhatsAppLoginService {
       confirmedFromPhone: from,
     });
 
-    this.logger.log(`[WA-LOGIN] Challenge confirmado — id: ${challenge.id} | userId: ${user.id}`);
+    this.logger.log(
+      `[WA-LOGIN] Challenge confirmado — id: ${challenge.id} | userId: ${user.id}`,
+    );
   }
 
   // ── Paso 3: estado y canje ────────────────────────────────────────────────
 
   /** Consulta el estado. El cliente hace polling hasta CONFIRMED. */
-  async getStatus(challengeId: string, deviceInfo: DeviceInfo): Promise<WhatsAppLoginStatusResponse> {
-    const challenge = await this.findChallengeForDevice(challengeId, deviceInfo);
+  async getStatus(
+    challengeId: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<WhatsAppLoginStatusResponse> {
+    const challenge = await this.findChallengeForDevice(
+      challengeId,
+      deviceInfo,
+    );
 
     if (
       challenge.status === WhatsAppLoginStatus.PENDING &&
       new Date() > challenge.expiresAt
     ) {
-      await this.challengeRepo.update(challenge.id, { status: WhatsAppLoginStatus.EXPIRED });
-      return { status: WhatsAppLoginStatus.EXPIRED, expiresAt: challenge.expiresAt };
+      await this.challengeRepo.update(challenge.id, {
+        status: WhatsAppLoginStatus.EXPIRED,
+      });
+      return {
+        status: WhatsAppLoginStatus.EXPIRED,
+        expiresAt: challenge.expiresAt,
+      };
     }
 
     return { status: challenge.status, expiresAt: challenge.expiresAt };
@@ -239,7 +272,10 @@ export class WhatsAppLoginService {
     deviceInfo: DeviceInfo,
     accessCode?: string,
   ): Promise<AuthResponse> {
-    const challenge = await this.findChallengeForDevice(challengeId, deviceInfo);
+    const challenge = await this.findChallengeForDevice(
+      challengeId,
+      deviceInfo,
+    );
 
     if (challenge.status === WhatsAppLoginStatus.CONSUMED) {
       throw new CustomError({
@@ -249,8 +285,13 @@ export class WhatsAppLoginService {
       });
     }
 
-    if (challenge.status === WhatsAppLoginStatus.EXPIRED || new Date() > challenge.expiresAt) {
-      await this.challengeRepo.update(challenge.id, { status: WhatsAppLoginStatus.EXPIRED });
+    if (
+      challenge.status === WhatsAppLoginStatus.EXPIRED ||
+      new Date() > challenge.expiresAt
+    ) {
+      await this.challengeRepo.update(challenge.id, {
+        status: WhatsAppLoginStatus.EXPIRED,
+      });
       throw new CustomError({
         message: 'El intento de inicio de sesión venció. Solicita uno nuevo',
         statusCode: HttpStatus.UNAUTHORIZED,
@@ -296,13 +337,27 @@ export class WhatsAppLoginService {
     // clave nueva sin conocer la anterior durante los próximos minutos.
     await this.residentDeviceService.grantResetPermission(user.id);
 
-    await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
+    await this.sessionService.enforceSessionLimit(
+      user.id,
+      AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
+    );
 
-    const tokenPair = await this.tokenService.generateTokenPair(user, deviceInfo, false, 'user');
+    const tokenPair = await this.tokenService.generateTokenPair(
+      user,
+      deviceInfo,
+      false,
+      'user',
+    );
 
-    await this.sessionService.createOrUpdateSession(user.id, tokenPair.sessionId, deviceInfo);
+    await this.sessionService.createOrUpdateSession(
+      user.id,
+      tokenPair.sessionId,
+      deviceInfo,
+    );
 
-    this.logger.log(`Login por WhatsApp entrante — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(
+      `Login por WhatsApp entrante — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`,
+    );
 
     return {
       accessToken: tokenPair.accessToken,
@@ -327,7 +382,8 @@ export class WhatsAppLoginService {
     // El segundo factor protege el alta de un equipo NUEVO. Si este ya está
     // vinculado, exigirlo dejaría sin salida a quien olvidó la clave: es
     // justamente el camino por el que vuelve a entrar para cambiarla.
-    if (await this.residentDeviceService.isDeviceLinked(userId, deviceInfo)) return;
+    if (await this.residentDeviceService.isDeviceLinked(userId, deviceInfo))
+      return;
 
     if (!accessCode?.trim()) {
       throw new CustomError({
@@ -364,7 +420,9 @@ export class WhatsAppLoginService {
     challengeId: string,
     deviceInfo: DeviceInfo,
   ): Promise<WhatsAppLoginChallenge> {
-    const challenge = await this.challengeRepo.findOne({ where: { id: challengeId } });
+    const challenge = await this.challengeRepo.findOne({
+      where: { id: challengeId },
+    });
 
     if (!challenge) {
       throw new CustomError({
@@ -375,7 +433,9 @@ export class WhatsAppLoginService {
     }
 
     if (challenge.deviceFingerprint !== deviceInfo.fingerprint) {
-      this.logger.warn(`[WA-LOGIN] Canje desde dispositivo distinto — id: ${challenge.id}`);
+      this.logger.warn(
+        `[WA-LOGIN] Canje desde dispositivo distinto — id: ${challenge.id}`,
+      );
       throw new CustomError({
         message: 'Intento de inicio de sesión no encontrado',
         statusCode: HttpStatus.NOT_FOUND,
@@ -406,15 +466,23 @@ export class WhatsAppLoginService {
         nonce += NONCE_ALPHABET[bytes[i] % NONCE_ALPHABET.length];
       }
 
-      const exists = await this.challengeRepo.findOne({ where: { nonce }, select: { id: true } });
+      const exists = await this.challengeRepo.findOne({
+        where: { nonce },
+        select: { id: true },
+      });
       if (!exists) return nonce;
     }
 
-    throw new Error('No se pudo generar un nonce único para el login por WhatsApp');
+    throw new Error(
+      'No se pudo generar un nonce único para el login por WhatsApp',
+    );
   }
 
   private async checkRateLimit(identityKey: string): Promise<void> {
-    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.WA_LOGIN_RATE_LIMIT, key: identityKey };
+    const key = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.WA_LOGIN_RATE_LIMIT,
+      key: identityKey,
+    };
     const data = await this.cacheService.get<{ count: number }>({ key });
 
     if ((data?.count ?? 0) >= AUTH_CONSTANTS.WA_LOGIN_RATE_LIMIT_MAX) {
@@ -433,7 +501,9 @@ export class WhatsAppLoginService {
   }
 
   /** Busca al residente por documento. Devuelve null sin lanzar: el caller no debe filtrar si existe. */
-  private async findResidentByIdentity(identityKey: string): Promise<User | null> {
+  private async findResidentByIdentity(
+    identityKey: string,
+  ): Promise<User | null> {
     const user = await this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.userRoles', 'userRoles')
@@ -444,7 +514,9 @@ export class WhatsAppLoginService {
 
     if (!user) return null;
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
 
     return isResident ? user : null;
   }
@@ -473,7 +545,9 @@ export class WhatsAppLoginService {
   /** El estado de la cuenta se revalida al canjear: pudo suspenderse durante el flujo. */
   private assertUserActive(user: User): void {
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {
-      const unlockIn = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / 60_000);
+      const unlockIn = Math.ceil(
+        (user.accountLockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new CustomError({
         message: `Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`,
         statusCode: HttpStatus.UNAUTHORIZED,

@@ -9,18 +9,19 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 
-import { User }               from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { CallDirection }      from '../enums/call-direction.enum';
-import { CallOutcome }        from '../enums/call-outcome.enum';
+import { CallDirection } from '../enums/call-direction.enum';
+import { CallOutcome } from '../enums/call-outcome.enum';
 
-@ObjectType({ description: 'Registro de llamada realizada o recibida por el guardia' })
+@ObjectType({
+  description: 'Registro de llamada realizada o recibida por el guardia',
+})
 @Entity({ name: 'call_logs' })
 @Index(['complexId', 'startedAt'])
 @Index(['agentUserId', 'startedAt'])
 @Index(['complexId', 'outcome'])
 export class CallLog {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -56,7 +57,12 @@ export class CallLog {
   residentId: string | null;
 
   @Field(() => String, { nullable: true })
-  @Column({ name: 'resident_name', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'resident_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   residentName: string | null;
 
   @Field(() => String, { nullable: true })
@@ -68,7 +74,12 @@ export class CallLog {
   unitNumber: string | null;
 
   @Field(() => String, { nullable: true })
-  @Column({ name: 'building_name', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'building_name',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   buildingName: string | null;
 
   // ==================== TEMPORALIDAD ====================
@@ -112,7 +123,10 @@ export class CallLog {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { nullable: true, description: 'Guardia/agente que realizó o recibió la llamada' })
+  @Field(() => User, {
+    nullable: true,
+    description: 'Guardia/agente que realizó o recibió la llamada',
+  })
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'agent_user_id' })
   agent?: User;

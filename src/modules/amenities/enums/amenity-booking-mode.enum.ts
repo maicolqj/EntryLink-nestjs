@@ -9,7 +9,7 @@ import { registerEnumType } from '@nestjs/graphql';
  *         acotado por `minDurationMinutes` / `maxDurationMinutes` (ej. salón comunal).
  */
 export enum AmenityBookingMode {
-  SLOT  = 'SLOT',
+  SLOT = 'SLOT',
   RANGE = 'RANGE',
 }
 

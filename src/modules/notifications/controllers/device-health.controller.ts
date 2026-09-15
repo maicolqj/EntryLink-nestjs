@@ -22,7 +22,6 @@ import { HealthCheckAckInput } from '../dto/inputs/health-check-ack.input';
  */
 @Controller('devices')
 export class DeviceHealthController {
-
   constructor(private readonly deviceHealthService: DeviceHealthService) {}
 
   @Post('health-check/:healthId/ack')

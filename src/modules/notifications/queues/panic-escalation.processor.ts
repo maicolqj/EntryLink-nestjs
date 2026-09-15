@@ -4,17 +4,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Job, Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 
-import { PanicAlert }               from '../entities/panic-alert.entity';
-import { PanicAlertDelivery }       from '../entities/panic-alert-delivery.entity';
-import { PanicEscalationSettings }  from '../entities/panic-escalation-settings.entity';
-import { PanicAlertStatus }         from '../enums/panic-alert-status.enum';
-import { PanicDeliveryChannel }     from '../enums/panic-delivery-channel.enum';
-import { NotificationsService }     from '../services/notifications.service';
-import { ValidRoles }               from '../../roles/enums/valid-roles';
-import { PanicChannel, PanicChannelContext } from '../channels/panic-channel.interface';
-import { SocketPanicChannel }       from '../channels/socket-panic.channel';
-import { EmailPanicChannel }        from '../channels/email-panic.channel';
-import { FcmRepushPanicChannel }    from '../channels/fcm-repush.channel';
+import { PanicAlert } from '../entities/panic-alert.entity';
+import { PanicAlertDelivery } from '../entities/panic-alert-delivery.entity';
+import { PanicEscalationSettings } from '../entities/panic-escalation-settings.entity';
+import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
+import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
+import { NotificationsService } from '../services/notifications.service';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import {
+  PanicChannel,
+  PanicChannelContext,
+} from '../channels/panic-channel.interface';
+import { SocketPanicChannel } from '../channels/socket-panic.channel';
+import { EmailPanicChannel } from '../channels/email-panic.channel';
+import { FcmRepushPanicChannel } from '../channels/fcm-repush.channel';
 import {
   WhatsAppPanicChannel,
   SmsPanicChannel,
@@ -59,12 +62,12 @@ export class PanicEscalationProcessor extends WorkerHost {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
 
-    private readonly socketChannel:   SocketPanicChannel,
-    private readonly emailChannel:    EmailPanicChannel,
-    private readonly fcmChannel:      FcmRepushPanicChannel,
+    private readonly socketChannel: SocketPanicChannel,
+    private readonly emailChannel: EmailPanicChannel,
+    private readonly fcmChannel: FcmRepushPanicChannel,
     private readonly whatsappChannel: WhatsAppPanicChannel,
-    private readonly smsChannel:      SmsPanicChannel,
-    private readonly voiceChannel:    VoicePanicChannel,
+    private readonly smsChannel: SmsPanicChannel,
+    private readonly voiceChannel: VoicePanicChannel,
   ) {
     super();
   }
@@ -82,7 +85,9 @@ export class PanicEscalationProcessor extends WorkerHost {
 
     const alert = await this.panicRepo.findOne({ where: { id: panicAlertId } });
     if (!alert) {
-      this.logger.warn(`Escalamiento abortado: la alerta ${panicAlertId} ya no existe`);
+      this.logger.warn(
+        `Escalamiento abortado: la alerta ${panicAlertId} ya no existe`,
+      );
       return;
     }
 
@@ -106,21 +111,21 @@ export class PanicEscalationProcessor extends WorkerHost {
       return;
     }
 
-    const settings  = await this.getSettings(alert.complexId);
-    const targets   = await this.resolveTargets(alert, level);
-    const channels  = this.channelsForLevel(level);
+    const settings = await this.getSettings(alert.complexId);
+    const targets = await this.resolveTargets(alert, level);
+    const channels = this.channelsForLevel(level);
 
     this.logger.warn(
       `PANIC escalamiento nivel ${level} — alerta ${alert.id}, ` +
-      `${targets.length} destinatarios, canales [${channels.map(c => c.channel).join(', ')}]`,
+        `${targets.length} destinatarios, canales [${channels.map((c) => c.channel).join(', ')}]`,
     );
 
     const ctx: PanicChannelContext = {
       alert,
-      userIds:         targets,
+      userIds: targets,
       escalationLevel: level,
-      title:           'ALERTA DE PÁNICO SIN ATENDER',
-      body:            `${alert.triggeredByLabel ?? 'Alerta de pánico'} — nadie la ha atendido.`,
+      title: 'ALERTA DE PÁNICO SIN ATENDER',
+      body: `${alert.triggeredByLabel ?? 'Alerta de pánico'} — nadie la ha atendido.`,
     };
 
     // allSettled: un canal caído no puede impedir que salgan los demás. Ese es
@@ -135,10 +140,12 @@ export class PanicEscalationProcessor extends WorkerHost {
       }),
     );
 
-    const failed = results.filter(r => r.status === 'rejected');
+    const failed = results.filter((r) => r.status === 'rejected');
     if (failed.length > 0) {
       // No debería ocurrir: el contrato dice que un canal nunca lanza.
-      this.logger.error(`Canales que lanzaron en nivel ${level}: ${JSON.stringify(failed)}`);
+      this.logger.error(
+        `Canales que lanzaron en nivel ${level}: ${JSON.stringify(failed)}`,
+      );
     }
 
     await this.panicRepo.update({ id: alert.id }, { escalationLevel: level });
@@ -160,12 +167,14 @@ export class PanicEscalationProcessor extends WorkerHost {
     if (!settings.isEnabled) return;
 
     const offsetSeconds =
-      level === 1 ? settings.level1DelaySeconds :
-      level === 2 ? settings.level2DelaySeconds :
-      settings.level3DelaySeconds;
+      level === 1
+        ? settings.level1DelaySeconds
+        : level === 2
+          ? settings.level2DelaySeconds
+          : settings.level3DelaySeconds;
 
     const elapsedMs = Date.now() - alert.createdAt.getTime();
-    const delay     = Math.max(0, offsetSeconds * 1000 - elapsedMs);
+    const delay = Math.max(0, offsetSeconds * 1000 - elapsedMs);
 
     await this.queue.add(
       PANIC_ESCALATION_JOBS.ESCALATE,
@@ -183,7 +192,10 @@ export class PanicEscalationProcessor extends WorkerHost {
 
   // ── Destinatarios ───────────────────────────────────────────────────────────
 
-  private async resolveTargets(alert: PanicAlert, level: number): Promise<string[]> {
+  private async resolveTargets(
+    alert: PanicAlert,
+    level: number,
+  ): Promise<string[]> {
     // El supervisor se resuelve aparte: no pertenece al conjunto, así que no
     // sale por rol. Su vínculo es la visita activa (ver
     // findSupervisorIdsOnSiteInternal), y fuera de ella no recibe nada.
@@ -197,15 +209,20 @@ export class PanicEscalationProcessor extends WorkerHost {
     const includesSupervisors = level >= 2;
 
     const [byRole, supervisors] = await Promise.all([
-      this.notificationsService.findUserIdsByRoleInternal(alert.complexId, roles),
+      this.notificationsService.findUserIdsByRoleInternal(
+        alert.complexId,
+        roles,
+      ),
       includesSupervisors
-        ? this.notificationsService.findSupervisorIdsOnSiteInternal(alert.complexId)
+        ? this.notificationsService.findSupervisorIdsOnSiteInternal(
+            alert.complexId,
+          )
         : Promise.resolve([]),
     ]);
 
     const ids = [...new Set([...byRole, ...supervisors])];
     // Nunca al que activó la alarma: ya sabe que la activó.
-    return ids.filter(id => id !== alert.triggeredByUserId);
+    return ids.filter((id) => id !== alert.triggeredByUserId);
   }
 
   /**
@@ -213,8 +230,10 @@ export class PanicEscalationProcessor extends WorkerHost {
    * si el push no llegó en el nivel 1, insistir con push en el 2 no aporta.
    */
   private channelsForLevel(level: number): PanicChannel[] {
-    if (level === 1) return [this.fcmChannel, this.socketChannel, this.whatsappChannel];
-    if (level === 2) return [this.emailChannel, this.socketChannel, this.smsChannel];
+    if (level === 1)
+      return [this.fcmChannel, this.socketChannel, this.whatsappChannel];
+    if (level === 2)
+      return [this.emailChannel, this.socketChannel, this.smsChannel];
     return [this.emailChannel, this.voiceChannel, this.socketChannel];
   }
 
@@ -238,22 +257,29 @@ export class PanicEscalationProcessor extends WorkerHost {
     try {
       await this.deliveryRepo.save(
         this.deliveryRepo.create({
-          panicAlertId:    alert.id,
-          channel:         channel.channel,
+          panicAlertId: alert.id,
+          channel: channel.channel,
           escalationLevel: level,
           failureReason,
           // SOCKET no tiene destinatario individual: va a la sala del complejo.
-          userId: channel.channel === PanicDeliveryChannel.SOCKET ? undefined : targets[0],
+          userId:
+            channel.channel === PanicDeliveryChannel.SOCKET
+              ? undefined
+              : targets[0],
         }),
       );
     } catch (err) {
       // La auditoría nunca puede tumbar el escalamiento.
-      this.logger.warn(`No se pudo auditar el envío por ${channel.channel}: ${(err as Error)?.message}`);
+      this.logger.warn(
+        `No se pudo auditar el envío por ${channel.channel}: ${(err as Error)?.message}`,
+      );
     }
   }
 
   /** Devuelve la configuración del complejo, o los valores por defecto si no la tiene. */
-  private async getSettings(complexId: string): Promise<PanicEscalationSettings> {
+  private async getSettings(
+    complexId: string,
+  ): Promise<PanicEscalationSettings> {
     const found = await this.settingsRepo.findOne({ where: { complexId } });
     if (found) return found;
 
@@ -261,7 +287,7 @@ export class PanicEscalationProcessor extends WorkerHost {
     // provocaría escrituras concurrentes desde varios niveles a la vez.
     return this.settingsRepo.create({
       complexId,
-      isEnabled:          true,
+      isEnabled: true,
       level1DelaySeconds: 15,
       level2DelaySeconds: 45,
       level3DelaySeconds: 90,

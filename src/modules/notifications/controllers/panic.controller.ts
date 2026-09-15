@@ -26,7 +26,6 @@ import { PanicDeliveredInput } from '../dto/inputs/panic-delivered.input';
  */
 @Controller('panic')
 export class PanicController {
-
   constructor(private readonly notificationsService: NotificationsService) {}
 
   /**

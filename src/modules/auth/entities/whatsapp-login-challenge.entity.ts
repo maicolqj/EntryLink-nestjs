@@ -45,7 +45,12 @@ export class WhatsAppLoginChallenge {
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId?: string;
 
-  @Column({ name: 'status', type: 'varchar', length: 20, default: WhatsAppLoginStatus.PENDING })
+  @Column({
+    name: 'status',
+    type: 'varchar',
+    length: 20,
+    default: WhatsAppLoginStatus.PENDING,
+  })
   status: WhatsAppLoginStatus;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
@@ -55,7 +60,12 @@ export class WhatsAppLoginChallenge {
   confirmedAt?: Date;
 
   /** Teléfono desde el que llegó el mensaje, normalizado. Para auditoría. */
-  @Column({ name: 'confirmed_from_phone', type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'confirmed_from_phone',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   confirmedFromPhone?: string;
 
   /**
@@ -66,7 +76,12 @@ export class WhatsAppLoginChallenge {
   @Column({ name: 'device_fingerprint', type: 'text' })
   deviceFingerprint: string;
 
-  @Column({ name: 'requested_from_ip', type: 'varchar', length: 45, nullable: true })
+  @Column({
+    name: 'requested_from_ip',
+    type: 'varchar',
+    length: 45,
+    nullable: true,
+  })
   requestedFromIp?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

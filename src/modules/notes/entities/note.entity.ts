@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { ObjectType, Field } from '@nestjs/graphql';
 
-import { User }               from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 
 /**
@@ -23,7 +23,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Index(['complexId', 'createdAt'])
 @Index(['complexId', 'createdByUserId'])
 export class Note {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -38,7 +37,10 @@ export class Note {
   @Column({ type: 'text' })
   content: string;
 
-  @Field(() => [String], { description: 'URLs de imágenes adjuntas (R2)', nullable: true })
+  @Field(() => [String], {
+    description: 'URLs de imágenes adjuntas (R2)',
+    nullable: true,
+  })
   @Column({
     name: 'image_urls',
     type: 'text',
@@ -53,7 +55,10 @@ export class Note {
         if (typeof value === 'string') {
           const stripped = value.replace(/^\{|\}$/g, '');
           if (!stripped) return [];
-          return stripped.split(',').map(s => s.replace(/^"|"$/g, '').trim()).filter(Boolean);
+          return stripped
+            .split(',')
+            .map((s) => s.replace(/^"|"$/g, '').trim())
+            .filter(Boolean);
         }
         return [];
       },
@@ -71,11 +76,23 @@ export class Note {
   @Column({ name: 'created_by_user_id', type: 'uuid', nullable: true })
   createdByUserId?: string;
 
-  @Field(() => String, { nullable: true, description: 'Rol del creador al momento de registrar la nota' })
-  @Column({ name: 'created_by_role', type: 'varchar', length: 50, nullable: true })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Rol del creador al momento de registrar la nota',
+  })
+  @Column({
+    name: 'created_by_role',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   createdByRole: string | null;
 
-  @Field(() => String, { nullable: true, description: 'ID de la visita activa del supervisor bajo la cual se creó esta nota' })
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'ID de la visita activa del supervisor bajo la cual se creó esta nota',
+  })
   @Column({ name: 'supervisor_visit_id', type: 'uuid', nullable: true })
   supervisorVisitId?: string;
 
@@ -85,7 +102,10 @@ export class Note {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @Field(() => Date, { nullable: true, description: 'Fecha de eliminación lógica (solo SUPER_ADMIN)' })
+  @Field(() => Date, {
+    nullable: true,
+    description: 'Fecha de eliminación lógica (solo SUPER_ADMIN)',
+  })
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt?: Date;
 
@@ -96,7 +116,10 @@ export class Note {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { description: 'Usuario que creó la nota', nullable: true })
+  @Field(() => User, {
+    description: 'Usuario que creó la nota',
+    nullable: true,
+  })
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by_user_id' })
   createdByUser?: User;

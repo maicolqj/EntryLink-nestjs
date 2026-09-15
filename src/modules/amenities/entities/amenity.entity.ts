@@ -12,14 +12,14 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, ID, Int, Float } from '@nestjs/graphql';
 
-import { AmenityType }        from '../enums/amenity-type.enum';
-import { AmenityStatus }      from '../enums/amenity-status.enum';
+import { AmenityType } from '../enums/amenity-type.enum';
+import { AmenityStatus } from '../enums/amenity-status.enum';
 import { AmenityBookingMode } from '../enums/amenity-booking-mode.enum';
-import { AmenityFeeType }     from '../enums/amenity-fee-type.enum';
+import { AmenityFeeType } from '../enums/amenity-fee-type.enum';
 import { AmenityDurationUnit } from '../enums/amenity-duration-unit.enum';
-import { AmenitySchedule }    from './amenity-schedule.entity';
+import { AmenitySchedule } from './amenity-schedule.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { moneyColumn }        from '../../finance/utils/numeric.transformer';
+import { moneyColumn } from '../../finance/utils/numeric.transformer';
 
 /**
  * Zona común reservable del complejo (salón comunal, zona BBQ, gimnasio…).
@@ -35,14 +35,15 @@ import { moneyColumn }        from '../../finance/utils/numeric.transformer';
 @Index(['complexId', 'status'])
 @Index(['complexId', 'type'])
 export class Amenity {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   // ─── Identificación ───────────────────────────────────────────────────────
 
-  @Field(() => String, { description: 'Nombre visible (ej. Salón Comunal Piso 1)' })
+  @Field(() => String, {
+    description: 'Nombre visible (ej. Salón Comunal Piso 1)',
+  })
   @Column({ type: 'varchar', length: 150 })
   name: string;
 
@@ -68,7 +69,10 @@ export class Amenity {
   @Column({ type: 'text', nullable: true })
   rules?: string | null;
 
-  @Field(() => [String], { description: 'URLs de fotos de la zona (R2)', nullable: true })
+  @Field(() => [String], {
+    description: 'URLs de fotos de la zona (R2)',
+    nullable: true,
+  })
   @Column({
     name: 'image_urls',
     type: 'text',
@@ -83,7 +87,10 @@ export class Amenity {
         if (typeof value === 'string') {
           const stripped = value.replace(/^\{|\}$/g, '');
           if (!stripped) return [];
-          return stripped.split(',').map(s => s.replace(/^"|"$/g, '').trim()).filter(Boolean);
+          return stripped
+            .split(',')
+            .map((s) => s.replace(/^"|"$/g, '').trim())
+            .filter(Boolean);
         }
         return [];
       },
@@ -94,7 +101,12 @@ export class Amenity {
   // ─── Reglas de reserva ────────────────────────────────────────────────────
 
   @Field(() => AmenityBookingMode)
-  @Column({ name: 'booking_mode', type: 'varchar', length: 10, default: AmenityBookingMode.SLOT })
+  @Column({
+    name: 'booking_mode',
+    type: 'varchar',
+    length: 10,
+    default: AmenityBookingMode.SLOT,
+  })
   bookingMode: AmenityBookingMode;
 
   /**
@@ -104,7 +116,12 @@ export class Amenity {
    * mismo día. Los campos de abajo siguen guardándose en minutos.
    */
   @Field(() => AmenityDurationUnit)
-  @Column({ name: 'duration_unit', type: 'varchar', length: 10, default: AmenityDurationUnit.HOURS })
+  @Column({
+    name: 'duration_unit',
+    type: 'varchar',
+    length: 10,
+    default: AmenityDurationUnit.HOURS,
+  })
   durationUnit: AmenityDurationUnit;
 
   /** Solo SLOT: duración de cada franja generada a partir del horario. */
@@ -160,7 +177,10 @@ export class Amenity {
    * de las dos formas —"48 horas antes" o "2 días antes"— y sumarlos evita que
    * se contradigan: 1 día y 6 horas son 30 horas de plazo.
    */
-  @Field(() => Int, { description: 'Se suman a cancellationDeadlineDays para formar el plazo real' })
+  @Field(() => Int, {
+    description:
+      'Se suman a cancellationDeadlineDays para formar el plazo real',
+  })
   @Column({ name: 'cancellation_deadline_hours', type: 'int', default: 0 })
   cancellationDeadlineHours: number;
 
@@ -171,7 +191,10 @@ export class Amenity {
    * resto. No toca el cobro por daños: ese responde a un hecho, no a la
    * cancelación.
    */
-  @Field(() => Int, { description: 'Porcentaje de la tarifa que se retiene al cancelar fuera de plazo' })
+  @Field(() => Int, {
+    description:
+      'Porcentaje de la tarifa que se retiene al cancelar fuera de plazo',
+  })
   @Column({ name: 'late_cancellation_fee_percent', type: 'int', default: 100 })
   lateCancellationFeePercent: number;
 
@@ -180,7 +203,10 @@ export class Amenity {
    * administración en esta zona. 0 = la zona no reconoce el beneficio, que es
    * el caso de la mayoría de complejos, y por eso nace apagado.
    */
-  @Field(() => Int, { description: 'Reservas gratis al año por miembro del consejo. 0 = sin beneficio' })
+  @Field(() => Int, {
+    description:
+      'Reservas gratis al año por miembro del consejo. 0 = sin beneficio',
+  })
   @Column({ name: 'council_free_bookings_per_year', type: 'int', default: 0 })
   councilFreeBookingsPerYear: number;
 
@@ -194,7 +220,10 @@ export class Amenity {
   @Column({ name: 'max_bookings_per_unit_per_month', type: 'int', default: 0 })
   maxBookingsPerUnitPerMonth: number;
 
-  @Field(() => Boolean, { description: 'Si es true la reserva nace en PENDING y la administración debe aprobarla' })
+  @Field(() => Boolean, {
+    description:
+      'Si es true la reserva nace en PENDING y la administración debe aprobarla',
+  })
   @Column({ name: 'requires_approval', type: 'boolean', default: true })
   requiresApproval: boolean;
 
@@ -202,19 +231,33 @@ export class Amenity {
    * Bloquea la reserva cuando la unidad tiene cartera vencida. Es la palanca de
    * cobro más usada en PH colombianas, pero no todos los complejos la aplican.
    */
-  @Field(() => Boolean, { description: 'Si es true, una unidad con saldo vencido no puede reservar' })
+  @Field(() => Boolean, {
+    description: 'Si es true, una unidad con saldo vencido no puede reservar',
+  })
   @Column({ name: 'block_bookings_on_debt', type: 'boolean', default: true })
   blockBookingsOnDebt: boolean;
 
   // ─── Cobro ────────────────────────────────────────────────────────────────
 
   @Field(() => AmenityFeeType)
-  @Column({ name: 'fee_type', type: 'varchar', length: 20, default: AmenityFeeType.FREE })
+  @Column({
+    name: 'fee_type',
+    type: 'varchar',
+    length: 20,
+    default: AmenityFeeType.FREE,
+  })
   feeType: AmenityFeeType;
 
   /** Tarifa base. Se interpreta según `feeType`. */
   @Field(() => Float)
-  @Column({ name: 'fee_amount', type: 'numeric', precision: 12, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    name: 'fee_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   feeAmount: number;
 
   // ─── Multi-tenant ─────────────────────────────────────────────────────────
@@ -229,7 +272,7 @@ export class Amenity {
   complex?: ResidentialComplex;
 
   @Field(() => [AmenitySchedule], { nullable: true })
-  @OneToMany(() => AmenitySchedule, schedule => schedule.amenity)
+  @OneToMany(() => AmenitySchedule, (schedule) => schedule.amenity)
   schedules?: AmenitySchedule[];
 
   // ─── Auditoría ────────────────────────────────────────────────────────────

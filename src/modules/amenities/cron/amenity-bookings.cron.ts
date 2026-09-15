@@ -36,7 +36,10 @@ export class AmenityBookingsCron {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Error en el barrido de reservas: ${err?.message}`, err?.stack);
+      this.logger.error(
+        `Error en el barrido de reservas: ${err?.message}`,
+        err?.stack,
+      );
     }
   }
 
@@ -48,9 +51,13 @@ export class AmenityBookingsCron {
   async reminders(): Promise<void> {
     try {
       const sent = await this.bookingsService.sendUpcomingReminders();
-      if (sent > 0) this.logger.log(`Recordatorios de reserva enviados: ${sent}`);
+      if (sent > 0)
+        this.logger.log(`Recordatorios de reserva enviados: ${sent}`);
     } catch (err: any) {
-      this.logger.error(`Error al enviar recordatorios de reserva: ${err?.message}`, err?.stack);
+      this.logger.error(
+        `Error al enviar recordatorios de reserva: ${err?.message}`,
+        err?.stack,
+      );
     }
   }
 }

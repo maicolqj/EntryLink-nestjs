@@ -16,7 +16,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * se agregó, y aquí hace falta agregarlo y usarlo de inmediato.
  */
 export class CouncilRole1781004100000 implements MigrationInterface {
-
   public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {

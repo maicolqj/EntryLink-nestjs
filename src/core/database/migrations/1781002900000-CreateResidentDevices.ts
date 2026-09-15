@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente (IF NOT EXISTS) por si en dev se corrió `synchronize`.
  */
 export class CreateResidentDevices1781002900000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "resident_devices" (
@@ -57,7 +56,9 @@ export class CreateResidentDevices1781002900000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "refresh_expiry"`);
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "refresh_expiry"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "resident_devices"`);
   }
 }

@@ -2,19 +2,19 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { SpecialNumber }            from './entities/special-number.entity';
+import { SpecialNumber } from './entities/special-number.entity';
 import { CreateSpecialNumberInput } from './dto/create-special-number.input';
 import { UpdateSpecialNumberInput } from './dto/update-special-number.input';
 
-import { CustomError }              from '../shared/utils/errors.utils';
-import { SpecialNumberErrorCode }   from '../shared/constans/error-codes.constants';
-import { JwtAccessPayload }         from '../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }               from '../roles/enums/valid-roles';
-import { AuditService }             from '../audit/services/audit.service';
-import { AuditAction }              from '../audit/enums/audit-action.enum';
-import { AuditEntityType }          from '../audit/enums/audit-entity-type.enum';
-import { CacheService }             from '../../core/infrastructure/cache/cache.service';
-import { BK }                       from '../../core/infrastructure/cache/business-cache.constants';
+import { CustomError } from '../shared/utils/errors.utils';
+import { SpecialNumberErrorCode } from '../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../roles/enums/valid-roles';
+import { AuditService } from '../audit/services/audit.service';
+import { AuditAction } from '../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
+import { CacheService } from '../../core/infrastructure/cache/cache.service';
+import { BK } from '../../core/infrastructure/cache/business-cache.constants';
 
 const MAX_NUMBERS_PER_COMPLEX = 20;
 
@@ -33,13 +33,18 @@ export class SpecialNumbersService {
   // QUERY — devuelve globales + específicos del complejo, globales primero
   // ================================================================
 
-  async findByComplex(complexId: string, currentUser: JwtAccessPayload): Promise<SpecialNumber[]> {
+  async findByComplex(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<SpecialNumber[]> {
     if (!this.isSuperAdmin(currentUser)) {
       this.assertComplexAccess(complexId, currentUser);
     }
 
     const cacheKey = BK.specialNumber.list(complexId);
-    const cached = await this.cacheService.get<SpecialNumber[]>({ key: cacheKey });
+    const cached = await this.cacheService.get<SpecialNumber[]>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const numbers = await this.repo
@@ -49,7 +54,11 @@ export class SpecialNumbersService {
       .addOrderBy('sn.order', 'ASC')
       .getMany();
 
-    await this.cacheService.set({ key: cacheKey, data: numbers, options: { ttl: BK.specialNumber.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: numbers,
+      options: { ttl: BK.specialNumber.TTL },
+    });
     return numbers;
   }
 
@@ -57,13 +66,17 @@ export class SpecialNumbersService {
   // CREATE
   // ================================================================
 
-  async create(input: CreateSpecialNumberInput, currentUser: JwtAccessPayload): Promise<SpecialNumber> {
+  async create(
+    input: CreateSpecialNumberInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<SpecialNumber> {
     const isGlobal = input.isGlobal ?? false;
 
     if (isGlobal) {
       if (!this.isSuperAdmin(currentUser)) {
         throw new CustomError({
-          message: 'Solo el administrador del sistema puede crear números especiales globales',
+          message:
+            'Solo el administrador del sistema puede crear números especiales globales',
           statusCode: HttpStatus.FORBIDDEN,
           errorCode: SpecialNumberErrorCode.SPECIAL_NUMBER_ACCESS_DENIED,
         });
@@ -71,7 +84,8 @@ export class SpecialNumbersService {
     } else {
       if (!input.complexId) {
         throw new CustomError({
-          message: 'El campo complexId es requerido para números específicos de un complejo',
+          message:
+            'El campo complexId es requerido para números específicos de un complejo',
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: SpecialNumberErrorCode.SPECIAL_NUMBER_COMPLEX_REQUIRED,
         });
@@ -79,7 +93,9 @@ export class SpecialNumbersService {
       if (!this.isSuperAdmin(currentUser)) {
         this.assertComplexAccess(input.complexId, currentUser);
       }
-      const count = await this.repo.count({ where: { complexId: input.complexId, isGlobal: false } });
+      const count = await this.repo.count({
+        where: { complexId: input.complexId, isGlobal: false },
+      });
       if (count >= MAX_NUMBERS_PER_COMPLEX) {
         throw new CustomError({
           message: `El complejo ya tiene el máximo de ${MAX_NUMBERS_PER_COMPLEX} números especiales permitidos`,
@@ -89,14 +105,19 @@ export class SpecialNumbersService {
       }
     }
 
-    const order = input.order ?? (await this.getNextOrder(isGlobal ? null : (input.complexId ?? null), isGlobal));
+    const order =
+      input.order ??
+      (await this.getNextOrder(
+        isGlobal ? null : (input.complexId ?? null),
+        isGlobal,
+      ));
 
     const entity = this.repo.create({
-      complexId:   isGlobal ? null : (input.complexId ?? null),
+      complexId: isGlobal ? null : (input.complexId ?? null),
       isGlobal,
-      name:        input.name.trim(),
+      name: input.name.trim(),
       phoneNumber: input.phoneNumber.trim(),
-      category:    input.category,
+      category: input.category,
       description: input.description?.trim() ?? null,
       order,
     });
@@ -106,20 +127,29 @@ export class SpecialNumbersService {
     if (isGlobal) {
       await this.cacheService.deleteByPrefix('sn:');
     } else {
-      await this.cacheService.deleteByPrefix(BK.specialNumber.prefix(saved.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.specialNumber.prefix(saved.complexId),
+      );
     }
-    this.logger.log(`Número especial creado: ${saved.id} | global: ${isGlobal} | complejo: ${saved.complexId ?? 'n/a'}`);
+    this.logger.log(
+      `Número especial creado: ${saved.id} | global: ${isGlobal} | complejo: ${saved.complexId ?? 'n/a'}`,
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.SpecialNumber,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, name: saved.name, isGlobal: saved.isGlobal, complexId: saved.complexId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.SpecialNumber,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        name: saved.name,
+        isGlobal: saved.isGlobal,
+        complexId: saved.complexId,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       saved.complexId ?? currentUser.complexId ?? '',
-      description:     `Número especial ${isGlobal ? 'global' : 'de complejo'} creado: "${saved.name}"`,
+      complexId: saved.complexId ?? currentUser.complexId ?? '',
+      description: `Número especial ${isGlobal ? 'global' : 'de complejo'} creado: "${saved.name}"`,
     });
 
     return saved;
@@ -129,43 +159,55 @@ export class SpecialNumbersService {
   // UPDATE — globales: solo SUPER_ADMIN; de complejo: solo su COMPLEX_ROL
   // ================================================================
 
-  async update(input: UpdateSpecialNumberInput, currentUser: JwtAccessPayload): Promise<SpecialNumber> {
+  async update(
+    input: UpdateSpecialNumberInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<SpecialNumber> {
     const entity = await this.findOneOrFail(input.id);
 
     this.assertWriteAccess(entity, currentUser);
 
     const previous = {
-      name:        entity.name,
+      name: entity.name,
       phoneNumber: entity.phoneNumber,
-      category:    entity.category,
+      category: entity.category,
       description: entity.description,
-      order:       entity.order,
+      order: entity.order,
     };
 
-    if (input.name !== undefined)        entity.name        = input.name.trim();
-    if (input.phoneNumber !== undefined) entity.phoneNumber = input.phoneNumber.trim();
-    if (input.category !== undefined)    entity.category    = input.category;
-    if (input.description !== undefined) entity.description = input.description?.trim() ?? null;
-    if (input.order !== undefined)       entity.order       = input.order;
+    if (input.name !== undefined) entity.name = input.name.trim();
+    if (input.phoneNumber !== undefined)
+      entity.phoneNumber = input.phoneNumber.trim();
+    if (input.category !== undefined) entity.category = input.category;
+    if (input.description !== undefined)
+      entity.description = input.description?.trim() ?? null;
+    if (input.order !== undefined) entity.order = input.order;
 
     const saved = await this.repo.save(entity);
     if (saved.isGlobal) {
       await this.cacheService.deleteByPrefix('sn:');
     } else {
-      await this.cacheService.deleteByPrefix(BK.specialNumber.prefix(saved.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.specialNumber.prefix(saved.complexId),
+      );
     }
 
     void this.auditService.log({
-      entityType:      AuditEntityType.SpecialNumber,
-      entityId:        saved.id,
-      action:          AuditAction.UPDATE,
-      previousValue:   previous,
-      newValue:        { name: saved.name, phoneNumber: saved.phoneNumber, category: saved.category, order: saved.order },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.SpecialNumber,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      previousValue: previous,
+      newValue: {
+        name: saved.name,
+        phoneNumber: saved.phoneNumber,
+        category: saved.category,
+        order: saved.order,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       saved.complexId ?? currentUser.complexId ?? '',
-      description:     `Número especial actualizado: "${saved.name}"`,
+      complexId: saved.complexId ?? currentUser.complexId ?? '',
+      description: `Número especial actualizado: "${saved.name}"`,
     });
 
     return saved;
@@ -199,20 +241,27 @@ export class SpecialNumbersService {
     if (entity.isGlobal) {
       await this.cacheService.deleteByPrefix('sn:');
     } else {
-      await this.cacheService.deleteByPrefix(BK.specialNumber.prefix(entity.complexId));
+      await this.cacheService.deleteByPrefix(
+        BK.specialNumber.prefix(entity.complexId),
+      );
     }
     this.logger.warn(`Número especial eliminado: ${id}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.SpecialNumber,
-      entityId:        id,
-      action:          AuditAction.DELETE,
-      previousValue:   { id: entity.id, name: entity.name, isGlobal: entity.isGlobal, complexId: entity.complexId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.SpecialNumber,
+      entityId: id,
+      action: AuditAction.DELETE,
+      previousValue: {
+        id: entity.id,
+        name: entity.name,
+        isGlobal: entity.isGlobal,
+        complexId: entity.complexId,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       entity.complexId ?? currentUser.complexId ?? '',
-      description:     `Número especial eliminado: "${entity.name}"`,
+      complexId: entity.complexId ?? currentUser.complexId ?? '',
+      description: `Número especial eliminado: "${entity.name}"`,
     });
 
     return true;
@@ -222,15 +271,21 @@ export class SpecialNumbersService {
   // REORDER — números de un complejo (COMPLEX_ROL / SUPER_ADMIN)
   // ================================================================
 
-  async reorder(complexId: string, ids: string[], currentUser: JwtAccessPayload): Promise<SpecialNumber[]> {
+  async reorder(
+    complexId: string,
+    ids: string[],
+    currentUser: JwtAccessPayload,
+  ): Promise<SpecialNumber[]> {
     if (!this.isSuperAdmin(currentUser)) {
       this.assertComplexAccess(complexId, currentUser);
     }
 
-    const existing = await this.repo.find({ where: { complexId, isGlobal: false } });
+    const existing = await this.repo.find({
+      where: { complexId, isGlobal: false },
+    });
     this.validateIdsSubset(ids, existing, complexId);
 
-    const entityMap = new Map(existing.map(e => [e.id, e]));
+    const entityMap = new Map(existing.map((e) => [e.id, e]));
     const updates = ids.map((id, index) => {
       const e = entityMap.get(id);
       e.order = index + 1;
@@ -247,10 +302,14 @@ export class SpecialNumbersService {
   // REORDER GLOBAL — solo SUPER_ADMIN
   // ================================================================
 
-  async reorderGlobal(ids: string[], currentUser: JwtAccessPayload): Promise<SpecialNumber[]> {
+  async reorderGlobal(
+    ids: string[],
+    currentUser: JwtAccessPayload,
+  ): Promise<SpecialNumber[]> {
     if (!this.isSuperAdmin(currentUser)) {
       throw new CustomError({
-        message: 'Solo el administrador del sistema puede reordenar los números globales',
+        message:
+          'Solo el administrador del sistema puede reordenar los números globales',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: SpecialNumberErrorCode.SPECIAL_NUMBER_ACCESS_DENIED,
       });
@@ -259,7 +318,7 @@ export class SpecialNumbersService {
     const existing = await this.repo.find({ where: { isGlobal: true } });
     this.validateIdsSubset(ids, existing, 'global');
 
-    const entityMap = new Map(existing.map(e => [e.id, e]));
+    const entityMap = new Map(existing.map((e) => [e.id, e]));
     const updates = ids.map((id, index) => {
       const e = entityMap.get(id);
       e.order = index + 1;
@@ -268,7 +327,10 @@ export class SpecialNumbersService {
     await this.repo.save(updates);
     await this.cacheService.deleteByPrefix('sn:');
 
-    return this.repo.find({ where: { isGlobal: true }, order: { order: 'ASC' } });
+    return this.repo.find({
+      where: { isGlobal: true },
+      order: { order: 'ASC' },
+    });
   }
 
   // ================================================================
@@ -287,11 +349,15 @@ export class SpecialNumbersService {
     return entity;
   }
 
-  private assertWriteAccess(entity: SpecialNumber, user: JwtAccessPayload): void {
+  private assertWriteAccess(
+    entity: SpecialNumber,
+    user: JwtAccessPayload,
+  ): void {
     if (entity.isGlobal) {
       if (!this.isSuperAdmin(user)) {
         throw new CustomError({
-          message: 'Los números globales solo pueden ser modificados por el administrador del sistema',
+          message:
+            'Los números globales solo pueden ser modificados por el administrador del sistema',
           statusCode: HttpStatus.FORBIDDEN,
           errorCode: SpecialNumberErrorCode.SPECIAL_NUMBER_ACCESS_DENIED,
         });
@@ -303,7 +369,10 @@ export class SpecialNumbersService {
     }
   }
 
-  private assertComplexAccess(complexId: string | null, user: JwtAccessPayload): void {
+  private assertComplexAccess(
+    complexId: string | null,
+    user: JwtAccessPayload,
+  ): void {
     if (!complexId || user.complexId !== complexId) {
       throw new CustomError({
         message: 'No tienes acceso a los números especiales de este complejo',
@@ -317,15 +386,22 @@ export class SpecialNumbersService {
     return user.roles?.includes(ValidRoles.SUPER_ADMIN_ROL) ?? false;
   }
 
-  private async getNextOrder(complexId: string | null, isGlobal: boolean): Promise<number> {
+  private async getNextOrder(
+    complexId: string | null,
+    isGlobal: boolean,
+  ): Promise<number> {
     const count = await this.repo.count({
       where: isGlobal ? { isGlobal: true } : { complexId, isGlobal: false },
     });
     return count + 1;
   }
 
-  private validateIdsSubset(ids: string[], existing: SpecialNumber[], scope: string): void {
-    const existingIds = new Set(existing.map(e => e.id));
+  private validateIdsSubset(
+    ids: string[],
+    existing: SpecialNumber[],
+    scope: string,
+  ): void {
+    const existingIds = new Set(existing.map((e) => e.id));
     for (const id of ids) {
       if (!existingIds.has(id)) {
         throw new CustomError({

@@ -1,5 +1,13 @@
 import { ObjectType, InputType, Field, Int } from '@nestjs/graphql';
-import { IsOptional, IsBoolean, IsInt, IsArray, IsString, IsEnum, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsArray,
+  IsString,
+  IsEnum,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { UnitType } from '../../../residential-complex/enums/unit-type.enum';

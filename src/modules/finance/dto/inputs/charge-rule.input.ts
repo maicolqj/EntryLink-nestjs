@@ -1,10 +1,16 @@
 import { InputType, ObjectType, Field, Float } from '@nestjs/graphql';
 import {
-  IsEnum, IsOptional, IsNumber, IsPositive, IsString, MaxLength, ValidateIf,
+  IsEnum,
+  IsOptional,
+  IsNumber,
+  IsPositive,
+  IsString,
+  MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 
-import { ChargeRuleTargetType }    from '../../enums/charge-rule-target-type.enum';
+import { ChargeRuleTargetType } from '../../enums/charge-rule-target-type.enum';
 import { ChargeCalculationMethod } from '../../enums/charge-calculation-method.enum';
 
 /**
@@ -17,7 +23,6 @@ import { ChargeCalculationMethod } from '../../enums/charge-calculation-method.e
  */
 @InputType()
 export class ChargeRuleInput {
-
   @Field(() => ChargeRuleTargetType)
   @IsEnum(ChargeRuleTargetType)
   targetType: ChargeRuleTargetType;
@@ -32,30 +37,36 @@ export class ChargeRuleInput {
 
   /** FIXED / PER_ATTRIBUTE: monto por unidad (o por unidad de atributo). */
   @Field(() => Float, { nullable: true })
-  @ValidateIf(o =>
-    o.calculationMethod === ChargeCalculationMethod.FIXED ||
-    o.calculationMethod === ChargeCalculationMethod.PER_ATTRIBUTE)
+  @ValidateIf(
+    (o) =>
+      o.calculationMethod === ChargeCalculationMethod.FIXED ||
+      o.calculationMethod === ChargeCalculationMethod.PER_ATTRIBUTE,
+  )
   @IsNumber()
   @IsPositive()
   amount?: number | null;
 
   /** BY_COEFFICIENT: monto total a prorratear entre el target. */
   @Field(() => Float, { nullable: true })
-  @ValidateIf(o => o.calculationMethod === ChargeCalculationMethod.BY_COEFFICIENT)
+  @ValidateIf(
+    (o) => o.calculationMethod === ChargeCalculationMethod.BY_COEFFICIENT,
+  )
   @IsNumber()
   @IsPositive()
   totalAmount?: number | null;
 
   /** BY_AREA: tarifa por m². */
   @Field(() => Float, { nullable: true })
-  @ValidateIf(o => o.calculationMethod === ChargeCalculationMethod.BY_AREA)
+  @ValidateIf((o) => o.calculationMethod === ChargeCalculationMethod.BY_AREA)
   @IsNumber()
   @IsPositive()
   ratePerSqm?: number | null;
 
   /** PER_ATTRIBUTE: atributo de la unidad a multiplicar (parkingSpots | storageRooms | bedrooms | bathrooms). */
   @Field(() => String, { nullable: true })
-  @ValidateIf(o => o.calculationMethod === ChargeCalculationMethod.PER_ATTRIBUTE)
+  @ValidateIf(
+    (o) => o.calculationMethod === ChargeCalculationMethod.PER_ATTRIBUTE,
+  )
   @IsString()
   @MaxLength(40)
   attributeKey?: string | null;
@@ -64,7 +75,6 @@ export class ChargeRuleInput {
 /** Espejo ObjectType para devolver las reglas persistidas en la emisión. */
 @ObjectType()
 export class ChargeRule {
-
   @Field(() => ChargeRuleTargetType)
   targetType: ChargeRuleTargetType;
 

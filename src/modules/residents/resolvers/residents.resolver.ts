@@ -1,4 +1,11 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 
 import { Resident } from '../entities/resident.entity';
 import { ResidentsService } from '../services/residents.service';
@@ -22,7 +29,6 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Resident)
 export class ResidentsResolver {
-
   /**
    * Pertenencia al consejo de administración.
    *
@@ -31,17 +37,20 @@ export class ResidentsResolver {
    * una frontera de permisos. Se expone como campo del residente porque es
    * donde el administrador la marca y la consulta.
    */
-  @ResolveField(() => Boolean, { description: 'Miembro del consejo de administración' })
+  @ResolveField(() => Boolean, {
+    description: 'Miembro del consejo de administración',
+  })
   isCouncilMember(@Parent() resident: Resident): boolean | Promise<boolean> {
     // El listado ya trae los roles; solo se vuelve a la base cuando la consulta
     // que trajo al residente no los cargó.
     const loaded = resident.user?.userRoles;
-    if (loaded) return loaded.some(ur => ur.role?.name === ValidRoles.COUNCIL_ROL);
+    if (loaded)
+      return loaded.some((ur) => ur.role?.name === ValidRoles.COUNCIL_ROL);
 
     return this.residentsService.isCouncilUser(resident.userId);
   }
 
-  constructor(private readonly residentsService: ResidentsService) { }
+  constructor(private readonly residentsService: ResidentsService) {}
 
   // ================================================================
   // MUTATIONS — Administración del Complejo
@@ -232,10 +241,11 @@ export class ResidentsResolver {
    */
   @Query(() => Resident, { name: 'myResidentProfile' })
   @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
-  myProfile(
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<Resident> {
-    return this.residentsService.findMyProfile(currentUser.sub, currentUser.complexId!);
+  myProfile(@CurrentUser() currentUser: JwtAccessPayload): Promise<Resident> {
+    return this.residentsService.findMyProfile(
+      currentUser.sub,
+      currentUser.complexId,
+    );
   }
 
   /**
@@ -302,11 +312,17 @@ export class ResidentsResolver {
   })
   findByComplex(
     @Args('complexId') complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @Args('filters', { nullable: true }) filters: FilterResidentsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedResidentsResponse> {
-    return this.residentsService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.residentsService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -319,7 +335,8 @@ export class ResidentsResolver {
     permissions: [ValidPermissions.APPROVE_RESIDENT],
   })
   findPending(
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedResidentsResponse> {
     return this.residentsService.findPending(pagination, currentUser);
@@ -350,7 +367,11 @@ export class ResidentsResolver {
    */
   @Query(() => [Resident], { name: 'residentHistoryByUnit' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.VIEW_RESIDENTS],
   })
   findHistoryByUnit(

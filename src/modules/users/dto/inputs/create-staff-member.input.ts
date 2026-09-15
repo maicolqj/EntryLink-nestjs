@@ -22,7 +22,10 @@ export const STAFF_ROLES = [
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-@InputType({ description: 'Datos para crear un miembro del personal del complejo (guardia o contador)' })
+@InputType({
+  description:
+    'Datos para crear un miembro del personal del complejo (guardia o contador)',
+})
 export class CreateStaffMemberInput {
   @Field(() => String)
   @IsString()
@@ -39,9 +42,10 @@ export class CreateStaffMemberInput {
   @Field(() => String)
   @IsString()
   @IsNotEmpty()
-  @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
+  @Matches(/^3\d{9}$/, {
+    message: 'Número de celular colombiano inválido (ej: 3001234567)',
+  })
   phoneNumber: string;
-
 
   @Field(() => String)
   @IsString()
@@ -67,17 +71,20 @@ export class CreateStaffMemberInput {
   @IsNotEmpty()
   email: string;
 
-  @Field(() => String, {nullable: true})
+  @Field(() => String, { nullable: true })
   @IsString()
   @IsOptional()
   @MinLength(8)
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
-    message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
+    message:
+      'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
   password?: string;
 
-  @Field(() => String, { description: 'ID del complejo al que se asigna el personal' })
+  @Field(() => String, {
+    description: 'ID del complejo al que se asigna el personal',
+  })
   @IsUUID('4')
   @IsNotEmpty()
   complexId: string;
@@ -89,7 +96,10 @@ export class CreateStaffMemberInput {
   @IsNotEmpty()
   role: StaffRole;
 
-  @Field(() => String, { nullable: true, description: 'Turno asignado (MAÑANA, TARDE, NOCHE)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Turno asignado (MAÑANA, TARDE, NOCHE)',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(50)

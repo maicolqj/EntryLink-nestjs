@@ -6,7 +6,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * cargos existentes. Idempotente.
  */
 export class AddTriggerTypeToRecurringCharges1781000900000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -21,7 +20,11 @@ export class AddTriggerTypeToRecurringCharges1781000900000 implements MigrationI
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "triggerType"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "recurring_charges_triggertype_enum"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "triggerType"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "recurring_charges_triggertype_enum"`,
+    );
   }
 }

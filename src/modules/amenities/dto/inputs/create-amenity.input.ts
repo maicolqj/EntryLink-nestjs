@@ -1,14 +1,27 @@
 import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum, IsUUID, IsBoolean,
-  IsInt, IsNumber, Min, Max, MaxLength, IsArray, IsUrl, ValidateNested, ArrayMaxSize,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsUUID,
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  Min,
+  Max,
+  MaxLength,
+  IsArray,
+  IsUrl,
+  ValidateNested,
+  ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { AmenityType }         from '../../enums/amenity-type.enum';
-import { AmenityStatus }       from '../../enums/amenity-status.enum';
-import { AmenityBookingMode }  from '../../enums/amenity-booking-mode.enum';
-import { AmenityFeeType }      from '../../enums/amenity-fee-type.enum';
+import { AmenityType } from '../../enums/amenity-type.enum';
+import { AmenityStatus } from '../../enums/amenity-status.enum';
+import { AmenityBookingMode } from '../../enums/amenity-booking-mode.enum';
+import { AmenityFeeType } from '../../enums/amenity-fee-type.enum';
 import { AmenityDurationUnit } from '../../enums/amenity-duration-unit.enum';
 import { AmenityScheduleInput } from './amenity-schedule.input';
 
@@ -22,7 +35,6 @@ export const MAX_DURATION_MINUTES = 30 * 24 * 60;
 
 @InputType()
 export class CreateAmenityInput {
-
   @Field()
   @IsUUID()
   complexId: string;
@@ -53,7 +65,10 @@ export class CreateAmenityInput {
   @MaxLength(200)
   location?: string;
 
-  @Field(() => String, { nullable: true, description: 'Reglamento de uso que ve el residente al reservar' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Reglamento de uso que ve el residente al reservar',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(5000)
@@ -87,30 +102,48 @@ export class CreateAmenityInput {
    * trabaja el motor de disponibilidad—, pero el administrador las expresa en
    * la unidad de la zona. La coherencia con `durationUnit` la valida el servicio.
    */
-  @Field(() => Int, { defaultValue: 120, description: 'Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit' })
+  @Field(() => Int, {
+    defaultValue: 120,
+    description:
+      'Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit',
+  })
   @IsInt()
   @Min(MIN_DURATION_MINUTES)
   @Max(MAX_DURATION_MINUTES)
   slotDurationMinutes: number = 120;
 
-  @Field(() => Int, { defaultValue: 60, description: 'Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit' })
+  @Field(() => Int, {
+    defaultValue: 60,
+    description:
+      'Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit',
+  })
   @IsInt()
   @Min(MIN_DURATION_MINUTES)
   @Max(MAX_DURATION_MINUTES)
   minDurationMinutes: number = 60;
 
-  @Field(() => Int, { defaultValue: 480, description: 'Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit' })
+  @Field(() => Int, {
+    defaultValue: 480,
+    description:
+      'Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit',
+  })
   @IsInt()
   @Min(MIN_DURATION_MINUTES)
   @Max(MAX_DURATION_MINUTES)
   maxDurationMinutes: number = 480;
 
-  @Field(() => Int, { defaultValue: 0, description: 'Aforo por reserva. 0 = sin control' })
+  @Field(() => Int, {
+    defaultValue: 0,
+    description: 'Aforo por reserva. 0 = sin control',
+  })
   @IsInt()
   @Min(0)
   capacity: number = 0;
 
-  @Field(() => Int, { defaultValue: 1, description: 'Reservas que caben a la misma hora (ej. 4 asadores)' })
+  @Field(() => Int, {
+    defaultValue: 1,
+    description: 'Reservas que caben a la misma hora (ej. 4 asadores)',
+  })
   @IsInt()
   @Min(1)
   @Max(100)
@@ -122,31 +155,48 @@ export class CreateAmenityInput {
   @Max(365)
   advanceBookingDays: number = 30;
 
-  @Field(() => Int, { defaultValue: 1, description: 'Anticipación mínima en días. 0 = se puede reservar para hoy' })
+  @Field(() => Int, {
+    defaultValue: 1,
+    description: 'Anticipación mínima en días. 0 = se puede reservar para hoy',
+  })
   @IsInt()
   @Min(0)
   @Max(365)
   minAdvanceDays: number = 1;
 
-  @Field(() => Int, { defaultValue: 1, description: 'Días antes del inicio en que aún se puede cancelar sin quedar con el cobro' })
+  @Field(() => Int, {
+    defaultValue: 1,
+    description:
+      'Días antes del inicio en que aún se puede cancelar sin quedar con el cobro',
+  })
   @IsInt()
   @Min(0)
   @Max(365)
   cancellationDeadlineDays: number = 1;
 
-  @Field(() => Int, { defaultValue: 0, description: 'Horas que se suman al plazo de cancelación en días' })
+  @Field(() => Int, {
+    defaultValue: 0,
+    description: 'Horas que se suman al plazo de cancelación en días',
+  })
   @IsInt()
   @Min(0)
   @Max(168)
   cancellationDeadlineHours: number = 0;
 
-  @Field(() => Int, { defaultValue: 100, description: '% de la tarifa que se retiene al cancelar fuera de plazo' })
+  @Field(() => Int, {
+    defaultValue: 100,
+    description: '% de la tarifa que se retiene al cancelar fuera de plazo',
+  })
   @IsInt()
   @Min(0)
   @Max(100)
   lateCancellationFeePercent: number = 100;
 
-  @Field(() => Int, { defaultValue: 0, description: 'Reservas gratis al año por miembro del consejo. 0 = sin beneficio' })
+  @Field(() => Int, {
+    defaultValue: 0,
+    description:
+      'Reservas gratis al año por miembro del consejo. 0 = sin beneficio',
+  })
   @IsInt()
   @Min(0)
   @Max(12)

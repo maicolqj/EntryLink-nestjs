@@ -5,7 +5,6 @@ import { IsOptional, IsString, MaxLength } from 'class-validator';
  * ruta crítica, sin serializadores ni modelos.
  */
 export class PanicDeliveredInput {
-
   /** Token firmado que viajó en el payload FCM como `ackToken`. */
   @IsString()
   @MaxLength(200)

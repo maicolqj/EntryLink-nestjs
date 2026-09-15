@@ -1,9 +1,9 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import GraphQLJSON from 'graphql-type-json';
 
-import { NotificationType }         from '../../enums/notification-type.enum';
-import { NotificationPriority }     from '../../enums/notification-priority.enum';
-import { NotificationActionType }   from '../../enums/notification-action-type.enum';
+import { NotificationType } from '../../enums/notification-type.enum';
+import { NotificationPriority } from '../../enums/notification-priority.enum';
+import { NotificationActionType } from '../../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../../enums/notification-action-result.enum';
 
 /**
@@ -12,7 +12,6 @@ import { NotificationActionResult } from '../../enums/notification-action-result
  */
 @ObjectType()
 export class NotificationUserInfo {
-
   @Field(() => ID)
   id: string;
 
@@ -50,7 +49,6 @@ export class NotificationUserInfo {
  */
 @ObjectType()
 export class NotificationDetailResponse {
-
   @Field(() => ID)
   id: string;
 

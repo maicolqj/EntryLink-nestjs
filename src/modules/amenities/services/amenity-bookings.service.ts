@@ -1,15 +1,31 @@
-import { HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, DataSource, In, IsNull, LessThan, MoreThan, Repository } from 'typeorm';
+import {
+  Between,
+  DataSource,
+  In,
+  IsNull,
+  LessThan,
+  MoreThan,
+  Repository,
+} from 'typeorm';
 import { randomBytes } from 'node:crypto';
 
-import { Amenity }        from '../entities/amenity.entity';
+import { Amenity } from '../entities/amenity.entity';
 import { AmenityBooking } from '../entities/amenity-booking.entity';
 
-import { AmenityBookingMode }   from '../enums/amenity-booking-mode.enum';
-import { AmenityFeeType }       from '../enums/amenity-fee-type.enum';
+import { AmenityBookingMode } from '../enums/amenity-booking-mode.enum';
+import { AmenityFeeType } from '../enums/amenity-fee-type.enum';
 import {
-  AmenityDurationUnit, DURATION_BOUNDS_MINUTES, MINUTES_PER_DAY,
+  AmenityDurationUnit,
+  DURATION_BOUNDS_MINUTES,
+  MINUTES_PER_DAY,
 } from '../enums/amenity-duration-unit.enum';
 import {
   AmenityBookingStatus,
@@ -17,41 +33,44 @@ import {
   COUNCIL_QUOTA_STATUSES,
 } from '../enums/amenity-booking-status.enum';
 
-import { CreateAmenityBookingInput }  from '../dto/inputs/create-amenity-booking.input';
-import { CancelAmenityBookingInput }  from '../dto/inputs/cancel-amenity-booking.input';
-import { RejectAmenityBookingInput }  from '../dto/inputs/reject-amenity-booking.input';
-import { ChargeAmenityDamageInput }   from '../dto/inputs/charge-amenity-damage.input';
+import { CreateAmenityBookingInput } from '../dto/inputs/create-amenity-booking.input';
+import { CancelAmenityBookingInput } from '../dto/inputs/cancel-amenity-booking.input';
+import { RejectAmenityBookingInput } from '../dto/inputs/reject-amenity-booking.input';
+import { ChargeAmenityDamageInput } from '../dto/inputs/charge-amenity-damage.input';
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
 
-import { AmenitiesService }           from './amenities.service';
+import { AmenitiesService } from './amenities.service';
 import { AmenityAvailabilityService } from './amenity-availability.service';
 
-import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
-import { CustomError }      from '../../shared/utils/errors.utils';
-import { AmenityErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import {
+  AmenityErrorCode,
+  GeneralErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { UnitService }               from '../../residential-complex/services/unit.service';
-import { ResidentsService }          from '../../residents/services/residents.service';
-import { NotificationsService }      from '../../notifications/services/notifications.service';
-import { NotificationType }          from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
-import { FinanceService }            from '../../finance/services/finance.service';
-import { AccountingService }         from '../../finance/services/accounting.service';
-import { PropertyAccountStatus }     from '../../finance/entities/property-account-status.entity';
-import { AuditService }              from '../../audit/services/audit.service';
-import { AuditAction }               from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
-import { SocketService }             from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }               from '../../../core/infrastructure/socket/socket.events';
+import { UnitService } from '../../residential-complex/services/unit.service';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { FinanceService } from '../../finance/services/finance.service';
+import { AccountingService } from '../../finance/services/accounting.service';
+import { PropertyAccountStatus } from '../../finance/entities/property-account-status.entity';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 const MINUTE_MS = 60_000;
-const HOUR_MS   = 60 * MINUTE_MS;
-const DAY_MS    = 24 * HOUR_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 /** Minutos antes del inicio en que la portería ya puede registrar el ingreso. */
 const CHECK_IN_GRACE_MINUTES = 30;
@@ -108,7 +127,10 @@ export class AmenityBookingsService {
     currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
     const amenity = await this.amenitiesService.findByIdOrFail(input.amenityId);
-    const complex = await this.complexService.findById(amenity.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      amenity.complexId,
+      currentUser,
+    );
     this.amenitiesService.assertActive(amenity);
 
     // El asiento contable exige un usuario real. Cuando quien opera es la cuenta
@@ -117,11 +139,14 @@ export class AmenityBookingsService {
     // usa el parqueadero de visitantes.
     const actingUserId = this.resolveActingUserId(currentUser, complex.ownerId);
 
-    const { unitId, residentId, requestedByName, isCouncilMember } = await this.resolveRequester(
-      amenity.complexId, input.unitId, currentUser,
-    );
+    const { unitId, residentId, requestedByName, isCouncilMember } =
+      await this.resolveRequester(amenity.complexId, input.unitId, currentUser);
 
-    const { startAt, endAt } = this.normalizeRange(amenity, input.startAt, input.endAt);
+    const { startAt, endAt } = this.normalizeRange(
+      amenity,
+      input.startAt,
+      input.endAt,
+    );
 
     await this.assertBookable(amenity, unitId, startAt, endAt, input.attendees);
 
@@ -131,27 +156,38 @@ export class AmenityBookingsService {
     // `useCouncilFreeQuota` llega en true por defecto: quien no conozca el
     // beneficio no tiene que pedirlo. Ponerlo en false es la forma de guardarse
     // el cupo del año y pagar esta reserva.
-    const usesCouncilQuota = input.useCouncilFreeQuota !== false
-      && await this.hasCouncilQuotaLeft(amenity, residentId, isCouncilMember, startAt);
+    const usesCouncilQuota =
+      input.useCouncilFreeQuota !== false &&
+      (await this.hasCouncilQuotaLeft(
+        amenity,
+        residentId,
+        isCouncilMember,
+        startAt,
+      ));
 
-    const feeAmount = usesCouncilQuota ? 0 : this.calculateFee(amenity, startAt, endAt);
+    const feeAmount = usesCouncilQuota
+      ? 0
+      : this.calculateFee(amenity, startAt, endAt);
 
     const autoApproved = !amenity.requiresApproval;
 
     let booking = await this.bookingRepo.save(
       this.bookingRepo.create({
-        amenityId:   amenity.id,
-        complexId:   amenity.complexId,
+        amenityId: amenity.id,
+        complexId: amenity.complexId,
         unitId,
         residentId,
-        requestedByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+        requestedByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
         requestedByName,
         startAt,
         endAt,
-        attendees:   input.attendees,
-        purpose:     input.purpose ?? null,
-        notes:       input.notes ?? null,
-        status:      autoApproved ? AmenityBookingStatus.APPROVED : AmenityBookingStatus.PENDING,
+        attendees: input.attendees,
+        purpose: input.purpose ?? null,
+        notes: input.notes ?? null,
+        status: autoApproved
+          ? AmenityBookingStatus.APPROVED
+          : AmenityBookingStatus.PENDING,
         feeAmount,
         isCouncilFreeBooking: usesCouncilQuota,
       }),
@@ -163,27 +199,47 @@ export class AmenityBookingsService {
 
     await this.amenitiesService.invalidate(amenity.complexId);
 
-    this.socketService.emitToComplex(amenity.complexId, SocketEvent.AMENITY_BOOKING_REQUESTED, {
-      bookingId: booking.id,
-      amenityId: amenity.id,
-      amenityName: amenity.name,
-      unitId,
-      startAt: booking.startAt,
-      endAt: booking.endAt,
-      status: booking.status,
-    });
+    this.socketService.emitToComplex(
+      amenity.complexId,
+      SocketEvent.AMENITY_BOOKING_REQUESTED,
+      {
+        bookingId: booking.id,
+        amenityId: amenity.id,
+        amenityName: amenity.name,
+        unitId,
+        startAt: booking.startAt,
+        endAt: booking.endAt,
+        status: booking.status,
+      },
+    );
 
     if (autoApproved) {
-      this.notifyResidents(booking, amenity, NotificationType.AMENITY_BOOKING_APPROVED,
+      this.notifyResidents(
+        booking,
+        amenity,
+        NotificationType.AMENITY_BOOKING_APPROVED,
         '✅ Reserva confirmada',
         `Tu reserva de ${amenity.name} para el ${this.formatWhen(booking.startAt, booking.endAt)} quedó confirmada.` +
-        (booking.accessCode ? ` Código de ingreso: ${booking.accessCode}.` : ''),
-      ).catch(err => this.logger.warn(`Error al notificar reserva ${booking.id}: ${err?.message}`));
+          (booking.accessCode
+            ? ` Código de ingreso: ${booking.accessCode}.`
+            : ''),
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar reserva ${booking.id}: ${err?.message}`,
+        ),
+      );
     } else {
-      this.notifyStaff(booking, amenity, NotificationType.AMENITY_BOOKING_REQUESTED,
+      this.notifyStaff(
+        booking,
+        amenity,
+        NotificationType.AMENITY_BOOKING_REQUESTED,
         '🗓️ Nueva reserva por aprobar',
         `${requestedByName ?? 'Un residente'} solicitó ${amenity.name} para el ${this.formatWhen(booking.startAt, booking.endAt)}.`,
-      ).catch(err => this.logger.warn(`Error al notificar reserva ${booking.id}: ${err?.message}`));
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar reserva ${booking.id}: ${err?.message}`,
+        ),
+      );
     }
 
     void this.auditService.log({
@@ -191,8 +247,13 @@ export class AmenityBookingsService {
       entityId: booking.id,
       action: AuditAction.CREATE,
       newValue: {
-        amenityId: amenity.id, amenityName: amenity.name, unitId,
-        startAt, endAt, status: booking.status, feeAmount,
+        amenityId: amenity.id,
+        amenityName: amenity.name,
+        unitId,
+        startAt,
+        endAt,
+        status: booking.status,
+        feeAmount,
       },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
@@ -218,10 +279,12 @@ export class AmenityBookingsService {
     rawEnd: string,
   ): { startAt: Date; endAt: Date } {
     const startAt = new Date(rawStart);
-    const endAt   = new Date(rawEnd);
+    const endAt = new Date(rawEnd);
 
-    if (amenity.durationUnit !== AmenityDurationUnit.DAYS) return { startAt, endAt };
-    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) return { startAt, endAt };
+    if (amenity.durationUnit !== AmenityDurationUnit.DAYS)
+      return { startAt, endAt };
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()))
+      return { startAt, endAt };
 
     const spanStart = this.availabilityService.startOfDay(startAt);
     let spanEnd = this.availabilityService.startOfDay(endAt);
@@ -239,39 +302,60 @@ export class AmenityBookingsService {
   // APROBAR / RECHAZAR
   // ═══════════════════════════════════════════════════════════════════════════
 
-  async approve(bookingId: string, currentUser: JwtAccessPayload): Promise<AmenityBooking> {
+  async approve(
+    bookingId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
     const booking = await this.findByIdOrFail(bookingId);
-    const complex = await this.complexService.findById(booking.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      booking.complexId,
+      currentUser,
+    );
     const actingUserId = this.resolveActingUserId(currentUser, complex.ownerId);
 
     this.assertStatus(booking, [AmenityBookingStatus.PENDING]);
 
-    const amenity = await this.amenitiesService.findByIdOrFail(booking.amenityId);
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
 
     // El cupo se revalida en la aprobación: entre la solicitud y este momento
     // pudo aprobarse otra reserva sobre la misma franja.
     await this.assertSlotStillFree(amenity, booking);
 
-    booking.status           = AmenityBookingStatus.APPROVED;
-    booking.approvedByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
-    booking.approvedAt       = new Date();
+    booking.status = AmenityBookingStatus.APPROVED;
+    booking.approvedByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.approvedAt = new Date();
 
     const activated = await this.activate(booking, amenity, actingUserId);
     await this.amenitiesService.invalidate(booking.complexId);
 
     this.emitUpdated(activated, amenity);
 
-    this.notifyResidents(activated, amenity, NotificationType.AMENITY_BOOKING_APPROVED,
+    this.notifyResidents(
+      activated,
+      amenity,
+      NotificationType.AMENITY_BOOKING_APPROVED,
       '✅ Reserva aprobada',
       `Tu reserva de ${amenity.name} para el ${this.formatWhen(activated.startAt, activated.endAt)} fue aprobada.` +
-      (activated.accessCode ? ` Código de ingreso: ${activated.accessCode}.` : ''),
-    ).catch(err => this.logger.warn(`Error al notificar aprobación ${bookingId}: ${err?.message}`));
+        (activated.accessCode
+          ? ` Código de ingreso: ${activated.accessCode}.`
+          : ''),
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar aprobación ${bookingId}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.AmenityBooking,
       entityId: bookingId,
       action: AuditAction.APPROVE,
-      newValue: { status: activated.status, feeChargeId: activated.feeChargeId },
+      newValue: {
+        status: activated.status,
+        feeChargeId: activated.feeChargeId,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -291,22 +375,32 @@ export class AmenityBookingsService {
 
     this.assertStatus(booking, [AmenityBookingStatus.PENDING]);
 
-    const amenity = await this.amenitiesService.findByIdOrFail(booking.amenityId);
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
 
-    booking.status           = AmenityBookingStatus.REJECTED;
-    booking.rejectionReason  = input.reason;
-    booking.approvedByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
-    booking.approvedAt       = new Date();
+    booking.status = AmenityBookingStatus.REJECTED;
+    booking.rejectionReason = input.reason;
+    booking.approvedByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.approvedAt = new Date();
 
     const saved = await this.bookingRepo.save(booking);
     await this.amenitiesService.invalidate(booking.complexId);
 
     this.emitUpdated(saved, amenity);
 
-    this.notifyResidents(saved, amenity, NotificationType.AMENITY_BOOKING_REJECTED,
+    this.notifyResidents(
+      saved,
+      amenity,
+      NotificationType.AMENITY_BOOKING_REJECTED,
       '❌ Reserva rechazada',
       `Tu reserva de ${amenity.name} para el ${this.formatWhen(saved.startAt, saved.endAt)} fue rechazada: ${input.reason}`,
-    ).catch(err => this.logger.warn(`Error al notificar rechazo ${input.bookingId}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar rechazo ${input.bookingId}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.AmenityBooking,
@@ -341,7 +435,10 @@ export class AmenityBookingsService {
     currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
     const booking = await this.findByIdOrFail(input.bookingId);
-    const complex = await this.complexService.findById(booking.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      booking.complexId,
+      currentUser,
+    );
     await this.assertCanManageBooking(booking, currentUser);
 
     this.assertStatus(booking, [
@@ -349,13 +446,16 @@ export class AmenityBookingsService {
       AmenityBookingStatus.APPROVED,
     ]);
 
-    const amenity = await this.amenitiesService.findByIdOrFail(booking.amenityId);
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
 
     // El plazo real suma los dos campos: el reglamento de cada copropiedad se
     // escribe "2 días antes" o "48 horas antes", y sumarlos evita que se
     // contradigan cuando el administrador llena los dos.
-    const deadlineHours  = amenity.cancellationDeadlineDays * 24 + amenity.cancellationDeadlineHours;
-    const hoursToStart   = (booking.startAt.getTime() - Date.now()) / HOUR_MS;
+    const deadlineHours =
+      amenity.cancellationDeadlineDays * 24 + amenity.cancellationDeadlineHours;
+    const hoursToStart = (booking.startAt.getTime() - Date.now()) / HOUR_MS;
     const withinDeadline = hoursToStart >= deadlineHours;
 
     // Fuera de plazo se retiene la parte de la tarifa que fije la zona. Una
@@ -363,20 +463,27 @@ export class AmenityBookingsService {
     // que retener, así que el porcentaje se aplica sobre cero y no cobra nada.
     const retained = withinDeadline
       ? 0
-      : Math.round(booking.feeAmount * amenity.lateCancellationFeePercent) / 100;
+      : Math.round(booking.feeAmount * amenity.lateCancellationFeePercent) /
+        100;
 
-    booking.status              = AmenityBookingStatus.CANCELLED;
-    booking.cancelledAt         = new Date();
-    booking.cancelledByUserId   = currentUser.entityType === 'user' ? currentUser.sub : null;
-    booking.cancellationReason  = input.reason ?? null;
+    booking.status = AmenityBookingStatus.CANCELLED;
+    booking.cancelledAt = new Date();
+    booking.cancelledByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.cancellationReason = input.reason ?? null;
 
-    const performedBy = currentUser.entityType === 'user' ? currentUser.sub : undefined;
+    const performedBy =
+      currentUser.entityType === 'user' ? currentUser.sub : undefined;
 
     // Solo la TARIFA responde al plazo de cancelación. El cobro por daños no:
     // responde a un hecho al recibir la zona, y cancelar tarde no puede
     // convertirlo en un castigo.
     await this.settleCancellationCharge(
-      booking, amenity, retained, this.resolveActingUserId(currentUser, complex.ownerId), performedBy,
+      booking,
+      amenity,
+      retained,
+      this.resolveActingUserId(currentUser, complex.ownerId),
+      performedBy,
     );
 
     const saved = await this.bookingRepo.save(booking);
@@ -384,20 +491,30 @@ export class AmenityBookingsService {
 
     this.emitUpdated(saved, amenity);
 
-    const chargeNote = retained > 0
-      ? ` Se retiene ${this.formatMoney(retained)} por cancelar fuera del plazo de ${this.formatDeadline(deadlineHours)}.`
-      : '';
+    const chargeNote =
+      retained > 0
+        ? ` Se retiene ${this.formatMoney(retained)} por cancelar fuera del plazo de ${this.formatDeadline(deadlineHours)}.`
+        : '';
 
-    this.notifyCancellation(saved, amenity, currentUser, chargeNote)
-      .catch(err => this.logger.warn(`Error al notificar cancelación ${saved.id}: ${err?.message}`));
+    this.notifyCancellation(saved, amenity, currentUser, chargeNote).catch(
+      (err) =>
+        this.logger.warn(
+          `Error al notificar cancelación ${saved.id}: ${err?.message}`,
+        ),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.AmenityBooking,
       entityId: saved.id,
       action: AuditAction.UPDATE,
-      newValue: {
-        status: saved.status, reason: input.reason, withinDeadline,
-        feeChargeId: saved.feeChargeId, retained, lateCancellationChargeId: saved.lateCancellationChargeId,
+      newValue: {
+        status: saved.status,
+        reason: input.reason,
+        withinDeadline,
+
+        feeChargeId: saved.feeChargeId,
+        retained,
+        lateCancellationChargeId: saved.lateCancellationChargeId,
       },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
@@ -424,34 +541,45 @@ export class AmenityBookingsService {
       where: {
         amenityId: amenity.id,
         deletedAt: IsNull(),
-        status:    In(ACTIVE_BOOKING_STATUSES),
-        startAt:   LessThan(endAt),
-        endAt:     MoreThan(startAt),
+        status: In(ACTIVE_BOOKING_STATUSES),
+        startAt: LessThan(endAt),
+        endAt: MoreThan(startAt),
       },
     });
 
     for (const booking of affected) {
-      booking.status             = AmenityBookingStatus.CANCELLED;
-      booking.cancelledAt        = new Date();
-      booking.cancelledByUserId  = currentUser.entityType === 'user' ? currentUser.sub : null;
+      booking.status = AmenityBookingStatus.CANCELLED;
+      booking.cancelledAt = new Date();
+      booking.cancelledByUserId =
+        currentUser.entityType === 'user' ? currentUser.sub : null;
       booking.cancellationReason = reason;
 
       // Cancelación por decisión del complejo: el cargo se anula y la garantía
       // vuelve siempre, sin mirar el plazo. El residente no provocó esto.
-      const performedBy = currentUser.entityType === 'user' ? currentUser.sub : undefined;
+      const performedBy =
+        currentUser.entityType === 'user' ? currentUser.sub : undefined;
 
       if (booking.feeChargeId) {
         const cancelledCharge = await this.financeService.cancelInternalCharge(
-          booking.feeChargeId, reason, performedBy,
+          booking.feeChargeId,
+          reason,
+          performedBy,
         );
         if (cancelledCharge) booking.feeChargeId = null;
       }
       await this.bookingRepo.save(booking);
 
-      this.notifyResidents(booking, amenity, NotificationType.AMENITY_BOOKING_CANCELLED,
+      this.notifyResidents(
+        booking,
+        amenity,
+        NotificationType.AMENITY_BOOKING_CANCELLED,
         '⚠️ Reserva cancelada',
         `Tu reserva de ${amenity.name} del ${this.formatWhen(booking.startAt, booking.endAt)} fue cancelada. ${reason}`,
-      ).catch(err => this.logger.warn(`Error al notificar cancelación masiva ${booking.id}: ${err?.message}`));
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al notificar cancelación masiva ${booking.id}: ${err?.message}`,
+        ),
+      );
     }
 
     return affected.length;
@@ -474,7 +602,11 @@ export class AmenityBookingsService {
     await this.complexService.findById(complexId, currentUser);
 
     const booking = await this.bookingRepo.findOne({
-      where: { complexId, accessCode: accessCode.trim().toUpperCase(), deletedAt: IsNull() },
+      where: {
+        complexId,
+        accessCode: accessCode.trim().toUpperCase(),
+        deletedAt: IsNull(),
+      },
       relations: ['amenity', 'unit'],
     });
 
@@ -497,7 +629,10 @@ export class AmenityBookingsService {
     this.assertStatus(booking, [AmenityBookingStatus.APPROVED]);
 
     const now = new Date();
-    if (now.getTime() < booking.startAt.getTime() - CHECK_IN_GRACE_MINUTES * MINUTE_MS) {
+    if (
+      now.getTime() <
+      booking.startAt.getTime() - CHECK_IN_GRACE_MINUTES * MINUTE_MS
+    ) {
       throw new CustomError({
         message: `El ingreso se habilita ${CHECK_IN_GRACE_MINUTES} minutos antes del inicio de la reserva`,
         statusCode: HttpStatus.CONFLICT,
@@ -505,24 +640,32 @@ export class AmenityBookingsService {
       });
     }
 
-    booking.status            = AmenityBookingStatus.CHECKED_IN;
-    booking.checkInAt         = now;
-    booking.checkedInByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.status = AmenityBookingStatus.CHECKED_IN;
+    booking.checkInAt = now;
+    booking.checkedInByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
 
     const saved = await this.bookingRepo.save(booking);
     await this.amenitiesService.invalidate(complexId);
 
-    this.socketService.emitToComplex(complexId, SocketEvent.AMENITY_BOOKING_CHECKED_IN, {
-      bookingId: saved.id,
-      amenityId: saved.amenityId,
-      unitId: saved.unitId,
-      checkInAt: saved.checkInAt,
-    });
+    this.socketService.emitToComplex(
+      complexId,
+      SocketEvent.AMENITY_BOOKING_CHECKED_IN,
+      {
+        bookingId: saved.id,
+        amenityId: saved.amenityId,
+        unitId: saved.unitId,
+        checkInAt: saved.checkInAt,
+      },
+    );
 
     return saved;
   }
 
-  async checkOut(bookingId: string, currentUser: JwtAccessPayload): Promise<AmenityBooking> {
+  async checkOut(
+    bookingId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
     const booking = await this.findByIdOrFail(bookingId);
     await this.complexService.findById(booking.complexId, currentUser);
 
@@ -534,7 +677,7 @@ export class AmenityBookingsService {
       });
     }
 
-    booking.status     = AmenityBookingStatus.COMPLETED;
+    booking.status = AmenityBookingStatus.COMPLETED;
     booking.checkOutAt = new Date();
 
     // El cobro por daños NO se registra aquí: exige revisar la zona y dejar
@@ -542,11 +685,15 @@ export class AmenityBookingsService {
     const saved = await this.bookingRepo.save(booking);
     await this.amenitiesService.invalidate(booking.complexId);
 
-    this.socketService.emitToComplex(booking.complexId, SocketEvent.AMENITY_BOOKING_UPDATED, {
-      bookingId: saved.id,
-      status: saved.status,
-      checkOutAt: saved.checkOutAt,
-    });
+    this.socketService.emitToComplex(
+      booking.complexId,
+      SocketEvent.AMENITY_BOOKING_UPDATED,
+      {
+        bookingId: saved.id,
+        status: saved.status,
+        checkOutAt: saved.checkOutAt,
+      },
+    );
 
     return saved;
   }
@@ -572,7 +719,10 @@ export class AmenityBookingsService {
     currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
     const booking = await this.findByIdOrFail(input.bookingId);
-    const complex = await this.complexService.findById(booking.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      booking.complexId,
+      currentUser,
+    );
     const actingUserId = this.resolveActingUserId(currentUser, complex.ownerId);
 
     if (booking.damageChargeId) {
@@ -585,9 +735,13 @@ export class AmenityBookingsService {
 
     // Cobrar antes de que el residente use la zona no tiene sentido: el daño
     // solo puede constatarse al recibirla de vuelta.
-    if (!booking.checkInAt && booking.status !== AmenityBookingStatus.COMPLETED) {
+    if (
+      !booking.checkInAt &&
+      booking.status !== AmenityBookingStatus.COMPLETED
+    ) {
       throw new CustomError({
-        message: 'El cobro por daños se registra cuando el residente entrega la zona',
+        message:
+          'El cobro por daños se registra cuando el residente entrega la zona',
         statusCode: HttpStatus.CONFLICT,
         errorCode: AmenityErrorCode.DAMAGE_NOT_CHARGEABLE_YET,
       });
@@ -597,33 +751,46 @@ export class AmenityBookingsService {
     const description = input.description.trim();
 
     const now = new Date();
-    const { chargeId } = await this.dataSource.transaction(em =>
+    const { chargeId } = await this.dataSource.transaction((em) =>
       this.accountingService.emitAmenityUnitCharge(em, {
-        complexId:   booking.complexId,
-        unitId:      booking.unitId,
-        amount:      input.amount,
+        complexId: booking.complexId,
+        unitId: booking.unitId,
+        amount: input.amount,
         // El daño es ingreso del mes en que se constata, no del de la reserva.
-        period:      this.periodOf(now),
-        dueDate:     new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
+        period: this.periodOf(now),
+        dueDate: new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        ),
         documentDate: now,
         description: `Daños en ${amenityName} — ${description}`,
         createdByUserId: actingUserId,
       }),
     );
 
-    booking.damageChargeId        = chargeId;
-    booking.damageAmount          = input.amount;
-    booking.damageDescription     = description;
-    booking.damageChargedAt       = new Date();
-    booking.damageChargedByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.damageChargeId = chargeId;
+    booking.damageAmount = input.amount;
+    booking.damageDescription = description;
+    booking.damageChargedAt = new Date();
+    booking.damageChargedByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
 
     const saved = await this.bookingRepo.save(booking);
 
-    this.notifyResidents(saved, saved.amenity ?? ({ id: saved.amenityId, name: amenityName } as Amenity),
+    this.notifyResidents(
+      saved,
+      saved.amenity ?? ({ id: saved.amenityId, name: amenityName } as Amenity),
       NotificationType.AMENITY_DAMAGE_CHARGED,
       '⚠️ Cobro por daños en zona común',
       `Se cargó a tu unidad un valor por daños en ${amenityName}: ${description}`,
-    ).catch(err => this.logger.warn(`Error al notificar daños ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(`Error al notificar daños ${saved.id}: ${err?.message}`),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.AmenityBooking,
@@ -665,11 +832,20 @@ export class AmenityBookingsService {
     filters: FilterAmenityBookingsInput,
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedAmenityBookingsResponse> {
-    const resident = await this.residentsService.findMyProfile(currentUser.sub, complexId);
-    return this.queryBookings(complexId, pagination, { ...filters, unitId: resident.unitId });
+    const resident = await this.residentsService.findMyProfile(
+      currentUser.sub,
+      complexId,
+    );
+    return this.queryBookings(complexId, pagination, {
+      ...filters,
+      unitId: resident.unitId,
+    });
   }
 
-  async findById(bookingId: string, currentUser: JwtAccessPayload): Promise<AmenityBooking> {
+  async findById(
+    bookingId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
     const booking = await this.findByIdOrFail(bookingId);
     await this.complexService.findById(booking.complexId, currentUser);
     await this.assertCanManageBooking(booking, currentUser);
@@ -682,8 +858,8 @@ export class AmenityBookingsService {
       where: {
         amenityId,
         deletedAt: IsNull(),
-        status:    In(ACTIVE_BOOKING_STATUSES),
-        endAt:     MoreThan(new Date()),
+        status: In(ACTIVE_BOOKING_STATUSES),
+        endAt: MoreThan(new Date()),
       },
     });
   }
@@ -704,18 +880,30 @@ export class AmenityBookingsService {
       .where('b.complexId = :complexId', { complexId })
       .andWhere('b.deletedAt IS NULL');
 
-    if (filters?.status)     qb.andWhere('b.status = :status',         { status: filters.status });
-    if (filters?.amenityId)  qb.andWhere('b.amenityId = :amenityId',   { amenityId: filters.amenityId });
-    if (filters?.unitId)     qb.andWhere('b.unitId = :unitId',         { unitId: filters.unitId });
-    if (filters?.startFrom)  qb.andWhere('b.startAt >= :startFrom',    { startFrom: new Date(filters.startFrom) });
-    if (filters?.startUntil) qb.andWhere('b.startAt <= :startUntil',   { startUntil: new Date(filters.startUntil) });
+    if (filters?.status)
+      qb.andWhere('b.status = :status', { status: filters.status });
+    if (filters?.amenityId)
+      qb.andWhere('b.amenityId = :amenityId', { amenityId: filters.amenityId });
+    if (filters?.unitId)
+      qb.andWhere('b.unitId = :unitId', { unitId: filters.unitId });
+    if (filters?.startFrom)
+      qb.andWhere('b.startAt >= :startFrom', {
+        startFrom: new Date(filters.startFrom),
+      });
+    if (filters?.startUntil)
+      qb.andWhere('b.startAt <= :startUntil', {
+        startUntil: new Date(filters.startUntil),
+      });
 
     qb.leftJoinAndSelect('b.amenity', 'amenity')
       .leftJoinAndSelect('b.unit', 'unit')
       .orderBy('b.startAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
 
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -775,8 +963,8 @@ export class AmenityBookingsService {
   async markNoShows(): Promise<number> {
     const stale = await this.bookingRepo.find({
       where: {
-        status:    AmenityBookingStatus.APPROVED,
-        endAt:     LessThan(new Date()),
+        status: AmenityBookingStatus.APPROVED,
+        endAt: LessThan(new Date()),
         deletedAt: IsNull(),
       },
       relations: ['amenity'],
@@ -788,7 +976,10 @@ export class AmenityBookingsService {
       await this.bookingRepo.save(booking);
 
       if (booking.amenity) {
-        this.notifyResidents(booking, booking.amenity, NotificationType.AMENITY_BOOKING_NO_SHOW,
+        this.notifyResidents(
+          booking,
+          booking.amenity,
+          NotificationType.AMENITY_BOOKING_NO_SHOW,
           'Reserva no utilizada',
           `Tu reserva de ${booking.amenity.name} del ${this.formatWhen(booking.startAt, booking.endAt)} se cerró sin registro de ingreso.`,
         ).catch(() => undefined);
@@ -807,8 +998,8 @@ export class AmenityBookingsService {
   async autoCompleteCheckedIn(): Promise<number> {
     const finished = await this.bookingRepo.find({
       where: {
-        status:    AmenityBookingStatus.CHECKED_IN,
-        endAt:     LessThan(new Date()),
+        status: AmenityBookingStatus.CHECKED_IN,
+        endAt: LessThan(new Date()),
         deletedAt: IsNull(),
       },
       relations: ['amenity'],
@@ -816,7 +1007,7 @@ export class AmenityBookingsService {
     });
 
     for (const booking of finished) {
-      booking.status     = AmenityBookingStatus.COMPLETED;
+      booking.status = AmenityBookingStatus.COMPLETED;
       booking.checkOutAt = new Date();
 
       // El depósito queda PENDING a propósito: un cron no puede dar fe de que
@@ -834,10 +1025,10 @@ export class AmenityBookingsService {
 
     const upcoming = await this.bookingRepo.find({
       where: {
-        status:         AmenityBookingStatus.APPROVED,
-        startAt:        Between(now, horizon),
+        status: AmenityBookingStatus.APPROVED,
+        startAt: Between(now, horizon),
         reminderSentAt: IsNull(),
-        deletedAt:      IsNull(),
+        deletedAt: IsNull(),
       },
       relations: ['amenity'],
       take: 500,
@@ -846,11 +1037,20 @@ export class AmenityBookingsService {
     for (const booking of upcoming) {
       if (!booking.amenity) continue;
 
-      await this.notifyResidents(booking, booking.amenity, NotificationType.AMENITY_REMINDER,
+      await this.notifyResidents(
+        booking,
+        booking.amenity,
+        NotificationType.AMENITY_REMINDER,
         '⏰ Recordatorio de reserva',
         `Tu reserva de ${booking.amenity.name} es el ${this.formatWhen(booking.startAt, booking.endAt)}.` +
-        (booking.accessCode ? ` Código de ingreso: ${booking.accessCode}.` : ''),
-      ).catch(err => this.logger.warn(`Error al enviar recordatorio ${booking.id}: ${err?.message}`));
+          (booking.accessCode
+            ? ` Código de ingreso: ${booking.accessCode}.`
+            : ''),
+      ).catch((err) =>
+        this.logger.warn(
+          `Error al enviar recordatorio ${booking.id}: ${err?.message}`,
+        ),
+      );
 
       booking.reminderSentAt = new Date();
       await this.bookingRepo.save(booking);
@@ -876,9 +1076,14 @@ export class AmenityBookingsService {
   ): Promise<void> {
     const now = new Date();
 
-    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+    if (
+      Number.isNaN(startAt.getTime()) ||
+      Number.isNaN(endAt.getTime()) ||
+      endAt <= startAt
+    ) {
       throw new CustomError({
-        message: 'El rango de la reserva es inválido: el fin debe ser posterior al inicio',
+        message:
+          'El rango de la reserva es inválido: el fin debe ser posterior al inicio',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AmenityErrorCode.BOOKING_INVALID_RANGE,
       });
@@ -922,7 +1127,10 @@ export class AmenityBookingsService {
     // venir de una llamada directa a la API.
     if (isByDays) {
       const endOfSpan = this.availabilityService.startOfDay(endAt);
-      if (startAt.getTime() !== dayStart.getTime() || endAt.getTime() !== endOfSpan.getTime()) {
+      if (
+        startAt.getTime() !== dayStart.getTime() ||
+        endAt.getTime() !== endOfSpan.getTime()
+      ) {
         throw new CustomError({
           message: 'Esta zona se reserva por días completos',
           statusCode: HttpStatus.BAD_REQUEST,
@@ -979,14 +1187,27 @@ export class AmenityBookingsService {
       // misma hora. En modo SLOT no hace falta —la franja siempre cabe en la
       // ventana que la generó— y además el alineamiento se cuenta desde la
       // apertura de la ventana del día, que unir periodos desplazaría.
-      const openWindows = amenity.bookingMode === AmenityBookingMode.RANGE
-        ? await this.availabilityService.getContinuousWindowsForDay(amenity.id, dayStart)
-        : await this.availabilityService.getOpenWindowsForDay(amenity.id, dayStart);
+      const openWindows =
+        amenity.bookingMode === AmenityBookingMode.RANGE
+          ? await this.availabilityService.getContinuousWindowsForDay(
+              amenity.id,
+              dayStart,
+            )
+          : await this.availabilityService.getOpenWindowsForDay(
+              amenity.id,
+              dayStart,
+            );
 
-      const fitsInWindow = openWindows.some(w => startAt >= w.startAt && endAt <= w.endAt);
+      const fitsInWindow = openWindows.some(
+        (w) => startAt >= w.startAt && endAt <= w.endAt,
+      );
 
       if (!fitsInWindow) {
-        const blackout = await this.availabilityService.findBlackoutOverlapping(amenity.id, startAt, endAt);
+        const blackout = await this.availabilityService.findBlackoutOverlapping(
+          amenity.id,
+          startAt,
+          endAt,
+        );
         throw new CustomError({
           message: blackout
             ? `La zona está bloqueada en ese horario: ${blackout.reason}`
@@ -1005,7 +1226,11 @@ export class AmenityBookingsService {
 
     // ── Cupo de la franja ───────────────────────────────────────────────────
 
-    const overlapping = await this.availabilityService.countOverlappingBookings(amenity.id, startAt, endAt);
+    const overlapping = await this.availabilityService.countOverlappingBookings(
+      amenity.id,
+      startAt,
+      endAt,
+    );
     if (overlapping >= amenity.maxSimultaneousBookings) {
       throw new CustomError({
         message: 'La franja seleccionada ya no tiene cupo disponible',
@@ -1027,9 +1252,15 @@ export class AmenityBookingsService {
    * tramo entero deje de ser reservable: prometer una zona que cierra en la
    * mitad del alquiler es peor que no ofrecerla.
    */
-  private async assertSpanIsOpen(amenity: Amenity, spanStart: Date, spanEnd: Date): Promise<void> {
+  private async assertSpanIsOpen(
+    amenity: Amenity,
+    spanStart: Date,
+    spanEnd: Date,
+  ): Promise<void> {
     const blackout = await this.availabilityService.findBlackoutOverlapping(
-      amenity.id, spanStart, spanEnd,
+      amenity.id,
+      spanStart,
+      spanEnd,
     );
     if (blackout) {
       throw new CustomError({
@@ -1044,7 +1275,10 @@ export class AmenityBookingsService {
       day < spanEnd;
       day = this.availabilityService.addDays(day, 1)
     ) {
-      const windows = await this.availabilityService.getOpenWindowsForDay(amenity.id, day);
+      const windows = await this.availabilityService.getOpenWindowsForDay(
+        amenity.id,
+        day,
+      );
       if (windows.length === 0) {
         throw new CustomError({
           message: `${amenity.name} no abre el ${this.formatDay(day)}, así que no cubre todo el rango`,
@@ -1067,7 +1301,7 @@ export class AmenityBookingsService {
   ): void {
     const stepMs = amenity.slotDurationMinutes * MINUTE_MS;
 
-    const aligned = openWindows.some(w => {
+    const aligned = openWindows.some((w) => {
       if (startAt < w.startAt || startAt >= w.endAt) return false;
       return (startAt.getTime() - w.startAt.getTime()) % stepMs === 0;
     });
@@ -1081,15 +1315,19 @@ export class AmenityBookingsService {
     }
   }
 
-  private async assertUnitLimits(amenity: Amenity, unitId: string, startAt: Date): Promise<void> {
+  private async assertUnitLimits(
+    amenity: Amenity,
+    unitId: string,
+    startAt: Date,
+  ): Promise<void> {
     if (amenity.maxActiveBookingsPerUnit > 0) {
       const active = await this.bookingRepo.count({
         where: {
           amenityId: amenity.id,
           unitId,
           deletedAt: IsNull(),
-          status:    In(ACTIVE_BOOKING_STATUSES),
-          endAt:     MoreThan(new Date()),
+          status: In(ACTIVE_BOOKING_STATUSES),
+          endAt: MoreThan(new Date()),
         },
       });
 
@@ -1104,7 +1342,11 @@ export class AmenityBookingsService {
 
     if (amenity.maxBookingsPerUnitPerMonth > 0) {
       const monthStart = new Date(startAt.getFullYear(), startAt.getMonth(), 1);
-      const monthEnd   = new Date(startAt.getFullYear(), startAt.getMonth() + 1, 1);
+      const monthEnd = new Date(
+        startAt.getFullYear(),
+        startAt.getMonth() + 1,
+        1,
+      );
 
       // Cuentan también las ya usadas: el límite es de uso mensual, no de agenda.
       const inMonth = await this.bookingRepo.count({
@@ -1112,8 +1354,12 @@ export class AmenityBookingsService {
           amenityId: amenity.id,
           unitId,
           deletedAt: IsNull(),
-          status:    In([...ACTIVE_BOOKING_STATUSES, AmenityBookingStatus.COMPLETED, AmenityBookingStatus.NO_SHOW]),
-          startAt:   Between(monthStart, monthEnd),
+          status: In([
+            ...ACTIVE_BOOKING_STATUSES,
+            AmenityBookingStatus.COMPLETED,
+            AmenityBookingStatus.NO_SHOW,
+          ]),
+          startAt: Between(monthStart, monthEnd),
         },
       });
 
@@ -1132,7 +1378,10 @@ export class AmenityBookingsService {
    * (`property_account_status.currentBalance`, positivo = deuda) en vez de
    * recorrer los cargos: es el mismo número que muestra el estado de cuenta.
    */
-  private async assertUnitSolvent(amenity: Amenity, unitId: string): Promise<void> {
+  private async assertUnitSolvent(
+    amenity: Amenity,
+    unitId: string,
+  ): Promise<void> {
     if (!amenity.blockBookingsOnDebt) return;
 
     const status = await this.accountStatusRepo.findOne({
@@ -1141,7 +1390,8 @@ export class AmenityBookingsService {
 
     if (status && Number(status.currentBalance) > 0) {
       throw new CustomError({
-        message: 'Tu unidad tiene saldo pendiente. Ponte al día para reservar zonas comunes.',
+        message:
+          'Tu unidad tiene saldo pendiente. Ponte al día para reservar zonas comunes.',
         statusCode: HttpStatus.CONFLICT,
         errorCode: AmenityErrorCode.BOOKING_UNIT_HAS_DEBT,
       });
@@ -1149,14 +1399,21 @@ export class AmenityBookingsService {
   }
 
   /** Revalida el cupo antes de aprobar, excluyendo la propia reserva pendiente. */
-  private async assertSlotStillFree(amenity: Amenity, booking: AmenityBooking): Promise<void> {
+  private async assertSlotStillFree(
+    amenity: Amenity,
+    booking: AmenityBooking,
+  ): Promise<void> {
     const overlapping = await this.availabilityService.countOverlappingBookings(
-      amenity.id, booking.startAt, booking.endAt, booking.id,
+      amenity.id,
+      booking.startAt,
+      booking.endAt,
+      booking.id,
     );
 
     if (overlapping >= amenity.maxSimultaneousBookings) {
       throw new CustomError({
-        message: 'Ya no queda cupo en esa franja: otra reserva la ocupó mientras esta esperaba aprobación',
+        message:
+          'Ya no queda cupo en esa franja: otra reserva la ocupó mientras esta esperaba aprobación',
         statusCode: HttpStatus.CONFLICT,
         errorCode: AmenityErrorCode.BOOKING_SLOT_UNAVAILABLE,
       });
@@ -1185,15 +1442,19 @@ export class AmenityBookingsService {
     const dueDate = this.availabilityService.endOfDay(booking.startAt);
 
     if (booking.feeAmount > 0 && !booking.feeChargeId) {
-      const chargeId = await this.tryCreateCharge(booking, {
-        description: `Reserva ${amenity.name} — ${when}`,
-        amount: booking.feeAmount,
-        dueDate,
-        // La tarifa pertenece al período en que se usa la zona, no a aquel en
-        // que se aprobó: una reserva de enero pedida en diciembre es ingreso
-        // de enero.
-        period: this.periodOf(booking.startAt),
-      }, performedByUserId);
+      const chargeId = await this.tryCreateCharge(
+        booking,
+        {
+          description: `Reserva ${amenity.name} — ${when}`,
+          amount: booking.feeAmount,
+          dueDate,
+          // La tarifa pertenece al período en que se usa la zona, no a aquel en
+          // que se aprobó: una reserva de enero pedida en diciembre es ingreso
+          // de enero.
+          period: this.periodOf(booking.startAt),
+        },
+        performedByUserId,
+      );
       booking.feeChargeId = chargeId;
     }
 
@@ -1219,7 +1480,8 @@ export class AmenityBookingsService {
   ): Promise<void> {
     booking.lateCancellationAmount = retained;
 
-    const keepsOriginal = retained > 0 && retained === booking.feeAmount && !!booking.feeChargeId;
+    const keepsOriginal =
+      retained > 0 && retained === booking.feeAmount && !!booking.feeChargeId;
     if (keepsOriginal) return;
 
     if (booking.feeChargeId) {
@@ -1235,12 +1497,16 @@ export class AmenityBookingsService {
 
     if (retained <= 0) return;
 
-    booking.lateCancellationChargeId = await this.tryCreateCharge(booking, {
-      description: `Penalización por cancelación tardía — ${amenity.name} (${this.formatWhen(booking.startAt, booking.endAt)})`,
-      amount:      retained,
-      dueDate:     this.availabilityService.endOfDay(booking.startAt),
-      period:      this.periodOf(booking.startAt),
-    }, actingUserId);
+    booking.lateCancellationChargeId = await this.tryCreateCharge(
+      booking,
+      {
+        description: `Penalización por cancelación tardía — ${amenity.name} (${this.formatWhen(booking.startAt, booking.endAt)})`,
+        amount: retained,
+        dueDate: this.availabilityService.endOfDay(booking.startAt),
+        period: this.periodOf(booking.startAt),
+      },
+      actingUserId,
+    );
   }
 
   /** "48 horas" / "2 días" — el plazo como lo entiende quien lee la notificación. */
@@ -1256,7 +1522,9 @@ export class AmenityBookingsService {
   /** Valor en pesos, para los mensajes que lee el residente. */
   private formatMoney(amount: number): string {
     return new Intl.NumberFormat('es-CO', {
-      style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
     }).format(amount);
   }
 
@@ -1267,19 +1535,24 @@ export class AmenityBookingsService {
    */
   private async tryCreateCharge(
     booking: AmenityBooking,
-    params: { description: string; amount: number; dueDate: Date; period: string },
+    params: {
+      description: string;
+      amount: number;
+      dueDate: Date;
+      period: string;
+    },
     performedByUserId: string,
   ): Promise<string | null> {
     try {
-      const { chargeId } = await this.dataSource.transaction(em =>
+      const { chargeId } = await this.dataSource.transaction((em) =>
         this.accountingService.emitAmenityUnitCharge(em, {
-          complexId:       booking.complexId,
-          unitId:          booking.unitId,
-          amount:          params.amount,
-          period:          params.period,
-          dueDate:         params.dueDate,
-          documentDate:    new Date(),
-          description:     params.description,
+          complexId: booking.complexId,
+          unitId: booking.unitId,
+          amount: params.amount,
+          period: params.period,
+          dueDate: params.dueDate,
+          documentDate: new Date(),
+          description: params.description,
           createdByUserId: performedByUserId,
         }),
       );
@@ -1296,7 +1569,10 @@ export class AmenityBookingsService {
    * Usuario al que se atribuye el asiento contable. La cuenta del complejo no
    * es una persona, así que en ese caso responde el propietario.
    */
-  private resolveActingUserId(currentUser: JwtAccessPayload, ownerId: string): string {
+  private resolveActingUserId(
+    currentUser: JwtAccessPayload,
+    ownerId: string,
+  ): string {
     return currentUser.entityType === 'user' ? currentUser.sub : ownerId;
   }
 
@@ -1319,9 +1595,18 @@ export class AmenityBookingsService {
     isCouncilMember: boolean,
     startAt: Date,
   ): Promise<boolean> {
-    if (amenity.councilFreeBookingsPerYear <= 0 || !isCouncilMember || !residentId) return false;
+    if (
+      amenity.councilFreeBookingsPerYear <= 0 ||
+      !isCouncilMember ||
+      !residentId
+    )
+      return false;
 
-    const used = await this.countCouncilFreeBookings(amenity.id, residentId, startAt.getFullYear());
+    const used = await this.countCouncilFreeBookings(
+      amenity.id,
+      residentId,
+      startAt.getFullYear(),
+    );
     return used < amenity.councilFreeBookingsPerYear;
   }
 
@@ -1336,9 +1621,9 @@ export class AmenityBookingsService {
         amenityId,
         residentId,
         isCouncilFreeBooking: true,
-        deletedAt:  IsNull(),
-        status:     In(COUNCIL_QUOTA_STATUSES),
-        startAt:    Between(new Date(year, 0, 1), new Date(year + 1, 0, 1)),
+        deletedAt: IsNull(),
+        status: In(COUNCIL_QUOTA_STATUSES),
+        startAt: Between(new Date(year, 0, 1), new Date(year + 1, 0, 1)),
       },
     });
   }
@@ -1358,13 +1643,18 @@ export class AmenityBookingsService {
     await this.complexService.findById(amenity.complexId, currentUser);
 
     const year = new Date().getFullYear();
-    const resident = await this.residentsService.findMyProfile(currentUser.sub, amenity.complexId);
+    const resident = await this.residentsService.findMyProfile(
+      currentUser.sub,
+      amenity.complexId,
+    );
 
     // Se pregunta a la base y no al JWT: a quien acaban de nombrar consejero
     // el token todavía no le trae el rol, y tendría que volver a entrar para
     // que la app le ofreciera su beneficio.
     const base = {
-      isCouncilMember: await this.residentsService.isCouncilUser(currentUser.sub),
+      isCouncilMember: await this.residentsService.isCouncilUser(
+        currentUser.sub,
+      ),
       bookingsPerYear: amenity.councilFreeBookingsPerYear,
       year,
     };
@@ -1373,14 +1663,23 @@ export class AmenityBookingsService {
       return { ...base, used: 0, remaining: 0 };
     }
 
-    const used = await this.countCouncilFreeBookings(amenity.id, resident.id, year);
-    return { ...base, used, remaining: Math.max(0, amenity.councilFreeBookingsPerYear - used) };
+    const used = await this.countCouncilFreeBookings(
+      amenity.id,
+      resident.id,
+      year,
+    );
+    return {
+      ...base,
+      used,
+      remaining: Math.max(0, amenity.councilFreeBookingsPerYear - used),
+    };
   }
 
   /** Tarifa congelada al momento de reservar, según el modo de cobro de la zona. */
   private calculateFee(amenity: Amenity, startAt: Date, endAt: Date): number {
     if (amenity.feeType === AmenityFeeType.FREE) return 0;
-    if (amenity.feeType === AmenityFeeType.PER_BOOKING) return Number(amenity.feeAmount);
+    if (amenity.feeType === AmenityFeeType.PER_BOOKING)
+      return Number(amenity.feeAmount);
 
     const hours = (endAt.getTime() - startAt.getTime()) / HOUR_MS;
     return Math.round(Number(amenity.feeAmount) * hours * 100) / 100;
@@ -1393,7 +1692,7 @@ export class AmenityBookingsService {
   private generateAccessCode(): string {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const bytes = randomBytes(6);
-    const code = [...bytes].map(b => alphabet[b % alphabet.length]).join('');
+    const code = [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
     return `ZC-${code}`;
   }
 
@@ -1412,23 +1711,32 @@ export class AmenityBookingsService {
     requestedByName: string | null;
     isCouncilMember: boolean;
   }> {
-    const isStaff = currentUser.roles?.some(role => STAFF_ROLES.includes(role));
+    const isStaff = currentUser.roles?.some((role) =>
+      STAFF_ROLES.includes(role),
+    );
 
     if (!isStaff) {
-      const resident = await this.residentsService.findMyProfile(currentUser.sub, complexId);
+      const resident = await this.residentsService.findMyProfile(
+        currentUser.sub,
+        complexId,
+      );
       return {
         unitId: resident.unitId,
         residentId: resident.id,
         requestedByName: resident.user
-          ? `${resident.user.name ?? ''} ${resident.user.lastName ?? ''}`.trim() || null
+          ? `${resident.user.name ?? ''} ${resident.user.lastName ?? ''}`.trim() ||
+            null
           : null,
-        isCouncilMember: await this.residentsService.isCouncilUser(resident.userId),
+        isCouncilMember: await this.residentsService.isCouncilUser(
+          resident.userId,
+        ),
       };
     }
 
     if (!requestedUnitId) {
       throw new CustomError({
-        message: 'Debes indicar la unidad a nombre de la cual se hace la reserva',
+        message:
+          'Debes indicar la unidad a nombre de la cual se hace la reserva',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.INVALID_INPUT,
       });
@@ -1459,10 +1767,15 @@ export class AmenityBookingsService {
     booking: AmenityBooking,
     currentUser: JwtAccessPayload,
   ): Promise<void> {
-    const isStaff = currentUser.roles?.some(role => STAFF_ROLES.includes(role));
+    const isStaff = currentUser.roles?.some((role) =>
+      STAFF_ROLES.includes(role),
+    );
     if (isStaff) return;
 
-    const resident = await this.residentsService.findMyProfile(currentUser.sub, booking.complexId);
+    const resident = await this.residentsService.findMyProfile(
+      currentUser.sub,
+      booking.complexId,
+    );
     if (resident.unitId !== booking.unitId) {
       throw new CustomError({
         message: 'Esta reserva no pertenece a tu unidad',
@@ -1472,7 +1785,10 @@ export class AmenityBookingsService {
     }
   }
 
-  private assertStatus(booking: AmenityBooking, allowed: AmenityBookingStatus[]): void {
+  private assertStatus(
+    booking: AmenityBooking,
+    allowed: AmenityBookingStatus[],
+  ): void {
     if (!allowed.includes(booking.status)) {
       throw new CustomError({
         message: `La reserva está en estado ${booking.status} y no admite esta operación`,
@@ -1483,15 +1799,19 @@ export class AmenityBookingsService {
   }
 
   private emitUpdated(booking: AmenityBooking, amenity: Amenity): void {
-    this.socketService.emitToComplex(booking.complexId, SocketEvent.AMENITY_BOOKING_UPDATED, {
-      bookingId: booking.id,
-      amenityId: amenity.id,
-      amenityName: amenity.name,
-      unitId: booking.unitId,
-      status: booking.status,
-      startAt: booking.startAt,
-      endAt: booking.endAt,
-    });
+    this.socketService.emitToComplex(
+      booking.complexId,
+      SocketEvent.AMENITY_BOOKING_UPDATED,
+      {
+        bookingId: booking.id,
+        amenityId: amenity.id,
+        amenityName: amenity.name,
+        unitId: booking.unitId,
+        status: booking.status,
+        startAt: booking.startAt,
+        endAt: booking.endAt,
+      },
+    );
   }
 
   // ─── Notificaciones ───────────────────────────────────────────────────────
@@ -1503,8 +1823,10 @@ export class AmenityBookingsService {
     title: string,
     body: string,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(booking.unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents = await this.residentsService.findActiveByUnitInternal(
+      booking.unitId,
+    );
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
@@ -1535,10 +1857,10 @@ export class AmenityBookingsService {
     title: string,
     body: string,
   ): Promise<void> {
-    const userIds = await this.notificationsService.findUserIdsByRoles(booking.complexId, [
-      ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
-    ]);
+    const userIds = await this.notificationsService.findUserIdsByRoles(
+      booking.complexId,
+      [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    );
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
@@ -1573,19 +1895,29 @@ export class AmenityBookingsService {
     currentUser: JwtAccessPayload,
     chargeNote: string,
   ): Promise<void> {
-    const cancelledByStaff = currentUser.roles?.some(role => STAFF_ROLES.includes(role));
+    const cancelledByStaff = currentUser.roles?.some((role) =>
+      STAFF_ROLES.includes(role),
+    );
     const when = this.formatWhen(booking.startAt, booking.endAt);
 
     if (cancelledByStaff) {
-      await this.notifyResidents(booking, amenity, NotificationType.AMENITY_BOOKING_CANCELLED,
+      await this.notifyResidents(
+        booking,
+        amenity,
+        NotificationType.AMENITY_BOOKING_CANCELLED,
         '⚠️ Reserva cancelada',
         `La administración canceló tu reserva de ${amenity.name} del ${when}.` +
-        (booking.cancellationReason ? ` Motivo: ${booking.cancellationReason}.` : ''),
+          (booking.cancellationReason
+            ? ` Motivo: ${booking.cancellationReason}.`
+            : ''),
       );
       return;
     }
 
-    await this.notifyStaff(booking, amenity, NotificationType.AMENITY_BOOKING_CANCELLED,
+    await this.notifyStaff(
+      booking,
+      amenity,
+      NotificationType.AMENITY_BOOKING_CANCELLED,
       'Reserva cancelada por el residente',
       `Se liberó ${amenity.name} para el ${when}.${chargeNote}`,
     );
@@ -1622,8 +1954,10 @@ export class AmenityBookingsService {
     // aportan nada. Se describe por los días que el residente realmente ocupa,
     // y el último es el anterior al fin exclusivo.
     const isWholeDays =
-      startAt.getHours() === 0 && startAt.getMinutes() === 0 &&
-      endAt.getHours() === 0 && endAt.getMinutes() === 0;
+      startAt.getHours() === 0 &&
+      startAt.getMinutes() === 0 &&
+      endAt.getHours() === 0 &&
+      endAt.getMinutes() === 0;
 
     if (isWholeDays) {
       const lastDay = new Date(endAt.getTime() - 1);
@@ -1632,7 +1966,7 @@ export class AmenityBookingsService {
     }
 
     const from = `${pad(startAt.getHours())}:${pad(startAt.getMinutes())}`;
-    const to   = `${pad(endAt.getHours())}:${pad(endAt.getMinutes())}`;
+    const to = `${pad(endAt.getHours())}:${pad(endAt.getMinutes())}`;
     return `${date} de ${from} a ${to}`;
   }
 }

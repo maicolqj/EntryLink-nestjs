@@ -1,7 +1,7 @@
-import { InputType, Field, Int } from "@nestjs/graphql";
-import { Type } from "class-transformer";
-import { IsOptional, IsBoolean, IsInt, Min, Max } from "class-validator";
-import { DateRangeInput } from "../../../shared/dto/inputs";
+import { InputType, Field, Int } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
+import { IsOptional, IsBoolean, IsInt, Min, Max } from 'class-validator';
+import { DateRangeInput } from '../../../shared/dto/inputs';
 
 @InputType()
 export class RolesFiltersInput {
@@ -9,9 +9,10 @@ export class RolesFiltersInput {
   @IsOptional()
   status?: boolean;
 
-  @Field(() => Int, { 
+  @Field(() => Int, {
     nullable: true,
-    description: 'Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)'
+    description:
+      'Hierarchy level (0=highest, 1=second, 2=third, 3=fourth, 4=lowest)',
   })
   @IsOptional()
   @IsInt()

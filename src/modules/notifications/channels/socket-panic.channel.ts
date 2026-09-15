@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { SocketService }        from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }          from '../../../core/infrastructure/socket/socket.events';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
 import {
   PanicChannel,
@@ -33,20 +33,26 @@ export class SocketPanicChannel implements PanicChannel {
 
   async send(ctx: PanicChannelContext): Promise<PanicChannelResult> {
     try {
-      this.socketService.emitToComplex(ctx.alert.complexId, SocketEvent.PANIC_ALERT_NEW, {
-        complexId:        ctx.alert.complexId,
-        alertId:          ctx.alert.id,
-        unitId:           ctx.alert.unitId,
-        triggeredBy:      ctx.alert.triggeredByUserId,
-        triggeredByLabel: ctx.alert.triggeredByLabel,
-        escalationLevel:  ctx.escalationLevel,
-      });
+      this.socketService.emitToComplex(
+        ctx.alert.complexId,
+        SocketEvent.PANIC_ALERT_NEW,
+        {
+          complexId: ctx.alert.complexId,
+          alertId: ctx.alert.id,
+          unitId: ctx.alert.unitId,
+          triggeredBy: ctx.alert.triggeredByUserId,
+          triggeredByLabel: ctx.alert.triggeredByLabel,
+          escalationLevel: ctx.escalationLevel,
+        },
+      );
       // Sin destinatario individual: se emite a la sala del complejo, así que no
       // hay forma de contar cuántos navegadores lo recibieron.
       return { reached: 1 };
     } catch (err) {
       const message = (err as Error)?.message ?? 'error desconocido';
-      this.logger.error(`Socket falló para la alerta ${ctx.alert.id}: ${message}`);
+      this.logger.error(
+        `Socket falló para la alerta ${ctx.alert.id}: ${message}`,
+      );
       return { reached: 0, skippedReason: message };
     }
   }

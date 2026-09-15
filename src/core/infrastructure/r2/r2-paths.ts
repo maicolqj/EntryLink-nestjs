@@ -49,7 +49,7 @@ export function buildFolderPath(
   const scope = sanitizeSegment(complexSlug) || PLATFORM_SCOPE;
 
   return [appRoot, scope, module, ...subPaths]
-    .map(segment => sanitizeSegment(segment))
+    .map((segment) => sanitizeSegment(segment))
     .filter(Boolean)
     .join('/');
 }

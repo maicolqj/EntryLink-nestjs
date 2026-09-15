@@ -1,17 +1,26 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsUUID, Matches,
-  MaxLength, IsInt, Min, Max, IsEnum, IsArray, ArrayNotEmpty,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  Matches,
+  MaxLength,
+  IsInt,
+  Min,
+  Max,
+  IsEnum,
+  IsArray,
+  ArrayNotEmpty,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { FeeConfigBillingMode } from '../../enums/fee-config-billing-mode.enum';
-import { ChargeRuleInput }      from './charge-rule.input';
+import { ChargeRuleInput } from './charge-rule.input';
 
 @InputType()
 export class CreateChargeEmissionInput {
-
   @Field()
   @IsUUID()
   complexId: string;
@@ -39,13 +48,18 @@ export class CreateChargeEmissionInput {
   })
   period: string;
 
-  @Field(() => Int, { defaultValue: 5, description: 'Día del mes de vencimiento (1-28)' })
+  @Field(() => Int, {
+    defaultValue: 5,
+    description: 'Día del mes de vencimiento (1-28)',
+  })
   @IsInt()
   @Min(1)
   @Max(28)
   dueDayOfMonth: number;
 
-  @Field(() => FeeConfigBillingMode, { defaultValue: FeeConfigBillingMode.ADVANCE })
+  @Field(() => FeeConfigBillingMode, {
+    defaultValue: FeeConfigBillingMode.ADVANCE,
+  })
   @IsOptional()
   @IsEnum(FeeConfigBillingMode)
   billingMode?: FeeConfigBillingMode;

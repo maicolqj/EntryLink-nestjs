@@ -21,7 +21,8 @@ export class LegalDocumentResolver {
 
   @Query(() => [LegalDocument], {
     name: 'legalDocumentsAdmin',
-    description: 'Todos los documentos legales (incluidos no publicados). Solo SUPER_ADMIN.',
+    description:
+      'Todos los documentos legales (incluidos no publicados). Solo SUPER_ADMIN.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   legalDocumentsAdmin(): Promise<LegalDocument[]> {
@@ -55,7 +56,8 @@ export class LegalDocumentResolver {
 
   @Mutation(() => LegalDocument, {
     name: 'updateLegalDocument',
-    description: 'Actualiza metadatos/contenido/publicación de un documento legal. Solo SUPER_ADMIN.',
+    description:
+      'Actualiza metadatos/contenido/publicación de un documento legal. Solo SUPER_ADMIN.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   updateLegalDocument(

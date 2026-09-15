@@ -1,7 +1,7 @@
 import { ObjectType, Field, Float } from '@nestjs/graphql';
 import { PaginationReponse } from '../../../shared/dto/responses/pagination-object.response';
-import { ComplexExpense }    from '../../entities/complex-expense.entity';
-import { ExpenseCategory }   from '../../enums/expense-category.enum';
+import { ComplexExpense } from '../../entities/complex-expense.entity';
+import { ExpenseCategory } from '../../enums/expense-category.enum';
 
 @ObjectType()
 export class ExpenseCategoryBreakdown {
@@ -17,7 +17,6 @@ export class ExpenseCategoryBreakdown {
 
 @ObjectType()
 export class PaginatedExpensesResponse {
-
   @Field(() => [ComplexExpense])
   items: ComplexExpense[];
 

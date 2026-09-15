@@ -1,40 +1,50 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, IsNull, LessThan, MoreThan, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  In,
+  IsNull,
+  LessThan,
+  MoreThan,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 
 import { Pqrf } from '../entities/pqrf.entity';
 import { PqrfAcknowledgement } from '../entities/pqrf-acknowledgement.entity';
 import { PqrfStatus } from '../enums/pqrf-status.enum';
 import {
-  PqrfAddressee, isForAdministration, isForCouncil,
+  PqrfAddressee,
+  isForAdministration,
+  isForCouncil,
 } from '../enums/pqrf-addressee.enum';
 
 import { CreatePqrfInput } from '../dto/inputs/create-pqrf.input';
 import { FilterPqrfInput } from '../dto/inputs/filter-pqrf.input';
 import { PaginatedPqrfResponse } from '../dto/responses/paginated-pqrf.response';
-import { PqrfCouncilMember }     from '../dto/responses/pqrf-council-member.response';
+import { PqrfCouncilMember } from '../dto/responses/pqrf-council-member.response';
 
-import { PaginationInput }  from '../../shared/dto/inputs/pagination.input';
-import { CustomError }      from '../../shared/utils/errors.utils';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { ResidentialComplex }        from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }                      from '../../residential-complex/entities/unit.entity';
-import { ResidentsService }          from '../../residents/services/residents.service';
-import { NotificationsService }      from '../../notifications/services/notifications.service';
-import { NotificationType }          from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
-import { AuditService }              from '../../audit/services/audit.service';
-import { AuditAction }               from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
-import { SocketService }             from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }               from '../../../core/infrastructure/socket/socket.events';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 
 const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS  = 24 * HOUR_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 /** Roles que leen los radicados dirigidos a la administración. */
 const ADMIN_ROLES: ValidRoles[] = [
@@ -44,10 +54,10 @@ const ADMIN_ROLES: ValidRoles[] = [
 ];
 
 const TYPE_LABEL: Record<string, string> = {
-  PETICION:     'Petición',
-  QUEJA:        'Queja',
-  RECLAMO:      'Reclamo',
-  SUGERENCIA:   'Sugerencia',
+  PETICION: 'Petición',
+  QUEJA: 'Queja',
+  RECLAMO: 'Reclamo',
+  SUGERENCIA: 'Sugerencia',
   FELICITACION: 'Felicitación',
 };
 
@@ -95,18 +105,26 @@ export class PqrfService {
    * complejo: dos residentes radicando a la vez no pueden llevarse el mismo
    * número, que es lo único que el residente tiene para reclamar después.
    */
-  async create(input: CreatePqrfInput, currentUser: JwtAccessPayload): Promise<Pqrf> {
-    const complex = await this.complexService.findById(input.complexId, currentUser);
+  async create(
+    input: CreatePqrfInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<Pqrf> {
+    const complex = await this.complexService.findById(
+      input.complexId,
+      currentUser,
+    );
 
-    const resident = await this.residentsService.findMyProfile(currentUser.sub, input.complexId);
+    const resident = await this.residentsService.findMyProfile(
+      currentUser.sub,
+      input.complexId,
+    );
 
-    const saved = await this.dataSource.transaction(async manager => {
+    const saved = await this.dataSource.transaction(async (manager) => {
       // El bloqueo serializa solo a quienes radican en ESTE complejo y se
       // libera al terminar la transacción.
-      await manager.query(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
-        [`pqrf:${input.complexId}`],
-      );
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `pqrf:${input.complexId}`,
+      ]);
 
       const last = await manager
         .createQueryBuilder(Pqrf, 'p')
@@ -116,36 +134,46 @@ export class PqrfService {
 
       const consecutive = (last?.max ?? 0) + 1;
 
-      return manager.save(manager.create(Pqrf, {
-        complexId:   input.complexId,
-        consecutive,
-        code:        `PQRF-${String(consecutive).padStart(6, '0')}`,
-        type:        input.type,
-        addressee:   input.addressee,
-        status:      PqrfStatus.RADICADO,
-        // El plazo se congela con la configuración vigente hoy: cambiarla
-        // mañana no puede correrle la fecha a un radicado ya en curso.
-        dueAt:       this.deadlineFrom(new Date(), complex.pqrfResolutionDays),
-        subject:     input.subject.trim(),
-        description: input.description.trim(),
-        residentId:  resident?.id ?? null,
-        unitId:      resident?.unitId ?? null,
-        requestedByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
-        requestedByName: resident?.user
-          ? `${resident.user.name ?? ''} ${resident.user.lastName ?? ''}`.trim() || null
-          : null,
-      }));
+      return manager.save(
+        manager.create(Pqrf, {
+          complexId: input.complexId,
+          consecutive,
+          code: `PQRF-${String(consecutive).padStart(6, '0')}`,
+          type: input.type,
+          addressee: input.addressee,
+          status: PqrfStatus.RADICADO,
+          // El plazo se congela con la configuración vigente hoy: cambiarla
+          // mañana no puede correrle la fecha a un radicado ya en curso.
+          dueAt: this.deadlineFrom(new Date(), complex.pqrfResolutionDays),
+          subject: input.subject.trim(),
+          description: input.description.trim(),
+          residentId: resident?.id ?? null,
+          unitId: resident?.unitId ?? null,
+          requestedByUserId:
+            currentUser.entityType === 'user' ? currentUser.sub : null,
+          requestedByName: resident?.user
+            ? `${resident.user.name ?? ''} ${resident.user.lastName ?? ''}`.trim() ||
+              null
+            : null,
+        }),
+      );
     });
 
-    this.notifyAddressees(saved)
-      .catch(err => this.logger.warn(`Error al notificar el radicado ${saved.code}: ${err?.message}`));
+    this.notifyAddressees(saved).catch((err) =>
+      this.logger.warn(
+        `Error al notificar el radicado ${saved.code}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
       entityType: AuditEntityType.Pqrf,
       entityId: saved.id,
       action: AuditAction.CREATE,
       newValue: {
-        code: saved.code, type: saved.type, addressee: saved.addressee, subject: saved.subject,
+        code: saved.code,
+        type: saved.type,
+        addressee: saved.addressee,
+        subject: saved.subject,
       },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
@@ -178,9 +206,10 @@ export class PqrfService {
     await this.complexService.findById(complexId, currentUser);
 
     const roles = currentUser.roles ?? [];
-    const isAdmin   = roles.some(role => ADMIN_ROLES.includes(role));
-    const isCouncil = roles.includes(ValidRoles.COUNCIL_ROL)
-      || await this.residentsService.isCouncilUser(currentUser.sub);
+    const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
+    const isCouncil =
+      roles.includes(ValidRoles.COUNCIL_ROL) ||
+      (await this.residentsService.isCouncilUser(currentUser.sub));
 
     if (!isAdmin && !isCouncil) {
       throw new CustomError({
@@ -192,11 +221,14 @@ export class PqrfService {
 
     // Lo que puede leer según su instancia. Quien es las dos cosas ve todo.
     const visible: PqrfAddressee[] = [];
-    if (isAdmin)   visible.push(PqrfAddressee.ADMINISTRACION, PqrfAddressee.AMBOS);
+    if (isAdmin)
+      visible.push(PqrfAddressee.ADMINISTRACION, PqrfAddressee.AMBOS);
     if (isCouncil) visible.push(PqrfAddressee.CONSEJO, PqrfAddressee.AMBOS);
 
-    return this.query(complexId, pagination, filters, qb =>
-      qb.andWhere('p.addressee IN (:...visible)', { visible: [...new Set(visible)] }),
+    return this.query(complexId, pagination, filters, (qb) =>
+      qb.andWhere('p.addressee IN (:...visible)', {
+        visible: [...new Set(visible)],
+      }),
     );
   }
 
@@ -209,7 +241,7 @@ export class PqrfService {
   ): Promise<PaginatedPqrfResponse> {
     await this.complexService.findById(complexId, currentUser);
 
-    return this.query(complexId, pagination, filters, qb =>
+    return this.query(complexId, pagination, filters, (qb) =>
       qb.andWhere('p.requestedByUserId = :userId', { userId: currentUser.sub }),
     );
   }
@@ -258,12 +290,14 @@ export class PqrfService {
     });
 
     if (!existing) {
-      await this.ackRepo.save(this.ackRepo.create({
-        pqrfId:   pqrf.id,
-        userId:   currentUser.sub,
-        userName: currentUser.email ?? null,
-        instance,
-      }));
+      await this.ackRepo.save(
+        this.ackRepo.create({
+          pqrfId: pqrf.id,
+          userId: currentUser.sub,
+          userName: currentUser.email ?? null,
+          instance,
+        }),
+      );
     }
 
     if (pqrf.status === PqrfStatus.RADICADO) {
@@ -285,7 +319,10 @@ export class PqrfService {
    * RESUELTO: si fue dirigido a las dos instancias, una no puede cerrarlo en
    * nombre de la otra. Al completarse se le avisa al residente.
    */
-  async markResolved(pqrfId: string, currentUser: JwtAccessPayload): Promise<Pqrf> {
+  async markResolved(
+    pqrfId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Pqrf> {
     const pqrf = await this.findById(pqrfId, currentUser);
 
     const instance = await this.instanceOf(pqrf, currentUser);
@@ -297,16 +334,21 @@ export class PqrfService {
       });
     }
 
-    if (pqrf.status === PqrfStatus.RESUELTO) return this.findByIdOrFail(pqrf.id);
+    if (pqrf.status === PqrfStatus.RESUELTO)
+      return this.findByIdOrFail(pqrf.id);
 
     const existing = await this.ackRepo.findOne({
       where: { pqrfId: pqrf.id, userId: currentUser.sub },
     });
 
     await this.ackRepo.save({
-      ...(existing ?? this.ackRepo.create({
-        pqrfId: pqrf.id, userId: currentUser.sub, userName: currentUser.email ?? null, instance,
-      })),
+      ...(existing ??
+        this.ackRepo.create({
+          pqrfId: pqrf.id,
+          userId: currentUser.sub,
+          userName: currentUser.email ?? null,
+          instance,
+        })),
       resolvedAt: existing?.resolvedAt ?? new Date(),
     });
 
@@ -321,9 +363,10 @@ export class PqrfService {
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
       complexId: pqrf.complexId,
-      description: closed.status === PqrfStatus.RESUELTO
-        ? `PQRF ${closed.code} resuelto`
-        : `PQRF ${closed.code} marcado como resuelto por un destinatario`,
+      description:
+        closed.status === PqrfStatus.RESUELTO
+          ? `PQRF ${closed.code} resuelto`
+          : `PQRF ${closed.code} marcado como resuelto por un destinatario`,
     });
 
     const updated = await this.findByIdOrFail(pqrf.id);
@@ -358,7 +401,10 @@ export class PqrfService {
     for (const pqrf of open) {
       const before = pqrf.status;
       const result = await this.closeIfComplete(pqrf);
-      if (result.status === PqrfStatus.RESUELTO && before !== PqrfStatus.RESUELTO) {
+      if (
+        result.status === PqrfStatus.RESUELTO &&
+        before !== PqrfStatus.RESUELTO
+      ) {
         this.emitUpdated(result);
         closed += 1;
       }
@@ -386,21 +432,28 @@ export class PqrfService {
     });
 
     for (const pqrf of expired) {
-      pqrf.status            = PqrfStatus.RESUELTO;
-      pqrf.resolvedAt        = new Date();
+      pqrf.status = PqrfStatus.RESUELTO;
+      pqrf.resolvedAt = new Date();
       pqrf.resolvedBySilence = true;
       const saved = await this.pqrfRepo.save(pqrf);
 
       this.emitUpdated(saved);
 
-      await this.notifySilence(saved)
-        .catch(err => this.logger.warn(`Error al avisar el silencio de ${saved.code}: ${err?.message}`));
+      await this.notifySilence(saved).catch((err) =>
+        this.logger.warn(
+          `Error al avisar el silencio de ${saved.code}: ${err?.message}`,
+        ),
+      );
 
       void this.auditService.log({
         entityType: AuditEntityType.Pqrf,
         entityId: saved.id,
         action: AuditAction.UPDATE,
-        newValue: { code: saved.code, status: saved.status, resolvedBySilence: true },
+        newValue: {
+          code: saved.code,
+          status: saved.status,
+          resolvedBySilence: true,
+        },
         performedById: null,
         performedByName: 'sistema',
         performedByRole: '',
@@ -448,7 +501,10 @@ export class PqrfService {
       const recipients = await this.pendingRecipients(pqrf);
       if (recipients.length === 0) continue;
 
-      const hoursLeft = Math.max(0, Math.round((pqrf.dueAt.getTime() - now.getTime()) / HOUR_MS));
+      const hoursLeft = Math.max(
+        0,
+        Math.round((pqrf.dueAt.getTime() - now.getTime()) / HOUR_MS),
+      );
 
       await this.notificationsService.notify({
         complexId: pqrf.complexId,
@@ -489,12 +545,16 @@ export class PqrfService {
 
     // Misma regla que al resolver: si de los elegidos no queda ninguno en el
     // consejo, responde el consejo completo, y la pantalla tiene que decirlo.
-    const resolvers = this.pickResolvers(residents.map(r => r.userId), designated);
+    const resolvers = this.pickResolvers(
+      residents.map((r) => r.userId),
+      designated,
+    );
 
-    return residents.map(resident => ({
-      userId:    resident.userId,
-      name:      `${resident.user?.name ?? ''} ${resident.user?.lastName ?? ''}`.trim()
-                   || (resident.user?.email ?? 'Consejero'),
+    return residents.map((resident) => ({
+      userId: resident.userId,
+      name:
+        `${resident.user?.name ?? ''} ${resident.user?.lastName ?? ''}`.trim() ||
+        (resident.user?.email ?? 'Consejero'),
       unitLabel: unitLabel(resident.unit),
       canResolve: resolvers.includes(resident.userId),
     }));
@@ -517,7 +577,7 @@ export class PqrfService {
     const members = await this.residentsService.findCouncilUserIds(complexId);
     const chosen = [...new Set(userIds)];
 
-    if (chosen.some(userId => !members.includes(userId))) {
+    if (chosen.some((userId) => !members.includes(userId))) {
       throw new CustomError({
         message: 'Solo puedes elegir a miembros actuales del consejo',
         statusCode: HttpStatus.BAD_REQUEST,
@@ -525,7 +585,9 @@ export class PqrfService {
       });
     }
 
-    await this.complexRepo.update(complexId, { pqrfCouncilResolverUserIds: chosen });
+    await this.complexRepo.update(complexId, {
+      pqrfCouncilResolverUserIds: chosen,
+    });
 
     void this.auditService.log({
       entityType: AuditEntityType.Pqrf,
@@ -536,15 +598,19 @@ export class PqrfService {
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
       complexId,
-      description: chosen.length === 0
-        ? 'Los PQRF dirigidos al consejo los responde todo el consejo'
-        : `Los PQRF dirigidos al consejo los responden ${chosen.length} consejero(s)`,
+      description:
+        chosen.length === 0
+          ? 'Los PQRF dirigidos al consejo los responde todo el consejo'
+          : `Los PQRF dirigidos al consejo los responden ${chosen.length} consejero(s)`,
     });
 
     // Si el grupo se achicó, puede que los que quedan ya hayan respondido todo:
     // sin este barrido esos radicados esperarían al cron.
-    this.closeFullyAnswered()
-      .catch(err => this.logger.warn(`Error al cerrar radicados tras cambiar el consejo: ${err?.message}`));
+    this.closeFullyAnswered().catch((err) =>
+      this.logger.warn(
+        `Error al cerrar radicados tras cambiar el consejo: ${err?.message}`,
+      ),
+    );
 
     return this.findCouncilMembers(complexId, currentUser);
   }
@@ -583,16 +649,23 @@ export class PqrfService {
     pqrf: Pqrf,
     currentUser: JwtAccessPayload,
   ): Promise<PqrfAddressee | null> {
-    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub) return null;
+    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub)
+      return null;
 
     const roles = currentUser.roles ?? [];
-    if (roles.some(role => ADMIN_ROLES.includes(role)) && isForAdministration(pqrf.addressee)) {
+    if (
+      roles.some((role) => ADMIN_ROLES.includes(role)) &&
+      isForAdministration(pqrf.addressee)
+    ) {
       return PqrfAddressee.ADMINISTRACION;
     }
 
     // Del consejo atiende solo a quien le toca: ser consejero da acceso a leer,
     // no necesariamente a responder.
-    if (isForCouncil(pqrf.addressee) && (await this.councilResolvers(pqrf)).includes(currentUser.sub)) {
+    if (
+      isForCouncil(pqrf.addressee) &&
+      (await this.councilResolvers(pqrf)).includes(currentUser.sub)
+    ) {
       return PqrfAddressee.CONSEJO;
     }
 
@@ -603,10 +676,15 @@ export class PqrfService {
    * ¿Es del consejo, le llegó el radicado, pero no le toca responderlo? La app
    * lo usa para explicar por qué no hay botón en vez de dejarlo adivinando.
    */
-  async isCouncilObserver(pqrf: Pqrf, currentUser: JwtAccessPayload): Promise<boolean> {
+  async isCouncilObserver(
+    pqrf: Pqrf,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
     if (!isForCouncil(pqrf.addressee)) return false;
-    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub) return false;
-    if (!await this.residentsService.isCouncilUser(currentUser.sub)) return false;
+    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub)
+      return false;
+    if (!(await this.residentsService.isCouncilUser(currentUser.sub)))
+      return false;
 
     return !(await this.councilResolvers(pqrf)).includes(currentUser.sub);
   }
@@ -621,16 +699,20 @@ export class PqrfService {
    * un radicado sin nadie que lo atienda solo se cerraría por silencio.
    */
   private async councilResolvers(pqrf: Pqrf): Promise<string[]> {
-    const members = (await this.residentsService.findCouncilUserIds(pqrf.complexId))
-      .filter(userId => userId !== pqrf.requestedByUserId);
+    const members = (
+      await this.residentsService.findCouncilUserIds(pqrf.complexId)
+    ).filter((userId) => userId !== pqrf.requestedByUserId);
 
-    return this.pickResolvers(members, await this.designatedResolvers(pqrf.complexId));
+    return this.pickResolvers(
+      members,
+      await this.designatedResolvers(pqrf.complexId),
+    );
   }
 
   private pickResolvers(members: string[], designated: string[]): string[] {
     if (designated.length === 0) return members;
 
-    const chosen = members.filter(userId => designated.includes(userId));
+    const chosen = members.filter((userId) => designated.includes(userId));
     return chosen.length > 0 ? chosen : members;
   }
 
@@ -661,11 +743,13 @@ export class PqrfService {
    */
   private async pendingResolvers(pqrf: Pqrf): Promise<string[]> {
     const acks = await this.ackRepo.find({ where: { pqrfId: pqrf.id } });
-    const resolved = acks.filter(ack => ack.resolvedAt);
+    const resolved = acks.filter((ack) => ack.resolvedAt);
     const pending: string[] = [];
 
-    if (isForAdministration(pqrf.addressee)
-      && !resolved.some(ack => ack.instance === PqrfAddressee.ADMINISTRACION)) {
+    if (
+      isForAdministration(pqrf.addressee) &&
+      !resolved.some((ack) => ack.instance === PqrfAddressee.ADMINISTRACION)
+    ) {
       pending.push(PqrfAddressee.ADMINISTRACION);
     }
 
@@ -673,10 +757,12 @@ export class PqrfService {
       const members = await this.councilResolvers(pqrf);
 
       const done = new Set(
-        resolved.filter(ack => ack.instance === PqrfAddressee.CONSEJO).map(ack => ack.userId),
+        resolved
+          .filter((ack) => ack.instance === PqrfAddressee.CONSEJO)
+          .map((ack) => ack.userId),
       );
 
-      pending.push(...members.filter(userId => !done.has(userId)));
+      pending.push(...members.filter((userId) => !done.has(userId)));
     }
 
     return pending;
@@ -695,7 +781,9 @@ export class PqrfService {
 
     const pending = await this.pendingResolvers(pqrf);
     if (pending.length > 0) {
-      this.logger.debug(`${pqrf.code}: faltan ${pending.length} por marcar como resuelto`);
+      this.logger.debug(
+        `${pqrf.code}: faltan ${pending.length} por marcar como resuelto`,
+      );
       return pqrf;
     }
 
@@ -704,12 +792,15 @@ export class PqrfService {
     const hasAnyMark = await this.ackRepo.count({ where: { pqrfId: pqrf.id } });
     if (hasAnyMark === 0) return pqrf;
 
-    pqrf.status     = PqrfStatus.RESUELTO;
+    pqrf.status = PqrfStatus.RESUELTO;
     pqrf.resolvedAt = new Date();
     const saved = await this.pqrfRepo.save(pqrf);
 
-    this.notifyResolved(saved)
-      .catch(err => this.logger.warn(`Error al avisar la resolución de ${saved.code}: ${err?.message}`));
+    this.notifyResolved(saved).catch((err) =>
+      this.logger.warn(
+        `Error al avisar la resolución de ${saved.code}: ${err?.message}`,
+      ),
+    );
 
     return saved;
   }
@@ -729,9 +820,17 @@ export class PqrfService {
       resolvedAt: pqrf.resolvedAt ?? null,
     };
 
-    this.socketService.emitToComplex(pqrf.complexId, SocketEvent.PQRF_UPDATED, payload);
+    this.socketService.emitToComplex(
+      pqrf.complexId,
+      SocketEvent.PQRF_UPDATED,
+      payload,
+    );
     if (pqrf.requestedByUserId) {
-      this.socketService.emitToUser(pqrf.requestedByUserId, SocketEvent.PQRF_UPDATED, payload);
+      this.socketService.emitToUser(
+        pqrf.requestedByUserId,
+        SocketEvent.PQRF_UPDATED,
+        payload,
+      );
     }
   }
 
@@ -752,16 +851,20 @@ export class PqrfService {
     const userIds: string[] = [];
 
     if (pending.includes(PqrfAddressee.ADMINISTRACION)) {
-      userIds.push(...await this.notificationsService.findUserIdsByRoles(pqrf.complexId, [
-        ValidRoles.COMPLEX_ROL,
-        ValidRoles.SUPERVISOR_ROL,
-      ]));
+      userIds.push(
+        ...(await this.notificationsService.findUserIdsByRoles(pqrf.complexId, [
+          ValidRoles.COMPLEX_ROL,
+          ValidRoles.SUPERVISOR_ROL,
+        ])),
+      );
     }
 
     // El resto de pendientes son ids de consejeros: se les avisa directamente.
-    userIds.push(...pending.filter(entry => entry !== PqrfAddressee.ADMINISTRACION));
+    userIds.push(
+      ...pending.filter((entry) => entry !== PqrfAddressee.ADMINISTRACION),
+    );
 
-    return [...new Set(userIds)].filter(id => id !== pqrf.requestedByUserId);
+    return [...new Set(userIds)].filter((id) => id !== pqrf.requestedByUserId);
   }
 
   /**
@@ -785,10 +888,10 @@ export class PqrfService {
       });
     }
 
-    const staff = await this.notificationsService.findUserIdsByRoles(pqrf.complexId, [
-      ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
-    ]);
+    const staff = await this.notificationsService.findUserIdsByRoles(
+      pqrf.complexId,
+      [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    );
 
     if (staff.length > 0) {
       await this.notificationsService.notify({
@@ -830,15 +933,24 @@ export class PqrfService {
   }
 
   /** Quien lo radicó siempre puede leerlo; los demás, solo si les fue dirigido. */
-  private async assertCanRead(pqrf: Pqrf, currentUser: JwtAccessPayload): Promise<void> {
-    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub) return;
+  private async assertCanRead(
+    pqrf: Pqrf,
+    currentUser: JwtAccessPayload,
+  ): Promise<void> {
+    if (pqrf.requestedByUserId && pqrf.requestedByUserId === currentUser.sub)
+      return;
 
     const roles = currentUser.roles ?? [];
-    if (roles.some(role => ADMIN_ROLES.includes(role)) && isForAdministration(pqrf.addressee)) return;
+    if (
+      roles.some((role) => ADMIN_ROLES.includes(role)) &&
+      isForAdministration(pqrf.addressee)
+    )
+      return;
 
     if (isForCouncil(pqrf.addressee)) {
-      const isCouncil = roles.includes(ValidRoles.COUNCIL_ROL)
-        || await this.residentsService.isCouncilUser(currentUser.sub);
+      const isCouncil =
+        roles.includes(ValidRoles.COUNCIL_ROL) ||
+        (await this.residentsService.isCouncilUser(currentUser.sub));
       if (isCouncil) return;
     }
 
@@ -867,9 +979,11 @@ export class PqrfService {
 
     scope(qb);
 
-    if (filters?.type)      qb.andWhere('p.type = :type',           { type: filters.type });
-    if (filters?.status)    qb.andWhere('p.status = :status',       { status: filters.status });
-    if (filters?.addressee) qb.andWhere('p.addressee = :addressee', { addressee: filters.addressee });
+    if (filters?.type) qb.andWhere('p.type = :type', { type: filters.type });
+    if (filters?.status)
+      qb.andWhere('p.status = :status', { status: filters.status });
+    if (filters?.addressee)
+      qb.andWhere('p.addressee = :addressee', { addressee: filters.addressee });
     if (filters?.search) {
       qb.andWhere('(p.code ILIKE :search OR p.subject ILIKE :search)', {
         search: `%${filters.search.trim()}%`,
@@ -883,7 +997,10 @@ export class PqrfService {
       .orderBy('p.createdAt', 'DESC');
 
     const totalItems = await qb.getCount();
-    const items = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const items = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
@@ -907,21 +1024,25 @@ export class PqrfService {
     const userIds: string[] = [];
 
     if (isForAdministration(pqrf.addressee)) {
-      userIds.push(...await this.notificationsService.findUserIdsByRoles(pqrf.complexId, [
-        ValidRoles.COMPLEX_ROL,
-        ValidRoles.SUPERVISOR_ROL,
-      ]));
+      userIds.push(
+        ...(await this.notificationsService.findUserIdsByRoles(pqrf.complexId, [
+          ValidRoles.COMPLEX_ROL,
+          ValidRoles.SUPERVISOR_ROL,
+        ])),
+      );
     }
 
     // Del consejo se avisa a quienes les toca responder: los demás lo pueden
     // leer en su bandeja, pero un aviso accionable sin botón es ruido.
     if (isForCouncil(pqrf.addressee)) {
-      userIds.push(...await this.councilResolvers(pqrf));
+      userIds.push(...(await this.councilResolvers(pqrf)));
     }
 
     const recipients = [...new Set(userIds)];
     if (recipients.length === 0) {
-      this.logger.warn(`El radicado ${pqrf.code} no tiene a quién notificar (${pqrf.addressee})`);
+      this.logger.warn(
+        `El radicado ${pqrf.code} no tiene a quién notificar (${pqrf.addressee})`,
+      );
       return;
     }
 

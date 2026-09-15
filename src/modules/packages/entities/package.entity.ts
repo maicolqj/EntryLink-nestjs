@@ -12,10 +12,10 @@ import {
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 
 import { PackageStatus } from '../enums/package-status.enum';
-import { PackageType }   from '../enums/package-type.enum';
-import { Unit }                   from '../../residential-complex/entities/unit.entity';
-import { ResidentialComplex }     from '../../residential-complex/entities/residential-complex.entity';
-import { User }                   from '../../users/entities/user.entity';
+import { PackageType } from '../enums/package-type.enum';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { User } from '../../users/entities/user.entity';
 
 @ObjectType()
 @Entity('packages')
@@ -23,7 +23,6 @@ import { User }                   from '../../users/entities/user.entity';
 @Index(['complexId', 'unitId'])
 @Index(['complexId', 'trackingCode'])
 export class Package {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -52,7 +51,11 @@ export class Package {
   type: PackageType;
 
   @Field(() => PackageStatus)
-  @Column({ type: 'enum', enum: PackageStatus, default: PackageStatus.RECEIVED })
+  @Column({
+    type: 'enum',
+    enum: PackageStatus,
+    default: PackageStatus.RECEIVED,
+  })
   status: PackageStatus;
 
   // ─── Fotos ────────────────────────────────────────────────────────

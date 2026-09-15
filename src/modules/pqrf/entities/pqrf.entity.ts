@@ -12,12 +12,12 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 
-import { PqrfType }      from '../enums/pqrf-type.enum';
-import { PqrfStatus }    from '../enums/pqrf-status.enum';
+import { PqrfType } from '../enums/pqrf-type.enum';
+import { PqrfStatus } from '../enums/pqrf-status.enum';
 import { PqrfAddressee } from '../enums/pqrf-addressee.enum';
 import { PqrfAcknowledgement } from './pqrf-acknowledgement.entity';
 
-import { Unit }               from '../../residential-complex/entities/unit.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 
 /**
@@ -36,7 +36,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Index(['complexId', 'addressee'])
 @Index(['residentId'])
 export class Pqrf {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -46,7 +45,9 @@ export class Pqrf {
    * Es lo que el residente cita cuando reclama por su solicitud, así que no
    * puede ser el uuid.
    */
-  @Field(() => String, { description: 'Número de radicado, consecutivo por complejo' })
+  @Field(() => String, {
+    description: 'Número de radicado, consecutivo por complejo',
+  })
   @Column({ name: 'code', type: 'varchar', length: 20 })
   code: string;
 
@@ -59,12 +60,19 @@ export class Pqrf {
   @Column({ name: 'type', type: 'varchar', length: 20 })
   type: PqrfType;
 
-  @Field(() => PqrfAddressee, { description: 'A quién se dirige: define quién puede leerlo' })
+  @Field(() => PqrfAddressee, {
+    description: 'A quién se dirige: define quién puede leerlo',
+  })
   @Column({ name: 'addressee', type: 'varchar', length: 20 })
   addressee: PqrfAddressee;
 
   @Field(() => PqrfStatus)
-  @Column({ name: 'status', type: 'varchar', length: 20, default: PqrfStatus.RADICADO })
+  @Column({
+    name: 'status',
+    type: 'varchar',
+    length: 20,
+    default: PqrfStatus.RADICADO,
+  })
   status: PqrfStatus;
 
   @Field(() => String)
@@ -96,7 +104,12 @@ export class Pqrf {
 
   /** Nombre congelado al radicar: el residente puede mudarse y el radicado queda. */
   @Field(() => String, { nullable: true })
-  @Column({ name: 'requested_by_name', type: 'varchar', length: 200, nullable: true })
+  @Column({
+    name: 'requested_by_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   requestedByName?: string | null;
 
   /**
@@ -104,7 +117,7 @@ export class Pqrf {
    * aquí: mientras falte uno por marcarlo, el radicado sigue abierto.
    */
   @Field(() => [PqrfAcknowledgement], { nullable: true })
-  @OneToMany(() => PqrfAcknowledgement, ack => ack.pqrf)
+  @OneToMany(() => PqrfAcknowledgement, (ack) => ack.pqrf)
   acknowledgements?: PqrfAcknowledgement[];
 
   /** Cuándo quedó resuelto. Null mientras falte alguna instancia. */
@@ -130,7 +143,9 @@ export class Pqrf {
    * radicó. Se marca aparte porque no es lo mismo que una respuesta —el
    * residente tiene que saber cuál de las dos recibió—.
    */
-  @Field(() => Boolean, { description: 'Resuelto por silencio administrativo positivo' })
+  @Field(() => Boolean, {
+    description: 'Resuelto por silencio administrativo positivo',
+  })
   @Column({ name: 'resolved_by_silence', type: 'boolean', default: false })
   resolvedBySilence: boolean;
 

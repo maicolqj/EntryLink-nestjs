@@ -1,9 +1,9 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 export enum PushPlatform {
-  WEB     = 'WEB',
+  WEB = 'WEB',
   ANDROID = 'ANDROID',
-  IOS     = 'IOS',
+  IOS = 'IOS',
 }
 
 registerEnumType(PushPlatform, {

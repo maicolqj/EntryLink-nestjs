@@ -3,7 +3,6 @@ import { CallLog } from '../../entities/call-log.entity';
 
 @ObjectType()
 export class CallLogsPage {
-
   @Field(() => [CallLog])
   items: CallLog[];
 

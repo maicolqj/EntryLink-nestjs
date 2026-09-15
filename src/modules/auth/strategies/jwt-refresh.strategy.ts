@@ -7,7 +7,10 @@ import { CustomError } from '../../shared/utils/errors.utils';
 import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
 
 @Injectable()
-export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class JwtRefreshStrategy extends PassportStrategy(
+  Strategy,
+  'jwt-refresh',
+) {
   constructor(configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -17,7 +20,10 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     });
   }
 
-  async validate(req: Request, payload: JwtRefreshPayload): Promise<JwtRefreshPayload> {
+  async validate(
+    req: Request,
+    payload: JwtRefreshPayload,
+  ): Promise<JwtRefreshPayload> {
     if (payload.type !== 'refresh') {
       throw new CustomError({
         message: 'Tipo de token inválido',
@@ -35,7 +41,10 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     }
 
     // Adjuntamos el token raw para que el servicio pueda rotarlo
-    (payload as any).rawToken = (req as any).headers?.authorization?.replace('Bearer ', '');
+    (payload as any).rawToken = (req as any).headers?.authorization?.replace(
+      'Bearer ',
+      '',
+    );
 
     return payload;
   }

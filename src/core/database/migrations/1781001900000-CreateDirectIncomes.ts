@@ -10,7 +10,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * ir entre comillas dobles. Idempotente.
  */
 export class CreateDirectIncomes1781001900000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$
@@ -58,9 +57,15 @@ export class CreateDirectIncomes1781001900000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_direct_incomes_complex_date"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_direct_incomes_complex_period"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_direct_incomes_complex_date"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_direct_incomes_complex_period"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "direct_incomes"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "direct_incomes_category_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "direct_incomes_category_enum"`,
+    );
   }
 }

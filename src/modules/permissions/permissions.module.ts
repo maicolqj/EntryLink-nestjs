@@ -7,6 +7,10 @@ import { PermissionDependencyService } from './services/permission-dependecy.ser
 
 @Module({
   imports: [TypeOrmModule.forFeature([Permission])],
-  providers: [PermissionsResolver, PermissionsService, PermissionDependencyService],
+  providers: [
+    PermissionsResolver,
+    PermissionsService,
+    PermissionDependencyService,
+  ],
 })
 export class PermissionsModule {}

@@ -9,7 +9,10 @@ import { RejectAccessRequestInput } from '../dto/inputs/resolve-access-request.i
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { assertGpsWithinComplex } from '../../shared/utils/gps.utils';
-import { AccessRequestErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AccessRequestErrorCode,
+  GeneralErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import {
   UserComplexAssignment,
@@ -69,10 +72,10 @@ export class SupervisorAccessRequestService {
     // 2. Si ya tiene asignación ACTIVA → no necesita solicitar
     const existingAssignment = await this.assignmentRepo.findOne({
       where: {
-        userId:    supervisorId,
+        userId: supervisorId,
         complexId,
-        role:      ValidRoles.SUPERVISOR_ROL,
-        status:    AssignmentStatus.ACTIVE,
+        role: ValidRoles.SUPERVISOR_ROL,
+        status: AssignmentStatus.ACTIVE,
       },
     });
     if (existingAssignment) {
@@ -89,7 +92,8 @@ export class SupervisorAccessRequestService {
     });
     if (pendingRequest) {
       throw new CustomError({
-        message: 'Ya tienes una solicitud pendiente para este complejo. Espera a que el administrador la revise',
+        message:
+          'Ya tienes una solicitud pendiente para este complejo. Espera a que el administrador la revise',
         statusCode: HttpStatus.CONFLICT,
         errorCode: AccessRequestErrorCode.REQUEST_ALREADY_PENDING,
       });
@@ -127,24 +131,24 @@ export class SupervisorAccessRequestService {
     // por eso el recipientUserId debe ser complexId para que filterIterator lo entregue.
     void this.notificationsService.notify({
       complexId,
-      userIds:          [complexId],
-      type:             NotificationType.SYSTEM_ANNOUNCEMENT,
-      priority:         NotificationPriority.HIGH,
-      title:            'Nueva solicitud de acceso',
-      body:             `${supervisorName} solicita acceso al complejo`,
-      entityId:         saved.id,
-      entityType:       'ACCESS_REQUEST',
-      createdByUserId:  supervisorId,
-      isActionable:     true,
-      actionType:       NotificationActionType.ACCESS_REQUEST,
-      actionLabel:      'Autorizar acceso',
-      metadata:         {
-        complexId,                 // el dashboard lo usa para pendingAccessRequests(complexId)
-        requestId:      saved.id,
+      userIds: [complexId],
+      type: NotificationType.SYSTEM_ANNOUNCEMENT,
+      priority: NotificationPriority.HIGH,
+      title: 'Nueva solicitud de acceso',
+      body: `${supervisorName} solicita acceso al complejo`,
+      entityId: saved.id,
+      entityType: 'ACCESS_REQUEST',
+      createdByUserId: supervisorId,
+      isActionable: true,
+      actionType: NotificationActionType.ACCESS_REQUEST,
+      actionLabel: 'Autorizar acceso',
+      metadata: {
+        complexId, // el dashboard lo usa para pendingAccessRequests(complexId)
+        requestId: saved.id,
         supervisorId,
         supervisorName,
-        requestLat:     lat,
-        requestLng:     lng,
+        requestLat: lat,
+        requestLng: lng,
       },
     });
 
@@ -159,24 +163,27 @@ export class SupervisorAccessRequestService {
     requestId: string,
     currentUser: JwtAccessPayload,
   ): Promise<SupervisorAccessRequest> {
-    const request = await this.findPendingRequestWithAccess(requestId, currentUser);
+    const request = await this.findPendingRequestWithAccess(
+      requestId,
+      currentUser,
+    );
 
     const existingAssignment = await this.assignmentRepo.findOne({
       where: {
-        userId:    request.supervisorId,
+        userId: request.supervisorId,
         complexId: request.complexId,
-        role:      ValidRoles.SUPERVISOR_ROL,
-        status:    AssignmentStatus.ACTIVE,
+        role: ValidRoles.SUPERVISOR_ROL,
+        status: AssignmentStatus.ACTIVE,
       },
     });
 
     if (!existingAssignment) {
       await this.assignmentRepo.save(
         this.assignmentRepo.create({
-          userId:    request.supervisorId,
+          userId: request.supervisorId,
           complexId: request.complexId,
-          role:      ValidRoles.SUPERVISOR_ROL,
-          status:    AssignmentStatus.ACTIVE,
+          role: ValidRoles.SUPERVISOR_ROL,
+          status: AssignmentStatus.ACTIVE,
         }),
       );
     }
@@ -190,13 +197,13 @@ export class SupervisorAccessRequestService {
     // Para COMPLEX_ROL, sub = complex.id (no es un user ID).
     // Usar ownerId del complejo como resolvedById en ese caso.
     const resolvedById = currentUser.roles?.includes(ValidRoles.COMPLEX_ROL)
-      ? complex?.ownerId ?? null
+      ? (complex?.ownerId ?? null)
       : currentUser.sub;
 
     await this.requestRepo.update(requestId, {
-      status:       AccessRequestStatus.APPROVED,
+      status: AccessRequestStatus.APPROVED,
       resolvedById,
-      resolvedAt:   new Date(),
+      resolvedAt: new Date(),
     });
 
     this.logger.log(
@@ -204,17 +211,21 @@ export class SupervisorAccessRequestService {
     );
 
     void this.notificationsService.notify({
-      complexId:       request.complexId,
-      userIds:         [request.supervisorId],
-      type:            NotificationType.ACCESS_REQUEST_APPROVED,
-      priority:        NotificationPriority.HIGH,
-      title:           'Tu solicitud de acceso fue aprobada',
-      body:            'El administrador del complejo ha aprobado tu solicitud de acceso.',
-      entityId:        requestId,
-      entityType:      'ACCESS_REQUEST',
+      complexId: request.complexId,
+      userIds: [request.supervisorId],
+      type: NotificationType.ACCESS_REQUEST_APPROVED,
+      priority: NotificationPriority.HIGH,
+      title: 'Tu solicitud de acceso fue aprobada',
+      body: 'El administrador del complejo ha aprobado tu solicitud de acceso.',
+      entityId: requestId,
+      entityType: 'ACCESS_REQUEST',
       createdByUserId: resolvedById,
-      isActionable:    false,
-      metadata:        { complexId: request.complexId, requestId, resolvedAt: new Date().toISOString() },
+      isActionable: false,
+      metadata: {
+        complexId: request.complexId,
+        requestId,
+        resolvedAt: new Date().toISOString(),
+      },
     });
 
     return this.loadRequestRelations(requestId);
@@ -229,7 +240,10 @@ export class SupervisorAccessRequestService {
     currentUser: JwtAccessPayload,
   ): Promise<SupervisorAccessRequest> {
     const { requestId, reason } = input;
-    const request = await this.findPendingRequestWithAccess(requestId, currentUser);
+    const request = await this.findPendingRequestWithAccess(
+      requestId,
+      currentUser,
+    );
 
     const complex = await this.complexRepo.findOne({
       where: { id: request.complexId },
@@ -237,14 +251,14 @@ export class SupervisorAccessRequestService {
     });
 
     const resolvedById = currentUser.roles?.includes(ValidRoles.COMPLEX_ROL)
-      ? complex?.ownerId ?? null
+      ? (complex?.ownerId ?? null)
       : currentUser.sub;
 
     await this.requestRepo.update(requestId, {
-      status:          AccessRequestStatus.REJECTED,
+      status: AccessRequestStatus.REJECTED,
       rejectionReason: reason,
       resolvedById,
-      resolvedAt:      new Date(),
+      resolvedAt: new Date(),
     });
 
     this.logger.log(
@@ -256,17 +270,17 @@ export class SupervisorAccessRequestService {
       : 'El administrador del complejo ha rechazado tu solicitud de acceso.';
 
     void this.notificationsService.notify({
-      complexId:       request.complexId,
-      userIds:         [request.supervisorId],
-      type:            NotificationType.ACCESS_REQUEST_REJECTED,
-      priority:        NotificationPriority.HIGH,
-      title:           'Tu solicitud de acceso fue rechazada',
-      body:            rejectedBody,
-      entityId:        requestId,
-      entityType:      'ACCESS_REQUEST',
+      complexId: request.complexId,
+      userIds: [request.supervisorId],
+      type: NotificationType.ACCESS_REQUEST_REJECTED,
+      priority: NotificationPriority.HIGH,
+      title: 'Tu solicitud de acceso fue rechazada',
+      body: rejectedBody,
+      entityId: requestId,
+      entityType: 'ACCESS_REQUEST',
       createdByUserId: resolvedById,
-      isActionable:    false,
-      metadata:        {
+      isActionable: false,
+      metadata: {
         complexId: request.complexId,
         requestId,
         resolvedAt: new Date().toISOString(),
@@ -281,7 +295,9 @@ export class SupervisorAccessRequestService {
   // SUPERVISOR: ver mis solicitudes
   // ================================================================
 
-  async findMyRequests(supervisorId: string): Promise<SupervisorAccessRequest[]> {
+  async findMyRequests(
+    supervisorId: string,
+  ): Promise<SupervisorAccessRequest[]> {
     return this.requestRepo.find({
       where: { supervisorId },
       relations: ['complex'],
@@ -329,7 +345,9 @@ export class SupervisorAccessRequestService {
     requestId: string,
     currentUser: JwtAccessPayload,
   ): Promise<SupervisorAccessRequest> {
-    const request = await this.requestRepo.findOne({ where: { id: requestId } });
+    const request = await this.requestRepo.findOne({
+      where: { id: requestId },
+    });
 
     if (!request) {
       throw new CustomError({
@@ -362,7 +380,10 @@ export class SupervisorAccessRequestService {
         where: { id: complexId },
         select: ['id', 'ownerId'],
       });
-      if (complex && (complex.id === currentUser.sub || complex.ownerId === currentUser.sub)) {
+      if (
+        complex &&
+        (complex.id === currentUser.sub || complex.ownerId === currentUser.sub)
+      ) {
         return;
       }
     }
@@ -374,7 +395,9 @@ export class SupervisorAccessRequestService {
     });
   }
 
-  private async loadRequestRelations(id: string): Promise<SupervisorAccessRequest> {
+  private async loadRequestRelations(
+    id: string,
+  ): Promise<SupervisorAccessRequest> {
     return this.requestRepo.findOne({
       where: { id },
       relations: ['supervisor', 'complex', 'resolvedBy'],

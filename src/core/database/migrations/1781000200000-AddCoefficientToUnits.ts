@@ -5,7 +5,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * recurrentes a nivel de complejo. Fracción con suma teórica = 1 (100%).
  */
 export class AddCoefficientToUnits1781000200000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "units"
@@ -14,6 +13,8 @@ export class AddCoefficientToUnits1781000200000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "units" DROP COLUMN IF EXISTS "coefficient"`);
+    await queryRunner.query(
+      `ALTER TABLE "units" DROP COLUMN IF EXISTS "coefficient"`,
+    );
   }
 }

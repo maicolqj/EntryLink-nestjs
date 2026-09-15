@@ -12,8 +12,8 @@ import { Request } from 'express';
 
 import { NotesService } from '../services/notes.service';
 import { CreateNoteDto } from '../dto/inputs/create-note.input';
-import { R2StorageService }           from '../../../core/infrastructure/r2/r2.service';
-import { multipleImagesInterceptor }  from '../../../core/infrastructure/r2/upload-interceptors';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { multipleImagesInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { SupervisorVisitService } from '../../supervisor-visits/services/supervisor-visit.service';
 import { JwtRestGuard } from '../../shared/guards/jwt-rest.guard';
@@ -32,7 +32,7 @@ export class NotesController {
     private readonly storageService: R2StorageService,
     private readonly complexService: ResidentialComplexService,
     private readonly supervisorVisitService: SupervisorVisitService,
-  ) { }
+  ) {}
 
   /**
    * POST /api/v1/notes
@@ -50,9 +50,14 @@ export class NotesController {
    * Carpeta R2: EntryLink/{complex-slug}/notes
    */
   @Post()
-  @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.SECURITY_ROL] })
+  @Auth({
+    roles: [
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+    ],
+  })
   @UseInterceptors(multipleImagesInterceptor('files', 10))
-
   async createNote(
     @UploadedFiles() files: Express.Multer.File[],
     @Body() body: CreateNoteDto,
@@ -80,15 +85,19 @@ export class NotesController {
     // su posición GPS debe estar dentro del perímetro configurado.
     let supervisorVisitId: string | undefined;
     if (currentUser.roles?.includes(ValidRoles.SUPERVISOR_ROL)) {
-      supervisorVisitId = await this.supervisorVisitService.assertActiveVisitForNote(
-        body.complexId,
-        currentUser.sub,
-        body.lat,
-        body.lng,
-      );
+      supervisorVisitId =
+        await this.supervisorVisitService.assertActiveVisitForNote(
+          body.complexId,
+          currentUser.sub,
+          body.lat,
+          body.lng,
+        );
     }
 
-    const complex = await this.complexService.findById(body.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      body.complexId,
+      currentUser,
+    );
     const folder = this.storageService.buildFolder(complex.slug, 'notes');
 
     // ── Subir imágenes a R2 ──────────────────────────────
@@ -122,7 +131,6 @@ export class NotesController {
       );
 
       return note;
-
     } catch (error) {
       // ── Rollback: eliminar imágenes huérfanas de R2 ───────
       if (uploadedPublicIds.length > 0) {

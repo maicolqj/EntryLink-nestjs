@@ -4,7 +4,6 @@ import { Notification } from '../../entities/notification.entity';
 
 @ObjectType()
 export class PaginatedNotificationsResponse {
-
   @Field(() => [Notification])
   items: Notification[];
 

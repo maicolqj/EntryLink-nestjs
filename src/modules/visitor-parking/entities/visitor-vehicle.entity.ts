@@ -25,18 +25,22 @@ import { ParkingRecordStatus } from '../enums/parking-status.enum';
 @Index(['complexId', 'entryDate'])
 @Index(['hostResidentId', 'status'])
 export class VisitorVehicle {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   // ==================== IDENTIFICACIÓN ====================
 
-  @Field(() => String, { description: 'Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)' })
+  @Field(() => String, {
+    description:
+      'Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)',
+  })
   @Column({ name: 'invoice_number', type: 'varchar', length: 30, unique: true })
   invoiceNumber: string;
 
-  @Field(() => String, { description: 'Placa del vehículo (normalizada: mayúsculas, sin espacios)' })
+  @Field(() => String, {
+    description: 'Placa del vehículo (normalizada: mayúsculas, sin espacios)',
+  })
   @Column({ type: 'varchar', length: 20 })
   plate: string;
 
@@ -58,7 +62,9 @@ export class VisitorVehicle {
 
   // ==================== TIEMPOS Y COSTO ====================
 
-  @Field(() => Date, { description: 'Fecha/hora de entrada (asignada por el servidor)' })
+  @Field(() => Date, {
+    description: 'Fecha/hora de entrada (asignada por el servidor)',
+  })
   @CreateDateColumn({ name: 'entry_date', type: 'timestamptz' })
   entryDate: Date;
 
@@ -71,29 +77,58 @@ export class VisitorVehicle {
   @Column({ name: 'exit_date', type: 'timestamptz', nullable: true })
   exitDate?: Date;
 
-  @Field(() => Int, { description: 'Duración en minutos (calculada en la salida)', nullable: true })
+  @Field(() => Int, {
+    description: 'Duración en minutos (calculada en la salida)',
+    nullable: true,
+  })
   @Column({ type: 'int', nullable: true })
   duration?: number;
 
-  @Field(() => Float, { description: 'Costo total generado al momento de la salida', nullable: true })
-  @Column({ name: 'parking_cost', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Field(() => Float, {
+    description: 'Costo total generado al momento de la salida',
+    nullable: true,
+  })
+  @Column({
+    name: 'parking_cost',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   parkingCost?: number;
 
-  @Field(() => ParkingPaymentMethod, { description: 'Método de pago (disponible tras el cierre)', nullable: true })
-  @Column({ name: 'payment_method', type: 'enum', enum: ParkingPaymentMethod, nullable: true })
+  @Field(() => ParkingPaymentMethod, {
+    description: 'Método de pago (disponible tras el cierre)',
+    nullable: true,
+  })
+  @Column({
+    name: 'payment_method',
+    type: 'enum',
+    enum: ParkingPaymentMethod,
+    nullable: true,
+  })
   paymentMethod?: ParkingPaymentMethod;
 
   // ==================== ESTADO ====================
 
-  @Field(() => ParkingRecordStatus, { description: 'Estado actual del registro' })
-  @Column({ type: 'enum', enum: ParkingRecordStatus, default: ParkingRecordStatus.OPEN })
+  @Field(() => ParkingRecordStatus, {
+    description: 'Estado actual del registro',
+  })
+  @Column({
+    type: 'enum',
+    enum: ParkingRecordStatus,
+    default: ParkingRecordStatus.OPEN,
+  })
   status: ParkingRecordStatus;
 
   @Field(() => String, { description: 'Motivo de cancelación', nullable: true })
   @Column({ name: 'cancellation_reason', type: 'text', nullable: true })
   cancellationReason?: string;
 
-  @Field(() => String, { description: 'Notas adicionales del registro', nullable: true })
+  @Field(() => String, {
+    description: 'Notas adicionales del registro',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
@@ -109,18 +144,26 @@ export class VisitorVehicle {
 
   // ==================== AUDITORÍA ====================
 
-  @Field(() => String, { description: 'Usuario que registró el ingreso', nullable: true })
+  @Field(() => String, {
+    description: 'Usuario que registró el ingreso',
+    nullable: true,
+  })
   @Column({ name: 'registered_by_user_id', type: 'uuid', nullable: true })
   registeredByUserId?: string;
 
-  @Field(() => String, { description: 'Usuario que registró la salida', nullable: true })
+  @Field(() => String, {
+    description: 'Usuario que registró la salida',
+    nullable: true,
+  })
   @Column({ name: 'exit_registered_by_user_id', type: 'uuid', nullable: true })
   exitRegisteredByUserId?: string;
 
-  @Field(() => String, { description: 'Usuario que canceló el registro', nullable: true })
+  @Field(() => String, {
+    description: 'Usuario que canceló el registro',
+    nullable: true,
+  })
   @Column({ name: 'cancelled_by_user_id', type: 'uuid', nullable: true })
   cancelledByUserId?: string;
-
 
   @Field(() => Date)
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
@@ -138,12 +181,18 @@ export class VisitorVehicle {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { description: 'Usuario que registró el ingreso', nullable: true })
+  @Field(() => User, {
+    description: 'Usuario que registró el ingreso',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'registered_by_user_id' })
   registeredByUser?: User;
 
-  @Field(() => User, { description: 'Usuario que registró la salida', nullable: true })
+  @Field(() => User, {
+    description: 'Usuario que registró la salida',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'exit_registered_by_user_id' })
   exitRegisteredByUser?: User;
@@ -153,7 +202,11 @@ export class VisitorVehicle {
   @BeforeInsert()
   @BeforeUpdate()
   normalizeFields() {
-    if (this.plate) this.plate = this.plate.trim().toUpperCase().replace(/[\s\-]/g, '');
+    if (this.plate)
+      this.plate = this.plate
+        .trim()
+        .toUpperCase()
+        .replace(/[\s\-]/g, '');
     if (this.driverName) this.driverName = this.driverName.trim().toUpperCase();
     if (this.brand) this.brand = this.brand.trim().toUpperCase();
     if (this.color) this.color = this.color.trim().toUpperCase();

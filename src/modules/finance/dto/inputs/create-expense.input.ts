@@ -1,14 +1,22 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
-  IsUUID, IsPositive, IsNotEmpty, IsOptional, IsString,
-  MaxLength, Matches, ValidateNested, ArrayMinSize, IsArray, IsDate,
+  IsUUID,
+  IsPositive,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Matches,
+  ValidateNested,
+  ArrayMinSize,
+  IsArray,
+  IsDate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /** Una línea de gasto del comprobante de egreso (se DEBITA). */
 @InputType()
 export class ExpenseLineInput {
-
   /** Cuenta de gasto / CxP a DEBITAR (PUC clase 5, o pasivo 2335). */
   @Field()
   @IsUUID()
@@ -34,7 +42,6 @@ export class ExpenseLineInput {
 
 @InputType()
 export class CreateExpenseInput {
-
   @Field()
   @IsUUID()
   complexId: string;
@@ -45,7 +52,9 @@ export class CreateExpenseInput {
 
   /** Período contable YYYY-MM */
   @Field()
-  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'El período debe tener el formato YYYY-MM' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'El período debe tener el formato YYYY-MM',
+  })
   period: string;
 
   /** Justificación a nivel de CABECERA del documento. */

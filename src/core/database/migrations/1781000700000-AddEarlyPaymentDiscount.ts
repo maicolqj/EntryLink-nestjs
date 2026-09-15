@@ -12,7 +12,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * monto si no se paga a tiempo. Idempotente.
  */
 export class AddEarlyPaymentDiscount1781000700000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "complex_finance_configs"
@@ -34,9 +33,17 @@ export class AddEarlyPaymentDiscount1781000700000 implements MigrationInterface 
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "earlyDiscountDay"`);
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "earlyDiscountPct"`);
-    await queryRunner.query(`ALTER TABLE "complex_finance_configs" DROP COLUMN IF EXISTS "earlyDiscountDay"`);
-    await queryRunner.query(`ALTER TABLE "complex_finance_configs" DROP COLUMN IF EXISTS "earlyDiscountPct"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "earlyDiscountDay"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "earlyDiscountPct"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "complex_finance_configs" DROP COLUMN IF EXISTS "earlyDiscountDay"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "complex_finance_configs" DROP COLUMN IF EXISTS "earlyDiscountPct"`,
+    );
   }
 }

@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 
@@ -10,7 +16,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Entity('charge_categories')
 @Index(['complexId', 'isActive'])
 export class ChargeCategory {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

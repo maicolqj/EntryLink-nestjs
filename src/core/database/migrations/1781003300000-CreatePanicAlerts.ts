@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * la ventana antigua.
  */
 export class CreatePanicAlerts1781003300000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Los enums nativos no admiten CREATE TYPE IF NOT EXISTS; el bloque hace
     // idempotente la migración por si en dev se corrió `synchronize`.
@@ -88,10 +87,18 @@ export class CreatePanicAlerts1781003300000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_notifications_panic_alert_id"`);
-    await queryRunner.query(`ALTER TABLE "notifications" DROP COLUMN IF EXISTS "panic_alert_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_panic_alerts_complex_status"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_panic_alerts_complex_created"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_notifications_panic_alert_id"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "notifications" DROP COLUMN IF EXISTS "panic_alert_id"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_panic_alerts_complex_status"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_panic_alerts_complex_created"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "panic_alerts"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "panic_alerts_status_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "panic_alerts_type_enum"`);
