@@ -87,6 +87,17 @@ export class Notification {
   @Column({ nullable: true })
   readAt?: Date;
 
+  /**
+   * Destacada por su destinatario, como la estrella del correo.
+   *
+   * La prioridad la decide el módulo que emite —urgencia técnica—; esto lo
+   * decide quien la recibe: qué tiene pendiente. Son cosas distintas y por eso
+   * conviven. No aplica a los broadcasts, que son un registro compartido.
+   */
+  @Field()
+  @Column({ default: false })
+  isStarred: boolean;
+
   // ─── Destinatario ─────────────────────────────────────────────
 
   /** ID del usuario al que va dirigida. NULL cuando isBroadcast = true. */

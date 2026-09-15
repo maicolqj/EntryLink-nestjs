@@ -1640,6 +1640,7 @@ type Notification {
   targetRoles: [String!]
   isRead: Boolean!
   readAt: DateTime
+  isStarred: Boolean!
   recipientUserId: String
   complexId: String!
   entityId: String
@@ -1795,6 +1796,130 @@ enum PanicAlertStatus {
   ACKNOWLEDGED
   RESOLVED
   FALSE_ALARM
+}
+
+"""Opción de una lista cerrada"""
+type NotificationActionOption {
+  value: String!
+  label: String!
+  hint: String
+}
+
+"""Dato que la acción pide antes de ejecutarse"""
+type NotificationActionField {
+  name: String!
+  label: String!
+  kind: NotificationActionFieldKind!
+  required: Boolean!
+  helpText: String
+  placeholder: String
+  defaultValue: String
+  defaultLabel: String
+  options: [NotificationActionOption!]
+  minLength: Int
+  min: Float
+  max: Float
+}
+
+"""Tipo de dato que pide una acción antes de ejecutarse"""
+enum NotificationActionFieldKind {
+  TEXT
+  TEXTAREA
+  NUMBER
+  MONEY
+  DATE
+  BOOLEAN
+  SELECT
+  UNIT
+}
+
+"""Acción disponible sobre lo que originó el aviso"""
+type NotificationSnapshotAction {
+  code: String!
+  label: String!
+  description: String
+  tone: NotificationActionTone!
+  isEnabled: Boolean!
+  disabledReason: String
+  confirmText: String
+  fields: [NotificationActionField!]!
+}
+
+"""Peso visual del botón de la acción"""
+enum NotificationActionTone {
+  PRIMARY
+  NEUTRAL
+  WARNING
+  DANGER
+}
+
+"""Un dato del expediente, ya con nombre legible"""
+type NotificationSnapshotField {
+  label: String!
+  value: String!
+  kind: NotificationFieldKind!
+  href: String
+}
+
+"""Formato de lectura de un campo del expediente"""
+enum NotificationFieldKind {
+  TEXT
+  MULTILINE
+  DATE
+  MONEY
+  BADGE
+  LINK
+  PHONE
+  LOCATION
+}
+
+"""Bloque de datos del expediente"""
+type NotificationSnapshotSection {
+  title: String
+  fields: [NotificationSnapshotField!]!
+}
+
+"""Imagen del expediente"""
+type NotificationSnapshotImage {
+  url: String!
+  caption: String
+  sealHash: String
+}
+
+"""Archivo adjunto del expediente (PDF, carné…)"""
+type NotificationSnapshotFile {
+  url: String!
+  label: String!
+}
+
+"""Datos completos de lo que originó la notificación"""
+type NotificationEntitySnapshot {
+  entityType: String
+  entityId: String
+  headline: String
+  statusLabel: String
+  statusCode: String
+  statusTone: NotificationSnapshotTone!
+  sections: [NotificationSnapshotSection!]!
+  images: [NotificationSnapshotImage!]!
+  files: [NotificationSnapshotFile!]!
+  actions: [NotificationSnapshotAction!]!
+  source: NotificationSnapshotSource!
+  isMissing: Boolean!
+}
+
+"""Tono con el que se muestra el estado del expediente"""
+enum NotificationSnapshotTone {
+  NEUTRAL
+  POSITIVE
+  WARNING
+  DANGER
+}
+
+"""Origen de los datos del expediente"""
+enum NotificationSnapshotSource {
+  LIVE
+  METADATA
 }
 
 """Registro de visita de supervisor a un complejo residencial"""
@@ -2163,8 +2288,10 @@ type NotificationDetailResponse {
   complexId: String!
   entityId: String
   entityType: String
+  entity: NotificationEntitySnapshot
   createdByUserId: String
   createdByUser: NotificationUserInfo
+  isStarred: Boolean!
   isActionable: Boolean!
   actionType: NotificationActionType
   actionLabel: String
@@ -2174,6 +2301,12 @@ type NotificationDetailResponse {
   actionResult: NotificationActionResult
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+"""Resultado de una acción en lote sobre la bandeja"""
+type BulkNotificationActionResult {
+  affected: Int!
+  skipped: Int!
 }
 
 """Respuesta de autenticación exitosa con tokens JWT"""
@@ -4514,6 +4647,8 @@ input FilterNotificationsInput {
   type: NotificationType
   priority: NotificationPriority
   isRead: Boolean
+  isStarred: Boolean
+  search: String
 }
 
 input FilterResidentsInput {
@@ -4955,6 +5090,9 @@ type Mutation {
   denyDeviceApproval(approvalId: ID!): Boolean!
   runPushHealthCheck(deviceToken: String!): PushHealthCheckResult!
   reportDevicePermissions(deviceToken: String!, hasNotificationPermission: Boolean, hasBatteryOptimizationDisabled: Boolean, hasFullScreenIntentPermission: Boolean, onboardingCompleted: Boolean): DevicePushHealthStatus!
+  executeNotificationAction(input: ExecuteNotificationActionInput!): NotificationEntitySnapshot!
+  bulkNotificationAction(input: BulkNotificationActionInput!): BulkNotificationActionResult!
+  setNotificationStarred(notificationId: String!, starred: Boolean!): Notification!
   markNotificationAsRead(notificationId: String!): Notification!
   markAllNotificationsAsRead(complexId: String): Int!
   sendNotification(input: SendNotificationInput!): SendNotificationResult!
@@ -5318,6 +5456,29 @@ input LoginAccessCodeInput {
   Nombre del dispositivo que se vincula en este ingreso (ej. "Mi Android")
   """
   label: String
+}
+
+input ExecuteNotificationActionInput {
+  notificationId: String!
+  actionCode: String!
+
+  """Respuestas a los campos que pide la acción"""
+  values: JSON
+  complexId: String
+}
+
+input BulkNotificationActionInput {
+  notificationIds: [String!]!
+  action: BulkNotificationAction!
+}
+
+"""Acción a aplicar sobre las notificaciones seleccionadas"""
+enum BulkNotificationAction {
+  MARK_READ
+  MARK_UNREAD
+  STAR
+  UNSTAR
+  DELETE
 }
 
 input SendNotificationInput {

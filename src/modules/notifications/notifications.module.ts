@@ -18,6 +18,8 @@ import { SupervisorVisit } from '../supervisor-visits/entities/supervisor-visit.
 import { ResidentsModule } from '../residents/residents.module';
 
 import { NotificationsService } from './services/notifications.service';
+import { NotificationDetailRegistry } from './services/notification-detail.registry';
+import { NotificationSnapshotService } from './services/notification-snapshot.service';
 import { PanicAckTokenService } from './services/panic-ack-token.service';
 import { PanicController } from './controllers/panic.controller';
 import { DeviceHealthController } from './controllers/device-health.controller';
@@ -62,6 +64,8 @@ import {
   controllers: [PanicController, DeviceHealthController],
   providers: [
     NotificationsService,
+    NotificationDetailRegistry,
+    NotificationSnapshotService,
     PanicAckTokenService,
     DeviceHealthService,
     DeviceHealthCron,
@@ -85,6 +89,12 @@ import {
      * o NotificationsService.notify() (con push incluido).
      */
     NotificationsService,
+    /**
+     * Cada módulo registra aquí cómo se lee el expediente de SUS avisos. Se
+     * exporta el registro —no el servicio que lo consume— para que la flecha
+     * siga apuntando en un solo sentido y nadie necesite `forwardRef`.
+     */
+    NotificationDetailRegistry,
   ],
 })
 export class NotificationsModule {}

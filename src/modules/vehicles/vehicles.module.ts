@@ -16,6 +16,7 @@ import { ResidentsModule } from '../residents/residents.module';
 import { AuditModule } from '../audit/audit.module';
 import { FinanceModule } from '../finance/finance.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { VehiclesNotificationDetailProvider } from './providers/vehicles-notification-detail.provider';
 
 @Module({
   imports: [
@@ -33,7 +34,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [VehiclesController],
-  providers: [VehiclesService, VehiclesResolver],
+  providers: [
+    // Expediente que se ve al abrir un aviso de este módulo.
+    VehiclesNotificationDetailProvider,
+    VehiclesService,
+    VehiclesResolver,
+  ],
   exports: [VehiclesService],
 })
 export class VehiclesModule {}

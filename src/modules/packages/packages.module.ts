@@ -10,6 +10,7 @@ import { PackagesController } from './controllers/packages.controller';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule } from '../residents/residents.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PackagesNotificationDetailProvider } from './providers/packages-notification-detail.provider';
 
 @Module({
   imports: [
@@ -20,7 +21,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
     // R2Module es @Global() — disponible automáticamente
   ],
   controllers: [PackagesController],
-  providers: [PackagesService, PackagesResolver],
+  providers: [
+    // Expediente que se ve al abrir un aviso de este módulo.
+    PackagesNotificationDetailProvider,
+    PackagesService,
+    PackagesResolver,
+  ],
   exports: [PackagesService],
 })
 export class PackagesModule {}
