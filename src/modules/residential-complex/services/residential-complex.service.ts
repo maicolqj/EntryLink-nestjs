@@ -24,7 +24,11 @@ import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexType } from '../enums/complex-type.enum';
 import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { ComplexErrorCode, GeneralErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  ComplexErrorCode,
+  GeneralErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { ComplexModule } from '../enums/complex-module.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
@@ -36,11 +40,11 @@ import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { Unit } from '../entities/unit.entity';
 import { UnitStatus } from '../enums/unit-status.enum';
-import { AuditService }    from '../../audit/services/audit.service';
-import { AuditAction }     from '../../audit/enums/audit-action.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { GeocodingService } from './geocoding.service';
-import { SupervisorVisit }   from '../../supervisor-visits/entities/supervisor-visit.entity';
+import { SupervisorVisit } from '../../supervisor-visits/entities/supervisor-visit.entity';
 import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-visit-status.enum';
 import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
 import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
@@ -78,7 +82,7 @@ export class ResidentialComplexService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
-  ) { }
+  ) {}
 
   // ================================================================
   // CREAR COMPLEJO
@@ -128,26 +132,33 @@ export class ResidentialComplexService {
         complex.state,
         complex.country ?? 'Colombia',
       );
-      complex.latitude  = coords.lat;
+      complex.latitude = coords.lat;
       complex.longitude = coords.lng;
     }
 
     const saved = await this.complexRepo.save(complex);
-    this.logger.log(`Complejo creado: ${saved.id} — "${saved.name}" por usuario ${currentUser.sub}`);
+    this.logger.log(
+      `Complejo creado: ${saved.id} — "${saved.name}" por usuario ${currentUser.sub}`,
+    );
 
     // Sembrar el PUC contable base (idempotente, best-effort: no rompe el alta)
     await this.seedPucSafe(saved.id);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.ResidentialComplex,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, name: saved.name, plan: saved.plan, status: saved.status },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.ResidentialComplex,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        name: saved.name,
+        plan: saved.plan,
+        status: saved.status,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       saved.id,
-      description:     `Complejo residencial creado: "${saved.name}"`,
+      complexId: saved.id,
+      description: `Complejo residencial creado: "${saved.name}"`,
     });
 
     return saved;
@@ -177,7 +188,9 @@ export class ResidentialComplexService {
 
     // Si NO es SUPER_ADMIN, solo ve sus propios complejos
     const isSuperAdmin = currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL);
-    const isCompilanceOficerAdmin = currentUser.roles.includes(ValidRoles.COMPILANCE_OFFICER_ROL);
+    const isCompilanceOficerAdmin = currentUser.roles.includes(
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    );
     if (!isSuperAdmin && !isCompilanceOficerAdmin) {
       qb.andWhere('complex.owner_id = :ownerId', { ownerId: currentUser.sub });
     }
@@ -190,10 +203,14 @@ export class ResidentialComplexService {
       );
     }
 
-    if (filters?.type) qb.andWhere('complex.type = :type', { type: filters.type });
-    if (filters?.plan) qb.andWhere('complex.plan = :plan', { plan: filters.plan });
-    if (filters?.status) qb.andWhere('complex.status = :status', { status: filters.status });
-    if (filters?.city) qb.andWhere('complex.city ILIKE :city', { city: `%${filters.city}%` });
+    if (filters?.type)
+      qb.andWhere('complex.type = :type', { type: filters.type });
+    if (filters?.plan)
+      qb.andWhere('complex.plan = :plan', { plan: filters.plan });
+    if (filters?.status)
+      qb.andWhere('complex.status = :status', { status: filters.status });
+    if (filters?.city)
+      qb.andWhere('complex.city ILIKE :city', { city: `%${filters.city}%` });
 
     qb.orderBy('complex.createdAt', 'DESC').skip(skip).take(limit);
 
@@ -222,7 +239,9 @@ export class ResidentialComplexService {
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     const cacheKey = BK.complex.one(id);
-    const cached = await this.cacheService.get<ResidentialComplex>({ key: cacheKey });
+    const cached = await this.cacheService.get<ResidentialComplex>({
+      key: cacheKey,
+    });
 
     let complex: ResidentialComplex;
     if (cached) {
@@ -233,7 +252,11 @@ export class ResidentialComplexService {
         relations: ['owner', 'buildings', 'buildings.units'],
       });
       if (complex) {
-        await this.cacheService.set({ key: cacheKey, data: complex, options: { ttl: BK.complex.TTL } });
+        await this.cacheService.set({
+          key: cacheKey,
+          data: complex,
+          options: { ttl: BK.complex.TTL },
+        });
       }
     }
 
@@ -306,7 +329,8 @@ export class ResidentialComplexService {
     Object.assign(complex, restInput);
 
     // Re-geocodificar si cambió algún campo de dirección y el admin no proveyó coords manuales
-    const addressChanged = input.address != null || input.city != null || input.state != null;
+    const addressChanged =
+      input.address != null || input.city != null || input.state != null;
     if (addressChanged && input.latitude == null && input.longitude == null) {
       const coords = await this.geocodingService.geocodeAddress(
         complex.address,
@@ -314,7 +338,7 @@ export class ResidentialComplexService {
         complex.state,
         complex.country ?? 'Colombia',
       );
-      complex.latitude  = coords.lat;
+      complex.latitude = coords.lat;
       complex.longitude = coords.lng;
     }
 
@@ -323,19 +347,21 @@ export class ResidentialComplexService {
     this.logger.log(`Complejo actualizado: ${saved.id}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.ResidentialComplex,
-      entityId:        saved.id,
-      action:          AuditAction.UPDATE,
-      newValue:        { ...restInput, plan: input.plan, legalRepresentativeId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.ResidentialComplex,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      newValue: { ...restInput, plan: input.plan, legalRepresentativeId },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       saved.id,
-      description:     `Complejo actualizado: "${saved.name}"`,
+      complexId: saved.id,
+      description: `Complejo actualizado: "${saved.name}"`,
     });
 
     // Recargar desde BD para que la relación eager devuelva el representante actualizado.
-    return this.complexRepo.findOne({ where: { id: saved.id, deletedAt: IsNull() } });
+    return this.complexRepo.findOne({
+      where: { id: saved.id, deletedAt: IsNull() },
+    });
   }
 
   // ================================================================
@@ -345,7 +371,7 @@ export class ResidentialComplexService {
   async changeStatus(
     id: string,
     status: ComplexStatus,
-    currentUser: JwtAccessPayload,  
+    currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(id, currentUser);
 
@@ -357,13 +383,22 @@ export class ResidentialComplexService {
 
       // Al desactivar el complejo, marcar todas sus unidades como DISABLED.
       if (status === ComplexStatus.INACTIVE) {
-        await manager.update(Unit, { complexId: id }, { status: UnitStatus.DISABLED });
-        this.logger.warn(`Complejo ${id} desactivado — unidades marcadas como DISABLED`);
+        await manager.update(
+          Unit,
+          { complexId: id },
+          { status: UnitStatus.DISABLED },
+        );
+        this.logger.warn(
+          `Complejo ${id} desactivado — unidades marcadas como DISABLED`,
+        );
       }
 
       // Al activar un complejo (p. ej. aprobación de registro PENDING_REVIEW→ACTIVE),
       // garantizar que tenga su PUC contable sembrado (idempotente, best-effort).
-      if (status === ComplexStatus.ACTIVE && previousStatus !== ComplexStatus.ACTIVE) {
+      if (
+        status === ComplexStatus.ACTIVE &&
+        previousStatus !== ComplexStatus.ACTIVE
+      ) {
         await this.restoreDisabledUnits(manager, id);
         await this.seedPucSafe(id);
       }
@@ -371,16 +406,16 @@ export class ResidentialComplexService {
       await this.cacheService.delete({ key: BK.complex.one(id) });
 
       void this.auditService.log({
-        entityType:      AuditEntityType.ResidentialComplex,
-        entityId:        id,
-        action:          AuditAction.UPDATE,
-        previousValue:   { status: previousStatus },
-        newValue:        { status },
-        performedById:   currentUser.sub,
+        entityType: AuditEntityType.ResidentialComplex,
+        entityId: id,
+        action: AuditAction.UPDATE,
+        previousValue: { status: previousStatus },
+        newValue: { status },
+        performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
-        complexId:       id,
-        description:     `Estado del complejo cambiado: ${previousStatus} → ${status}`,
+        complexId: id,
+        description: `Estado del complejo cambiado: ${previousStatus} → ${status}`,
       });
 
       return saved;
@@ -400,10 +435,16 @@ export class ResidentialComplexService {
    * de una deshabilitada en masa, así que la reactivación del complejo también
    * devuelve a servicio las primeras.
    */
-  private async restoreDisabledUnits(manager: EntityManager, complexId: string): Promise<void> {
+  private async restoreDisabledUnits(
+    manager: EntityManager,
+    complexId: string,
+  ): Promise<void> {
     // El estado va como parámetro (no como literal dentro de un CASE) para que
     // Postgres infiera units_status_enum desde la columna destino en vez de text.
-    const restoreTo = async (targetStatus: UnitStatus, occupancyPredicate: string): Promise<number> => {
+    const restoreTo = async (
+      targetStatus: UnitStatus,
+      occupancyPredicate: string,
+    ): Promise<number> => {
       const result = await manager.query(
         `UPDATE units u
             SET status = $2,
@@ -422,14 +463,14 @@ export class ResidentialComplexService {
       return Array.isArray(result) ? (result[1] ?? 0) : 0;
     };
 
-    const occupied  = await restoreTo(UnitStatus.OCCUPIED,  'EXISTS');
+    const occupied = await restoreTo(UnitStatus.OCCUPIED, 'EXISTS');
     const available = await restoreTo(UnitStatus.AVAILABLE, 'NOT EXISTS');
-    const restored  = occupied + available;
+    const restored = occupied + available;
 
     if (restored > 0) {
       this.logger.log(
         `Complejo ${complexId} reactivado — ${restored} unidades devueltas a servicio ` +
-        `(${occupied} OCCUPIED, ${available} AVAILABLE)`,
+          `(${occupied} OCCUPIED, ${available} AVAILABLE)`,
       );
     }
   }
@@ -447,9 +488,14 @@ export class ResidentialComplexService {
     complex.deletedAt = new Date();
     await this.complexRepo.save(complex);
     await this.cacheService.delete({ key: BK.complex.one(id) });
-    this.logger.warn(`Complejo eliminado (soft): ${id} por usuario ${currentUser.sub}`);
+    this.logger.warn(
+      `Complejo eliminado (soft): ${id} por usuario ${currentUser.sub}`,
+    );
 
-    return { success: true, message: `Complejo "${complex.name}" eliminado correctamente` };
+    return {
+      success: true,
+      message: `Complejo "${complex.name}" eliminado correctamente`,
+    };
   }
 
   // ================================================================
@@ -492,7 +538,10 @@ export class ResidentialComplexService {
    * SUPER_ADMIN siempre tiene acceso. Los demás solo al suyo.
    * SUPERVISOR_ROL requiere visita activa en el complejo específico.
    */
-  async assertAccess(complex: ResidentialComplex, user: JwtAccessPayload): Promise<void> {
+  async assertAccess(
+    complex: ResidentialComplex,
+    user: JwtAccessPayload,
+  ): Promise<void> {
     if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
 
     // COMPLEX_ROL: owner directo O complejo asignado en el perfil
@@ -529,7 +578,10 @@ export class ResidentialComplexService {
    *                 O tiene el complejo asignado en su perfil (user.complexId === complexId).
    * - Otros roles:  su complexId en el JWT debe coincidir con el ID del complejo.
    */
-  async assertComplexAccess(complexId: string, user: JwtAccessPayload): Promise<void> {
+  async assertComplexAccess(
+    complexId: string,
+    user: JwtAccessPayload,
+  ): Promise<void> {
     if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
 
     if (user.roles.includes(ValidRoles.COMPLEX_ROL)) {
@@ -568,7 +620,10 @@ export class ResidentialComplexService {
   /**
    * Verifica que el complejo no haya superado el límite de unidades de su plan.
    */
-  async assertUnitsLimit(complexId: string, currentCount: number): Promise<void> {
+  async assertUnitsLimit(
+    complexId: string,
+    currentCount: number,
+  ): Promise<void> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId, deletedAt: IsNull() },
     });
@@ -606,24 +661,33 @@ export class ResidentialComplexService {
     this.modulesListeners.push(listener);
   }
 
-  async updateEnabledModules(complexId: string, modules: ComplexModule[]): Promise<ResidentialComplex> {
+  async updateEnabledModules(
+    complexId: string,
+    modules: ComplexModule[],
+  ): Promise<ResidentialComplex> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId, deletedAt: IsNull() },
     });
 
     if (!complex) {
-      throw new NotFoundException(`Complejo con ID "${complexId}" no encontrado`);
+      throw new NotFoundException(
+        `Complejo con ID "${complexId}" no encontrado`,
+      );
     }
 
     complex.enabledModules = modules;
     const updated = await this.complexRepo.save(complex);
-    this.logger.log(`Módulos actualizados para complejo ${complexId}: [${modules.join(', ')}]`);
+    this.logger.log(
+      `Módulos actualizados para complejo ${complexId}: [${modules.join(', ')}]`,
+    );
 
     for (const listener of this.modulesListeners) {
       try {
         listener(complexId);
       } catch (err: any) {
-        this.logger.warn(`Error avisando el cambio de módulos de ${complexId}: ${err?.message}`);
+        this.logger.warn(
+          `Error avisando el cambio de módulos de ${complexId}: ${err?.message}`,
+        );
       }
     }
 
@@ -642,14 +706,17 @@ export class ResidentialComplexService {
     try {
       await seedPucForComplex(this.dataSource, complexId);
     } catch (err: any) {
-      this.logger.error(`No se pudo sembrar el PUC del complejo ${complexId}: ${err?.message}`, err?.stack);
+      this.logger.error(
+        `No se pudo sembrar el PUC del complejo ${complexId}: ${err?.message}`,
+        err?.stack,
+      );
     }
   }
 
   private async assertValidLegalRepresentative(userId: string): Promise<void> {
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      select: ['id', 'status', 'deletedAt'], 
+      select: ['id', 'status', 'deletedAt'],
     });
 
     if (!user) {
@@ -662,7 +729,8 @@ export class ResidentialComplexService {
 
     if (user.deletedAt) {
       throw new CustomError({
-        message: 'El usuario indicado como representante legal ha sido eliminado del sistema',
+        message:
+          'El usuario indicado como representante legal ha sido eliminado del sistema',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
@@ -695,7 +763,15 @@ export class ResidentialComplexService {
 
     const candidates = await this.complexRepo
       .createQueryBuilder('c')
-      .select(['c.id', 'c.name', 'c.address', 'c.city', 'c.latitude', 'c.longitude', 'c.gpsRadius'])
+      .select([
+        'c.id',
+        'c.name',
+        'c.address',
+        'c.city',
+        'c.latitude',
+        'c.longitude',
+        'c.gpsRadius',
+      ])
       .where('c.status = :status', { status: ComplexStatus.ACTIVE })
       .andWhere('c.deleted_at IS NULL')
       .andWhere('c.latitude IS NOT NULL')
@@ -711,28 +787,37 @@ export class ResidentialComplexService {
       .getMany();
 
     return candidates
-      .map(c => ({
+      .map((c) => ({
         id: c.id,
         name: c.name,
         address: c.address,
         city: c.city,
         gpsRadius: c.gpsRadius ?? null,
         distanceMeters: Math.round(
-          calculateHaversineDistance(lat, lng, Number(c.latitude), Number(c.longitude)),
+          calculateHaversineDistance(
+            lat,
+            lng,
+            Number(c.latitude),
+            Number(c.longitude),
+          ),
         ),
       }))
-      .filter(c => c.distanceMeters <= radiusMeters)
+      .filter((c) => c.distanceMeters <= radiusMeters)
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
   }
 
-  private async assertSupervisorActiveVisit(supervisorId: string, complexId: string): Promise<void> {
+  private async assertSupervisorActiveVisit(
+    supervisorId: string,
+    complexId: string,
+  ): Promise<void> {
     const visit = await this.supervisorVisitRepo.findOne({
       where: { supervisorId, complexId, status: SupervisorVisitStatus.ACTIVE },
     });
 
     if (!visit) {
       throw new CustomError({
-        message: 'No tienes una visita activa en este complejo. Debes hacer check-in primero',
+        message:
+          'No tienes una visita activa en este complejo. Debes hacer check-in primero',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
@@ -769,7 +854,9 @@ export class ResidentialComplexService {
     ]);
 
     if (existingSlug) {
-      throw new ConflictException(`Ya existe un complejo con un nombre similar a "${dto.name}"`);
+      throw new ConflictException(
+        `Ya existe un complejo con un nombre similar a "${dto.name}"`,
+      );
     }
     if (existingEmail) {
       throw new ConflictException(`El email "${dto.email}" ya está registrado`);
@@ -802,15 +889,21 @@ export class ResidentialComplexService {
         legalRepPublicId = legalResult.publicId;
         legalRepDocumentUrl = legalResult.url;
       } catch (err) {
-        await this.storageService.deleteByPublicId(rutPublicId, 'raw').catch(() => {});
+        await this.storageService
+          .deleteByPublicId(rutPublicId, 'raw')
+          .catch(() => {});
         throw err;
       }
     } catch (err: any) {
       this.logger.error(`Error subiendo documentos a R2: ${err.message}`);
-      throw new InternalServerErrorException('Error al procesar los documentos. Intenta de nuevo.');
+      throw new InternalServerErrorException(
+        'Error al procesar los documentos. Intenta de nuevo.',
+      );
     }
 
-    const isTower = dto.type === ComplexType.APARTMENT_COMPLEX || dto.type === ComplexType.MIXED_COMPLEX;
+    const isTower =
+      dto.type === ComplexType.APARTMENT_COMPLEX ||
+      dto.type === ComplexType.MIXED_COMPLEX;
 
     try {
       const complex = this.complexRepo.create({
@@ -828,7 +921,9 @@ export class ResidentialComplexService {
       });
 
       const saved = await this.complexRepo.save(complex);
-      this.logger.log(`Complejo registrado (PENDING_REVIEW): ${saved.id} — "${saved.name}"`);
+      this.logger.log(
+        `Complejo registrado (PENDING_REVIEW): ${saved.id} — "${saved.name}"`,
+      );
 
       return {
         id: saved.id,
@@ -844,7 +939,9 @@ export class ResidentialComplexService {
         this.storageService.deleteByPublicId(legalRepPublicId, 'raw'),
       ]);
       this.logger.error(`Error guardando complejo en BD: ${err.message}`);
-      throw new InternalServerErrorException('Error al registrar el complejo. Intenta de nuevo.');
+      throw new InternalServerErrorException(
+        'Error al registrar el complejo. Intenta de nuevo.',
+      );
     }
   }
 
@@ -858,7 +955,11 @@ export class ResidentialComplexService {
     pdfBase64: string,
     fileName?: string,
   ): Promise<ResidentialComplex> {
-    return this.attachSignedDpaFile(complexId, decodeBase64File(pdfBase64, 'El PDF'), fileName);
+    return this.attachSignedDpaFile(
+      complexId,
+      decodeBase64File(pdfBase64, 'El PDF'),
+      fileName,
+    );
   }
 
   /**
@@ -871,7 +972,9 @@ export class ResidentialComplexService {
     buffer: Buffer,
     fileName?: string,
   ): Promise<ResidentialComplex> {
-    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+    });
     if (!complex) throw new NotFoundException('Complejo no encontrado');
 
     if (!buffer?.length) throw new BadRequestException('El PDF está vacío.');
@@ -879,7 +982,11 @@ export class ResidentialComplexService {
       throw new BadRequestException('El documento firmado debe ser un PDF.');
     }
 
-    const folder = this.storageService.buildFolder(complex.slug, 'documents', 'signed-dpa');
+    const folder = this.storageService.buildFolder(
+      complex.slug,
+      'documents',
+      'signed-dpa',
+    );
     const oldPublicId = complex.signedDpaPublicId;
 
     const uploaded = await this.storageService.uploadBuffer(
@@ -895,14 +1002,16 @@ export class ResidentialComplexService {
     complex.signedDpaUploadedAt = new Date();
     // (Re)subida → vuelve a estado pendiente de revisión y limpia el veredicto anterior.
     complex.signedDpaStatus = DpaValidationStatus.PENDING;
-    complex.signedDpaRejectionReason = null as unknown as undefined;
-    complex.signedDpaReviewedAt = null as unknown as undefined;
-    complex.signedDpaReviewedById = null as unknown as undefined;
+    complex.signedDpaRejectionReason = null;
+    complex.signedDpaReviewedAt = null;
+    complex.signedDpaReviewedById = null;
 
     const saved = await this.complexRepo.save(complex);
 
     if (oldPublicId && oldPublicId !== saved.signedDpaPublicId) {
-      await this.storageService.deleteByPublicId(oldPublicId, 'raw').catch(() => {});
+      await this.storageService
+        .deleteByPublicId(oldPublicId, 'raw')
+        .catch(() => {});
     }
 
     // Avisar a los SUPER_ADMIN (best-effort, no bloquea la subida)
@@ -913,7 +1022,9 @@ export class ResidentialComplexService {
       fileUrl: saved.signedDpaUrl,
     });
 
-    this.logger.log(`DPA firmado adjuntado al complejo ${complex.slug} (${complex.id})`);
+    this.logger.log(
+      `DPA firmado adjuntado al complejo ${complex.slug} (${complex.id})`,
+    );
     return saved;
   }
 
@@ -928,14 +1039,21 @@ export class ResidentialComplexService {
     reason: string | undefined,
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
-    if (status !== DpaValidationStatus.APPROVED && status !== DpaValidationStatus.REJECTED) {
+    if (
+      status !== DpaValidationStatus.APPROVED &&
+      status !== DpaValidationStatus.REJECTED
+    ) {
       throw new BadRequestException('El estado debe ser APPROVED o REJECTED.');
     }
 
-    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+    });
     if (!complex) throw new NotFoundException('Complejo no encontrado');
     if (!complex.signedDpaUrl) {
-      throw new BadRequestException('Este complejo no tiene un DPA firmado por revisar.');
+      throw new BadRequestException(
+        'Este complejo no tiene un DPA firmado por revisar.',
+      );
     }
 
     const trimmedReason = reason?.trim();
@@ -945,7 +1063,7 @@ export class ResidentialComplexService {
 
     complex.signedDpaStatus = status;
     complex.signedDpaRejectionReason =
-      status === DpaValidationStatus.REJECTED ? trimmedReason : (null as unknown as undefined);
+      status === DpaValidationStatus.REJECTED ? trimmedReason : null;
     complex.signedDpaReviewedAt = new Date();
     complex.signedDpaReviewedById = currentUser.sub;
 
@@ -960,7 +1078,9 @@ export class ResidentialComplexService {
       reviewerId: currentUser.sub,
     });
 
-    this.logger.log(`DPA del complejo ${complex.slug} (${complex.id}) marcado como ${status}`);
+    this.logger.log(
+      `DPA del complejo ${complex.slug} (${complex.id}) marcado como ${status}`,
+    );
 
     // Activación automática: si el complejo está en onboarding (PENDING_SETUP) y
     // ya tiene aprobados TODOS los documentos que debe firmar, se activa solo.
@@ -969,8 +1089,14 @@ export class ResidentialComplexService {
       saved.status === ComplexStatus.PENDING_SETUP &&
       this.areRequiredSignedDocsApproved(saved)
     ) {
-      const activated = await this.changeStatus(saved.id, ComplexStatus.ACTIVE, currentUser);
-      this.logger.log(`Complejo ${saved.slug} activado automáticamente: documentos firmados aprobados`);
+      const activated = await this.changeStatus(
+        saved.id,
+        ComplexStatus.ACTIVE,
+        currentUser,
+      );
+      this.logger.log(
+        `Complejo ${saved.slug} activado automáticamente: documentos firmados aprobados`,
+      );
       return activated;
     }
 

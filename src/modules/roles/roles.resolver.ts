@@ -1,7 +1,16 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { RolesService } from './roles.service';
 import { Role } from './entities/role.entity';
-import { AssignChildrenResponse, ChangeParentResponse, MoveSubtreeResponse, PaginatedRolesResponse, RemoveRoleResponse, RestoreRoleResponse, RoleHierarchyResponse, SimpleRoleResponse } from './dto/responses';
+import {
+  AssignChildrenResponse,
+  ChangeParentResponse,
+  MoveSubtreeResponse,
+  PaginatedRolesResponse,
+  RemoveRoleResponse,
+  RestoreRoleResponse,
+  RoleHierarchyResponse,
+  SimpleRoleResponse,
+} from './dto/responses';
 import { CreateRoleInput } from './dto/inputs/create-role.input';
 import { SearchRolesInput } from './dto/inputs/search-roles.input';
 import { UpdateRoleInput } from './dto/inputs/update-role.input';
@@ -11,10 +20,9 @@ import { Auth } from '../shared/decorators/auth.decorator';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 
-
 @Resolver(() => Role)
 export class RolesResolver {
-  constructor(private readonly rolesService: RolesService) { }
+  constructor(private readonly rolesService: RolesService) {}
 
   @Mutation(() => SimpleRoleResponse, { name: 'createRole' })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
@@ -22,14 +30,13 @@ export class RolesResolver {
     return this.rolesService.create(createRoleInput);
   }
 
-
   @Query(() => PaginatedRolesResponse, { name: 'roles' })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   findAll(
-    @Args('input') input: SearchRolesInput): Promise<PaginatedRolesResponse> {
+    @Args('input') input: SearchRolesInput,
+  ): Promise<PaginatedRolesResponse> {
     return this.rolesService.findAll(input);
   }
-
 
   @Query(() => Role, { name: 'role' })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
@@ -41,7 +48,8 @@ export class RolesResolver {
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   updateRole(
     @Args('id', { type: () => String }) id: string,
-    @Args('input') updateRoleInput: UpdateRoleInput) {
+    @Args('input') updateRoleInput: UpdateRoleInput,
+  ) {
     return this.rolesService.update(id, updateRoleInput);
   }
 
@@ -82,7 +90,7 @@ export class RolesResolver {
 
   @Mutation(() => RemoveRoleResponse, {
     name: 'removeRole',
-    description: 'Soft delete a role by setting status to false'
+    description: 'Soft delete a role by setting status to false',
   })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async removePermission(
@@ -93,7 +101,7 @@ export class RolesResolver {
 
   @Mutation(() => RestoreRoleResponse, {
     name: 'restoreRole',
-    description: 'Restore a soft deleted role by setting status to true'
+    description: 'Restore a soft deleted role by setting status to true',
   })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async restorePermission(
@@ -103,7 +111,7 @@ export class RolesResolver {
   }
 
   @Mutation(() => AssignedUserRolResponse, {
-    description: 'Asigna un rol a un usuario'
+    description: 'Asigna un rol a un usuario',
   })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async assignRoleToUser(
@@ -115,7 +123,7 @@ export class RolesResolver {
   }
 
   @Mutation(() => AssignedUserRolResponse, {
-    description: 'Asigna un rol a un usuario'
+    description: 'Asigna un rol a un usuario',
   })
   @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async userHasRole(
@@ -126,4 +134,3 @@ export class RolesResolver {
     return this.rolesService.assignRoleToUser(user.id, userId, roleName);
   }
 }
-  

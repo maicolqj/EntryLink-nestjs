@@ -1,7 +1,10 @@
 // modules/auth/services/token.service.ts
 import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  ComplexErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,7 +16,12 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 import { Role } from '../../roles/entities/role.entity';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS, RefreshExpiry } from '../constants/auth.constants';
-import { JwtAccessPayload, JwtRefreshPayload, DeviceInfo, TokenPair } from '../interfaces/jwt-payload.interface';
+import {
+  JwtAccessPayload,
+  JwtRefreshPayload,
+  DeviceInfo,
+  TokenPair,
+} from '../interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { v4 as uuidv4 } from 'uuid';
@@ -32,19 +40,43 @@ export class TokenService {
     private readonly complexRepo: Repository<ResidentialComplex>,
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
-  ) { }
+  ) {}
 
   /**
    * @param refreshExpiryOverride vigencia explícita del refresh token (ej. '180d').
    *   Se persiste en la fila para que la rotación la conserve. Sin este parámetro
    *   la vigencia sale de `rememberMe`.
    */
-  async generateTokenPair(user: User, deviceInfo: DeviceInfo, rememberMe = false, entityType: 'user' | 'complex' = 'user', refreshExpiryOverride?: RefreshExpiry): Promise<TokenPair> {
+  async generateTokenPair(
+    user: User,
+    deviceInfo: DeviceInfo,
+    rememberMe = false,
+    entityType: 'user' | 'complex' = 'user',
+    refreshExpiryOverride?: RefreshExpiry,
+  ): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
-    const accessToken = await this.generateAccessToken(user, sessionId, entityType);
-    const refreshToken = await this.generateRefreshToken(user.id, sessionId, tokenFamily, deviceInfo, rememberMe, entityType, undefined, refreshExpiryOverride);
-    return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId };
+    const accessToken = await this.generateAccessToken(
+      user,
+      sessionId,
+      entityType,
+    );
+    const refreshToken = await this.generateRefreshToken(
+      user.id,
+      sessionId,
+      tokenFamily,
+      deviceInfo,
+      rememberMe,
+      entityType,
+      undefined,
+      refreshExpiryOverride,
+    );
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: this.getAccessTokenExpirySeconds(),
+      sessionId,
+    };
   }
 
   /**
@@ -55,10 +87,17 @@ export class TokenService {
    * roles/permissions = del owner (complex.owner debe estar cargado)
    * El refresh token usa complex.ownerId como userId (FK a users).
    */
-  async generateTokenPairForComplex(complex: ResidentialComplex, deviceInfo: DeviceInfo, rememberMe = false): Promise<TokenPair> {
+  async generateTokenPairForComplex(
+    complex: ResidentialComplex,
+    deviceInfo: DeviceInfo,
+    rememberMe = false,
+  ): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
-    const accessToken = await this.generateAccessTokenForComplex(complex, sessionId);
+    const accessToken = await this.generateAccessTokenForComplex(
+      complex,
+      sessionId,
+    );
     const refreshToken = await this.generateRefreshToken(
       complex.ownerId,
       sessionId,
@@ -68,18 +107,26 @@ export class TokenService {
       'complex',
       complex.id,
     );
-    return { accessToken, refreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId };
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: this.getAccessTokenExpirySeconds(),
+      sessionId,
+    };
   }
 
-  private async generateAccessTokenForComplex(complex: ResidentialComplex, sessionId: string): Promise<string> {
+  private async generateAccessTokenForComplex(
+    complex: ResidentialComplex,
+    sessionId: string,
+  ): Promise<string> {
     const complexRole = await this.roleRepo.findOne({
       where: { name: ValidRoles.COMPLEX_ROL },
       relations: ['permissions'],
     });
 
     const permissions: ValidPermissions[] = (complexRole?.permissions ?? [])
-      .map(p => p.name as ValidPermissions)
-      .filter(p => Object.values(ValidPermissions).includes(p));
+      .map((p) => p.name)
+      .filter((p) => Object.values(ValidPermissions).includes(p));
 
     const payload: JwtAccessPayload = {
       sub: complex.id,
@@ -96,101 +143,158 @@ export class TokenService {
     const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
     const issuer = this.configService.get<string>('JWT_ISSUER');
 
-
     return this.jwtService.signAsync(payload, {
       secret,
       expiresIn: this.getAccessTokenExpiry(),
       issuer,
       algorithm: 'HS256',
-
     });
   }
 
   private extractRoles(user: User): ValidRoles[] {
     if (!user.userRoles?.length) return [];
     return user.userRoles
-      .filter(ur => ur.role)
-      .map(ur => ur.role.name as ValidRoles)
-      .filter((role): role is ValidRoles => Object.values(ValidRoles).includes(role));
+      .filter((ur) => ur.role)
+      .map((ur) => ur.role.name)
+      .filter((role): role is ValidRoles =>
+        Object.values(ValidRoles).includes(role),
+      );
   }
 
   private extractPermissions(user: User): ValidPermissions[] {
     if (!user.userRoles?.length) return [];
     const perms = new Set<ValidPermissions>();
-    user.userRoles.forEach(ur => {
-      ur.role?.permissions?.forEach(p => {
-        if (Object.values(ValidPermissions).includes(p.name as ValidPermissions)) {
-          perms.add(p.name as ValidPermissions);
+    user.userRoles.forEach((ur) => {
+      ur.role?.permissions?.forEach((p) => {
+        if (Object.values(ValidPermissions).includes(p.name)) {
+          perms.add(p.name);
         }
       });
     });
     return Array.from(perms);
   }
 
-private async generateAccessToken(user: User, sessionId: string, entityType: 'user' | 'complex' = 'user'): Promise<string> {
-  const payload: JwtAccessPayload = {
-    sub: user.id,
-    email: user.email,
-    type: 'access',
-    entityType,
-    tokenVersion: user.tokenVersion ?? 0,
-    sessionId,
-    roles: this.extractRoles(user),
-    permissions: this.extractPermissions(user),
-    complexId: user.complexId ?? undefined,
-  };
+  private async generateAccessToken(
+    user: User,
+    sessionId: string,
+    entityType: 'user' | 'complex' = 'user',
+  ): Promise<string> {
+    const payload: JwtAccessPayload = {
+      sub: user.id,
+      email: user.email,
+      type: 'access',
+      entityType,
+      tokenVersion: user.tokenVersion ?? 0,
+      sessionId,
+      roles: this.extractRoles(user),
+      permissions: this.extractPermissions(user),
+      complexId: user.complexId ?? undefined,
+    };
 
-  const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
-  const issuer = this.configService.get<string>('JWT_ISSUER');
+    const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    const issuer = this.configService.get<string>('JWT_ISSUER');
 
-  // VULN-12 fix: algoritmo explícito
-  return this.jwtService.signAsync(payload, {
-    secret,
-    expiresIn: this.getAccessTokenExpiry(),
-    issuer,
-    algorithm: 'HS256',
-  });
-}
+    // VULN-12 fix: algoritmo explícito
+    return this.jwtService.signAsync(payload, {
+      secret,
+      expiresIn: this.getAccessTokenExpiry(),
+      issuer,
+      algorithm: 'HS256',
+    });
+  }
 
-  private async generateRefreshToken(userId: string, sessionId: string, tokenFamily: string, deviceInfo: DeviceInfo, rememberMe: boolean, entityType: 'user' | 'complex' = 'user', complexId?: string, refreshExpiryOverride?: RefreshExpiry): Promise<string> {
+  private async generateRefreshToken(
+    userId: string,
+    sessionId: string,
+    tokenFamily: string,
+    deviceInfo: DeviceInfo,
+    rememberMe: boolean,
+    entityType: 'user' | 'complex' = 'user',
+    complexId?: string,
+    refreshExpiryOverride?: RefreshExpiry,
+  ): Promise<string> {
     const tokenId = this.generateSecureId();
-    const expiresIn = refreshExpiryOverride ?? this.getRefreshTokenExpiry(rememberMe);
+    const expiresIn =
+      refreshExpiryOverride ?? this.getRefreshTokenExpiry(rememberMe);
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: userId, type: 'refresh', entityType, complexId, sessionId, tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+      {
+        sub: userId,
+        type: 'refresh',
+        entityType,
+        complexId,
+        sessionId,
+        tokenFamily,
+        deviceFingerprint: deviceInfo.fingerprint,
+      } as JwtRefreshPayload,
 
       // VULN-12 fix: algoritmo explícito
-      { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn, jwtid: tokenId, algorithm: 'HS256' }
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn,
+        jwtid: tokenId,
+        algorithm: 'HS256',
+      },
     );
 
     await this.refreshTokenRepo.save({
-      id: tokenId, userId, tokenHash: this.hashToken(refreshToken), tokenFamily, sessionId,
+      id: tokenId,
+      userId,
+      tokenHash: this.hashToken(refreshToken),
+      tokenFamily,
+      sessionId,
       deviceFingerprint: deviceInfo.fingerprint,
-      deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform, deviceId: deviceInfo.deviceId, appVersion: deviceInfo.appVersion },
-      expiresAt: this.calculateExpiry(expiresIn), lastUsedAt: new Date(),
-      rememberMe, refreshExpiry: expiresIn,
+      deviceInfo: {
+        userAgent: deviceInfo.userAgent,
+        ip: deviceInfo.ip,
+        platform: deviceInfo.platform,
+        deviceId: deviceInfo.deviceId,
+        appVersion: deviceInfo.appVersion,
+      },
+      expiresAt: this.calculateExpiry(expiresIn),
+      lastUsedAt: new Date(),
+      rememberMe,
+      refreshExpiry: expiresIn,
     });
     return refreshToken;
   }
 
-  async rotateRefreshToken(currentToken: string, deviceInfo: DeviceInfo): Promise<TokenPair> {
+  async rotateRefreshToken(
+    currentToken: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<TokenPair> {
     const payload = await this.verifyRefreshToken(currentToken);
     const currentTokenHash = this.hashToken(currentToken);
 
     const storedToken = await this.refreshTokenRepo.findOne({
       where: { tokenHash: currentTokenHash, isRevoked: false },
-      relations: ['user', 'user.userRoles', 'user.userRoles.role', 'user.userRoles.role.permissions'],
+      relations: [
+        'user',
+        'user.userRoles',
+        'user.userRoles.role',
+        'user.userRoles.role.permissions',
+      ],
     });
 
     if (!storedToken) {
       // Grace window: concurrent request arrived after first rotation already completed.
       // Return the same token pair idempotently instead of triggering family revocation.
-      const gracePayload = await this.cacheService.get<{ accessToken: string; refreshToken: string; sessionId: string }>({
-        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW, key: currentTokenHash },
+      const gracePayload = await this.cacheService.get<{
+        accessToken: string;
+        refreshToken: string;
+        sessionId: string;
+      }>({
+        key: {
+          prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW,
+          key: currentTokenHash,
+        },
       });
 
       if (gracePayload) {
-        return { ...gracePayload, expiresIn: this.getAccessTokenExpirySeconds() };
+        return {
+          ...gracePayload,
+          expiresIn: this.getAccessTokenExpirySeconds(),
+        };
       }
 
       // Outside grace window → genuine reuse attack or expired token → revoke family
@@ -211,7 +315,11 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
       });
     }
 
-    await this.refreshTokenRepo.update(storedToken.id, { isRevoked: true, revokedReason: 'rotated', lastUsedAt: new Date() });
+    await this.refreshTokenRepo.update(storedToken.id, {
+      isRevoked: true,
+      revokedReason: 'rotated',
+      lastUsedAt: new Date(),
+    });
 
     const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
@@ -220,7 +328,9 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
     // debe convertir una sesión de residente de 180d en una de 7d.
     // El cast es seguro: esta columna solo la escribe generateRefreshToken con
     // un valor de RefreshExpiry, y calculateExpiry rechaza cualquier formato raro.
-    const refreshExpiry = (storedToken.refreshExpiry as RefreshExpiry) ?? this.getRefreshTokenExpiry(storedToken.rememberMe);
+    const refreshExpiry =
+      (storedToken.refreshExpiry as RefreshExpiry) ??
+      this.getRefreshTokenExpiry(storedToken.rememberMe);
 
     let accessToken: string;
     let newRefreshToken: string;
@@ -237,79 +347,150 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
         .andWhere('complex.deleted_at IS NULL')
         .getOne();
 
-      if (!complex) throw new CustomError({
-        message: 'Complejo no encontrado o eliminado',
-        statusCode: HttpStatus.UNAUTHORIZED,
-        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
-      });
+      if (!complex)
+        throw new CustomError({
+          message: 'Complejo no encontrado o eliminado',
+          statusCode: HttpStatus.UNAUTHORIZED,
+          errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+        });
 
-      accessToken = await this.generateAccessTokenForComplex(complex, storedToken.sessionId);
+      accessToken = await this.generateAccessTokenForComplex(
+        complex,
+        storedToken.sessionId,
+      );
 
       // VULN-12 fix: algoritmo explícito en rotación de refresh token
       newRefreshToken = await this.jwtService.signAsync(
-        { sub: storedToken.user.id, type: 'refresh', entityType, complexId: complex.id, sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
-        { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: refreshExpiry, jwtid: tokenId, algorithm: 'HS256' }
+        {
+          sub: storedToken.user.id,
+          type: 'refresh',
+          entityType,
+          complexId: complex.id,
+          sessionId: storedToken.sessionId,
+          tokenFamily: payload.tokenFamily,
+          deviceFingerprint: deviceInfo.fingerprint,
+        } as JwtRefreshPayload,
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: refreshExpiry,
+          jwtid: tokenId,
+          algorithm: 'HS256',
+        },
       );
     } else {
-      accessToken = await this.generateAccessToken(storedToken.user, storedToken.sessionId, 'user');
+      accessToken = await this.generateAccessToken(
+        storedToken.user,
+        storedToken.sessionId,
+        'user',
+      );
       newRefreshToken = await this.jwtService.signAsync(
-        { sub: storedToken.user.id, type: 'refresh', entityType: 'user', sessionId: storedToken.sessionId, tokenFamily: payload.tokenFamily, deviceFingerprint: deviceInfo.fingerprint } as JwtRefreshPayload,
+        {
+          sub: storedToken.user.id,
+          type: 'refresh',
+          entityType: 'user',
+          sessionId: storedToken.sessionId,
+          tokenFamily: payload.tokenFamily,
+          deviceFingerprint: deviceInfo.fingerprint,
+        } as JwtRefreshPayload,
 
-        { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: refreshExpiry, jwtid: tokenId, algorithm: 'HS256' }
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: refreshExpiry,
+          jwtid: tokenId,
+          algorithm: 'HS256',
+        },
       );
     }
 
     await this.refreshTokenRepo.save({
-      id: tokenId, userId: storedToken.user.id, tokenHash: this.hashToken(newRefreshToken), tokenFamily: payload.tokenFamily,
+      id: tokenId,
+      userId: storedToken.user.id,
+      tokenHash: this.hashToken(newRefreshToken),
+      tokenFamily: payload.tokenFamily,
       previousTokenHash: currentTokenHash,
-      previousTokenValidUntil: new Date(Date.now() + AUTH_CONSTANTS.GRACE_WINDOW_MS),
-      sessionId: storedToken.sessionId, deviceFingerprint: deviceInfo.fingerprint,
-      deviceInfo: { userAgent: deviceInfo.userAgent, ip: deviceInfo.ip, platform: deviceInfo.platform },
-      expiresAt: this.calculateExpiry(refreshExpiry), lastUsedAt: new Date(),
-      rememberMe: storedToken.rememberMe, refreshExpiry,
+      previousTokenValidUntil: new Date(
+        Date.now() + AUTH_CONSTANTS.GRACE_WINDOW_MS,
+      ),
+      sessionId: storedToken.sessionId,
+      deviceFingerprint: deviceInfo.fingerprint,
+      deviceInfo: {
+        userAgent: deviceInfo.userAgent,
+        ip: deviceInfo.ip,
+        platform: deviceInfo.platform,
+      },
+      expiresAt: this.calculateExpiry(refreshExpiry),
+      lastUsedAt: new Date(),
+      rememberMe: storedToken.rememberMe,
+      refreshExpiry,
     });
 
     // Cache the result so concurrent requests with the old token are served idempotently
     // within the grace window instead of triggering family revocation.
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW, key: currentTokenHash },
-      data: { accessToken, refreshToken: newRefreshToken, sessionId: storedToken.sessionId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW,
+        key: currentTokenHash,
+      },
+      data: {
+        accessToken,
+        refreshToken: newRefreshToken,
+        sessionId: storedToken.sessionId,
+      },
       options: { ttl: AUTH_CONSTANTS.CACHE_TTL.GRACE_WINDOW },
     });
 
-    return { accessToken, refreshToken: newRefreshToken, expiresIn: this.getAccessTokenExpirySeconds(), sessionId: storedToken.sessionId };
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: this.getAccessTokenExpirySeconds(),
+      sessionId: storedToken.sessionId,
+    };
   }
 
   async verifyRefreshToken(token: string): Promise<JwtRefreshPayload> {
-    const payload = await this.jwtService.verifyAsync<JwtRefreshPayload>(token, { secret: this.configService.get<string>('JWT_REFRESH_SECRET') });
-    if (payload.type !== 'refresh') throw new CustomError({
-      message: 'Tipo de token inválido',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
-    });
+    const payload = await this.jwtService.verifyAsync<JwtRefreshPayload>(
+      token,
+      { secret: this.configService.get<string>('JWT_REFRESH_SECRET') },
+    );
+    if (payload.type !== 'refresh')
+      throw new CustomError({
+        message: 'Tipo de token inválido',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
+      });
     return payload;
   }
 
   async verifyAccessToken(token: string): Promise<JwtAccessPayload> {
-    const payload = await this.jwtService.verifyAsync<JwtAccessPayload>(token, { secret: this.configService.get<string>('JWT_ACCESS_SECRET') });
-    if (payload.type !== 'access') throw new CustomError({
-      message: 'Tipo de token inválido',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
+    const payload = await this.jwtService.verifyAsync<JwtAccessPayload>(token, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
     });
-    if (await this.isTokenBlacklisted(token)) throw new CustomError({
-      message: 'Token revocado',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: AuthErrorCode.TOKEN_REVOKED,
-    });
+    if (payload.type !== 'access')
+      throw new CustomError({
+        message: 'Tipo de token inválido',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.INVALID_TOKEN_TYPE,
+      });
+    if (await this.isTokenBlacklisted(token))
+      throw new CustomError({
+        message: 'Token revocado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.TOKEN_REVOKED,
+      });
     return payload;
   }
 
   async blacklistAccessToken(token: string, expiresAt: Date): Promise<void> {
-    const ttl = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+    const ttl = Math.max(
+      0,
+      Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+    );
     if (ttl > 0) {
       await this.cacheService.set({
-        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.BLACKLIST, key: this.hashToken(token) },
+        key: {
+          prefix: AUTH_CONSTANTS.CACHE_PREFIX.BLACKLIST,
+          key: this.hashToken(token),
+        },
         data: { revoked: true },
         options: { ttl },
       });
@@ -318,7 +499,10 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
 
   async isTokenBlacklisted(token: string): Promise<boolean> {
     const result = await this.cacheService.get<{ revoked: boolean }>({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.BLACKLIST, key: this.hashToken(token) },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.BLACKLIST,
+        key: this.hashToken(token),
+      },
     });
     return result?.revoked === true;
   }
@@ -339,50 +523,76 @@ private async generateAccessToken(user: User, sessionId: string, entityType: 'us
   }
 
   async clearUserTokenVersionCache(userId: string): Promise<void> {
-    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.TOKEN_VERSION, key: userId } });
+    await this.cacheService.delete({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.TOKEN_VERSION, key: userId },
+    });
   }
 
   async revokeTokenFamily(tokenFamily: string, reason: string): Promise<void> {
-    await this.refreshTokenRepo.update({ tokenFamily, isRevoked: false }, { isRevoked: true, revokedReason: reason });
+    await this.refreshTokenRepo.update(
+      { tokenFamily, isRevoked: false },
+      { isRevoked: true, revokedReason: reason },
+    );
   }
 
   async revokeAllUserTokens(userId: string, reason: string): Promise<void> {
-    await this.refreshTokenRepo.update({ userId, isRevoked: false }, { isRevoked: true, revokedReason: reason });
+    await this.refreshTokenRepo.update(
+      { userId, isRevoked: false },
+      { isRevoked: true, revokedReason: reason },
+    );
   }
 
   async revokeSession(sessionId: string, reason: string): Promise<void> {
-    await this.refreshTokenRepo.update({ sessionId, isRevoked: false }, { isRevoked: true, revokedReason: reason });
+    await this.refreshTokenRepo.update(
+      { sessionId, isRevoked: false },
+      { isRevoked: true, revokedReason: reason },
+    );
   }
 
   async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.refreshTokenRepo.delete({ expiresAt: LessThan(new Date()) });
+    const result = await this.refreshTokenRepo.delete({
+      expiresAt: LessThan(new Date()),
+    });
     return result.affected || 0;
   }
 
   private hashToken(token: string): string {
-     return createHash('sha256').update(token).digest('hex');
-    }
+    return createHash('sha256').update(token).digest('hex');
+  }
 
   private generateSecureId(): string {
-     return uuidv4();
-     }
-
+    return uuidv4();
+  }
 
   private calculateExpiry(expiresIn: string): Date {
     const match = expiresIn.match(/^(\d+)([smhd])$/);
     if (!match) throw new Error('Invalid expiry');
-    const mult: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+    const mult: Record<string, number> = {
+      s: 1000,
+      m: 60000,
+      h: 3600000,
+      d: 86400000,
+    };
     return new Date(Date.now() + parseInt(match[1]) * mult[match[2]]);
   }
   private getAccessTokenExpiry(): typeof AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY {
-    return (this.configService.get<string>('JWT_ACCESS_EXPIRY') ?? AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY) as typeof AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY;
+    return (this.configService.get<string>('JWT_ACCESS_EXPIRY') ??
+      AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY) as typeof AUTH_CONSTANTS.ACCESS_TOKEN_EXPIRY;
   }
 
-  private getRefreshTokenExpiry(rememberMe: boolean): typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER {
+  private getRefreshTokenExpiry(
+    rememberMe: boolean,
+  ):
+    | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY
+    | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER {
     const value = rememberMe
-      ? this.configService.get<string>('JWT_REFRESH_EXPIRY_REMEMBER') ?? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER
-      : this.configService.get<string>('JWT_REFRESH_EXPIRY') ?? AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY;
-    return value as typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER;
+      ? (this.configService.get<string>('JWT_REFRESH_EXPIRY_REMEMBER') ??
+        AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER)
+      : (this.configService.get<string>('JWT_REFRESH_EXPIRY') ??
+        AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY);
+    return value as
+      | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY
+      | typeof AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY_REMEMBER;
   }
 
   private getAccessTokenExpirySeconds(): number {

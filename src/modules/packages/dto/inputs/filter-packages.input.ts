@@ -2,11 +2,10 @@ import { InputType, Field } from '@nestjs/graphql';
 import { IsOptional, IsEnum, IsString, IsDateString } from 'class-validator';
 
 import { PackageStatus } from '../../enums/package-status.enum';
-import { PackageType }   from '../../enums/package-type.enum';
+import { PackageType } from '../../enums/package-type.enum';
 
 @InputType()
 export class FilterPackagesInput {
-
   @Field(() => PackageStatus, { nullable: true })
   @IsOptional()
   @IsEnum(PackageStatus)

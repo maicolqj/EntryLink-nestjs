@@ -4,7 +4,6 @@ import { ChargeStatus } from '../../enums/charge-status.enum';
 
 @InputType()
 export class FilterChargesInput {
-
   @Field(() => ChargeStatus, { nullable: true })
   @IsOptional()
   @IsEnum(ChargeStatus)
@@ -18,7 +17,9 @@ export class FilterChargesInput {
   /** Filtrar por período YYYY-MM */
   @Field(() => String, { nullable: true })
   @IsOptional()
-  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'Formato de período: YYYY-MM' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'Formato de período: YYYY-MM',
+  })
   period?: string;
 
   /** Búsqueda libre por número de unidad o nombre de torre (ILIKE) */

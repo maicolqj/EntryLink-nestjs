@@ -1,18 +1,17 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { SpecialNumber }              from './entities/special-number.entity';
-import { SpecialNumbersService }      from './special-numbers.service';
-import { CreateSpecialNumberInput }   from './dto/create-special-number.input';
-import { UpdateSpecialNumberInput }   from './dto/update-special-number.input';
+import { SpecialNumber } from './entities/special-number.entity';
+import { SpecialNumbersService } from './special-numbers.service';
+import { CreateSpecialNumberInput } from './dto/create-special-number.input';
+import { UpdateSpecialNumberInput } from './dto/update-special-number.input';
 
-import { Auth }             from '../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../shared/decorators/current-user.decorator';
+import { Auth } from '../shared/decorators/auth.decorator';
+import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../roles/enums/valid-roles';
+import { ValidRoles } from '../roles/enums/valid-roles';
 
 @Resolver(() => SpecialNumber)
 export class SpecialNumbersResolver {
-
   constructor(private readonly service: SpecialNumbersService) {}
 
   // ================================================================
@@ -20,7 +19,13 @@ export class SpecialNumbersResolver {
   // ================================================================
 
   @Query(() => [SpecialNumber], { name: 'specialNumbers' })
-  @Auth({ roles: [ValidRoles.SECURITY_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+    ],
+  })
   specialNumbers(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -70,7 +75,10 @@ export class SpecialNumbersResolver {
     return this.service.reorder(complexId, ids, currentUser);
   }
 
-  @Mutation(() => [SpecialNumber], { name: 'reorderGlobalSpecialNumbers', description: 'Reordena los números especiales globales. Solo SUPER_ADMIN.' })
+  @Mutation(() => [SpecialNumber], {
+    name: 'reorderGlobalSpecialNumbers',
+    description: 'Reordena los números especiales globales. Solo SUPER_ADMIN.',
+  })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   reorderGlobalSpecialNumbers(
     @Args('ids', { type: () => [String] }) ids: string[],

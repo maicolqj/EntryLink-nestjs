@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
-import { PanicAlertType }   from '../enums/panic-alert-type.enum';
+import { PanicAlertType } from '../enums/panic-alert-type.enum';
 import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
 
 /**
@@ -32,7 +32,6 @@ import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
 // abierto en un complejo; sin este índice es un scan por estado.
 @Index(['complexId', 'status'])
 export class PanicAlert {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -90,7 +89,11 @@ export class PanicAlert {
   // ─── Estado ───────────────────────────────────────────────────────────────
 
   @Field(() => PanicAlertStatus)
-  @Column({ type: 'enum', enum: PanicAlertStatus, default: PanicAlertStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: PanicAlertStatus,
+    default: PanicAlertStatus.PENDING,
+  })
   status: PanicAlertStatus;
 
   /** Primer dispositivo que confirmó haber mostrado la alerta (automático). */

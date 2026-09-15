@@ -8,9 +8,10 @@ import {
   Matches,
 } from 'class-validator';
 
-@InputType({ description: 'Datos para el auto-registro de un supervisor en la plataforma' })
+@InputType({
+  description: 'Datos para el auto-registro de un supervisor en la plataforma',
+})
 export class RegisterSupervisorInput {
-
   @Field(() => String, { description: 'Nombre completo del supervisor' })
   @IsString()
   @IsNotEmpty({ message: 'El nombre completo es obligatorio' })
@@ -28,14 +29,19 @@ export class RegisterSupervisorInput {
   @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message: 'La contraseña debe contener al menos una mayúscula, una minúscula y un número',
+    message:
+      'La contraseña debe contener al menos una mayúscula, una minúscula y un número',
   })
   password: string;
 
-  @Field(() => String, { description: 'Número de teléfono celular colombiano (ej: 3001234567)' })
+  @Field(() => String, {
+    description: 'Número de teléfono celular colombiano (ej: 3001234567)',
+  })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
+  @Matches(/^3\d{9}$/, {
+    message: 'Número de celular colombiano inválido (ej: 3001234567)',
+  })
   phone: string;
 
   @Field(() => String, { description: 'Número de documento de identidad' })

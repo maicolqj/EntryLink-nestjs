@@ -8,7 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente (IF NOT EXISTS) por si en dev se corrió `synchronize`.
  */
 export class AddWeightingFieldsToUnits1781001100000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "units"
@@ -21,7 +20,11 @@ export class AddWeightingFieldsToUnits1781001100000 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "units" DROP COLUMN IF EXISTS "houseFloors"`);
-    await queryRunner.query(`ALTER TABLE "units" DROP COLUMN IF EXISTS "hasElevator"`);
+    await queryRunner.query(
+      `ALTER TABLE "units" DROP COLUMN IF EXISTS "houseFloors"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "units" DROP COLUMN IF EXISTS "hasElevator"`,
+    );
   }
 }

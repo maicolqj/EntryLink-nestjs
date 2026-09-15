@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -19,19 +15,32 @@ import { OtpService } from './otp.service';
 import { OtpProducer } from '../queues/otp.producer';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
-import { LoginEmailInput, EMAIL_PASSWORD_USER_ROLES } from '../dto/inputs/login-email.input';
-import { LoginSystemCodeInput, SYSTEM_CODE_ROLES } from '../dto/inputs/login-system-code.input';
+import {
+  LoginEmailInput,
+  EMAIL_PASSWORD_USER_ROLES,
+} from '../dto/inputs/login-email.input';
+import {
+  LoginSystemCodeInput,
+  SYSTEM_CODE_ROLES,
+} from '../dto/inputs/login-system-code.input';
 import { LoginResidentInput } from '../dto/inputs/login-resident.input';
 import { RequestOtpInput } from '../dto/inputs/request-otp.input';
 import { VerifyOtpInput } from '../dto/inputs/verify-otp.input';
-import { AuthResponse, OtpRequestResponse } from '../dto/responses/auth-response';
+import {
+  AuthResponse,
+  OtpRequestResponse,
+} from '../dto/responses/auth-response';
 import { DeviceInfo, TokenPair } from '../interfaces/jwt-payload.interface';
 import { QrLoginTokenResponse } from '../dto/responses/qr-login-token.response';
 import { SetPasswordResponse } from '../dto/responses/set-password.response';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { Role } from '../../roles/entities/role.entity';
 import { RegisterSupervisorInput } from '../dto/inputs/register-supervisor.input';
-import { UserErrorCode, AuthErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  UserErrorCode,
+  AuthErrorCode,
+  ComplexErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { ResetPasswordInput } from '../dto/inputs/reset-password.input';
 import { RequestPasswordResetResponse } from '../dto/responses/request-password-reset.response';
@@ -40,7 +49,6 @@ import { RegisterSupervisorResponse } from '../dto/responses/register-supervisor
 import { SupervisorVerificationStatusResponse } from '../dto/responses/supervisor-verification-status.response';
 import { MailService } from '../../../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
-
 
 @Injectable()
 export class AuthService {
@@ -92,14 +100,15 @@ export class AuthService {
       .getOne();
 
     if (user) {
-      const userRoleNames = (user.userRoles ?? []).map(ur => ur.role?.name as ValidRoles);
-      const hasValidRole = userRoleNames.some(r =>
+      const userRoleNames = (user.userRoles ?? []).map((ur) => ur.role?.name);
+      const hasValidRole = userRoleNames.some((r) =>
         (EMAIL_PASSWORD_USER_ROLES as readonly ValidRoles[]).includes(r),
       );
 
       if (!hasValidRole) {
         throw new CustomError({
-          message: 'Este usuario no puede iniciar sesión con email y contraseña',
+          message:
+            'Este usuario no puede iniciar sesión con email y contraseña',
           statusCode: HttpStatus.UNAUTHORIZED,
           errorCode: AuthErrorCode.LOGIN_METHOD_NOT_ALLOWED,
         });
@@ -133,7 +142,9 @@ export class AuthService {
       .leftJoinAndSelect('user.userRoles', 'userRoles')
       .leftJoinAndSelect('userRoles.role', 'role')
       .leftJoinAndSelect('role.permissions', 'permissions')
-      .where('LOWER(user.identity) = LOWER(:identity)', { identity: identity.trim() })
+      .where('LOWER(user.identity) = LOWER(:identity)', {
+        identity: identity.trim(),
+      })
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
@@ -148,9 +159,15 @@ export class AuthService {
 
     // VULN-14 fix: verificar password ANTES de revelar estado de cuenta para evitar user enumeration
     // Un atacante no puede distinguir "usuario suspendido" de "password incorrecto"
-    const passwordValid = user.password && await bcrypt.compare(password, user.password);
+    const passwordValid =
+      user.password && (await bcrypt.compare(password, user.password));
     if (!passwordValid) {
-      await this.registerFailedAttempt(identity, deviceInfo.ip, true, user.email);
+      await this.registerFailedAttempt(
+        identity,
+        deviceInfo.ip,
+        true,
+        user.email,
+      );
       throw new CustomError({
         message: 'Credenciales inválidas',
         statusCode: HttpStatus.UNAUTHORIZED,
@@ -158,8 +175,8 @@ export class AuthService {
       });
     }
 
-    const userRoleNames = (user.userRoles ?? []).map(ur => ur.role?.name as ValidRoles);
-    const hasValidRole = userRoleNames.some(r =>
+    const userRoleNames = (user.userRoles ?? []).map((ur) => ur.role?.name);
+    const hasValidRole = userRoleNames.some((r) =>
       (SYSTEM_CODE_ROLES as readonly ValidRoles[]).includes(r),
     );
 
@@ -197,7 +214,9 @@ export class AuthService {
       .leftJoinAndSelect('user.userRoles', 'userRoles')
       .leftJoinAndSelect('userRoles.role', 'role')
       .leftJoinAndSelect('role.permissions', 'permissions')
-      .where('LOWER(user.identity) = LOWER(:identity)', { identity: identity.trim() })
+      .where('LOWER(user.identity) = LOWER(:identity)', {
+        identity: identity.trim(),
+      })
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
@@ -211,7 +230,7 @@ export class AuthService {
     }
 
     const isResident = (user.userRoles ?? []).some(
-      ur => ur.role?.name === ValidRoles.RESIDENT_ROL,
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
     );
 
     if (!isResident) {
@@ -224,7 +243,10 @@ export class AuthService {
     }
 
     // Comparar systemCode antes de revelar estado de cuenta (evita user enumeration)
-    if (!user.systemCode || user.systemCode.toUpperCase() !== systemCode.trim().toUpperCase()) {
+    if (
+      !user.systemCode ||
+      user.systemCode.toUpperCase() !== systemCode.trim().toUpperCase()
+    ) {
       await this.registerFailedAttempt(identity, deviceInfo.ip, false);
       throw new CustomError({
         message: 'Credenciales inválidas',
@@ -236,7 +258,9 @@ export class AuthService {
     this.assertUserAccountActive(user);
 
     await this.clearFailedAttempts(identity);
-    this.logger.log(`Login exitoso (resident identity+systemCode): userId=${user.id}`);
+    this.logger.log(
+      `Login exitoso (resident identity+systemCode): userId=${user.id}`,
+    );
     return this.createUserSession(user, deviceInfo, false);
   }
 
@@ -249,15 +273,23 @@ export class AuthService {
    * vía WhatsApp. Respuesta siempre genérica para no revelar si la identidad
    * existe (anti user-enumeration): los casos inválidos solo se loguean.
    */
-  async resendResidentSystemCode(identity: string, ip: string): Promise<OtpRequestResponse> {
+  async resendResidentSystemCode(
+    identity: string,
+    ip: string,
+  ): Promise<OtpRequestResponse> {
     await this.checkIpRateLimit(ip);
 
     const genericMessage =
       'Si la identidad está registrada, recibirás tu código por WhatsApp en los próximos segundos';
 
     const identityKey = identity.trim().toLowerCase();
-    const rateKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SYSTEM_CODE_RATE_LIMIT, key: identityKey };
-    const rateData = await this.cacheService.get<{ count: number }>({ key: rateKey });
+    const rateKey = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.SYSTEM_CODE_RATE_LIMIT,
+      key: identityKey,
+    };
+    const rateData = await this.cacheService.get<{ count: number }>({
+      key: rateKey,
+    });
 
     if ((rateData?.count ?? 0) >= AUTH_CONSTANTS.SYSTEM_CODE_RATE_LIMIT_MAX) {
       throw new CustomError({
@@ -278,7 +310,9 @@ export class AuthService {
       .addSelect('user.systemCode')
       .leftJoinAndSelect('user.userRoles', 'userRoles')
       .leftJoinAndSelect('userRoles.role', 'role')
-      .where('LOWER(user.identity) = LOWER(:identity)', { identity: identity.trim() })
+      .where('LOWER(user.identity) = LOWER(:identity)', {
+        identity: identity.trim(),
+      })
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
@@ -287,19 +321,27 @@ export class AuthService {
       return { success: true, message: genericMessage };
     }
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
     if (!isResident) {
-      this.logger.warn(`Reenvío de systemCode para usuario no-residente: ${user.id}`);
+      this.logger.warn(
+        `Reenvío de systemCode para usuario no-residente: ${user.id}`,
+      );
       return { success: true, message: genericMessage };
     }
 
     if (user.status !== UserStatus.ACTIVE) {
-      this.logger.warn(`Reenvío de systemCode para cuenta no activa: ${user.id} (${user.status})`);
+      this.logger.warn(
+        `Reenvío de systemCode para cuenta no activa: ${user.id} (${user.status})`,
+      );
       return { success: true, message: genericMessage };
     }
 
     if (!user.systemCode || !user.phoneNumber) {
-      this.logger.warn(`Reenvío de systemCode sin código o teléfono registrado: ${user.id}`);
+      this.logger.warn(
+        `Reenvío de systemCode sin código o teléfono registrado: ${user.id}`,
+      );
       return { success: true, message: genericMessage };
     }
 
@@ -317,7 +359,10 @@ export class AuthService {
   // LOGIN D: Teléfono + OTP (RESIDENT_ROL - flujo alternativo)
   // ═══════════════════════════════════════════════════════════════
 
-  async requestOtp(input: RequestOtpInput, ip: string): Promise<OtpRequestResponse> {
+  async requestOtp(
+    input: RequestOtpInput,
+    ip: string,
+  ): Promise<OtpRequestResponse> {
     const { phoneNumber } = input;
 
     const user = await this.userRepo
@@ -328,14 +373,17 @@ export class AuthService {
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
-    const genericMessage = 'Si el número está registrado, recibirás un código en los próximos segundos';
+    const genericMessage =
+      'Si el número está registrado, recibirás un código en los próximos segundos';
 
     if (!user) {
       this.logger.warn(`OTP para número no registrado: ${phoneNumber}`);
       return { success: true, message: genericMessage };
     }
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
     if (!isResident) {
       this.logger.warn(`OTP para usuario no-residente: ${user.id}`);
       return { success: true, message: genericMessage };
@@ -346,7 +394,10 @@ export class AuthService {
     return { success: true, message: genericMessage };
   }
 
-  async verifyOtp(input: VerifyOtpInput, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async verifyOtp(
+    input: VerifyOtpInput,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
     const { phoneNumber, code } = input;
 
     const user = await this.userRepo
@@ -358,11 +409,12 @@ export class AuthService {
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
-    if (!user) throw new CustomError({
-      message: 'Número de celular no registrado',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: UserErrorCode.USER_NOT_FOUND,
-    });
+    if (!user)
+      throw new CustomError({
+        message: 'Número de celular no registrado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
 
     this.assertUserAccountActive(user);
     await this.otpService.validate(phoneNumber, code);
@@ -375,7 +427,9 @@ export class AuthService {
   // ═══════════════════════════════════════════════════════════════
 
   async generateQrLoginToken(complexId: string): Promise<QrLoginTokenResponse> {
-    const complex = await this.complexRepo.findOne({ where: { id: complexId } });
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+    });
 
     if (!complex) {
       throw new CustomError({
@@ -388,12 +442,12 @@ export class AuthService {
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1_000);
 
-
     // PIN = últimos 4 dígitos del NIT base (antes del dígito de verificación tras "-")
     const nitBase = (complex.nit ?? '').split('-')[0].replace(/\D/g, '');
     if (nitBase.length < 4) {
       throw new CustomError({
-        message: 'NIT del complejo no tiene suficientes dígitos para generar el PIN',
+        message:
+          'NIT del complejo no tiene suficientes dígitos para generar el PIN',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AuthErrorCode.QR_PIN_GENERATION_FAILED,
       });
@@ -418,7 +472,11 @@ export class AuthService {
   // QR Login: canjear token (el complejo escanea el QR)
   // ═══════════════════════════════════════════════════════════════
 
-  async redeemQrToken(token: string, pin: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async redeemQrToken(
+    token: string,
+    pin: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
     const normalizedPin = (pin ?? '').trim();
 
     if (!normalizedPin) {
@@ -441,7 +499,6 @@ export class AuthService {
       .where('complex.qrLoginToken = :token', { token })
       .andWhere('complex.deleted_at IS NULL')
       .getOne();
-
 
     if (!complex) {
       throw new CustomError({
@@ -481,7 +538,9 @@ export class AuthService {
 
     const pinValid = await bcrypt.compare(normalizedPin, complex.qrLoginPin);
     if (!pinValid) {
-      this.logger.warn(`PIN incorrecto al canjear QR — complexId: ${complex.id} | pinLen: ${normalizedPin.length} | hashLen: ${complex.qrLoginPin.length} | hashPrefix: ${complex.qrLoginPin.substring(0, 7)}`);
+      this.logger.warn(
+        `PIN incorrecto al canjear QR — complexId: ${complex.id} | pinLen: ${normalizedPin.length} | hashLen: ${complex.qrLoginPin.length} | hashPrefix: ${complex.qrLoginPin.substring(0, 7)}`,
+      );
       throw new CustomError({
         message: 'PIN incorrecto',
         statusCode: HttpStatus.UNAUTHORIZED,
@@ -494,8 +553,7 @@ export class AuthService {
     // se limpia definitivamente en setInitialPassword.
     await this.complexRepo.update(complex.id, {
       qrLoginTokenUsed: true,
-      qrLoginPin: null as unknown as string,
-
+      qrLoginPin: null,
     });
 
     this.assertComplexAccountActive(complex);
@@ -510,7 +568,9 @@ export class AuthService {
 
     this.assertUserAccountActive(complex.owner);
 
-    this.logger.log(`QR token canjeado — complexId: ${complex.id} | owner: ${complex.ownerId}`);
+    this.logger.log(
+      `QR token canjeado — complexId: ${complex.id} | owner: ${complex.ownerId}`,
+    );
     return this.createComplexSession(complex, deviceInfo, false);
   }
 
@@ -518,8 +578,10 @@ export class AuthService {
   // Establecer contraseña inicial del complejo (post-QR login)
   // ═══════════════════════════════════════════════════════════════
 
-  async setInitialPassword(complexId: string, newPassword: string): Promise<SetPasswordResponse> {
-
+  async setInitialPassword(
+    complexId: string,
+    newPassword: string,
+  ): Promise<SetPasswordResponse> {
     // VULN-07 fix: usar ConfigService en lugar de process.env directo
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
@@ -528,16 +590,18 @@ export class AuthService {
       password: hashedPassword,
       lastPasswordChange: new Date(),
       passwordSet: true,
-      qrLoginToken: null as unknown as string,
-      qrLoginTokenExp: null as unknown as Date,
-      qrLoginPin: null as unknown as string,
+      qrLoginToken: null,
+      qrLoginTokenExp: null,
+      qrLoginPin: null,
 
       tokenVersion: () => '"tokenVersion" + 1',
     });
 
     await this.tokenService.clearUserTokenVersionCache(complexId);
 
-    this.logger.log(`Contraseña inicial establecida para complejo ${complexId}`);
+    this.logger.log(
+      `Contraseña inicial establecida para complejo ${complexId}`,
+    );
     return { success: true };
   }
 
@@ -545,8 +609,14 @@ export class AuthService {
   // Refresh Token
   // ═══════════════════════════════════════════════════════════════
 
-  async refreshToken(currentRefreshToken: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
-    const tokenPair = await this.tokenService.rotateRefreshToken(currentRefreshToken, deviceInfo);
+  async refreshToken(
+    currentRefreshToken: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
+    const tokenPair = await this.tokenService.rotateRefreshToken(
+      currentRefreshToken,
+      deviceInfo,
+    );
     return this.toAuthResponse(tokenPair);
   }
 
@@ -554,10 +624,16 @@ export class AuthService {
   // Logout
   // ═══════════════════════════════════════════════════════════════
 
-  async logout(userId: string, sessionId: string, accessToken: string): Promise<boolean> {
+  async logout(
+    userId: string,
+    sessionId: string,
+    accessToken: string,
+  ): Promise<boolean> {
     try {
       const payload = await this.tokenService.verifyAccessToken(accessToken);
-      const expiresAt = payload.exp ? new Date(payload.exp * 1_000) : new Date();
+      const expiresAt = payload.exp
+        ? new Date(payload.exp * 1_000)
+        : new Date();
 
       await Promise.all([
         this.tokenService.blacklistAccessToken(accessToken, expiresAt),
@@ -590,7 +666,9 @@ export class AuthService {
    * Solo aplica a cuentas PENDING_VERIFICATION y sin correo verificado: una
    * cuenta ya verificada nunca se toca por esta vía.
    */
-  async registerSupervisor(input: RegisterSupervisorInput): Promise<RegisterSupervisorResponse> {
+  async registerSupervisor(
+    input: RegisterSupervisorInput,
+  ): Promise<RegisterSupervisorResponse> {
     const { fullName, email, password, phone, documentNumber } = input;
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -611,38 +689,56 @@ export class AuthService {
       !!u &&
       !u.emailVerified &&
       u.status === UserStatus.PENDING_VERIFICATION &&
-      !!u.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL);
+      !!u.userRoles?.some((ur) => ur.role?.name === ValidRoles.SUPERVISOR_ROL);
 
     // El correo ya es de otra cuenta —verificada, o el registro pendiente de
     // otra persona—. Mismo mensaje ambiguo de siempre: decir "ese correo ya
     // existe" convierte este endpoint en un detector de cuentas.
-    if (byEmail && (!isReusable(byEmail) || (byDocumentOrPhone && byDocumentOrPhone.id !== byEmail.id))) {
-      return { success: false, message: 'Si el correo no está registrado, recibirás un enlace de verificación', supervisorId: null };
+    if (
+      byEmail &&
+      (!isReusable(byEmail) ||
+        (byDocumentOrPhone && byDocumentOrPhone.id !== byEmail.id))
+    ) {
+      return {
+        success: false,
+        message:
+          'Si el correo no está registrado, recibirás un enlace de verificación',
+        supervisorId: null,
+      };
     }
 
-    const reusable = byEmail ?? (isReusable(byDocumentOrPhone) ? byDocumentOrPhone : null);
+    const reusable =
+      byEmail ?? (isReusable(byDocumentOrPhone) ? byDocumentOrPhone : null);
 
     // Documento o teléfono de una cuenta que ya se verificó. Aquí sí conviene
     // ser explícito: no hay nada que enumerar —quien registra conoce su propio
     // documento— y sin el mensaje el usuario no sabe que debe iniciar sesión.
     if (!reusable && byDocumentOrPhone) {
       throw new CustomError({
-        message: 'Ya existe una cuenta con este documento o teléfono. Inicia sesión o recupera tu contraseña.',
+        message:
+          'Ya existe una cuenta con este documento o teléfono. Inicia sesión o recupera tu contraseña.',
         statusCode: HttpStatus.CONFLICT,
         errorCode: UserErrorCode.USER_ALREADY_EXISTS,
       });
     }
 
     if (reusable) {
-      return this.resendSupervisorVerification(reusable, input, normalizedEmail);
+      return this.resendSupervisorVerification(
+        reusable,
+        input,
+        normalizedEmail,
+      );
     }
 
-    const supervisorRole = await this.roleRepo.findOne({ where: { name: ValidRoles.SUPERVISOR_ROL } });
-    if (!supervisorRole) throw new CustomError({
-      message: 'Rol de supervisor no configurado',
-      statusCode: HttpStatus.BAD_REQUEST,
-      errorCode: AuthErrorCode.ROLE_NOT_CONFIGURED,
+    const supervisorRole = await this.roleRepo.findOne({
+      where: { name: ValidRoles.SUPERVISOR_ROL },
     });
+    if (!supervisorRole)
+      throw new CustomError({
+        message: 'Rol de supervisor no configurado',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.ROLE_NOT_CONFIGURED,
+      });
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -683,7 +779,11 @@ export class AuthService {
     await this.startResendCooldown(user.id);
 
     this.logger.log(`Supervisor registrado: userId=${user.id}`);
-    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
+    return {
+      success: true,
+      message: 'Revisa tu correo para verificar tu cuenta',
+      supervisorId: user.id,
+    };
   }
 
   /**
@@ -705,16 +805,16 @@ export class AuthService {
     const { fullName, password, phone, documentNumber } = input;
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
-    const nameParts  = fullName.trim().split(/\s+/);
+    const nameParts = fullName.trim().split(/\s+/);
 
     await this.userRepo.update(user.id, {
-      name:        nameParts[0],
-      lastName:    nameParts.slice(1).join(' ') || nameParts[0],
-      email:       normalizedEmail,
-      password:    await bcrypt.hash(password, saltRounds),
+      name: nameParts[0],
+      lastName: nameParts.slice(1).join(' ') || nameParts[0],
+      email: normalizedEmail,
+      password: await bcrypt.hash(password, saltRounds),
       passwordSet: true,
       phoneNumber: phone,
-      identity:    documentNumber,
+      identity: documentNumber,
     });
 
     await this.issueEmailVerification(user.id, normalizedEmail, nameParts[0]);
@@ -723,7 +823,11 @@ export class AuthService {
     this.logger.log(
       `Registro de supervisor reintentado: userId=${user.id} | correo actualizado=${user.email !== normalizedEmail}`,
     );
-    return { success: true, message: 'Revisa tu correo para verificar tu cuenta', supervisorId: user.id };
+    return {
+      success: true,
+      message: 'Revisa tu correo para verificar tu cuenta',
+      supervisorId: user.id,
+    };
   }
 
   /**
@@ -749,13 +853,18 @@ export class AuthService {
       relations: ['userRoles', 'userRoles.role'],
     });
 
-    if (!user?.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL)) {
+    if (
+      !user?.userRoles?.some(
+        (ur) => ur.role?.name === ValidRoles.SUPERVISOR_ROL,
+      )
+    ) {
       return notFound;
     }
 
     return {
       verified: user.emailVerified,
-      resendAvailableInSeconds: await this.resendCooldownRemaining(supervisorId),
+      resendAvailableInSeconds:
+        await this.resendCooldownRemaining(supervisorId),
     };
   }
 
@@ -789,7 +898,9 @@ export class AuthService {
       !!user &&
       !user.emailVerified &&
       user.status === UserStatus.PENDING_VERIFICATION &&
-      !!user.userRoles?.some(ur => ur.role?.name === ValidRoles.SUPERVISOR_ROL);
+      !!user.userRoles?.some(
+        (ur) => ur.role?.name === ValidRoles.SUPERVISOR_ROL,
+      );
 
     // Mismo mensaje para "no existe", "ya verificó" y "no es supervisor": desde
     // fuera, ninguno de los tres se distingue del caso bueno.
@@ -808,13 +919,20 @@ export class AuthService {
     await this.startResendCooldown(supervisorId);
 
     this.logger.log(`Verificación reenviada: userId=${user.id}`);
-    return { success: true, message: 'Te enviamos el enlace de nuevo', supervisorId };
+    return {
+      success: true,
+      message: 'Te enviamos el enlace de nuevo',
+      supervisorId,
+    };
   }
 
   /** Segundos que faltan para habilitar el reenvío; 0 si ya se puede. */
   private async resendCooldownRemaining(supervisorId: string): Promise<number> {
     const cached = await this.cacheService.get<{ availableAt: number }>({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND, key: supervisorId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND,
+        key: supervisorId,
+      },
     });
     if (!cached?.availableAt) return 0;
 
@@ -826,7 +944,10 @@ export class AuthService {
   private async startResendCooldown(supervisorId: string): Promise<void> {
     const seconds = AUTH_CONSTANTS.EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS;
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND, key: supervisorId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_RESEND,
+        key: supervisorId,
+      },
       data: { availableAt: Date.now() + seconds * 1000 },
       options: { ttl: seconds },
     });
@@ -849,22 +970,34 @@ export class AuthService {
     const ttl = AUTH_CONSTANTS.EMAIL_VERIFICATION_EXPIRY_MINUTES * 60;
 
     const previous = await this.cacheService.get<{ token: string }>({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER, key: userId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER,
+        key: userId,
+      },
     });
     if (previous?.token) {
       await this.cacheService.delete({
-        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: previous.token },
+        key: {
+          prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN,
+          key: previous.token,
+        },
       });
     }
 
     const token = uuidv4();
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN,
+        key: token,
+      },
       data: { userId },
       options: { ttl },
     });
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER, key: userId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_BY_USER,
+        key: userId,
+      },
       data: { token },
       options: { ttl },
     });
@@ -880,16 +1013,23 @@ export class AuthService {
     });
   }
 
-  async verifySupervisorEmail(token: string, deviceInfo: DeviceInfo): Promise<AuthResponse> {
+  async verifySupervisorEmail(
+    token: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<AuthResponse> {
     const cached = await this.cacheService.get<{ userId: string }>({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN,
+        key: token,
+      },
     });
 
-    if (!cached?.userId) throw new CustomError({
-      message: 'Token de verificación inválido o expirado',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: UserErrorCode.INVALID_TOKEN,
-    });
+    if (!cached?.userId)
+      throw new CustomError({
+        message: 'Token de verificación inválido o expirado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.INVALID_TOKEN,
+      });
 
     const user = await this.userRepo
       .createQueryBuilder('user')
@@ -900,19 +1040,29 @@ export class AuthService {
       .andWhere('user.deleted_at IS NULL')
       .getOne();
 
-    if (!user) throw new CustomError({
-      message: 'Usuario no encontrado',
-      statusCode: HttpStatus.UNAUTHORIZED,
-      errorCode: UserErrorCode.USER_NOT_FOUND,
-    });
-    if (user.status !== UserStatus.PENDING_VERIFICATION) throw new CustomError({
-      message: 'La cuenta ya fue verificada',
-      statusCode: HttpStatus.BAD_REQUEST,
-      errorCode: AuthErrorCode.ACCOUNT_ALREADY_VERIFIED,
-    });
+    if (!user)
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
+    if (user.status !== UserStatus.PENDING_VERIFICATION)
+      throw new CustomError({
+        message: 'La cuenta ya fue verificada',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AuthErrorCode.ACCOUNT_ALREADY_VERIFIED,
+      });
 
-    await this.userRepo.update(user.id, { emailVerified: true, status: UserStatus.ACTIVE });
-    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN, key: token } });
+    await this.userRepo.update(user.id, {
+      emailVerified: true,
+      status: UserStatus.ACTIVE,
+    });
+    await this.cacheService.delete({
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.EMAIL_VERIFICATION_TOKEN,
+        key: token,
+      },
+    });
 
     user.emailVerified = true;
     user.status = UserStatus.ACTIVE;
@@ -925,12 +1075,22 @@ export class AuthService {
   // Reset de contraseña por email
   // ═══════════════════════════════════════════════════════════════
 
-  async requestPasswordReset(email: string): Promise<RequestPasswordResetResponse> {
-    const genericResponse = { success: true, message: 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña' };
+  async requestPasswordReset(
+    email: string,
+  ): Promise<RequestPasswordResetResponse> {
+    const genericResponse = {
+      success: true,
+      message:
+        'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña',
+    };
 
-    const rlKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_RATE_LIMIT, key: email.toLowerCase() };
+    const rlKey = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_RATE_LIMIT,
+      key: email.toLowerCase(),
+    };
     const rl = await this.cacheService.get<{ count: number }>({ key: rlKey });
-    if ((rl?.count ?? 0) >= AUTH_CONSTANTS.PASSWORD_RESET_RATE_LIMIT_MAX) return genericResponse;
+    if ((rl?.count ?? 0) >= AUTH_CONSTANTS.PASSWORD_RESET_RATE_LIMIT_MAX)
+      return genericResponse;
 
     await this.cacheService.set({
       key: rlKey,
@@ -938,13 +1098,18 @@ export class AuthService {
       options: { ttl: AUTH_CONSTANTS.CACHE_TTL.PASSWORD_RESET_RATE_LIMIT },
     });
 
-    const user = await this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
+    const user = await this.userRepo.findOne({
+      where: { email: email.toLowerCase().trim() },
+    });
     if (!user) return genericResponse;
 
     const token = uuidv4();
     const ttl = AUTH_CONSTANTS.PASSWORD_RESET_EXPIRY_MINUTES * 60;
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: token },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN,
+        key: token,
+      },
       data: { userId: user.id },
       options: { ttl },
     });
@@ -966,21 +1131,26 @@ export class AuthService {
 
   async resetPassword(input: ResetPasswordInput): Promise<SetPasswordResponse> {
     const cached = await this.cacheService.get<{ userId: string }>({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: input.token },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN,
+        key: input.token,
+      },
     });
 
-    if (!cached?.userId) throw new CustomError({
-      message: 'Token inválido o expirado',
-      statusCode: HttpStatus.BAD_REQUEST,
-      errorCode: UserErrorCode.INVALID_TOKEN,
-    });
+    if (!cached?.userId)
+      throw new CustomError({
+        message: 'Token inválido o expirado',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: UserErrorCode.INVALID_TOKEN,
+      });
 
     const user = await this.userRepo.findOne({ where: { id: cached.userId } });
-    if (!user) throw new CustomError({
-      message: 'Usuario no encontrado',
-      statusCode: HttpStatus.NOT_FOUND,
-      errorCode: UserErrorCode.USER_NOT_FOUND,
-    });
+    if (!user)
+      throw new CustomError({
+        message: 'Usuario no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: UserErrorCode.USER_NOT_FOUND,
+      });
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
     const hashedPassword = await bcrypt.hash(input.newPassword, saltRounds);
@@ -991,7 +1161,12 @@ export class AuthService {
       tokenVersion: () => '"tokenVersion" + 1',
     });
 
-    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN, key: input.token } });
+    await this.cacheService.delete({
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.PASSWORD_RESET_TOKEN,
+        key: input.token,
+      },
+    });
     await this.tokenService.clearUserTokenVersionCache(user.id);
 
     this.logger.log(`Password restablecido — userId=${user.id}`);
@@ -1083,10 +1258,11 @@ export class AuthService {
     this.assertUserAccountActive(complex.owner);
     await this.clearFailedAttempts(email);
 
-    this.logger.log(`Login exitoso (complex email+pwd): complexId=${complex.id} owner=${complex.ownerId}`);
+    this.logger.log(
+      `Login exitoso (complex email+pwd): complexId=${complex.id} owner=${complex.ownerId}`,
+    );
     return this.createComplexSession(complex, deviceInfo, rememberMe ?? false);
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // Creación de sesiones
@@ -1102,13 +1278,27 @@ export class AuthService {
     deviceInfo: DeviceInfo,
     rememberMe: boolean,
   ): Promise<AuthResponse> {
-    await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
+    await this.sessionService.enforceSessionLimit(
+      user.id,
+      AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
+    );
 
-    const tokenPair = await this.tokenService.generateTokenPair(user, deviceInfo, rememberMe, 'user');
+    const tokenPair = await this.tokenService.generateTokenPair(
+      user,
+      deviceInfo,
+      rememberMe,
+      'user',
+    );
 
-    await this.sessionService.createOrUpdateSession(user.id, tokenPair.sessionId, deviceInfo);
+    await this.sessionService.createOrUpdateSession(
+      user.id,
+      tokenPair.sessionId,
+      deviceInfo,
+    );
 
-    this.logger.log(`Sesión user creada — sub: ${user.id} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(
+      `Sesión user creada — sub: ${user.id} | sessionId: ${tokenPair.sessionId}`,
+    );
     return this.toAuthResponse(tokenPair);
   }
 
@@ -1122,13 +1312,26 @@ export class AuthService {
     deviceInfo: DeviceInfo,
     rememberMe: boolean,
   ): Promise<AuthResponse> {
-    await this.sessionService.enforceSessionLimit(complex.ownerId, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
+    await this.sessionService.enforceSessionLimit(
+      complex.ownerId,
+      AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
+    );
 
-    const tokenPair = await this.tokenService.generateTokenPairForComplex(complex, deviceInfo, rememberMe);
+    const tokenPair = await this.tokenService.generateTokenPairForComplex(
+      complex,
+      deviceInfo,
+      rememberMe,
+    );
 
-      await this.sessionService.createOrUpdateSession(complex.ownerId, tokenPair.sessionId, deviceInfo);
+    await this.sessionService.createOrUpdateSession(
+      complex.ownerId,
+      tokenPair.sessionId,
+      deviceInfo,
+    );
 
-    this.logger.log(`Sesión complex creada — sub: ${complex.id} | owner: ${complex.ownerId} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(
+      `Sesión complex creada — sub: ${complex.id} | owner: ${complex.ownerId} | sessionId: ${tokenPair.sessionId}`,
+    );
     return this.toAuthResponse(tokenPair);
   }
 
@@ -1149,14 +1352,16 @@ export class AuthService {
   private assertComplexAccountActive(complex: ResidentialComplex): void {
     if (complex.status === ComplexStatus.INACTIVE) {
       throw new CustomError({
-        message: 'El complejo residencial está inactivo. Contacta al administrador',
+        message:
+          'El complejo residencial está inactivo. Contacta al administrador',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.COMPLEX_INACTIVE,
       });
     }
     if (complex.status === ComplexStatus.SUSPENDED) {
       throw new CustomError({
-        message: 'El complejo residencial está suspendido. Contacta al administrador',
+        message:
+          'El complejo residencial está suspendido. Contacta al administrador',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.COMPLEX_SUSPENDED,
       });
@@ -1174,14 +1379,15 @@ export class AuthService {
     }
 
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {
-      const unlockIn = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / 60_000);
+      const unlockIn = Math.ceil(
+        (user.accountLockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new CustomError({
         message: `Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`,
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: UserErrorCode.ACCOUNT_LOCKED,
       });
     }
-
 
     const blockedStatuses: UserStatus[] = [
       UserStatus.SUSPENDED,
@@ -1211,9 +1417,11 @@ export class AuthService {
     ip: string,
     updateUserDb = true,
     userEmail?: string,
-
   ): Promise<void> {
-    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.FAILED_ATTEMPTS, key: identifier };
+    const key = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.FAILED_ATTEMPTS,
+      key: identifier,
+    };
     const current = await this.cacheService.get<{ count: number }>({ key });
     const newCount = (current?.count ?? 0) + 1;
 
@@ -1222,7 +1430,11 @@ export class AuthService {
 
       await this.userRepo.update(
         { email: emailToLock },
-        { accountLockedUntil: new Date(Date.now() + AUTH_CONSTANTS.LOGIN_BLOCK_DURATION * 1_000) },
+        {
+          accountLockedUntil: new Date(
+            Date.now() + AUTH_CONSTANTS.LOGIN_BLOCK_DURATION * 1_000,
+          ),
+        },
       );
     }
 
@@ -1235,7 +1447,10 @@ export class AuthService {
 
   private async clearFailedAttempts(identifier: string): Promise<void> {
     await this.cacheService.delete({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.FAILED_ATTEMPTS, key: identifier },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.FAILED_ATTEMPTS,
+        key: identifier,
+      },
     });
   }
 

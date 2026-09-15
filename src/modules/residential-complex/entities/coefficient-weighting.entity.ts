@@ -1,7 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 import GraphQLJSON from 'graphql-type-json';
@@ -18,11 +23,13 @@ import { ResidentialComplex } from './residential-complex.entity';
  * El coeficiente de cada unidad = score / Σscore (suma 1). El cálculo y la
  * normalización viven en el frontend; esta entidad solo persiste la config.
  */
-@ObjectType({ description: 'Pesos para derivar el coeficiente de copropiedad por características' })
+@ObjectType({
+  description:
+    'Pesos para derivar el coeficiente de copropiedad por características',
+})
 @Entity('coefficient_weightings')
 @Index(['complexId'], { unique: true })
 export class CoefficientWeighting {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -37,7 +44,9 @@ export class CoefficientWeighting {
   base: string;
 
   /** Multiplicador por tipo de unidad. Ej: { "HOUSE": 1, "PENTHOUSE": 1.5 }. */
-  @Field(() => GraphQLJSON, { description: 'Multiplicador por tipo de unidad (clave = UnitType)' })
+  @Field(() => GraphQLJSON, {
+    description: 'Multiplicador por tipo de unidad (clave = UnitType)',
+  })
   @Column({ type: 'jsonb', default: {} })
   typeMultipliers: Record<string, number>;
 

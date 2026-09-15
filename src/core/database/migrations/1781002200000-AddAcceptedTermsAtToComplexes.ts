@@ -8,7 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente (IF NOT EXISTS) por si en dev se corrió `synchronize`.
  */
 export class AddAcceptedTermsAtToComplexes1781002200000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "residential_complexes"

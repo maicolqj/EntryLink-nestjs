@@ -1,8 +1,8 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 export enum MessageChannel {
-  SMS       = 'SMS',
-  WHATSAPP  = 'WHATSAPP',
+  SMS = 'SMS',
+  WHATSAPP = 'WHATSAPP',
 }
 
 registerEnumType(MessageChannel, {

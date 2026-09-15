@@ -13,5 +13,6 @@ export enum LegalAudience {
 
 registerEnumType(LegalAudience, {
   name: 'LegalAudience',
-  description: 'Audiencia de un documento legal (público o solo complejos registrados)',
+  description:
+    'Audiencia de un documento legal (público o solo complejos registrados)',
 });

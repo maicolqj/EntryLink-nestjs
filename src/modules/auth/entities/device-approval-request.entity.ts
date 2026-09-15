@@ -53,7 +53,12 @@ export class DeviceApprovalRequest {
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId?: string;
 
-  @Column({ name: 'status', type: 'varchar', length: 20, default: DeviceApprovalStatus.PENDING })
+  @Column({
+    name: 'status',
+    type: 'varchar',
+    length: 20,
+    default: DeviceApprovalStatus.PENDING,
+  })
   status: DeviceApprovalStatus;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
@@ -74,10 +79,20 @@ export class DeviceApprovalRequest {
    * Descripción legible del equipo que pide entrar ("Chrome en Windows").
    * Se envía en el push para que el residente pueda juzgar si es suyo.
    */
-  @Column({ name: 'requested_from_label', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'requested_from_label',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   requestedFromLabel?: string;
 
-  @Column({ name: 'requested_from_ip', type: 'varchar', length: 45, nullable: true })
+  @Column({
+    name: 'requested_from_ip',
+    type: 'varchar',
+    length: 45,
+    nullable: true,
+  })
   requestedFromIp?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

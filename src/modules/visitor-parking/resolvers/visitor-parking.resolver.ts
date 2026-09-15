@@ -1,27 +1,26 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { VisitorVehicle }       from '../entities/visitor-vehicle.entity';
+import { VisitorVehicle } from '../entities/visitor-vehicle.entity';
 import { VisitorParkingConfig } from '../entities/visitor-parking-config.entity';
 import { VisitorParkingService } from '../services/visitor-parking.service';
 
-import { SetParkingRateInput }                 from '../dto/inputs/set-parking-rate.input';
-import { RegisterVisitorVehicleInput }         from '../dto/inputs/register-visitor-vehicle.input';
-import { FilterVisitorVehiclesInput }          from '../dto/inputs/filter-visitor-vehicles.input';
-import { UpdateVisitorParkingConfigInput }     from '../dto/inputs/update-visitor-parking-config.input';
-import { PaginatedVisitorVehiclesResponse }    from '../dto/responses/paginated-visitor-vehicles.response';
-import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
+import { SetParkingRateInput } from '../dto/inputs/set-parking-rate.input';
+import { RegisterVisitorVehicleInput } from '../dto/inputs/register-visitor-vehicle.input';
+import { FilterVisitorVehiclesInput } from '../dto/inputs/filter-visitor-vehicles.input';
+import { UpdateVisitorParkingConfigInput } from '../dto/inputs/update-visitor-parking-config.input';
+import { PaginatedVisitorVehiclesResponse } from '../dto/responses/paginated-visitor-vehicles.response';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { VisitorParkingRate } from '../entities/visitor-parking-rate.entity';
 import { ResgiterExitVehicle } from '../dto/inputs/register-exit-vehicle.input';
 import { ParkingRateType } from '../enums/parking-rate-type.enum';
 
 @Resolver()
 export class VisitorParkingResolver {
-
   constructor(private readonly parkingService: VisitorParkingService) {}
 
   // ================================================================
@@ -32,7 +31,10 @@ export class VisitorParkingResolver {
    * Retorna la configuración del parqueadero visitante para un complejo.
    * Devuelve null si aún no existe configuración.
    */
-  @Query(() => VisitorParkingConfig, { name: 'visitorParkingConfig', nullable: true })
+  @Query(() => VisitorParkingConfig, {
+    name: 'visitorParkingConfig',
+    nullable: true,
+  })
   @Auth({
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
@@ -89,7 +91,7 @@ export class VisitorParkingResolver {
   })
   setParkingRate(
     @Args('input') input: SetParkingRateInput,
-    @CurrentUser() currentUser: JwtAccessPayload, 
+    @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<VisitorParkingRate> {
     return this.parkingService.setParkingRate(input, currentUser);
   }
@@ -163,14 +165,22 @@ export class VisitorParkingResolver {
    */
   @Mutation(() => VisitorVehicle, { name: 'cancelVisitorVehicleEntry' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
   })
   cancelEntry(
     @Args('visitorVehicleId') visitorVehicleId: string,
-    @Args('cancellationReason') cancellationReason: string, 
+    @Args('cancellationReason') cancellationReason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-    return this.parkingService.cancelEntry(visitorVehicleId, cancellationReason, currentUser);
+    return this.parkingService.cancelEntry(
+      visitorVehicleId,
+      cancellationReason,
+      currentUser,
+    );
   }
 
   // ================================================================
@@ -235,7 +245,8 @@ export class VisitorParkingResolver {
   })
   findAll(
     @Args('filters') filters: FilterVisitorVehiclesInput,
-    @Args('pagination', { defaultValue: { page: 1, limit: 10 } }) pagination: PaginationInput,
+    @Args('pagination', { defaultValue: { page: 1, limit: 10 } })
+    pagination: PaginationInput,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedVisitorVehiclesResponse> {
     return this.parkingService.findAll(filters, pagination, currentUser);

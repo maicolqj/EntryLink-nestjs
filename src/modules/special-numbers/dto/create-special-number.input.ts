@@ -14,13 +14,21 @@ import { SpecialNumberCategory } from '../enums/special-number-category.enum';
 
 @InputType()
 export class CreateSpecialNumberInput {
-
-  @Field(() => String, { nullable: true, description: 'Requerido para números de complejo; omitir para números globales (solo SUPER_ADMIN)' })
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Requerido para números de complejo; omitir para números globales (solo SUPER_ADMIN)',
+  })
   @IsOptional()
   @IsUUID()
   complexId?: string;
 
-  @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'true = número global visible en todos los complejos (solo SUPER_ADMIN)' })
+  @Field(() => Boolean, {
+    nullable: true,
+    defaultValue: false,
+    description:
+      'true = número global visible en todos los complejos (solo SUPER_ADMIN)',
+  })
   @IsOptional()
   @IsBoolean()
   isGlobal?: boolean;

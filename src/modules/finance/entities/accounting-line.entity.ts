@@ -1,6 +1,11 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
@@ -22,7 +27,6 @@ import { moneyColumn } from '../utils/numeric.transformer';
 @Index(['complexId', 'pucAccountId'])
 @Index(['complexId', 'unitId'])
 export class AccountingLine {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -45,11 +49,23 @@ export class AccountingLine {
   pucAccount: PucAccount;
 
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   debit: number;
 
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   credit: number;
 
   /** Justificación específica de la línea (a qué corresponde el movimiento). */

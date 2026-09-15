@@ -2,12 +2,11 @@ import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class AccountMovement {
-
   @Field()
   id: string;
 
   @Field()
-  date: string;  // ISO string
+  date: string; // ISO string
 
   /** 'CHARGE' | 'PAYMENT' | 'CREDIT' | 'DEBIT' | 'MORA' */
   @Field()
@@ -34,7 +33,6 @@ export class AccountMovement {
 
 @ObjectType()
 export class UnitAccountStatementResponse {
-
   @Field()
   unitId: string;
 

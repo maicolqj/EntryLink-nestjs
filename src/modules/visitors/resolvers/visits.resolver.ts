@@ -1,23 +1,22 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Visit }                  from '../entities/visit.entity';
-import { VisitsService }          from '../services/visits.service';
-import { RegisterWalkInInput }    from '../dto/inputs/register-walk-in.input';
-import { ScheduleVisitInput }     from '../dto/inputs/schedule-visit.input';
-import { FilterVisitsInput }      from '../dto/inputs/filter-visits.input';
+import { Visit } from '../entities/visit.entity';
+import { VisitsService } from '../services/visits.service';
+import { RegisterWalkInInput } from '../dto/inputs/register-walk-in.input';
+import { ScheduleVisitInput } from '../dto/inputs/schedule-visit.input';
+import { FilterVisitsInput } from '../dto/inputs/filter-visits.input';
 import { PaginatedVisitsResponse } from '../dto/responses/paginated-visits.response';
-import { QrValidationResponse }   from '../dto/responses/qr-validation.response';
-import { PaginationInput }        from '../../shared/dto/inputs/pagination.input';
+import { QrValidationResponse } from '../dto/responses/qr-validation.response';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Visit)
 export class VisitsResolver {
-
   constructor(private readonly visitsService: VisitsService) {}
 
   // ================================================================
@@ -30,7 +29,12 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'registerWalkIn' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_VISITOR_ENTRY],
   })
   registerWalkIn(
@@ -46,7 +50,11 @@ export class VisitsResolver {
    */
   @Mutation(() => QrValidationResponse, { name: 'validateQrAccess' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_VISITOR_ENTRY],
   })
   validateQrAccess(
@@ -63,13 +71,17 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'registerVisitorEntry' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_VISITOR_ENTRY],
   })
   registerEntry(
-    @Args('visitId')                          visitId: string,
-    @Args('accessToken', { nullable: true })  accessToken?: string,
-    @CurrentUser()                            currentUser?: JwtAccessPayload,
+    @Args('visitId') visitId: string,
+    @Args('accessToken', { nullable: true }) accessToken?: string,
+    @CurrentUser() currentUser?: JwtAccessPayload,
   ): Promise<Visit> {
     return this.visitsService.registerEntry(visitId, currentUser, accessToken);
   }
@@ -79,11 +91,16 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'registerVisitorExit' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL, ValidRoles.COMPLEX_ROL ],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_VISITOR_EXIT],
   })
   registerExit(
-    @Args('visitId')            visitId: string,
+    @Args('visitId') visitId: string,
     @Args('notes', { nullable: true }) notes?: string,
     @CurrentUser() currentUser?: JwtAccessPayload,
   ): Promise<Visit> {
@@ -99,7 +116,11 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'scheduleVisit' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
     permissions: [ValidPermissions.SCHEDULE_VISIT],
   })
   scheduleVisit(
@@ -114,7 +135,11 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'approveVisitEntry' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
     permissions: [ValidPermissions.APPROVE_VISIT],
   })
   approveVisitEntry(
@@ -129,12 +154,16 @@ export class VisitsResolver {
    */
   @Mutation(() => Visit, { name: 'denyVisitEntry' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL, ValidRoles.COMPLEX_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
     permissions: [ValidPermissions.APPROVE_VISIT],
   })
   denyVisitEntry(
     @Args('visitId') visitId: string,
-    @Args('reason')  reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Visit> {
     return this.visitsService.denyVisitEntry(visitId, reason, currentUser);
@@ -146,8 +175,10 @@ export class VisitsResolver {
   @Mutation(() => Visit, { name: 'cancelVisit' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL,
-      ValidRoles.COMPLEX_ROL,     ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
     ],
     permissions: [ValidPermissions.SCHEDULE_VISIT],
   })
@@ -172,8 +203,9 @@ export class VisitsResolver {
     permissions: [ValidPermissions.SCHEDULE_VISIT],
   })
   findMyVisits(
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterVisitsInput = {},
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterVisitsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedVisitsResponse> {
     return this.visitsService.findMyVisits(pagination, filters, currentUser);
@@ -185,18 +217,26 @@ export class VisitsResolver {
   @Query(() => PaginatedVisitsResponse, { name: 'visits' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITS],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterVisitsInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterVisitsInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedVisitsResponse> {
-    return this.visitsService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.visitsService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -206,14 +246,14 @@ export class VisitsResolver {
   @Query(() => [Visit], { name: 'activeVisits' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITS],
   })
-  findActiveVisits(
-    @Args('complexId') complexId: string,
-  ): Promise<Visit[]> {
+  findActiveVisits(@Args('complexId') complexId: string): Promise<Visit[]> {
     return this.visitsService.findActiveVisits(complexId);
   }
 
@@ -223,13 +263,13 @@ export class VisitsResolver {
   @Query(() => [Visit], { name: 'pendingApprovalVisits' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITS],
   })
-  findPendingApproval(
-    @Args('complexId') complexId: string,
-  ): Promise<Visit[]> {
+  findPendingApproval(@Args('complexId') complexId: string): Promise<Visit[]> {
     return this.visitsService.findPendingApproval(complexId);
   }
 
@@ -239,14 +279,14 @@ export class VisitsResolver {
   @Query(() => [Visit], { name: 'scheduledVisitsToday' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITS],
   })
-  findScheduledToday(
-    @Args('complexId') complexId: string,
-  ): Promise<Visit[]> {
+  findScheduledToday(@Args('complexId') complexId: string): Promise<Visit[]> {
     return this.visitsService.findScheduledToday(complexId);
   }
 
@@ -256,8 +296,10 @@ export class VisitsResolver {
   @Query(() => Visit, { name: 'visit' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITS],
@@ -269,4 +311,3 @@ export class VisitsResolver {
     return this.visitsService.findById(id, currentUser);
   }
 }
- 

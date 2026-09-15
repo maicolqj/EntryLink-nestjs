@@ -2,7 +2,9 @@ import { DataSource } from 'typeorm';
 import { SpecialNumber } from '../../../modules/special-numbers/entities/special-number.entity';
 import { GLOBAL_SPECIAL_NUMBERS_TO_SEED } from './datas/special-numbers-data.seed';
 
-export const seedSpecialNumbers = async (dataSource: DataSource): Promise<void> => {
+export const seedSpecialNumbers = async (
+  dataSource: DataSource,
+): Promise<void> => {
   const queryRunner = dataSource.createQueryRunner();
   await queryRunner.connect();
   await queryRunner.startTransaction();
@@ -15,14 +17,14 @@ export const seedSpecialNumbers = async (dataSource: DataSource): Promise<void> 
       if (!existing) {
         await repo.save(
           repo.create({
-            id:          data.id,
-            complexId:   null,
-            isGlobal:    true,
-            name:        data.name,
+            id: data.id,
+            complexId: null,
+            isGlobal: true,
+            name: data.name,
             phoneNumber: data.phoneNumber,
-            category:    data.category,
+            category: data.category,
             description: data.description,
-            order:       data.order,
+            order: data.order,
           }),
         );
         console.log(`  ✅ Número global creado: "${data.name}"`);

@@ -40,7 +40,9 @@ export class CountryCode {
   flag: string;
 }
 
-@InputType({ description: 'Datos para crear un usuario administrativo (no residente)' })
+@InputType({
+  description: 'Datos para crear un usuario administrativo (no residente)',
+})
 export class CreateAdminUserInput {
   @Field(() => String)
   @IsString()
@@ -65,7 +67,8 @@ export class CreateAdminUserInput {
   @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
-    message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
+    message:
+      'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
   password: string;
 
@@ -78,7 +81,9 @@ export class CreateAdminUserInput {
   @Field(() => String)
   @IsString()
   @IsNotEmpty()
-  @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
+  @Matches(/^3\d{9}$/, {
+    message: 'Número de celular colombiano inválido (ej: 3001234567)',
+  })
   phoneNumber: string;
 
   @Field(() => String, { nullable: true })

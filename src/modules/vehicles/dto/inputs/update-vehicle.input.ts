@@ -10,4 +10,3 @@ export class UpdateVehicleInput extends PartialType(
   @IsUUID()
   id: string;
 }
-  

@@ -1,4 +1,13 @@
-import { IsString, IsUUID, MinLength, MaxLength, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsUUID,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -8,7 +17,6 @@ import { Type } from 'class-transformer';
  * Para SUPERVISOR_ROL: lat y lng son requeridos si el complejo tiene GPS configurado.
  */
 export class CreateNoteDto {
-
   @IsUUID()
   complexId: string;
 

@@ -4,7 +4,6 @@ import { ResidentialComplex } from '../../entities/residential-complex.entity';
 
 @ObjectType()
 export class PaginatedComplexesResponse {
-
   @Field(() => [ResidentialComplex])
   items: ResidentialComplex[];
 

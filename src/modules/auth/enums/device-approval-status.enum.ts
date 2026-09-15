@@ -16,5 +16,6 @@ export enum DeviceApprovalStatus {
 
 registerEnumType(DeviceApprovalStatus, {
   name: 'DeviceApprovalStatus',
-  description: 'Estado de una solicitud de ingreso pendiente de aprobación por push',
+  description:
+    'Estado de una solicitud de ingreso pendiente de aprobación por push',
 });

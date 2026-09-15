@@ -25,7 +25,6 @@ import { Amenity } from './amenity.entity';
 @Entity({ name: 'amenity_schedules' })
 @Index(['amenityId', 'dayOfWeek'])
 export class AmenitySchedule {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,7 +34,10 @@ export class AmenitySchedule {
   amenityId: string;
 
   @Field(() => Amenity, { nullable: true })
-  @ManyToOne(() => Amenity, amenity => amenity.schedules, { eager: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => Amenity, (amenity) => amenity.schedules, {
+    eager: false,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'amenity_id' })
   amenity?: Amenity;
 

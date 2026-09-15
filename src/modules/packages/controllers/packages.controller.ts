@@ -13,20 +13,25 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { Request } from 'express';
 
-import { PackagesService }           from '../services/packages.service';
-import { RegisterPackageInput }      from '../dto/inputs/register-package.input';
-import { RegisterPackageBodyDto }    from '../dto/inputs/register-package-body.dto';
-import { PackageType }               from '../enums/package-type.enum';
-import { R2StorageService }          from '../../../core/infrastructure/r2/r2.service';
+import { PackagesService } from '../services/packages.service';
+import { RegisterPackageInput } from '../dto/inputs/register-package.input';
+import { RegisterPackageBodyDto } from '../dto/inputs/register-package-body.dto';
+import { PackageType } from '../enums/package-type.enum';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { JwtRestGuard }              from '../../shared/guards/jwt-rest.guard';
-import { JwtAccessPayload }          from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }                from '../../roles/enums/valid-roles';
-import { CustomError }               from '../../shared/utils/errors.utils';
-import { GeneralErrorCode }          from '../../shared/constans/error-codes.constants';
+import { JwtRestGuard } from '../../shared/guards/jwt-rest.guard';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-const MAX_FILE_SIZE_MB   = 10;
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+];
+const MAX_FILE_SIZE_MB = 10;
 
 @Controller('packages')
 @UseGuards(JwtRestGuard)
@@ -34,9 +39,9 @@ export class PackagesController {
   private readonly logger = new Logger(PackagesController.name);
 
   constructor(
-    private readonly packagesService:   PackagesService,
-    private readonly storageService:    R2StorageService,
-    private readonly complexService:    ResidentialComplexService,
+    private readonly packagesService: PackagesService,
+    private readonly storageService: R2StorageService,
+    private readonly complexService: ResidentialComplexService,
   ) {}
 
   /**
@@ -90,24 +95,24 @@ export class PackagesController {
       ValidRoles.SUPERVISOR_ROL,
       ValidRoles.SECURITY_ROL,
     ];
-    if (!currentUser.roles?.some(r => allowedRoles.includes(r))) {
+    if (!currentUser.roles?.some((r) => allowedRoles.includes(r))) {
       throw new CustomError({
-        message:    'No tienes permisos para registrar paquetes',
+        message: 'No tienes permisos para registrar paquetes',
         statusCode: 403,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
     const input: RegisterPackageInput = {
-      unitId:         body.unitId,
-      complexId:      body.complexId,
-      senderName:     body.senderName,
-      type:           body.type ?? PackageType.PARCEL,
-      trackingCode:   body.trackingCode   || undefined,
-      description:    body.description    || undefined,
-      recipientName:  body.recipientName  || undefined,
+      unitId: body.unitId,
+      complexId: body.complexId,
+      senderName: body.senderName,
+      type: body.type ?? PackageType.PARCEL,
+      trackingCode: body.trackingCode || undefined,
+      description: body.description || undefined,
+      recipientName: body.recipientName || undefined,
       maxStorageDays: body.maxStorageDays,
-      notes:          body.notes          || undefined,
+      notes: body.notes || undefined,
     };
 
     // 1. Crear paquete en BD (sin foto todavía para obtener el ID)
@@ -116,8 +121,15 @@ export class PackagesController {
     // 2. Subir foto si fue enviada
     if (!photo) return pkg;
 
-    const complex = await this.complexService.findById(pkg.complexId, currentUser);
-    const folder  = this.storageService.buildFolder(complex.slug, 'packages', pkg.id);
+    const complex = await this.complexService.findById(
+      pkg.complexId,
+      currentUser,
+    );
+    const folder = this.storageService.buildFolder(
+      complex.slug,
+      'packages',
+      pkg.id,
+    );
 
     let storagePublicId: string | undefined;
     try {
@@ -130,14 +142,19 @@ export class PackagesController {
 
       // 3. Actualizar photoUrl en BD
       return await this.packagesService.updatePhotoUrl(pkg.id, result.url);
-
     } catch (err: any) {
       // Si la actualización en BD falló pero ya subimos la imagen → rollback
       if (storagePublicId) {
-        this.logger.warn(`Rollback R2: eliminando imagen huérfana ${storagePublicId}`);
-        await this.storageService.deleteByPublicId(storagePublicId).catch(() => undefined);
+        this.logger.warn(
+          `Rollback R2: eliminando imagen huérfana ${storagePublicId}`,
+        );
+        await this.storageService
+          .deleteByPublicId(storagePublicId)
+          .catch(() => undefined);
       }
-      this.logger.error(`Error subiendo foto del paquete ${pkg.id}: ${err?.message}`);
+      this.logger.error(
+        `Error subiendo foto del paquete ${pkg.id}: ${err?.message}`,
+      );
       // Retornamos el paquete sin foto antes de propagar el error
       return pkg;
     }

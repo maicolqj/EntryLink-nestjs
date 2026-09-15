@@ -1,5 +1,12 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
-import { IsUUID, IsNumber, IsPositive, IsString, IsNotEmpty, MaxLength } from 'class-validator';
+import {
+  IsUUID,
+  IsNumber,
+  IsPositive,
+  IsString,
+  IsNotEmpty,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * Cobro por daños tras entregar la zona común.
@@ -13,7 +20,6 @@ import { IsUUID, IsNumber, IsPositive, IsString, IsNotEmpty, MaxLength } from 'c
  */
 @InputType()
 export class ChargeAmenityDamageInput {
-
   @Field()
   @IsUUID()
   bookingId: string;
@@ -23,7 +29,10 @@ export class ChargeAmenityDamageInput {
   @IsPositive()
   amount: number;
 
-  @Field(() => String, { description: 'Qué se dañó y por qué se cobra. Lo ve el residente en su estado de cuenta' })
+  @Field(() => String, {
+    description:
+      'Qué se dañó y por qué se cobra. Lo ve el residente en su estado de cuenta',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(500)

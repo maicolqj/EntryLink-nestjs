@@ -3,7 +3,6 @@ import { Role } from '../../../modules/roles/entities/role.entity';
 import { Permission } from '../../../modules/permissions/entities/permission.entity';
 import { ROLES_TO_SEED } from './datas/roles.data.seed';
 
-
 export const seedRoles = async (dataSource: DataSource): Promise<void> => {
   const queryRunner = dataSource.createQueryRunner();
   await queryRunner.connect();
@@ -20,14 +19,14 @@ export const seedRoles = async (dataSource: DataSource): Promise<void> => {
 
     for (const roleData of ROLES_TO_SEED) {
       // Buscar si el rol ya existe
-      let role = await roleRepository.findOne({ 
+      let role = await roleRepository.findOne({
         where: { id: roleData.id },
-        relations: ['permissions'] 
+        relations: ['permissions'],
       });
 
       // Filtrar los objetos Permission que coincidan con los nombres en el seed
-      const assignedPermissions = allPermissions.filter(p => 
-        roleData.permissions.includes(p.name as any)
+      const assignedPermissions = allPermissions.filter((p) =>
+        roleData.permissions.includes(p.name as any),
       );
 
       if (!role) {
@@ -41,7 +40,9 @@ export const seedRoles = async (dataSource: DataSource): Promise<void> => {
           permissions: assignedPermissions,
         });
         await roleRepository.save(role);
-        console.log(`  ✓ Created Role: ${roleData.name} with ${assignedPermissions.length} permissions`);
+        console.log(
+          `  ✓ Created Role: ${roleData.name} with ${assignedPermissions.length} permissions`,
+        );
       } else {
         // Actualizar rol existente y sus permisos
         role.name = roleData.name;
@@ -54,7 +55,6 @@ export const seedRoles = async (dataSource: DataSource): Promise<void> => {
 
     await queryRunner.commitTransaction();
     console.log('\n✅ Roles and Permissions association completed!');
-
   } catch (error) {
     console.error('❌ Role Seeding failed. Rolling back...', error);
     await queryRunner.rollbackTransaction();

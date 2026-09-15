@@ -11,11 +11,10 @@ import {
 } from 'class-validator';
 
 import { MessageChannel } from '../../enums/message-channel.enum';
-import { MessageType }    from '../../enums/message-type.enum';
+import { MessageType } from '../../enums/message-type.enum';
 
 @InputType()
 export class SaveSentMessageInput {
-
   @Field(() => String)
   @IsString()
   @IsNotEmpty()

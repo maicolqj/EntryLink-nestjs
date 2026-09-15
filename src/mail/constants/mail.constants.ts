@@ -1,9 +1,9 @@
 export const MAIL_QUEUE_NAME = 'mail';
 
 export const MAIL_JOBS = {
-  SEND_PASSWORD_RESET:      'send-password-reset',
-  SEND_EMAIL_VERIFICATION:  'send-email-verification',
-  SEND_PANIC_ALERT:         'send-panic-alert',
+  SEND_PASSWORD_RESET: 'send-password-reset',
+  SEND_EMAIL_VERIFICATION: 'send-email-verification',
+  SEND_PANIC_ALERT: 'send-panic-alert',
 } as const;
 
 export interface SendPasswordResetJobPayload {
@@ -30,12 +30,12 @@ export interface SendEmailVerificationJobPayload {
  * de SMS contratado.
  */
 export interface SendPanicAlertJobPayload {
-  email:            string;
-  name:             string;
-  alertId:          string;
-  complexId:        string;
+  email: string;
+  name: string;
+  alertId: string;
+  complexId: string;
   triggeredByLabel: string;
-  triggeredAt:      string;
-  escalationLevel:  number;
-  locationUrl?:     string;
+  triggeredAt: string;
+  escalationLevel: number;
+  locationUrl?: string;
 }

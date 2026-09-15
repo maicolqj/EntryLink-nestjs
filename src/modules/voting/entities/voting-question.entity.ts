@@ -12,7 +12,11 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 
-import { VoteSecrecy, VoteWeighting, VotingQuestionStatus } from '../enums/voting.enums';
+import {
+  VoteSecrecy,
+  VoteWeighting,
+  VotingQuestionStatus,
+} from '../enums/voting.enums';
 import { VotingMeeting } from './voting-meeting.entity';
 import { VotingOption } from './voting-option.entity';
 
@@ -37,7 +41,6 @@ const numeric = {
 @Index('IDX_voting_questions_meeting', ['meetingId'])
 @Index('IDX_voting_questions_complex_status', ['complexId', 'status'])
 export class VotingQuestion {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -47,7 +50,9 @@ export class VotingQuestion {
   meetingId: string;
 
   @Field(() => VotingMeeting, { nullable: true })
-  @ManyToOne(() => VotingMeeting, meeting => meeting.questions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => VotingMeeting, (meeting) => meeting.questions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'meeting_id' })
   meeting?: VotingMeeting;
 
@@ -69,11 +74,21 @@ export class VotingQuestion {
   weighting: VoteWeighting;
 
   @Field(() => VoteSecrecy)
-  @Column({ name: 'secrecy', type: 'varchar', length: 20, default: VoteSecrecy.NOMINAL })
+  @Column({
+    name: 'secrecy',
+    type: 'varchar',
+    length: 20,
+    default: VoteSecrecy.NOMINAL,
+  })
   secrecy: VoteSecrecy;
 
   @Field(() => VotingQuestionStatus)
-  @Column({ name: 'status', type: 'varchar', length: 20, default: VotingQuestionStatus.DRAFT })
+  @Column({
+    name: 'status',
+    type: 'varchar',
+    length: 20,
+    default: VotingQuestionStatus.DRAFT,
+  })
   status: VotingQuestionStatus;
 
   @Field(() => Date, { nullable: true })
@@ -85,7 +100,7 @@ export class VotingQuestion {
   closedAt?: Date | null;
 
   @Field(() => [VotingOption], { nullable: true })
-  @OneToMany(() => VotingOption, option => option.question)
+  @OneToMany(() => VotingOption, (option) => option.question)
   options?: VotingOption[];
 
   /**
@@ -96,7 +111,14 @@ export class VotingQuestion {
   @Column({ name: 'eligible_count', type: 'int', nullable: true })
   eligibleCount?: number | null;
 
-  @Column({ name: 'eligible_weight', type: 'numeric', precision: 14, scale: 6, nullable: true, transformer: numeric })
+  @Column({
+    name: 'eligible_weight',
+    type: 'numeric',
+    precision: 14,
+    scale: 6,
+    nullable: true,
+    transformer: numeric,
+  })
   eligibleWeight?: number | null;
 
   // ─── Multi-tenant y auditoría ─────────────────────────────────────────────

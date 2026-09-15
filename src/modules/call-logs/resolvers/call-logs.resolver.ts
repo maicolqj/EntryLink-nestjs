@@ -1,20 +1,19 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { CallLog }          from '../entities/call-log.entity';
-import { CallLogsService }  from '../services/call-logs.service';
-import { LogCallInput }     from '../dto/inputs/log-call.input';
-import { CallLogsInput }    from '../dto/inputs/call-logs.input';
-import { CallLogsPage }     from '../dto/responses/call-logs-page.response';
+import { CallLog } from '../entities/call-log.entity';
+import { CallLogsService } from '../services/call-logs.service';
+import { LogCallInput } from '../dto/inputs/log-call.input';
+import { CallLogsInput } from '../dto/inputs/call-logs.input';
+import { CallLogsPage } from '../dto/responses/call-logs-page.response';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => CallLog)
 export class CallLogsResolver {
-
   constructor(private readonly callLogsService: CallLogsService) {}
 
   // ================================================================

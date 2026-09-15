@@ -1,22 +1,21 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Package }                   from '../entities/package.entity';
-import { PackagesService }           from '../services/packages.service';
-import { RegisterPackageInput }      from '../dto/inputs/register-package.input';
-import { ConfirmDeliveryInput }      from '../dto/inputs/confirm-delivery.input';
-import { FilterPackagesInput }       from '../dto/inputs/filter-packages.input';
+import { Package } from '../entities/package.entity';
+import { PackagesService } from '../services/packages.service';
+import { RegisterPackageInput } from '../dto/inputs/register-package.input';
+import { ConfirmDeliveryInput } from '../dto/inputs/confirm-delivery.input';
+import { FilterPackagesInput } from '../dto/inputs/filter-packages.input';
 import { PaginatedPackagesResponse } from '../dto/responses/paginated-packages.response';
-import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Package)
 export class PackagesResolver {
-
   constructor(private readonly packagesService: PackagesService) {}
 
   // ================================================================
@@ -30,8 +29,10 @@ export class PackagesResolver {
   @Mutation(() => Package, { name: 'registerPackage' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.CREATE_PACKAGE],
   })
@@ -48,10 +49,12 @@ export class PackagesResolver {
   @Mutation(() => Package, { name: 'markPackageAsNotified' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, 
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
-    permissions: [ValidPermissions.EDIT_PACKAGE],  
+    permissions: [ValidPermissions.EDIT_PACKAGE],
   })
   markAsNotified(
     @Args('packageId') packageId: string,
@@ -66,8 +69,10 @@ export class PackagesResolver {
   @Mutation(() => Package, { name: 'markPackageAsReadyForPickup' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.EDIT_PACKAGE],
   })
@@ -84,8 +89,10 @@ export class PackagesResolver {
   @Mutation(() => Package, { name: 'confirmPackageDelivery' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.MANAGE_PACKAGES],
   })
@@ -94,22 +101,23 @@ export class PackagesResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Package> {
     return this.packagesService.confirmDelivery(input, currentUser);
-  } 
+  }
 
   /**
    * Registra la devolución de un paquete al remitente.
    */
   @Mutation(() => Package, { name: 'returnPackage' })
-  @Auth({ 
+  @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
       ValidRoles.SUPERVISOR_ROL,
     ],
     permissions: [ValidPermissions.MANAGE_PACKAGES],
   })
   returnPackage(
     @Args('packageId') packageId: string,
-    @Args('reason')    reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Package> {
     return this.packagesService.returnPackage(packageId, reason, currentUser);
@@ -125,7 +133,7 @@ export class PackagesResolver {
   })
   markAsLost(
     @Args('packageId') packageId: string,
-    @Args('reason')    reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Package> {
     return this.packagesService.markAsLost(packageId, reason, currentUser);
@@ -141,19 +149,27 @@ export class PackagesResolver {
   @Query(() => PaginatedPackagesResponse, { name: 'packages' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.ACCOUNTANT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_PACKAGES],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterPackagesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterPackagesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedPackagesResponse> {
-    return this.packagesService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.packagesService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -166,12 +182,18 @@ export class PackagesResolver {
     permissions: [ValidPermissions.VIEW_PACKAGES],
   })
   findMyUnitPackages(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterPackagesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterPackagesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedPackagesResponse> {
-    return this.packagesService.findMyUnitPackages(complexId, pagination, filters, currentUser);
+    return this.packagesService.findMyUnitPackages(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -180,18 +202,24 @@ export class PackagesResolver {
   @Query(() => [Package], { name: 'pendingPackagesByUnit' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_PACKAGES],
   })
   findPendingByUnit(
-    @Args('unitId')    unitId: string,
+    @Args('unitId') unitId: string,
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Package[]> {
-    return this.packagesService.findPendingByUnit(unitId, complexId, currentUser);
+    return this.packagesService.findPendingByUnit(
+      unitId,
+      complexId,
+      currentUser,
+    );
   }
 
   /**
@@ -200,8 +228,10 @@ export class PackagesResolver {
   @Query(() => Package, { name: 'package' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_PACKAGES],

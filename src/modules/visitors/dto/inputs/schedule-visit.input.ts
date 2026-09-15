@@ -1,5 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { VisitorIdentityType } from '../../enums/visitor-identity-type.enum';
 
 /**
@@ -8,7 +15,6 @@ import { VisitorIdentityType } from '../../enums/visitor-identity-type.enum';
  */
 @InputType()
 export class ScheduleVisitInput {
-
   // ---- Datos del visitante ----
 
   @Field(() => String)
@@ -26,7 +32,10 @@ export class ScheduleVisitInput {
   @MaxLength(30)
   visitorIdentity: string;
 
-  @Field(() => VisitorIdentityType, { description: 'Tipo de documento del visitante', defaultValue: VisitorIdentityType.CC })
+  @Field(() => VisitorIdentityType, {
+    description: 'Tipo de documento del visitante',
+    defaultValue: VisitorIdentityType.CC,
+  })
   @IsOptional()
   @IsEnum(VisitorIdentityType)
   identityType?: VisitorIdentityType;
@@ -39,7 +48,9 @@ export class ScheduleVisitInput {
 
   // ---- Datos de la visita ----
 
-  @Field(() => String, { description: 'ID del residente que agenda (anfitrión)' })
+  @Field(() => String, {
+    description: 'ID del residente que agenda (anfitrión)',
+  })
   @IsUUID()
   hostResidentId: string;
 
@@ -51,11 +62,16 @@ export class ScheduleVisitInput {
   @IsUUID()
   complexId: string;
 
-  @Field(() => String, { description: 'Fecha y hora de llegada esperada (ISO 8601)' })
+  @Field(() => String, {
+    description: 'Fecha y hora de llegada esperada (ISO 8601)',
+  })
   @IsDateString()
   expectedArrivalAt: string;
 
-  @Field(() => String, { description: 'Fecha y hora límite de llegada (ISO 8601)', nullable: true })
+  @Field(() => String, {
+    description: 'Fecha y hora límite de llegada (ISO 8601)',
+    nullable: true,
+  })
   @IsOptional()
   @IsDateString()
   expectedArrivalUntil?: string;
@@ -66,7 +82,10 @@ export class ScheduleVisitInput {
   @MaxLength(255)
   purpose?: string;
 
-  @Field(() => String, { description: 'Placa del vehículo (si aplica)', nullable: true })
+  @Field(() => String, {
+    description: 'Placa del vehículo (si aplica)',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(10)

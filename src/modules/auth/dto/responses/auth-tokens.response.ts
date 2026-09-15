@@ -17,7 +17,7 @@ export class AuthTokensResponse {
 
   @Field({ nullable: true })
   message?: string;
-  
+
   @Field(() => UserBasicResponse)
   user: UserBasicResponse;
 }

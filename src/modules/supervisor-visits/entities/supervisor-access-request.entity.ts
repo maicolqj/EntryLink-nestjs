@@ -25,12 +25,13 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
  * Solo puede existir una solicitud PENDING por supervisor + complejo a la vez.
  * Las solicitudes APPROVED/REJECTED se conservan como historial.
  */
-@ObjectType({ description: 'Solicitud de acceso de un supervisor a un complejo residencial' })
+@ObjectType({
+  description: 'Solicitud de acceso de un supervisor a un complejo residencial',
+})
 @Entity({ name: 'supervisor_access_requests' })
 @Index(['supervisorId', 'complexId', 'status'])
 @Index(['complexId', 'status'])
 export class SupervisorAccessRequest {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -48,30 +49,61 @@ export class SupervisorAccessRequest {
   // ==================== ESTADO ====================
 
   @Field(() => AccessRequestStatus)
-  @Column({ type: 'enum', enum: AccessRequestStatus, default: AccessRequestStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: AccessRequestStatus,
+    default: AccessRequestStatus.PENDING,
+  })
   status: AccessRequestStatus;
 
-  @Field(() => String, { nullable: true, description: 'Mensaje opcional del supervisor al solicitar acceso' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Mensaje opcional del supervisor al solicitar acceso',
+  })
   @Column({ type: 'text', nullable: true })
   message?: string;
 
-  @Field(() => String, { nullable: true, description: 'Motivo de rechazo (solo cuando status = REJECTED)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Motivo de rechazo (solo cuando status = REJECTED)',
+  })
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason?: string;
 
   // ==================== UBICACIÓN GPS DE LA SOLICITUD ====================
 
-  @Field(() => Float, { nullable: true, description: 'Latitud GPS del supervisor al solicitar acceso' })
-  @Column({ name: 'request_lat', type: 'decimal', precision: 10, scale: 8, nullable: true })
+  @Field(() => Float, {
+    nullable: true,
+    description: 'Latitud GPS del supervisor al solicitar acceso',
+  })
+  @Column({
+    name: 'request_lat',
+    type: 'decimal',
+    precision: 10,
+    scale: 8,
+    nullable: true,
+  })
   requestLat?: number;
 
-  @Field(() => Float, { nullable: true, description: 'Longitud GPS del supervisor al solicitar acceso' })
-  @Column({ name: 'request_lng', type: 'decimal', precision: 11, scale: 8, nullable: true })
+  @Field(() => Float, {
+    nullable: true,
+    description: 'Longitud GPS del supervisor al solicitar acceso',
+  })
+  @Column({
+    name: 'request_lng',
+    type: 'decimal',
+    precision: 11,
+    scale: 8,
+    nullable: true,
+  })
   requestLng?: number;
 
   // ==================== RESOLUCIÓN ====================
 
-  @Field(() => String, { nullable: true, description: 'ID del usuario que aprobó o rechazó la solicitud' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'ID del usuario que aprobó o rechazó la solicitud',
+  })
   @Column({ name: 'resolved_by_id', type: 'uuid', nullable: true })
   resolvedById?: string;
 
@@ -87,7 +119,10 @@ export class SupervisorAccessRequest {
 
   // ==================== RELACIONES ====================
 
-  @Field(() => User, { nullable: true, description: 'Supervisor que solicitó el acceso' })
+  @Field(() => User, {
+    nullable: true,
+    description: 'Supervisor que solicitó el acceso',
+  })
   @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: false })
   @JoinColumn({ name: 'supervisor_id' })
   supervisor?: User;
@@ -97,7 +132,10 @@ export class SupervisorAccessRequest {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { nullable: true, description: 'Admin que resolvió la solicitud' })
+  @Field(() => User, {
+    nullable: true,
+    description: 'Admin que resolvió la solicitud',
+  })
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'resolved_by_id' })
   resolvedBy?: User;

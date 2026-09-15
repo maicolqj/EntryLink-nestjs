@@ -8,6 +8,10 @@ export class RegisterSupervisorResponse {
   @Field(() => String)
   message: string;
 
-  @Field(() => String, { nullable: true, description: 'ID del supervisor creado; null si hubo error o el correo ya existe' })
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'ID del supervisor creado; null si hubo error o el correo ya existe',
+  })
   supervisorId?: string | null;
 }

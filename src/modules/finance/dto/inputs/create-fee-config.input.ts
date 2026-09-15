@@ -1,7 +1,17 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, Min, Max, IsPositive, MaxLength, IsInt, IsBoolean, ValidateNested,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  Min,
+  Max,
+  IsPositive,
+  MaxLength,
+  IsInt,
+  IsBoolean,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -15,7 +25,6 @@ import { FeeConfigTargetRulesInput } from './fee-config-target-rules.input';
 
 @InputType()
 export class CreateFeeConfigInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()
@@ -95,7 +104,9 @@ export class CreateFeeConfigInput {
   @Min(1)
   installments?: number;
 
-  @Field(() => FeeConfigBillingMode, { defaultValue: FeeConfigBillingMode.ADVANCE })
+  @Field(() => FeeConfigBillingMode, {
+    defaultValue: FeeConfigBillingMode.ADVANCE,
+  })
   @IsOptional()
   @IsEnum(FeeConfigBillingMode)
   billingMode?: FeeConfigBillingMode;

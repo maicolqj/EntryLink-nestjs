@@ -10,7 +10,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * módulo finance). Idempotente.
  */
 export class CreateChargeEmissions1781001300000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -76,7 +75,11 @@ export class CreateChargeEmissions1781001300000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "charge_emissions"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "charge_emission_billing_mode_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "charge_emission_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "charge_emission_billing_mode_enum"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "charge_emission_status_enum"`,
+    );
   }
 }

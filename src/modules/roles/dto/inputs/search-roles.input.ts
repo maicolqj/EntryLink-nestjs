@@ -1,9 +1,9 @@
-import { InputType, Field } from "@nestjs/graphql";
-import { Type } from "class-transformer";
-import { IsOptional } from "class-validator";
+import { InputType, Field } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
+import { IsOptional } from 'class-validator';
 
-import { RolesFiltersInput } from "./roles-filter.input";
-import { PaginationInput, SortInput } from "../../../shared/dto/inputs";
+import { RolesFiltersInput } from './roles-filter.input';
+import { PaginationInput, SortInput } from '../../../shared/dto/inputs';
 
 @InputType()
 export class SearchRolesInput {

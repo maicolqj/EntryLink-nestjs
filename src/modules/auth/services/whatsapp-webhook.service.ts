@@ -69,7 +69,9 @@ export class WhatsAppWebhookService {
   ) {
     this.verifyToken = this.config.get<string>('WHATSAPP_WEBHOOK_VERIFY_TOKEN');
     this.appSecret = this.config.get<string>('WHATSAPP_APP_SECRET');
-    this.isProduction = (this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV) === 'production';
+    this.isProduction =
+      (this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV) ===
+      'production';
 
     if (!this.verifyToken) {
       this.logger.warn(
@@ -82,9 +84,13 @@ export class WhatsAppWebhookService {
         'WHATSAPP_APP_SECRET sin configurar: no se puede validar la firma X-Hub-Signature-256 de los callbacks.';
 
       if (this.isProduction) {
-        this.logger.error(`${message} En producción TODOS los callbacks serán rechazados.`);
+        this.logger.error(
+          `${message} En producción TODOS los callbacks serán rechazados.`,
+        );
       } else {
-        this.logger.warn(`${message} Los callbacks se aceptan sin verificar (solo fuera de producción).`);
+        this.logger.warn(
+          `${message} Los callbacks se aceptan sin verificar (solo fuera de producción).`,
+        );
       }
     }
   }
@@ -115,12 +121,17 @@ export class WhatsAppWebhookService {
    * es preferible a dejar la autenticación abierta, y el log de arranque dice
    * exactamente qué falta configurar.
    */
-  isSignatureValid(signatureHeader: string | undefined, rawBody: Buffer | undefined): boolean {
+  isSignatureValid(
+    signatureHeader: string | undefined,
+    rawBody: Buffer | undefined,
+  ): boolean {
     if (!this.appSecret) return !this.isProduction;
 
     if (!signatureHeader?.startsWith('sha256=') || !rawBody) return false;
 
-    const expected = createHmac('sha256', this.appSecret).update(rawBody).digest('hex');
+    const expected = createHmac('sha256', this.appSecret)
+      .update(rawBody)
+      .digest('hex');
 
     return this.safeCompare(signatureHeader.slice('sha256='.length), expected);
   }
@@ -135,7 +146,9 @@ export class WhatsAppWebhookService {
       .map((change) => change?.value)
       .filter((value): value is MetaWebhookValue => !!value);
 
-    await this.processInboundMessages(values.flatMap((value) => value.messages ?? []));
+    await this.processInboundMessages(
+      values.flatMap((value) => value.messages ?? []),
+    );
 
     this.processStatuses(values.flatMap((value) => value.statuses ?? []));
   }
@@ -144,7 +157,9 @@ export class WhatsAppWebhookService {
    * Mensajes que el residente nos envía. Es el canal del login reverse-OTP:
    * a diferencia de las plantillas salientes, recibir no tiene costo.
    */
-  private async processInboundMessages(messages: MetaInboundMessage[]): Promise<void> {
+  private async processInboundMessages(
+    messages: MetaInboundMessage[],
+  ): Promise<void> {
     for (const message of messages) {
       const from = message.from;
       const text = message.text?.body ?? message.button?.text;
@@ -155,7 +170,9 @@ export class WhatsAppWebhookService {
         await this.whatsAppLoginService.confirmFromInboundMessage(from, text);
       } catch (err: any) {
         // Nunca propagar: el webhook debe responder 200 a Meta pase lo que pase.
-        this.logger.error(`[WA-LOGIN] Error procesando mensaje entrante: ${err?.message ?? String(err)}`);
+        this.logger.error(
+          `[WA-LOGIN] Error procesando mensaje entrante: ${err?.message ?? String(err)}`,
+        );
       }
     }
   }
@@ -180,7 +197,9 @@ export class WhatsAppWebhookService {
 
       for (const err of errors) {
         const details = err.error_data?.details ?? err.message ?? 'sin detalle';
-        this.logger.error(`${base} | code ${err.code} (${err.title ?? 'sin título'}): ${details}`);
+        this.logger.error(
+          `${base} | code ${err.code} (${err.title ?? 'sin título'}): ${details}`,
+        );
       }
     }
   }

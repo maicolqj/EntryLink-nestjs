@@ -1,4 +1,10 @@
-import { Injectable, Logger, HttpStatus, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpStatus,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In, Not } from 'typeorm';
 import { randomInt, randomUUID } from 'crypto';
@@ -23,7 +29,10 @@ import { DeviceApprovalResponse } from '../dto/responses/device-approval.respons
 import { DeviceApprovalStatusResponse } from '../dto/responses/device-approval-status.response';
 import { PendingDeviceApproval } from '../dto/responses/pending-device-approval.response';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 
 /**
  * Ingreso aprobado desde un dispositivo confiable, avisado por push.
@@ -90,7 +99,9 @@ export class DeviceApprovalService {
     );
 
     const approvalCode = this.generateCode();
-    const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.DEVICE_APPROVAL_EXPIRY_SECONDS * 1_000);
+    const expiresAt = new Date(
+      Date.now() + AUTH_CONSTANTS.DEVICE_APPROVAL_EXPIRY_SECONDS * 1_000,
+    );
     const requestedFromLabel = this.describeDevice(deviceInfo);
 
     const request = await this.approvalRepo.save(
@@ -137,8 +148,8 @@ export class DeviceApprovalService {
     });
 
     return pending
-      .filter(request => new Date() <= request.expiresAt)
-      .map(request => ({
+      .filter((request) => new Date() <= request.expiresAt)
+      .map((request) => ({
         approvalId: request.approvalId,
         approvalCode: request.approvalCode,
         requestedFromLabel: request.requestedFromLabel,
@@ -149,7 +160,11 @@ export class DeviceApprovalService {
   }
 
   /** Aprueba el ingreso. Solo el dueño de la solicitud puede hacerlo. */
-  async approve(approvalId: string, userId: string, sessionId: string): Promise<boolean> {
+  async approve(
+    approvalId: string,
+    userId: string,
+    sessionId: string,
+  ): Promise<boolean> {
     const request = await this.findResolvableRequest(approvalId, userId);
 
     await this.approvalRepo.update(request.id, {
@@ -166,7 +181,11 @@ export class DeviceApprovalService {
    * Rechaza el ingreso. Es terminal: el solicitante no puede reintentar con la
    * misma solicitud, tiene que pedir una nueva y volver a pasar por el push.
    */
-  async deny(approvalId: string, userId: string, sessionId: string): Promise<boolean> {
+  async deny(
+    approvalId: string,
+    userId: string,
+    sessionId: string,
+  ): Promise<boolean> {
     const request = await this.findResolvableRequest(approvalId, userId);
 
     await this.approvalRepo.update(request.id, {
@@ -178,7 +197,7 @@ export class DeviceApprovalService {
     // Un rechazo significa que alguien más intentó entrar con este documento.
     this.logger.warn(
       `Ingreso RECHAZADO por el residente — id: ${request.id} | userId: ${userId} | ` +
-      `origen: ${request.requestedFromLabel ?? 'desconocido'} | ip: ${request.requestedFromIp ?? 'desconocida'}`,
+        `origen: ${request.requestedFromLabel ?? 'desconocido'} | ip: ${request.requestedFromIp ?? 'desconocida'}`,
     );
     return true;
   }
@@ -186,12 +205,23 @@ export class DeviceApprovalService {
   // ── Paso 3: estado y canje ────────────────────────────────────────────────
 
   /** Consulta el estado. El dispositivo solicitante hace polling hasta APPROVED. */
-  async getStatus(challengeId: string, deviceInfo: DeviceInfo): Promise<DeviceApprovalStatusResponse> {
+  async getStatus(
+    challengeId: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<DeviceApprovalStatusResponse> {
     const request = await this.findRequestForDevice(challengeId, deviceInfo);
 
-    if (request.status === DeviceApprovalStatus.PENDING && new Date() > request.expiresAt) {
-      await this.approvalRepo.update(request.id, { status: DeviceApprovalStatus.EXPIRED });
-      return { status: DeviceApprovalStatus.EXPIRED, expiresAt: request.expiresAt };
+    if (
+      request.status === DeviceApprovalStatus.PENDING &&
+      new Date() > request.expiresAt
+    ) {
+      await this.approvalRepo.update(request.id, {
+        status: DeviceApprovalStatus.EXPIRED,
+      });
+      return {
+        status: DeviceApprovalStatus.EXPIRED,
+        expiresAt: request.expiresAt,
+      };
     }
 
     return { status: request.status, expiresAt: request.expiresAt };
@@ -250,13 +280,27 @@ export class DeviceApprovalService {
     // la anterior durante los próximos minutos.
     await this.residentDeviceService.grantResetPermission(user.id);
 
-    await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
+    await this.sessionService.enforceSessionLimit(
+      user.id,
+      AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
+    );
 
-    const tokenPair = await this.tokenService.generateTokenPair(user, deviceInfo, false, 'user');
+    const tokenPair = await this.tokenService.generateTokenPair(
+      user,
+      deviceInfo,
+      false,
+      'user',
+    );
 
-    await this.sessionService.createOrUpdateSession(user.id, tokenPair.sessionId, deviceInfo);
+    await this.sessionService.createOrUpdateSession(
+      user.id,
+      tokenPair.sessionId,
+      deviceInfo,
+    );
 
-    this.logger.log(`Login por aprobación push — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(
+      `Login por aprobación push — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`,
+    );
 
     return {
       accessToken: tokenPair.accessToken,
@@ -287,14 +331,19 @@ export class DeviceApprovalService {
    * resolverla desde `pendingDeviceApprovals`. Romper el login porque FCM está
    * caído sería peor que entregar el aviso tarde.
    */
-  private async pushApprovalRequest(user: User, request: DeviceApprovalRequest): Promise<void> {
+  private async pushApprovalRequest(
+    user: User,
+    request: DeviceApprovalRequest,
+  ): Promise<void> {
     try {
       const hasLinkedDevice = await this.deviceRepo.count({
         where: { userId: user.id, isRevoked: false },
       });
 
       if (hasLinkedDevice === 0) {
-        this.logger.warn(`[APPROVAL] Residente sin dispositivos vinculados — id: ${request.id}`);
+        this.logger.warn(
+          `[APPROVAL] Residente sin dispositivos vinculados — id: ${request.id}`,
+        );
         return;
       }
 
@@ -316,7 +365,9 @@ export class DeviceApprovalService {
         },
       });
     } catch (err: any) {
-      this.logger.error(`[APPROVAL] Error enviando push — id: ${request.id}: ${err?.message ?? String(err)}`);
+      this.logger.error(
+        `[APPROVAL] Error enviando push — id: ${request.id}: ${err?.message ?? String(err)}`,
+      );
     }
   }
 
@@ -325,8 +376,13 @@ export class DeviceApprovalService {
    * Exige que sea suya: el `approvalId` viaja en un push, y aunque solo llega a
    * sus dispositivos, la propiedad se verifica igual contra el JWT.
    */
-  private async findResolvableRequest(approvalId: string, userId: string): Promise<DeviceApprovalRequest> {
-    const request = await this.approvalRepo.findOne({ where: { approvalId, userId } });
+  private async findResolvableRequest(
+    approvalId: string,
+    userId: string,
+  ): Promise<DeviceApprovalRequest> {
+    const request = await this.approvalRepo.findOne({
+      where: { approvalId, userId },
+    });
 
     if (!request) {
       throw new CustomError({
@@ -337,7 +393,9 @@ export class DeviceApprovalService {
     }
 
     if (new Date() > request.expiresAt) {
-      await this.approvalRepo.update(request.id, { status: DeviceApprovalStatus.EXPIRED });
+      await this.approvalRepo.update(request.id, {
+        status: DeviceApprovalStatus.EXPIRED,
+      });
       throw new CustomError({
         message: 'La solicitud de ingreso venció',
         statusCode: HttpStatus.BAD_REQUEST,
@@ -365,11 +423,15 @@ export class DeviceApprovalService {
     challengeId: string,
     deviceInfo: DeviceInfo,
   ): Promise<DeviceApprovalRequest> {
-    const request = await this.approvalRepo.findOne({ where: { id: challengeId } });
+    const request = await this.approvalRepo.findOne({
+      where: { id: challengeId },
+    });
 
     if (!request || request.deviceFingerprint !== deviceInfo.fingerprint) {
       if (request) {
-        this.logger.warn(`[APPROVAL] Acceso desde dispositivo distinto — id: ${request.id}`);
+        this.logger.warn(
+          `[APPROVAL] Acceso desde dispositivo distinto — id: ${request.id}`,
+        );
       }
       throw new CustomError({
         message: 'Solicitud de ingreso no encontrada',
@@ -398,7 +460,10 @@ export class DeviceApprovalService {
       });
     }
 
-    if (request.status === DeviceApprovalStatus.EXPIRED || new Date() > request.expiresAt) {
+    if (
+      request.status === DeviceApprovalStatus.EXPIRED ||
+      new Date() > request.expiresAt
+    ) {
       throw new CustomError({
         message: 'La solicitud de ingreso venció. Solicita una nueva',
         statusCode: HttpStatus.UNAUTHORIZED,
@@ -431,21 +496,30 @@ export class DeviceApprovalService {
   /** Descripción legible del equipo solicitante, para que el residente la juzgue. */
   private describeDevice(deviceInfo: DeviceInfo): string {
     const platform =
-      deviceInfo.platform === 'ios' ? 'iPhone/iPad' :
-      deviceInfo.platform === 'android' ? 'Android' :
-      'un navegador web';
+      deviceInfo.platform === 'ios'
+        ? 'iPhone/iPad'
+        : deviceInfo.platform === 'android'
+          ? 'Android'
+          : 'un navegador web';
 
-    const browser = /chrome/i.test(deviceInfo.userAgent) ? 'Chrome'
-      : /firefox/i.test(deviceInfo.userAgent) ? 'Firefox'
-      : /safari/i.test(deviceInfo.userAgent) ? 'Safari'
-      : /edg/i.test(deviceInfo.userAgent) ? 'Edge'
-      : null;
+    const browser = /chrome/i.test(deviceInfo.userAgent)
+      ? 'Chrome'
+      : /firefox/i.test(deviceInfo.userAgent)
+        ? 'Firefox'
+        : /safari/i.test(deviceInfo.userAgent)
+          ? 'Safari'
+          : /edg/i.test(deviceInfo.userAgent)
+            ? 'Edge'
+            : null;
 
     return browser ? `${browser} en ${platform}` : platform;
   }
 
   private async checkRateLimit(identityKey: string): Promise<void> {
-    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.DEVICE_APPROVAL_RATE_LIMIT, key: identityKey };
+    const key = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.DEVICE_APPROVAL_RATE_LIMIT,
+      key: identityKey,
+    };
     const data = await this.cacheService.get<{ count: number }>({ key });
 
     if ((data?.count ?? 0) >= AUTH_CONSTANTS.DEVICE_APPROVAL_RATE_LIMIT_MAX) {
@@ -464,7 +538,9 @@ export class DeviceApprovalService {
   }
 
   /** Busca al residente por documento. Devuelve null sin lanzar: el caller no debe filtrar si existe. */
-  private async findResidentByIdentity(identityKey: string): Promise<User | null> {
+  private async findResidentByIdentity(
+    identityKey: string,
+  ): Promise<User | null> {
     const user = await this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.userRoles', 'userRoles')
@@ -475,7 +551,9 @@ export class DeviceApprovalService {
 
     if (!user) return null;
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
 
     return isResident ? user : null;
   }
@@ -504,7 +582,9 @@ export class DeviceApprovalService {
   /** El estado de la cuenta se revalida al canjear: pudo suspenderse durante el flujo. */
   private assertUserActive(user: User): void {
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {
-      const unlockIn = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / 60_000);
+      const unlockIn = Math.ceil(
+        (user.accountLockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new CustomError({
         message: `Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`,
         statusCode: HttpStatus.UNAUTHORIZED,

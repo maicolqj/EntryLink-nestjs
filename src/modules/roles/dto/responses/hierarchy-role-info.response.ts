@@ -1,6 +1,5 @@
-import { ObjectType, Field, Int } from "@nestjs/graphql";
-import { ValidRoles } from "../../enums/valid-roles";
-
+import { ObjectType, Field, Int } from '@nestjs/graphql';
+import { ValidRoles } from '../../enums/valid-roles';
 
 @ObjectType()
 export class HierarchyRoleInfo {

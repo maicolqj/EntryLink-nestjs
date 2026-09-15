@@ -1,4 +1,12 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 export enum SessionStatus {
@@ -25,7 +33,13 @@ export class UserSession {
   deviceFingerprint: string;
 
   @Column({ type: 'jsonb' })
-  deviceInfo: { userAgent: string; ip: string; platform: string; deviceId?: string; appVersion?: string };
+  deviceInfo: {
+    userAgent: string;
+    ip: string;
+    platform: string;
+    deviceId?: string;
+    appVersion?: string;
+  };
 
   @Column({ type: 'enum', enum: SessionStatus, default: SessionStatus.ACTIVE })
   status: SessionStatus;

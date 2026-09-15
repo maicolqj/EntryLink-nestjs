@@ -69,7 +69,8 @@ export class SupervisorVisitService {
     });
     if (existingActiveVisit) {
       throw new CustomError({
-        message: 'Ya tienes una visita activa en este complejo. Debes hacer check-out primero',
+        message:
+          'Ya tienes una visita activa en este complejo. Debes hacer check-out primero',
         statusCode: HttpStatus.CONFLICT,
         errorCode: SupervisorErrorCode.SUPERVISOR_VISIT_ALREADY_ACTIVE,
       });
@@ -146,7 +147,8 @@ export class SupervisorVisitService {
 
     if (!visit) {
       throw new CustomError({
-        message: 'No tienes una visita activa en este complejo. Debes hacer check-in primero para crear notas',
+        message:
+          'No tienes una visita activa en este complejo. Debes hacer check-in primero para crear notas',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: SupervisorErrorCode.SUPERVISOR_VISIT_REQUIRED_FOR_NOTE,
       });
@@ -161,7 +163,8 @@ export class SupervisorVisitService {
     if (complex?.latitude != null && complex?.longitude != null) {
       if (lat == null || lng == null) {
         throw new CustomError({
-          message: 'Debes proporcionar tu ubicación GPS actual para crear notas en este complejo',
+          message:
+            'Debes proporcionar tu ubicación GPS actual para crear notas en este complejo',
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: SupervisorErrorCode.GPS_COORDINATES_REQUIRED,
         });
@@ -177,12 +180,14 @@ export class SupervisorVisitService {
   // Lista los complejos a los que el supervisor tiene asignación activa.
   // ================================================================
 
-  async findAssignedComplexes(supervisorId: string): Promise<ResidentialComplex[]> {
+  async findAssignedComplexes(
+    supervisorId: string,
+  ): Promise<ResidentialComplex[]> {
     const assignments = await this.assignmentRepo.find({
       where: {
-        userId:   supervisorId,
-        role:     ValidRoles.SUPERVISOR_ROL,
-        status:   AssignmentStatus.ACTIVE,
+        userId: supervisorId,
+        role: ValidRoles.SUPERVISOR_ROL,
+        status: AssignmentStatus.ACTIVE,
       },
     });
 
@@ -194,7 +199,16 @@ export class SupervisorVisitService {
       .createQueryBuilder('c')
       .where('c.id IN (:...ids)', { ids: complexIds })
       .andWhere('c.deleted_at IS NULL')
-      .select(['c.id', 'c.name', 'c.address', 'c.city', 'c.latitude', 'c.longitude', 'c.gpsRadius', 'c.logoUrl'])
+      .select([
+        'c.id',
+        'c.name',
+        'c.address',
+        'c.city',
+        'c.latitude',
+        'c.longitude',
+        'c.gpsRadius',
+        'c.logoUrl',
+      ])
       .getMany();
   }
 
@@ -242,16 +256,17 @@ export class SupervisorVisitService {
   ): Promise<void> {
     const assignment = await this.assignmentRepo.findOne({
       where: {
-        userId:    supervisorId,
+        userId: supervisorId,
         complexId,
-        role:      ValidRoles.SUPERVISOR_ROL,
-        status:    AssignmentStatus.ACTIVE,
+        role: ValidRoles.SUPERVISOR_ROL,
+        status: AssignmentStatus.ACTIVE,
       },
     });
 
     if (!assignment) {
       throw new CustomError({
-        message: 'No estás autorizado para visitar este complejo. Contacta al administrador del complejo para que te asigne.',
+        message:
+          'No estás autorizado para visitar este complejo. Contacta al administrador del complejo para que te asigne.',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: SupervisorErrorCode.SUPERVISOR_NOT_ASSIGNED_TO_COMPLEX,
       });
@@ -263,7 +278,10 @@ export class SupervisorVisitService {
   // ================================================================
 
   private validateGps(
-    complex: Pick<ResidentialComplex, 'id' | 'latitude' | 'longitude' | 'gpsRadius'>,
+    complex: Pick<
+      ResidentialComplex,
+      'id' | 'latitude' | 'longitude' | 'gpsRadius'
+    >,
     lat: number,
     lng: number,
   ): void {

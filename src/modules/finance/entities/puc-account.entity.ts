@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  ManyToOne, OneToMany, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 
@@ -17,7 +23,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Index(['complexId', 'code'], { unique: true })
 @Index(['complexId', 'isPostable'])
 export class PucAccount {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -59,7 +64,10 @@ export class PucAccount {
   @Column({ type: 'uuid', nullable: true })
   parentId: string | null;
 
-  @ManyToOne(() => PucAccount, (a) => a.children, { nullable: true, onDelete: 'RESTRICT' })
+  @ManyToOne(() => PucAccount, (a) => a.children, {
+    nullable: true,
+    onDelete: 'RESTRICT',
+  })
   @JoinColumn({ name: 'parentId' })
   parent: PucAccount | null;
 

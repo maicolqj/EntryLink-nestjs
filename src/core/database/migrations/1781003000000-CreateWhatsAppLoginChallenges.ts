@@ -12,7 +12,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente (IF NOT EXISTS) por si en dev se corrió `synchronize`.
  */
 export class CreateWhatsAppLoginChallenges1781003000000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "whatsapp_login_challenges" (

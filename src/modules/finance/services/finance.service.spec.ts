@@ -8,7 +8,7 @@ import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
  * constructor, que es todo lo que estos helpers necesitan.
  */
 describe('FinanceService — fechas de vencimiento', () => {
-  const service = Object.create(FinanceService.prototype) as any;
+  const service = Object.create(FinanceService.prototype);
 
   const dueDate = (period: string, mode?: FeeConfigBillingMode): Date =>
     service.buildDueDate(period, mode);
@@ -17,7 +17,7 @@ describe('FinanceService — fechas de vencimiento', () => {
     it('ADVANCE (default): último instante del mismo período', () => {
       const d = dueDate('2026-07');
       expect(d.getFullYear()).toBe(2026);
-      expect(d.getMonth()).toBe(6);   // julio
+      expect(d.getMonth()).toBe(6); // julio
       expect(d.getDate()).toBe(31);
       expect(d.getHours()).toBe(23);
       expect(d.getMinutes()).toBe(59);
@@ -26,7 +26,7 @@ describe('FinanceService — fechas de vencimiento', () => {
 
     it('ARREARS: último instante del mes siguiente', () => {
       const d = dueDate('2026-07', FeeConfigBillingMode.ARREARS);
-      expect(d.getMonth()).toBe(7);   // agosto
+      expect(d.getMonth()).toBe(7); // agosto
       expect(d.getDate()).toBe(31);
     });
 
@@ -59,8 +59,8 @@ describe('FinanceService — fechas de vencimiento', () => {
 
     it('el descuento vale durante todo el día del corte', () => {
       const d = service.buildPeriodDayDate('2026-07', 10);
-      expect(d > new Date(2026, 6, 10, 18, 0, 0)).toBe(true);   // el 10 aún aplica
-      expect(d < new Date(2026, 6, 11, 0, 0, 1)).toBe(true);    // el 11 ya no
+      expect(d > new Date(2026, 6, 10, 18, 0, 0)).toBe(true); // el 10 aún aplica
+      expect(d < new Date(2026, 6, 11, 0, 0, 1)).toBe(true); // el 11 ya no
     });
 
     it('un día mayor al último del mes se recorta', () => {

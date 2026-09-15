@@ -1,12 +1,14 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-import { VehicleType }   from '../../enums/vehicle-type.enum';
+import { VehicleType } from '../../enums/vehicle-type.enum';
 import { VehicleStatus } from '../../enums/vehicle-status.enum';
 
 @InputType()
 export class FilterVehiclesInput {
-
-  @Field(() => String, { nullable: true, description: 'Buscar por placa, marca, modelo o color' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Buscar por placa, marca, modelo o color',
+  })
   @IsOptional()
   @IsString()
   search?: string;

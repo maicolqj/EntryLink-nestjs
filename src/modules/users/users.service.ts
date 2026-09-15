@@ -1,4 +1,10 @@
-import { HttpStatus, Injectable, Logger, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  Logger,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, IsNull, Not, Repository } from 'typeorm';
@@ -8,10 +14,16 @@ import { randomBytes } from 'crypto';
 import { User } from './entities/user.entity';
 import { generateSystemCode } from './utils/system-code.util';
 import { UserRole } from './entities/user_has_roles.entity';
-import { UserComplexAssignment, AssignmentStatus } from './entities/user-complex-assignment.entity';
+import {
+  UserComplexAssignment,
+  AssignmentStatus,
+} from './entities/user-complex-assignment.entity';
 import { UserStatus } from './enums/user.enums';
 import { UpdateUserIdentityInput } from './dto/inputs/update-user-identity.input';
-import { CreateStaffMemberResponse, StaffMemberAction } from './dto/responses/create-staff-member.response';
+import {
+  CreateStaffMemberResponse,
+  StaffMemberAction,
+} from './dto/responses/create-staff-member.response';
 import { UpdateUserInput } from './dto/update-user.input';
 import { ChangePasswordInput } from './dto/inputs/change-password.input';
 import { ChangePasswordResponse } from './dto/responses/change-password.response';
@@ -20,9 +32,15 @@ import { UsersFilterInput } from './dto/inputs/users-filter.input';
 import { UsersListResponse } from './dto/responses/users-list.response';
 import { CreateAdminUserInput } from './dto/inputs/create-admin-user.input';
 import { CreateResidentUserInput } from './dto/inputs/create-resident-user.input';
-import { CreateStaffMemberInput, STAFF_ROLES } from './dto/inputs/create-staff-member.input';
+import {
+  CreateStaffMemberInput,
+  STAFF_ROLES,
+} from './dto/inputs/create-staff-member.input';
 import { RemoveStaffMemberInput } from './dto/inputs/remove-staff-member.input';
-import { RemoveStaffMemberResponse, RemoveStaffAction } from './dto/responses/remove-staff-member.response';
+import {
+  RemoveStaffMemberResponse,
+  RemoveStaffAction,
+} from './dto/responses/remove-staff-member.response';
 import { AdminResetUserPasswordInput } from './dto/inputs/admin-reset-user-password.input';
 import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
@@ -34,7 +52,10 @@ import { Resident } from '../residents/entities/resident.entity';
 import { ResidentStatus } from '../residents/enums/resident-status.enum';
 import { ResidentType } from '../residents/enums/resident-type.enum';
 import { CustomError } from '../shared/utils/errors.utils';
-import { GeneralErrorCode, UserErrorCode } from '../shared/constans/error-codes.constants';
+import {
+  GeneralErrorCode,
+  UserErrorCode,
+} from '../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../auth/interfaces/jwt-payload.interface';
 import { GraphQLError } from 'graphql/error';
 import { AuditService } from '../audit/services/audit.service';
@@ -94,8 +115,7 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
     private readonly tokenService: TokenService,
     private readonly configService: ConfigService,
-  ) { }
-
+  ) {}
 
   // ── Consultas ────────────────────────────────────────────────────────────
 
@@ -123,10 +143,14 @@ export class UsersService {
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
-    return this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
+    return this.userRepo.findOne({
+      where: { email: email.toLowerCase().trim() },
+    });
   }
 
-  async getMyProfile(payload: JwtAccessPayload): Promise<User | ResidentialComplex> {
+  async getMyProfile(
+    payload: JwtAccessPayload,
+  ): Promise<User | ResidentialComplex> {
     if (payload.entityType === 'complex') {
       const complex = await this.complexRepo.findOne({
         where: { id: payload.sub },
@@ -160,7 +184,10 @@ export class UsersService {
     return user;
   }
 
-  async findOne(id: string, caller?: JwtAccessPayload): Promise<UserInfoCompleteResponse | null> {
+  async findOne(
+    id: string,
+    caller?: JwtAccessPayload,
+  ): Promise<UserInfoCompleteResponse | null> {
     try {
       const qb = this.userRepo
         .createQueryBuilder('user')
@@ -171,7 +198,9 @@ export class UsersService {
 
       const isSuperAdmin = caller?.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
       if (!isSuperAdmin && caller?.complexId) {
-        qb.andWhere('user.complexId = :complexId', { complexId: caller.complexId });
+        qb.andWhere('user.complexId = :complexId', {
+          complexId: caller.complexId,
+        });
       }
 
       const user = await qb.getOne();
@@ -187,7 +216,8 @@ export class UsersService {
       user.userRoles = this.getEffectiveUserRoles(user);
       return user;
     } catch (error: any) {
-      if (error instanceof CustomError || error instanceof GraphQLError) throw error;
+      if (error instanceof CustomError || error instanceof GraphQLError)
+        throw error;
 
       throw new CustomError({
         message: `Error al buscar un usuario: ${error.message}`,
@@ -243,15 +273,21 @@ export class UsersService {
       return saved;
     });
 
-    this.logger.log(`Usuario administrativo creado: ${user.id} | rol: ${input.role} | por: ${createdByUserId}`);
+    this.logger.log(
+      `Usuario administrativo creado: ${user.id} | rol: ${input.role} | por: ${createdByUserId}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
-
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.CREATE,
-        newValue: { id: user.id, email: user.email, role: input.role, complexId: input.complexId },
+        newValue: {
+          id: user.id,
+          email: user.email,
+          role: input.role,
+          complexId: input.complexId,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -293,8 +329,9 @@ export class UsersService {
 
     const residentRole = await this.findRoleOrFail(ValidRoles.RESIDENT_ROL);
     const systemCode = generateSystemCode();
-    const email = input.email?.trim().toLowerCase()
-      ?? `resident.${input.phoneNumber}@entrylink.local`;
+    const email =
+      input.email?.trim().toLowerCase() ??
+      `resident.${input.phoneNumber}@entrylink.local`;
 
     const user = await this.dataSource.transaction(async (manager) => {
       const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
@@ -347,11 +384,15 @@ export class UsersService {
 
     if (currentUser) {
       void this.auditService.log({
-
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.CREATE,
-        newValue: { id: user.id, phoneNumber: input.phoneNumber, unitId: input.unitId, complexId: input.complexId },
+        newValue: {
+          id: user.id,
+          phoneNumber: input.phoneNumber,
+          unitId: input.unitId,
+          complexId: input.complexId,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -401,27 +442,25 @@ export class UsersService {
 
       const user = await this.dataSource.transaction(async (manager) => {
         const newUser = manager.create(User, {
-          name:                     input.name,
-          lastName:                 input.lastName,
-          email:                    normalizedEmail,
-          password:                 input.password,
-          phoneNumber:              input.phoneNumber,
-          identity:                 input.identityNumber,
-          identityType:             input.identityType,
-          complexId:                input.complexId,
-          status:                   UserStatus.ACTIVE,
-          phoneVerified:            false,
-          emailVerified:            false,
-          identityVerified:         false,
+          name: input.name,
+          lastName: input.lastName,
+          email: normalizedEmail,
+          password: input.password,
+          phoneNumber: input.phoneNumber,
+          identity: input.identityNumber,
+          identityType: input.identityType,
+          complexId: input.complexId,
+          status: UserStatus.ACTIVE,
+          phoneVerified: false,
+          emailVerified: false,
+          identityVerified: false,
           acceptTermsAdnConditions: false,
-          acceptsMarketing:         false,
-
+          acceptsMarketing: false,
         });
         const saved = await manager.save(User, newUser);
 
         await manager.save(
           manager.create(UserRole, {
-
             user: { id: saved.id },
             role: { id: role.id },
             isPrimary: true,
@@ -438,15 +477,21 @@ export class UsersService {
         );
 
         return saved;
-
       });
 
-      this.logger.log(`Personal creado: ${user.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
+      this.logger.log(
+        `Personal creado: ${user.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
+      );
       void this.auditService.log({
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.CREATE,
-        newValue: { id: user.id, email: normalizedEmail, role: input.role, complexId: input.complexId },
+        newValue: {
+          id: user.id,
+          email: normalizedEmail,
+          role: input.role,
+          complexId: input.complexId,
+        },
         performedById: currentUser?.sub ?? adminUserId,
         performedByName: currentUser?.email,
         performedByRole: currentUser?.roles?.[0] ?? '',
@@ -461,7 +506,9 @@ export class UsersService {
         email: user.email,
         phoneNumber: user.phoneNumber,
         identity: user.identity,
-        complexId: user.complexId, status: user.status, action: StaffMemberAction.CREATED
+        complexId: user.complexId,
+        status: user.status,
+        action: StaffMemberAction.CREATED,
       };
     }
 
@@ -470,42 +517,58 @@ export class UsersService {
     // ── SECURITY_ROL: un solo complejo activo a la vez ────────────────────
     if (input.role === ValidRoles.SECURITY_ROL) {
       const activeAssignment = await this.assignmentRepo.findOne({
-        where: { userId: existingUser.id, role: ValidRoles.SECURITY_ROL, status: AssignmentStatus.ACTIVE },
+        where: {
+          userId: existingUser.id,
+          role: ValidRoles.SECURITY_ROL,
+          status: AssignmentStatus.ACTIVE,
+        },
       });
 
       if (activeAssignment) {
         if (activeAssignment.complexId === input.complexId) {
-          throw new ConflictException('Este guardia ya está asignado a este complejo');
+          throw new ConflictException(
+            'Este guardia ya está asignado a este complejo',
+          );
         }
-        throw new ConflictException('Este guardia ya está activo en otro complejo residencial');
+        throw new ConflictException(
+          'Este guardia ya está activo en otro complejo residencial',
+        );
       }
 
       // Reintegrar
       const updates: Partial<User> = { complexId: input.complexId };
-      const needsRestore = existingUser.status === UserStatus.INACTIVE || existingUser.status === UserStatus.DELETED;
+      const needsRestore =
+        existingUser.status === UserStatus.INACTIVE ||
+        existingUser.status === UserStatus.DELETED;
       if (needsRestore) {
-
         updates.status = UserStatus.ACTIVE;
-        updates.deletedAt = null as any;
+        updates.deletedAt = null;
       }
-      if (input.phoneNumber && !existingUser.phoneNumber) updates.phoneNumber = input.phoneNumber;
-      if (input.identityNumber && !existingUser.identity) updates.identity = input.identityNumber;
-      if (input.identityType && !existingUser.identityType) updates.identityType = input.identityType;
-
+      if (input.phoneNumber && !existingUser.phoneNumber)
+        updates.phoneNumber = input.phoneNumber;
+      if (input.identityNumber && !existingUser.identity)
+        updates.identity = input.identityNumber;
+      if (input.identityType && !existingUser.identityType)
+        updates.identityType = input.identityType;
 
       await this.dataSource.transaction(async (manager) => {
         await manager.update(User, existingUser.id, updates);
 
-        const alreadyHasRole = existingUser.userRoles?.some(ur => ur.role?.name === ValidRoles.SECURITY_ROL);
+        const alreadyHasRole = existingUser.userRoles?.some(
+          (ur) => ur.role?.name === ValidRoles.SECURITY_ROL,
+        );
         if (!alreadyHasRole) {
           await manager.save(
-            manager.create(UserRole, { user: { id: existingUser.id }, role: { id: role.id }, isPrimary: false }),
+            manager.create(UserRole, {
+              user: { id: existingUser.id },
+              role: { id: role.id },
+              isPrimary: false,
+            }),
           );
         }
 
         await manager.save(
           manager.create(UserComplexAssignment, {
-
             userId: existingUser.id,
             complexId: input.complexId,
             role: input.role,
@@ -515,13 +578,18 @@ export class UsersService {
       });
 
       const reintegratedUser = { ...existingUser, ...updates };
-      this.logger.log(`Personal reintegrado: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
+      this.logger.log(
+        `Personal reintegrado: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
+      );
       void this.auditService.log({
-
         entityType: AuditEntityType.User,
         entityId: existingUser.id,
         action: AuditAction.ACTIVATE,
-        newValue: { complexId: input.complexId, role: input.role, action: StaffMemberAction.REINTEGRATED },
+        newValue: {
+          complexId: input.complexId,
+          role: input.role,
+          action: StaffMemberAction.REINTEGRATED,
+        },
         performedById: currentUser?.sub ?? adminUserId,
         performedByName: currentUser?.email,
         performedByRole: currentUser?.roles?.[0] ?? '',
@@ -537,14 +605,14 @@ export class UsersService {
         phoneNumber: reintegratedUser.phoneNumber ?? existingUser.phoneNumber,
         identity: reintegratedUser.identity,
         complexId: input.complexId,
-        status: reintegratedUser.status ?? existingUser.status, action: StaffMemberAction.REINTEGRATED
+        status: reintegratedUser.status ?? existingUser.status,
+        action: StaffMemberAction.REINTEGRATED,
       };
     }
 
     // ── SUPERVISOR_ROL / ACCOUNTANT_ROL: pueden estar en N complejos ─────
     const existingActiveAssignment = await this.assignmentRepo.findOne({
       where: {
-
         userId: existingUser.id,
         complexId: input.complexId,
         role: input.role,
@@ -553,34 +621,47 @@ export class UsersService {
     });
 
     if (existingActiveAssignment) {
-      throw new ConflictException('Este usuario ya está asignado a este complejo con ese cargo');
+      throw new ConflictException(
+        'Este usuario ya está asignado a este complejo con ese cargo',
+      );
     }
 
     await this.dataSource.transaction(async (manager) => {
-      const alreadyHasRole = existingUser.userRoles?.some(ur => ur.role?.name === input.role);
+      const alreadyHasRole = existingUser.userRoles?.some(
+        (ur) => ur.role?.name === input.role,
+      );
       if (!alreadyHasRole) {
         await manager.save(
-          manager.create(UserRole, { user: { id: existingUser.id }, role: { id: role.id }, isPrimary: false }),
+          manager.create(UserRole, {
+            user: { id: existingUser.id },
+            role: { id: role.id },
+            isPrimary: false,
+          }),
         );
       }
 
       await manager.save(
         manager.create(UserComplexAssignment, {
-        userId: existingUser.id,
-        complexId: input.complexId,
-        role: input.role,
-        status: AssignmentStatus.ACTIVE,
+          userId: existingUser.id,
+          complexId: input.complexId,
+          role: input.role,
+          status: AssignmentStatus.ACTIVE,
         }),
       );
     });
 
-    this.logger.log(`Personal asignado a nuevo complejo: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`);
+    this.logger.log(
+      `Personal asignado a nuevo complejo: ${existingUser.id} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
+    );
     void this.auditService.log({
-
       entityType: AuditEntityType.User,
       entityId: existingUser.id,
       action: AuditAction.UPDATE,
-      newValue: { complexId: input.complexId, role: input.role, action: StaffMemberAction.ADDED_TO_COMPLEX },
+      newValue: {
+        complexId: input.complexId,
+        role: input.role,
+        action: StaffMemberAction.ADDED_TO_COMPLEX,
+      },
       performedById: currentUser?.sub ?? adminUserId,
       performedByName: currentUser?.email,
       performedByRole: currentUser?.roles?.[0] ?? '',
@@ -597,7 +678,7 @@ export class UsersService {
       identity: existingUser.identity,
       complexId: existingUser.complexId,
       status: existingUser.status,
-      action: StaffMemberAction.ADDED_TO_COMPLEX
+      action: StaffMemberAction.ADDED_TO_COMPLEX,
     };
   }
 
@@ -688,10 +769,10 @@ export class UsersService {
     });
 
     const hasResidentRole = (user.userRoles ?? []).some(
-      ur => ur.role?.name === ValidRoles.RESIDENT_ROL,
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
     );
     const userRoleToRemove = (user.userRoles ?? []).find(
-      ur => ur.role?.name === input.role,
+      (ur) => ur.role?.name === input.role,
     );
 
     await this.dataSource.transaction(async (manager) => {
@@ -709,7 +790,7 @@ export class UsersService {
       // c. Para SECURITY_ROL → limpiar complexId del usuario
       const userUpdates: Partial<User> = {};
       if (input.role === ValidRoles.SECURITY_ROL) {
-        userUpdates.complexId = null as any;
+        userUpdates.complexId = null;
       }
 
       // d. Si no tiene residencia ni otras asignaciones → pasar a INACTIVE
@@ -723,9 +804,10 @@ export class UsersService {
       }
     });
 
-    const action = hasResidentRole || totalOtherActiveAssignments > 0
-      ? RemoveStaffAction.STAFF_ROLE_REMOVED
-      : RemoveStaffAction.USER_DELETED; // semántica: "dado de baja del personal" (no se borra el registro)
+    const action =
+      hasResidentRole || totalOtherActiveAssignments > 0
+        ? RemoveStaffAction.STAFF_ROLE_REMOVED
+        : RemoveStaffAction.USER_DELETED; // semántica: "dado de baja del personal" (no se borra el registro)
 
     const message = hasResidentRole
       ? 'Rol de personal revocado. El usuario continúa activo como residente.'
@@ -737,12 +819,20 @@ export class UsersService {
       `Personal removido: usuario ${input.userId} | rol: ${input.role} | complejo: ${input.complexId} | por: ${adminUserId}`,
     );
     void this.auditService.log({
-
       entityType: AuditEntityType.User,
       entityId: input.userId,
       action: AuditAction.UPDATE,
-      previousValue: { role: input.role, complexId: input.complexId, status: AssignmentStatus.ACTIVE },
-      newValue: { role: input.role, complexId: input.complexId, status: AssignmentStatus.REMOVED, action },
+      previousValue: {
+        role: input.role,
+        complexId: input.complexId,
+        status: AssignmentStatus.ACTIVE,
+      },
+      newValue: {
+        role: input.role,
+        complexId: input.complexId,
+        status: AssignmentStatus.REMOVED,
+        action,
+      },
       performedById: currentUser?.sub ?? adminUserId,
       performedByName: currentUser?.email,
       performedByRole: currentUser?.roles?.[0] ?? '',
@@ -755,7 +845,11 @@ export class UsersService {
 
   // ── Actualización de usuario ─────────────────────────────────────────────
 
-  async updateUser(input: UpdateUserInput, callerComplexId?: string, currentUser?: JwtAccessPayload): Promise<User> {
+  async updateUser(
+    input: UpdateUserInput,
+    callerComplexId?: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
     const user = await this.userRepo.findOne({
       where: { id: input.userId },
       relations: ['userRoles', 'userRoles.role'],
@@ -796,13 +890,18 @@ export class UsersService {
       user.lastName = input.lastName;
       changedFields.push('apellido');
     }
-    if (input.phoneNumber !== undefined && input.phoneNumber !== user.phoneNumber) {
+    if (
+      input.phoneNumber !== undefined &&
+      input.phoneNumber !== user.phoneNumber
+    ) {
       user.phoneNumber = input.phoneNumber;
       changedFields.push('teléfono');
     }
 
     if (input.role !== undefined) {
-      const role = await this.roleRepo.findOne({ where: { name: input.role as any } });
+      const role = await this.roleRepo.findOne({
+        where: { name: input.role as any },
+      });
 
       if (!role) {
         throw new CustomError({
@@ -812,13 +911,17 @@ export class UsersService {
         });
       }
 
-      const existing = user.userRoles?.find(ur => ur.isPrimary);
+      const existing = user.userRoles?.find((ur) => ur.isPrimary);
       if (existing && existing.role?.name !== role.name) {
         await this.userRoleRepo.update(existing.id, { role });
         changedFields.push('rol');
       } else if (!existing) {
         await this.userRoleRepo.save(
-          this.userRoleRepo.create({ user: { id: user.id }, role, isPrimary: true }),
+          this.userRoleRepo.create({
+            user: { id: user.id },
+            role,
+            isPrimary: true,
+          }),
         );
         changedFields.push('rol');
       }
@@ -840,7 +943,12 @@ export class UsersService {
         entityType: AuditEntityType.User,
         entityId: user.id,
         action: AuditAction.UPDATE,
-        newValue: { name: input.name, lastName: input.lastName, phoneNumber: input.phoneNumber, role: input.role },
+        newValue: {
+          name: input.name,
+          lastName: input.lastName,
+          phoneNumber: input.phoneNumber,
+          role: input.role,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -902,17 +1010,24 @@ export class UsersService {
       });
     }
 
-    const previous = { identityType: user.identityType, identity: user.identity };
+    const previous = {
+      identityType: user.identityType,
+      identity: user.identity,
+    };
 
     const changedFields: string[] = [];
-    if (user.identityType !== input.identityType) changedFields.push('tipo de documento');
-    if (user.identity !== newIdentity) changedFields.push('número de documento');
+    if (user.identityType !== input.identityType)
+      changedFields.push('tipo de documento');
+    if (user.identity !== newIdentity)
+      changedFields.push('número de documento');
 
     user.identityType = input.identityType;
     user.identity = newIdentity;
 
     const updated = await this.userRepo.save(user);
-    this.logger.log(`Documento de identidad actualizado para usuario: ${user.id}`);
+    this.logger.log(
+      `Documento de identidad actualizado para usuario: ${user.id}`,
+    );
 
     void this.notificationsService.notifyProfileUpdated({
       userId: user.id,
@@ -941,7 +1056,12 @@ export class UsersService {
 
   // ── Gestión de estado de usuarios ────────────────────────────────────────
 
-  async suspendUser(userId: string, reason: string, callerComplexId?: string, currentUser?: JwtAccessPayload): Promise<User> {
+  async suspendUser(
+    userId: string,
+    reason: string,
+    callerComplexId?: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -960,7 +1080,10 @@ export class UsersService {
       });
     }
 
-    if (user.status === UserStatus.SUSPENDED || user.status === UserStatus.DELETED) {
+    if (
+      user.status === UserStatus.SUSPENDED ||
+      user.status === UserStatus.DELETED
+    ) {
       throw new CustomError({
         message: `No se puede suspender un usuario con estado "${user.status}"`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -991,7 +1114,11 @@ export class UsersService {
     return updated;
   }
 
-  async reactivateUser(userId: string, callerComplexId?: string, currentUser?: JwtAccessPayload): Promise<User> {
+  async reactivateUser(
+    userId: string,
+    callerComplexId?: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -1041,7 +1168,10 @@ export class UsersService {
     return updated;
   }
 
-  async restoreUser(userId: string, currentUser?: JwtAccessPayload): Promise<User> {
+  async restoreUser(
+    userId: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -1084,7 +1214,10 @@ export class UsersService {
     return updated;
   }
 
-  async deleteUser(userId: string, currentUser?: JwtAccessPayload): Promise<User> {
+  async deleteUser(
+    userId: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -1247,19 +1380,21 @@ export class UsersService {
 
     if (callerComplexId && user.complexId !== callerComplexId) {
       throw new CustomError({
-        message: 'No tienes permisos para restablecer la contraseña de usuarios de otro complejo',
+        message:
+          'No tienes permisos para restablecer la contraseña de usuarios de otro complejo',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
-    const isResettableStaff = (user.userRoles ?? []).some(
-      ur => STAFF_RESETTABLE_ROLES.includes(ur.role?.name as ValidRoles),
+    const isResettableStaff = (user.userRoles ?? []).some((ur) =>
+      STAFF_RESETTABLE_ROLES.includes(ur.role?.name),
     );
 
     if (!isResettableStaff) {
       throw new CustomError({
-        message: 'Solo se puede restablecer la contraseña de personal del complejo (guardia, supervisor o contador)',
+        message:
+          'Solo se puede restablecer la contraseña de personal del complejo (guardia, supervisor o contador)',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
@@ -1276,7 +1411,9 @@ export class UsersService {
 
     await this.tokenService.clearUserTokenVersionCache(user.id);
 
-    this.logger.warn(`Contraseña restablecida por administrador: usuario ${user.id} | por: ${currentUser?.sub}`);
+    this.logger.warn(
+      `Contraseña restablecida por administrador: usuario ${user.id} | por: ${currentUser?.sub}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
@@ -1301,7 +1438,7 @@ export class UsersService {
     const userRoles = user.userRoles ?? [];
 
     const hasResidentRole = userRoles.some(
-      ur => ur.role?.name === ValidRoles.RESIDENT_ROL,
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
     );
 
     if (!hasResidentRole) {
@@ -1322,7 +1459,9 @@ export class UsersService {
     });
 
     if (exists) {
-      throw new ConflictException(`El correo '${email}' ya está registrado en el sistema`);
+      throw new ConflictException(
+        `El correo '${email}' ya está registrado en el sistema`,
+      );
     }
   }
 
@@ -1346,13 +1485,13 @@ export class UsersService {
    */
   async getComplexSlugForUser(userId: string): Promise<string | null> {
     const user = await this.userRepo.findOne({
-      where:  { id: userId },
+      where: { id: userId },
       select: ['id', 'complexId'],
     });
     if (!user?.complexId) return null;
 
     const complex = await this.complexRepo.findOne({
-      where:  { id: user.complexId },
+      where: { id: user.complexId },
       select: ['id', 'slug'],
     });
     return complex?.slug ?? null;
@@ -1378,10 +1517,11 @@ export class UsersService {
     const role = await this.roleRepo.findOne({ where: { name: roleName } });
 
     if (!role) {
-      throw new BadRequestException(`El rol '${roleName}' no está configurado en el sistema`);
+      throw new BadRequestException(
+        `El rol '${roleName}' no está configurado en el sistema`,
+      );
     }
 
     return role;
   }
-
 }

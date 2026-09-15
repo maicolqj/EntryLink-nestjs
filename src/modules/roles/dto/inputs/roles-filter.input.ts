@@ -1,7 +1,7 @@
-import { InputType, Field, Int } from "@nestjs/graphql";
-import { Type } from "class-transformer";
-import { IsOptional, IsBoolean, IsInt } from "class-validator";
-import { DateRangeInput } from "../../../shared/dto/inputs";
+import { InputType, Field, Int } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
+import { IsOptional, IsBoolean, IsInt } from 'class-validator';
+import { DateRangeInput } from '../../../shared/dto/inputs';
 
 @InputType()
 export class RolesFiltersInput {

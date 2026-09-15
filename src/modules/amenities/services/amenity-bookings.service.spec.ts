@@ -1,15 +1,15 @@
 import { AmenityBookingsService } from './amenity-bookings.service';
-import { Amenity }        from '../entities/amenity.entity';
+import { Amenity } from '../entities/amenity.entity';
 import { AmenityBooking } from '../entities/amenity-booking.entity';
 
-import { AmenityStatus }        from '../enums/amenity-status.enum';
-import { AmenityBookingMode }   from '../enums/amenity-booking-mode.enum';
-import { AmenityFeeType }       from '../enums/amenity-fee-type.enum';
+import { AmenityStatus } from '../enums/amenity-status.enum';
+import { AmenityBookingMode } from '../enums/amenity-booking-mode.enum';
+import { AmenityFeeType } from '../enums/amenity-fee-type.enum';
 import { AmenityBookingStatus } from '../enums/amenity-booking-status.enum';
-import { AmenityDurationUnit }  from '../enums/amenity-duration-unit.enum';
+import { AmenityDurationUnit } from '../enums/amenity-duration-unit.enum';
 
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 /**
  * Specs del COBRO POR DAÑOS y de los plazos en días.
@@ -21,52 +21,60 @@ import { ValidRoles }       from '../../roles/enums/valid-roles';
  */
 
 const HOUR = 60 * 60 * 1000;
-const DAY  = 24 * HOUR;
+const DAY = 24 * HOUR;
 
 const staff: JwtAccessPayload = {
-  sub: 'user-admin', email: 'admin@test.com', type: 'access', entityType: 'user',
-  tokenVersion: 1, sessionId: 's1', roles: [ValidRoles.COMPLEX_ROL], permissions: [],
+  sub: 'user-admin',
+  email: 'admin@test.com',
+  type: 'access',
+  entityType: 'user',
+  tokenVersion: 1,
+  sessionId: 's1',
+  roles: [ValidRoles.COMPLEX_ROL],
+  permissions: [],
   complexId: 'complex-1',
-} as JwtAccessPayload;
+};
 
-const amenityOf = (partial: Partial<Amenity> = {}): Amenity => ({
-  id: 'amenity-1',
-  complexId: 'complex-1',
-  name: 'Salón Comunal',
-  status: AmenityStatus.ACTIVE,
-  bookingMode: AmenityBookingMode.SLOT,
-  durationUnit: AmenityDurationUnit.HOURS,
-  slotDurationMinutes: 120,
-  minDurationMinutes: 60,
-  maxDurationMinutes: 480,
-  capacity: 0,
-  maxSimultaneousBookings: 1,
-  advanceBookingDays: 30,
-  minAdvanceDays: 0,
-  cancellationDeadlineDays: 1,
-  cancellationDeadlineHours: 0,
-  lateCancellationFeePercent: 100,
-  councilFreeBookingsPerYear: 0,
-  requiresApproval: true,
-  feeType: AmenityFeeType.PER_BOOKING,
-  feeAmount: 100_000,
-  ...partial,
-} as Amenity);
+const amenityOf = (partial: Partial<Amenity> = {}): Amenity =>
+  ({
+    id: 'amenity-1',
+    complexId: 'complex-1',
+    name: 'Salón Comunal',
+    status: AmenityStatus.ACTIVE,
+    bookingMode: AmenityBookingMode.SLOT,
+    durationUnit: AmenityDurationUnit.HOURS,
+    slotDurationMinutes: 120,
+    minDurationMinutes: 60,
+    maxDurationMinutes: 480,
+    capacity: 0,
+    maxSimultaneousBookings: 1,
+    advanceBookingDays: 30,
+    minAdvanceDays: 0,
+    cancellationDeadlineDays: 1,
+    cancellationDeadlineHours: 0,
+    lateCancellationFeePercent: 100,
+    councilFreeBookingsPerYear: 0,
+    requiresApproval: true,
+    feeType: AmenityFeeType.PER_BOOKING,
+    feeAmount: 100_000,
+    ...partial,
+  }) as Amenity;
 
-const bookingOf = (partial: Partial<AmenityBooking> = {}): AmenityBooking => ({
-  id: 'booking-1',
-  amenityId: 'amenity-1',
-  complexId: 'complex-1',
-  unitId: 'unit-1',
-  startAt: new Date(Date.now() + 3 * DAY),
-  endAt:   new Date(Date.now() + 3 * DAY + 2 * HOUR),
-  attendees: 1,
-  status: AmenityBookingStatus.APPROVED,
-  feeAmount: 100_000,
-  damageAmount: 0,
-  feeChargeId: 'charge-fee',
-  ...partial,
-} as AmenityBooking);
+const bookingOf = (partial: Partial<AmenityBooking> = {}): AmenityBooking =>
+  ({
+    id: 'booking-1',
+    amenityId: 'amenity-1',
+    complexId: 'complex-1',
+    unitId: 'unit-1',
+    startAt: new Date(Date.now() + 3 * DAY),
+    endAt: new Date(Date.now() + 3 * DAY + 2 * HOUR),
+    attendees: 1,
+    status: AmenityBookingStatus.APPROVED,
+    feeAmount: 100_000,
+    damageAmount: 0,
+    feeChargeId: 'charge-fee',
+    ...partial,
+  }) as AmenityBooking;
 
 interface Harness {
   service: AmenityBookingsService;
@@ -81,16 +89,20 @@ const build = (booking: AmenityBooking, amenity = amenityOf()): Harness => {
 
   const bookingRepo = {
     findOne: jest.fn().mockResolvedValue(booking),
-    find:    jest.fn().mockResolvedValue([booking]),
-    save:    jest.fn(async (b: AmenityBooking) => { saved.push(b); return b; }),
-    count:   jest.fn().mockResolvedValue(0),
+    find: jest.fn().mockResolvedValue([booking]),
+    save: jest.fn(async (b: AmenityBooking) => {
+      saved.push(b);
+      return b;
+    }),
+    count: jest.fn().mockResolvedValue(0),
     createQueryBuilder: jest.fn(),
   };
 
   let seq = 0;
   const accounting = {
     emitAmenityUnitCharge: jest.fn(async () => ({
-      chargeId: `charge-${++seq}`, accountingHeaderId: `header-${seq}`,
+      chargeId: `charge-${++seq}`,
+      accountingHeaderId: `header-${seq}`,
     })),
   };
   const finance = {
@@ -111,15 +123,30 @@ const build = (booking: AmenityBooking, amenity = amenityOf()): Harness => {
     {
       countOverlappingBookings: jest.fn().mockResolvedValue(0),
       endOfDay: (d: Date) => d,
-      startOfDay: (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; },
-      addDays: (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; },
+      startOfDay: (d: Date) => {
+        const x = new Date(d);
+        x.setHours(0, 0, 0, 0);
+        return x;
+      },
+      addDays: (d: Date, n: number) => {
+        const x = new Date(d);
+        x.setDate(x.getDate() + n);
+        return x;
+      },
       getOpenWindowsForDay: jest.fn().mockResolvedValue([]),
       findBlackoutOverlapping: jest.fn().mockResolvedValue(null),
     } as never,
-    { findById: jest.fn().mockResolvedValue({ id: 'complex-1', ownerId: 'owner-1' }) } as never,
+    {
+      findById: jest
+        .fn()
+        .mockResolvedValue({ id: 'complex-1', ownerId: 'owner-1' }),
+    } as never,
     { findById: jest.fn() } as never,
     { findActiveByUnitInternal: jest.fn().mockResolvedValue([]) } as never,
-    { notify: jest.fn(), findUserIdsByRoles: jest.fn().mockResolvedValue([]) } as never,
+    {
+      notify: jest.fn(),
+      findUserIdsByRoles: jest.fn().mockResolvedValue([]),
+    } as never,
     finance as never,
     accounting as never,
     dataSource as never,
@@ -131,24 +158,33 @@ const build = (booking: AmenityBooking, amenity = amenityOf()): Harness => {
 };
 
 describe('AmenityBookingsService — cobro por daños', () => {
-
   // ── Reservar no adelanta dinero ──────────────────────────────────
   describe('al aprobar', () => {
     it('genera solo el cargo de la tarifa: la unidad no adelanta garantía', async () => {
-      const booking = bookingOf({ status: AmenityBookingStatus.PENDING, feeChargeId: null });
+      const booking = bookingOf({
+        status: AmenityBookingStatus.PENDING,
+        feeChargeId: null,
+      });
       const { service, accounting } = build(booking);
 
       await service.approve('booking-1', staff);
 
       expect(accounting.emitAmenityUnitCharge).toHaveBeenCalledTimes(1);
-      expect(accounting.emitAmenityUnitCharge.mock.calls[0][1].amount).toBe(100_000);
+      expect(accounting.emitAmenityUnitCharge.mock.calls[0][1].amount).toBe(
+        100_000,
+      );
     });
 
     it('no genera ningún cargo cuando la zona es gratuita', async () => {
       const booking = bookingOf({
-        status: AmenityBookingStatus.PENDING, feeChargeId: null, feeAmount: 0,
+        status: AmenityBookingStatus.PENDING,
+        feeChargeId: null,
+        feeAmount: 0,
       });
-      const { service, accounting } = build(booking, amenityOf({ feeType: AmenityFeeType.FREE, feeAmount: 0 }));
+      const { service, accounting } = build(
+        booking,
+        amenityOf({ feeType: AmenityFeeType.FREE, feeAmount: 0 }),
+      );
 
       await service.approve('booking-1', staff);
 
@@ -158,20 +194,24 @@ describe('AmenityBookingsService — cobro por daños', () => {
 
   // ── El cobro por daños ───────────────────────────────────────────
   describe('cobro por daños', () => {
-    const usedBooking = () => bookingOf({
-      status: AmenityBookingStatus.CHECKED_IN,
-      checkInAt: new Date(),
-      amenity: amenityOf(),
-    });
+    const usedBooking = () =>
+      bookingOf({
+        status: AmenityBookingStatus.CHECKED_IN,
+        checkInAt: new Date(),
+        amenity: amenityOf(),
+      });
 
     it('carga el valor a la unidad con la explicación escrita', async () => {
       const { service, accounting, saved } = build(usedBooking());
 
-      await service.chargeDamage({
-        bookingId: 'booking-1',
-        amount: 350_000,
-        description: 'Se rompieron dos sillas y una mesa',
-      }, staff);
+      await service.chargeDamage(
+        {
+          bookingId: 'booking-1',
+          amount: 350_000,
+          description: 'Se rompieron dos sillas y una mesa',
+        },
+        staff,
+      );
 
       expect(accounting.emitAmenityUnitCharge).toHaveBeenCalledTimes(1);
       // [0] es el EntityManager de la transacción; [1] son los datos del cargo.
@@ -184,7 +224,9 @@ describe('AmenityBookingsService — cobro por daños', () => {
 
       const result = saved[saved.length - 1];
       expect(result.damageAmount).toBe(350_000);
-      expect(result.damageDescription).toBe('Se rompieron dos sillas y una mesa');
+      expect(result.damageDescription).toBe(
+        'Se rompieron dos sillas y una mesa',
+      );
       expect(result.damageChargeId).toBeTruthy();
       expect(result.damageChargedAt).toBeInstanceOf(Date);
       expect(result.damageChargedByUserId).toBe('user-admin');
@@ -196,7 +238,10 @@ describe('AmenityBookingsService — cobro por daños', () => {
       const { service } = build(booking);
 
       await expect(
-        service.chargeDamage({ bookingId: 'booking-1', amount: 100, description: 'otra vez' }, staff),
+        service.chargeDamage(
+          { bookingId: 'booking-1', amount: 100, description: 'otra vez' },
+          staff,
+        ),
       ).rejects.toThrow(/ya tiene un cobro/i);
     });
 
@@ -205,7 +250,10 @@ describe('AmenityBookingsService — cobro por daños', () => {
       const { service, accounting } = build(bookingOf());
 
       await expect(
-        service.chargeDamage({ bookingId: 'booking-1', amount: 100, description: 'x' }, staff),
+        service.chargeDamage(
+          { bookingId: 'booking-1', amount: 100, description: 'x' },
+          staff,
+        ),
       ).rejects.toThrow(/entrega la zona/i);
 
       expect(accounting.emitAmenityUnitCharge).not.toHaveBeenCalled();
@@ -219,9 +267,14 @@ describe('AmenityBookingsService — cobro por daños', () => {
       });
       const { service, saved } = build(booking);
 
-      await service.chargeDamage({
-        bookingId: 'booking-1', amount: 50_000, description: 'Vidrio roto',
-      }, staff);
+      await service.chargeDamage(
+        {
+          bookingId: 'booking-1',
+          amount: 50_000,
+          description: 'Vidrio roto',
+        },
+        staff,
+      );
 
       expect(saved[saved.length - 1].damageAmount).toBe(50_000);
     });
@@ -250,7 +303,7 @@ describe('AmenityBookingsService — cobro por daños', () => {
       const booking = bookingOf({
         status: AmenityBookingStatus.CHECKED_IN,
         startAt: new Date(Date.now() - 4 * HOUR),
-        endAt:   new Date(Date.now() - 2 * HOUR),
+        endAt: new Date(Date.now() - 2 * HOUR),
         amenity: amenityOf(),
       });
       const { service, accounting, finance } = build(booking);
@@ -277,7 +330,7 @@ describe('AmenityBookingsService — cobro por daños', () => {
       // Faltan 3 horas y el plazo es 1 día: cancela tarde.
       const booking = bookingOf({
         startAt: new Date(Date.now() + 3 * HOUR),
-        endAt:   new Date(Date.now() + 5 * HOUR),
+        endAt: new Date(Date.now() + 5 * HOUR),
       });
       const { service, accounting, finance, saved } = build(booking);
 
@@ -290,9 +343,12 @@ describe('AmenityBookingsService — cobro por daños', () => {
     it('un plazo de 0 días permite cancelar sin costo hasta el último momento', async () => {
       const booking = bookingOf({
         startAt: new Date(Date.now() + 1 * HOUR),
-        endAt:   new Date(Date.now() + 3 * HOUR),
+        endAt: new Date(Date.now() + 3 * HOUR),
       });
-      const { service, finance } = build(booking, amenityOf({ cancellationDeadlineDays: 0 }));
+      const { service, finance } = build(
+        booking,
+        amenityOf({ cancellationDeadlineDays: 0 }),
+      );
 
       await service.cancel({ bookingId: 'booking-1' }, staff);
 
@@ -303,11 +359,15 @@ describe('AmenityBookingsService — cobro por daños', () => {
       // 0 días + 48 horas de plazo, y faltan 30 horas: llega tarde.
       const booking = bookingOf({
         startAt: new Date(Date.now() + 30 * HOUR),
-        endAt:   new Date(Date.now() + 32 * HOUR),
+        endAt: new Date(Date.now() + 32 * HOUR),
       });
-      const { service, finance } = build(booking, amenityOf({
-        cancellationDeadlineDays: 0, cancellationDeadlineHours: 48,
-      }));
+      const { service, finance } = build(
+        booking,
+        amenityOf({
+          cancellationDeadlineDays: 0,
+          cancellationDeadlineHours: 48,
+        }),
+      );
 
       await service.cancel({ bookingId: 'booking-1' }, staff);
 
@@ -317,15 +377,17 @@ describe('AmenityBookingsService — cobro por daños', () => {
 
   // ── Penalización parcial ─────────────────────────────────────────
   describe('penalización por cancelación tardía', () => {
-    const late = (partial: Partial<AmenityBooking> = {}) => bookingOf({
-      startAt: new Date(Date.now() + 3 * HOUR),
-      endAt:   new Date(Date.now() + 5 * HOUR),
-      ...partial,
-    });
+    const late = (partial: Partial<AmenityBooking> = {}) =>
+      bookingOf({
+        startAt: new Date(Date.now() + 3 * HOUR),
+        endAt: new Date(Date.now() + 5 * HOUR),
+        ...partial,
+      });
 
     it('retiene solo el porcentaje configurado y reemplaza el cargo', async () => {
       const { service, accounting, finance, saved } = build(
-        late(), amenityOf({ lateCancellationFeePercent: 50 }),
+        late(),
+        amenityOf({ lateCancellationFeePercent: 50 }),
       );
 
       await service.cancel({ bookingId: 'booking-1' }, staff);
@@ -333,7 +395,8 @@ describe('AmenityBookingsService — cobro por daños', () => {
       // El cargo original se anula entero: un asiento del ledger no se rebaja.
       expect(finance.cancelInternalCharge).toHaveBeenCalled();
       expect(accounting.emitAmenityUnitCharge).toHaveBeenCalledWith(
-        expect.anything(), expect.objectContaining({ amount: 50_000 }),
+        expect.anything(),
+        expect.objectContaining({ amount: 50_000 }),
       );
 
       const result = saved[saved.length - 1];
@@ -344,7 +407,8 @@ describe('AmenityBookingsService — cobro por daños', () => {
 
     it('con 0% el plazo es informativo y no cuesta nada', async () => {
       const { service, accounting, finance, saved } = build(
-        late(), amenityOf({ lateCancellationFeePercent: 0 }),
+        late(),
+        amenityOf({ lateCancellationFeePercent: 0 }),
       );
 
       await service.cancel({ bookingId: 'booking-1' }, staff);
@@ -365,7 +429,8 @@ describe('AmenityBookingsService — cobro por daños', () => {
 
       expect(finance.cancelInternalCharge).not.toHaveBeenCalled();
       expect(accounting.emitAmenityUnitCharge).toHaveBeenCalledWith(
-        expect.anything(), expect.objectContaining({ amount: 100_000 }),
+        expect.anything(),
+        expect.objectContaining({ amount: 100_000 }),
       );
     });
 

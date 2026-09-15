@@ -19,7 +19,6 @@ import { LegalAudience } from '../enums/legal-audience.enum';
 @Entity({ name: 'legal_documents' })
 @Index(['slug'], { unique: true })
 export class LegalDocument {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -32,11 +31,17 @@ export class LegalDocument {
   @Column({ type: 'varchar', length: 200 })
   title: string;
 
-  @Field(() => String, { description: 'Descripción corta para el índice', nullable: true })
+  @Field(() => String, {
+    description: 'Descripción corta para el índice',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Field(() => String, { description: 'Contenido HTML sanitizado', nullable: true })
+  @Field(() => String, {
+    description: 'Contenido HTML sanitizado',
+    nullable: true,
+  })
   @Column({ name: 'content_html', type: 'text', nullable: true })
   contentHtml?: string;
 
@@ -44,31 +49,52 @@ export class LegalDocument {
   @Column({ name: 'is_published', type: 'boolean', default: false })
   isPublished: boolean;
 
-  @Field(() => LegalAudience, { description: 'Audiencia: PUBLIC (/legal) o COMPLEX (solo complejos registrados)' })
+  @Field(() => LegalAudience, {
+    description:
+      'Audiencia: PUBLIC (/legal) o COMPLEX (solo complejos registrados)',
+  })
   @Column({ type: 'enum', enum: LegalAudience, default: LegalAudience.PUBLIC })
   audience: LegalAudience;
 
-  @Field(() => Boolean, { description: 'Si ofrece un archivo descargable (PDF)' })
+  @Field(() => Boolean, {
+    description: 'Si ofrece un archivo descargable (PDF)',
+  })
   @Column({ name: 'is_downloadable', type: 'boolean', default: false })
   isDownloadable: boolean;
 
-  @Field(() => String, { description: 'URL del PDF descargable (R2)', nullable: true })
+  @Field(() => String, {
+    description: 'URL del PDF descargable (R2)',
+    nullable: true,
+  })
   @Column({ name: 'download_file_url', type: 'text', nullable: true })
   downloadFileUrl?: string;
 
-  @Field(() => String, { description: 'Nombre del archivo descargable', nullable: true })
-  @Column({ name: 'download_file_name', type: 'varchar', length: 255, nullable: true })
+  @Field(() => String, {
+    description: 'Nombre del archivo descargable',
+    nullable: true,
+  })
+  @Column({
+    name: 'download_file_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   downloadFileName?: string;
 
   /** Key de R2 para poder eliminar/reemplazar el archivo. Sin @Field = oculto en GraphQL. */
   @Column({ name: 'download_file_public_id', type: 'text', nullable: true })
   downloadFilePublicId?: string;
 
-  @Field(() => Int, { description: 'Versión, incrementa en cada actualización de contenido' })
+  @Field(() => Int, {
+    description: 'Versión, incrementa en cada actualización de contenido',
+  })
   @Column({ type: 'int', default: 1 })
   version: number;
 
-  @Field(() => String, { description: 'ID del usuario que actualizó por última vez', nullable: true })
+  @Field(() => String, {
+    description: 'ID del usuario que actualizó por última vez',
+    nullable: true,
+  })
   @Column({ name: 'updated_by_id', type: 'uuid', nullable: true })
   updatedById?: string;
 

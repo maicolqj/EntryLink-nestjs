@@ -16,7 +16,6 @@ import { generateSystemCode } from '../../../modules/users/utils/system-code.uti
  * Idempotente: si no quedan filas con código nulo, no hace nada.
  */
 export class BackfillUserSystemCodes1781001600000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const pending: Array<{ id: string }> = await queryRunner.query(
       `SELECT id FROM users WHERE system_code IS NULL`,

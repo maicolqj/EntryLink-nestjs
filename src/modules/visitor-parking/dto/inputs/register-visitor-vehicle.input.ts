@@ -3,11 +3,10 @@ import { IsUUID, IsOptional, MaxLength, isEnum, IsEnum } from 'class-validator';
 
 import { VehicleType } from '../../../vehicles/enums/vehicle-type.enum';
 
-@InputType({ description: 'Datos para registrar el ingreso de un vehículo visitante' })
+@InputType({
+  description: 'Datos para registrar el ingreso de un vehículo visitante',
+})
 export class RegisterVisitorVehicleInput {
-
-  
-
   @Field(() => String, { description: 'ID del complejo residencial' })
   @IsUUID()
   complexId: string;
@@ -16,15 +15,22 @@ export class RegisterVisitorVehicleInput {
   @MaxLength(20)
   plate: string;
 
-  @Field(() => VehicleType, { description: 'Tipo de vehículo (carro, moto, etc.)' })
+  @Field(() => VehicleType, {
+    description: 'Tipo de vehículo (carro, moto, etc.)',
+  })
   @IsEnum(VehicleType)
   vehicleType: VehicleType;
 
-  @Field(() => String, { description: 'ID del residente anfitrión que recibe la visita' })
+  @Field(() => String, {
+    description: 'ID del residente anfitrión que recibe la visita',
+  })
   @IsUUID()
   hostResidentId: string;
 
-  @Field(() => String, { description: 'Nombre del conductor (opcional)', nullable: true })
+  @Field(() => String, {
+    description: 'Nombre del conductor (opcional)',
+    nullable: true,
+  })
   @IsOptional()
   @MaxLength(200)
   driverName?: string;
@@ -33,4 +39,3 @@ export class RegisterVisitorVehicleInput {
   @IsOptional()
   notes?: string;
 }
- 

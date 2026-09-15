@@ -1,7 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, VersionColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  VersionColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
@@ -23,7 +29,6 @@ import { moneyColumn } from '../utils/numeric.transformer';
 @Entity('property_account_status')
 @Index(['complexId', 'unitId'], { unique: true })
 export class PropertyAccountStatus {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -42,12 +47,24 @@ export class PropertyAccountStatus {
 
   /** Saldo neto firmado. Positivo = deuda, negativo = saldo a favor. */
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   currentBalance: number;
 
   /** Anticipo disponible para aplicar (>= 0). */
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   prepaidBalance: number;
 
   /** Concurrencia optimista: protege contra carreras al actualizar saldo. */

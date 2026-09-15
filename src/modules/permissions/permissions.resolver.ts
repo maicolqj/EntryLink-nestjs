@@ -17,13 +17,14 @@ import { RestorePermissionResponse } from './dto/responses/restore-permission.re
 export class PermissionsResolver {
   constructor(
     private readonly permissionsService: PermissionsService,
-    private readonly dependencyService: PermissionDependencyService
-  ) { }
+    private readonly dependencyService: PermissionDependencyService,
+  ) {}
 
   @Mutation(() => CreatePermissionResponse)
   // @Auth({roles: [ValidRoles.SUPER_ADMIN_ROL]})
   async createPermission(
-    @Args('input') input: CreatePermissionInput): Promise<CreatePermissionResponse> {
+    @Args('input') input: CreatePermissionInput,
+  ): Promise<CreatePermissionResponse> {
     console.log(`CREATING PERMISSION ${JSON.stringify(input)}`);
     if (input.dependsOn && input.dependsOn.length > 0) {
       const permission = await this.permissionsService.create({
@@ -33,32 +34,31 @@ export class PermissionsResolver {
 
       return this.dependencyService.updatePermissionDependencies(
         permission.id,
-        input.dependsOn.map(dep => dep.id)
-
+        input.dependsOn.map((dep) => dep.id),
       );
     }
     return this.permissionsService.create(input);
   }
 
- @Query(() => PaginatedPermissionsResponse, { name: 'permissions' })
+  @Query(() => PaginatedPermissionsResponse, { name: 'permissions' })
   // @Auth({permissions: [ValidRoles.SUPER_ADMIN_ROL]})
   findAll(
-    @Args('input') input: SearchPermissionsInput): Promise<PaginatedPermissionsResponse> {
+    @Args('input') input: SearchPermissionsInput,
+  ): Promise<PaginatedPermissionsResponse> {
     return this.permissionsService.findAll(input);
   }
 
-
-@Query(() => Permission, { name: 'permission' })
+  @Query(() => Permission, { name: 'permission' })
   // @Auth({permissions: [ValidRoles.SUPER_ADMIN_ROL]})
   findOne(@Args('id', { type: () => String }) id: string) {
     return this.permissionsService.findOne(id);
   }
 
- @Mutation(() => UpdatePermissionResponse, {
+  @Mutation(() => UpdatePermissionResponse, {
     name: 'updatePermission',
-    description: 'Update an existing permission'
+    description: 'Update an existing permission',
   })
-  @Auth({permissions: [ValidRoles.SUPER_ADMIN_ROL]})
+  @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async updatePermission(
     @Args('id', { type: () => String }) id: string,
     @Args('updatePermissionInput') updatePermissionInput: UpdatePermissionInput,
@@ -68,9 +68,9 @@ export class PermissionsResolver {
 
   @Mutation(() => RemovePermissionResponse, {
     name: 'removePermission',
-    description: 'Soft delete a permission by setting status to false'
+    description: 'Soft delete a permission by setting status to false',
   })
-  @Auth({permissions: [ValidRoles.SUPER_ADMIN_ROL]})
+  @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async removePermission(
     @Args('id', { type: () => String }) id: string,
   ): Promise<RemovePermissionResponse> {
@@ -79,9 +79,9 @@ export class PermissionsResolver {
 
   @Mutation(() => RestorePermissionResponse, {
     name: 'restorePermission',
-    description: 'Restore a soft deleted permission by setting status to true'
+    description: 'Restore a soft deleted permission by setting status to true',
   })
-  @Auth({permissions: [ValidRoles.SUPER_ADMIN_ROL]})
+  @Auth({ permissions: [ValidRoles.SUPER_ADMIN_ROL] })
   async restorePermission(
     @Args('id', { type: () => String }) id: string,
   ): Promise<RestorePermissionResponse> {

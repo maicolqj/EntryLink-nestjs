@@ -62,7 +62,9 @@ export class ResidentDeviceResolver {
       'Indica si la cuenta ya tiene clave de acceso. El cliente la consulta tras iniciar sesión ' +
       'para exigir su creación cuando falta.',
   })
-  async residentHasAccessCode(@CurrentUser() payload: JwtAccessPayload): Promise<boolean> {
+  async residentHasAccessCode(
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<boolean> {
     return this.residentDeviceService.hasAccessCode(payload.sub);
   }
 
@@ -128,12 +130,18 @@ export class ResidentDeviceResolver {
     @CurrentUser() payload: JwtAccessPayload,
     @Context() context: any,
   ): Promise<number> {
-    return this.residentDeviceService.revokeOtherDevices(payload.sub, this.deviceInfo(context));
+    return this.residentDeviceService.revokeOtherDevices(
+      payload.sub,
+      this.deviceInfo(context),
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private deviceInfo(context: any) {
-    return buildDeviceInfo(context, this.configService.getOrThrow<string>('FINGERPRINT_SECRET'));
+    return buildDeviceInfo(
+      context,
+      this.configService.getOrThrow<string>('FINGERPRINT_SECRET'),
+    );
   }
 }

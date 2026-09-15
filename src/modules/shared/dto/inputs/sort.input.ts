@@ -21,7 +21,10 @@ export class SortInput {
   @IsString()
   field?: string;
 
-  @Field(() => SortDirection, { defaultValue: SortDirection.DESC, nullable: true })
+  @Field(() => SortDirection, {
+    defaultValue: SortDirection.DESC,
+    nullable: true,
+  })
   @IsOptional()
   @IsEnum(SortDirection)
   direction?: SortDirection;

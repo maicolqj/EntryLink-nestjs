@@ -24,9 +24,9 @@ export const OPENING_BALANCE_COL = {
   // que no se agrupan, se deja vacío y la unidad se resuelve solo por su número.
   // Solo es necesario si el conjunto tiene torres y el número de unidad se repite entre ellas.
   BUILDING: 1,
-  UNIT:     2, // Número/identificador de la unidad (casa/oficina/apto) — requerido
-  CARTERA:  3, // Saldo de cartera / deuda a la fecha de corte (>= 0)
-  FAVOR:    4, // Saldo a favor / anticipo a la fecha de corte (>= 0)
+  UNIT: 2, // Número/identificador de la unidad (casa/oficina/apto) — requerido
+  CARTERA: 3, // Saldo de cartera / deuda a la fecha de corte (>= 0)
+  FAVOR: 4, // Saldo a favor / anticipo a la fecha de corte (>= 0)
 } as const;
 
 export interface OpeningBalanceRowData {
@@ -49,10 +49,10 @@ export interface PlannedOpeningBalance {
   unitId: string;
   unitNumber: string;
   buildingName?: string;
-  cartera: number;       // > 0 si hay deuda a migrar
-  favor: number;         // > 0 si hay saldo a favor a migrar
-  skipCharge: boolean;   // ya existe un cargo de apertura para (unidad, período)
-  skipWallet: boolean;   // ya existe un crédito de apertura para la unidad
+  cartera: number; // > 0 si hay deuda a migrar
+  favor: number; // > 0 si hay saldo a favor a migrar
+  skipCharge: boolean; // ya existe un cargo de apertura para (unidad, período)
+  skipWallet: boolean; // ya existe un crédito de apertura para la unidad
 }
 
 /**

@@ -1,8 +1,15 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsArray, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsUUID,
+} from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 
-import { NotificationType }     from '../../enums/notification-type.enum';
+import { NotificationType } from '../../enums/notification-type.enum';
 import { NotificationPriority } from '../../enums/notification-priority.enum';
 
 /**
@@ -11,7 +18,6 @@ import { NotificationPriority } from '../../enums/notification-priority.enum';
  */
 @InputType()
 export class SendNotificationInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

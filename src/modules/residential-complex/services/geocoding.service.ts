@@ -50,13 +50,15 @@ export class GeocodingService {
       const { lat, lon } = results[0];
       this.logger.log(`Geocodificado "${query}" → (${lat}, ${lon})`);
       return { lat: parseFloat(lat), lng: parseFloat(lon) };
-
     } catch (err) {
       if (err instanceof CustomError) throw err;
 
-      this.logger.error(`Nominatim no disponible para "${query}": ${err.message}`);
+      this.logger.error(
+        `Nominatim no disponible para "${query}": ${err.message}`,
+      );
       throw new CustomError({
-        message: 'El servicio de geocodificación no está disponible en este momento. Intenta de nuevo o ingresa las coordenadas manualmente.',
+        message:
+          'El servicio de geocodificación no está disponible en este momento. Intenta de nuevo o ingresa las coordenadas manualmente.',
         statusCode: HttpStatus.SERVICE_UNAVAILABLE,
         errorCode: ComplexErrorCode.GEOCODING_SERVICE_UNAVAILABLE,
       });

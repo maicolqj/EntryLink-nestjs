@@ -23,7 +23,7 @@ import { bullBoardAuthMiddleware } from './bull-board-auth.middleware';
     ),
 
     BullBoardModule.forFeature(
-      { name: OTP_QUEUE_NAME,  adapter: BullMQAdapter },
+      { name: OTP_QUEUE_NAME, adapter: BullMQAdapter },
       { name: MAIL_QUEUE_NAME, adapter: BullMQAdapter },
       // Sin esta línea el panel no muestra el escalamiento de pánico, que es la
       // única forma de ver si los jobs L1/L2/L3 se encolaron a los 15/45/90s y si

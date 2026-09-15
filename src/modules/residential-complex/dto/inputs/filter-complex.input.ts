@@ -1,13 +1,15 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ComplexType }   from '../../enums/complex-type.enum';
-import { ComplexPlan }   from '../../enums/complex-plan.enum';
+import { ComplexType } from '../../enums/complex-type.enum';
+import { ComplexPlan } from '../../enums/complex-plan.enum';
 import { ComplexStatus } from '../../enums/complex-status.enum';
 
 @InputType()
 export class FilterComplexInput {
-
-  @Field(() => String, { nullable: true, description: 'Buscar por nombre, ciudad o dirección' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Buscar por nombre, ciudad o dirección',
+  })
   @IsOptional()
   @IsString()
   search?: string;

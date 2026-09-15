@@ -26,7 +26,9 @@ export class RegisterComplexDto {
   totalUnits: number;
 
   @IsOptional()
-  @Transform(({ value }) => (value !== undefined && value !== '' ? parseInt(value, 10) : undefined))
+  @Transform(({ value }) =>
+    value !== undefined && value !== '' ? parseInt(value, 10) : undefined,
+  )
   @IsInt()
   @IsPositive()
   numberOfTowers?: number;
@@ -39,7 +41,9 @@ export class RegisterComplexDto {
   email: string;
 
   @IsString()
-  @Matches(/^\d{7,15}$/, { message: 'El teléfono debe tener entre 7 y 15 dígitos' })
+  @Matches(/^\d{7,15}$/, {
+    message: 'El teléfono debe tener entre 7 y 15 dígitos',
+  })
   phone: string;
 
   /** Aceptación de Términos, Privacidad y DPA. Enviado como string en multipart. */

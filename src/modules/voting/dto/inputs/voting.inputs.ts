@@ -1,14 +1,25 @@
 import { InputType, Field } from '@nestjs/graphql';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsDate, IsEnum, IsOptional, IsString, IsUUID,
-  MaxLength, MinLength,
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsDate,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
 
-import { VoteSecrecy, VoteWeighting, VotingMeetingKind } from '../../enums/voting.enums';
+import {
+  VoteSecrecy,
+  VoteWeighting,
+  VotingMeetingKind,
+} from '../../enums/voting.enums';
 
 @InputType()
 export class CreateVotingMeetingInput {
-
   @Field(() => String)
   @IsUUID()
   complexId: string;
@@ -36,7 +47,6 @@ export class CreateVotingMeetingInput {
 
 @InputType()
 export class CreateVotingQuestionInput {
-
   @Field(() => String)
   @IsUUID()
   meetingId: string;
@@ -55,13 +65,17 @@ export class CreateVotingQuestionInput {
 
   @Field(() => VoteWeighting, {
     nullable: true,
-    description: 'Solo asambleas: COEFFICIENT (por defecto) o UNIT. En el consejo vota cada miembro',
+    description:
+      'Solo asambleas: COEFFICIENT (por defecto) o UNIT. En el consejo vota cada miembro',
   })
   @IsOptional()
   @IsEnum(VoteWeighting)
   weighting?: VoteWeighting;
 
-  @Field(() => VoteSecrecy, { nullable: true, defaultValue: VoteSecrecy.NOMINAL })
+  @Field(() => VoteSecrecy, {
+    nullable: true,
+    defaultValue: VoteSecrecy.NOMINAL,
+  })
   @IsOptional()
   @IsEnum(VoteSecrecy)
   secrecy?: VoteSecrecy;
@@ -78,7 +92,6 @@ export class CreateVotingQuestionInput {
 /** Solo mientras la pregunta está en borrador. `options` reemplaza la lista entera. */
 @InputType()
 export class UpdateVotingQuestionInput {
-
   @Field(() => String)
   @IsUUID()
   questionId: string;

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron }               from '@nestjs/schedule';
-import { InjectRepository }   from '@nestjs/typeorm';
-import { Repository }         from 'typeorm';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity';
-import { FeeConfig }            from '../entities/fee-config.entity';
-import { FinanceService }       from '../services/finance.service';
-import { ComplexStatus }        from '../../residential-complex/enums/complex-status.enum';
+import { FeeConfig } from '../entities/fee-config.entity';
+import { FinanceService } from '../services/finance.service';
+import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
 
 /**
  * Cron diario 00:05 AM (Bogotá): emite los cargos de los períodos que falten
@@ -35,7 +35,7 @@ export class AutoGenerateChargesCron {
   @Cron('5 0 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
     // Mes en curso (America/Bogota via TZ env). Es el tope: nunca se emite futuro.
-    const today  = new Date();
+    const today = new Date();
     const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
     // Cargar configs activas que tienen autoGenerateCharges=true
@@ -53,7 +53,7 @@ export class AutoGenerateChargesCron {
     // Debug: corre a diario y la mayoría de los días no hay nada que emitir.
     this.logger.debug(
       `[AutoGenerateCharges] Revisando hasta ${period} ` +
-      `— ${configs.length} complejo(s) candidatos`,
+        `— ${configs.length} complejo(s) candidatos`,
     );
 
     let processedComplexes = 0;
@@ -63,17 +63,20 @@ export class AutoGenerateChargesCron {
 
       // Sin conceptos activos no hay nada que emitir
       const activeConfigs = await this.feeConfigRepo.count({
-        where: { complexId, isActive: true, deletedAt: null as any },
+        where: { complexId, isActive: true, deletedAt: null },
       });
 
       if (!activeConfigs) continue;
 
       try {
-        const result = await this.financeService.generateMissingChargesInternal(complexId, period);
+        const result = await this.financeService.generateMissingChargesInternal(
+          complexId,
+          period,
+        );
         if (result.generated > 0) {
           this.logger.log(
             `[AutoGenerateCharges] Complejo ${complexId} | períodos ${result.periods.join(', ')} ` +
-            `→ ${result.generated} generados, ${result.skipped} omitidos`,
+              `→ ${result.generated} generados, ${result.skipped} omitidos`,
           );
         }
         processedComplexes++;

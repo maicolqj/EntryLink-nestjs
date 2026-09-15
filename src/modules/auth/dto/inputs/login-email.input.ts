@@ -1,5 +1,13 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  MaxLength,
+  IsBoolean,
+  IsOptional,
+} from 'class-validator';
 import { ValidRoles } from '../../../roles/enums/valid-roles';
 
 /**
@@ -11,10 +19,11 @@ export const EMAIL_PASSWORD_USER_ROLES = [
   ValidRoles.COMPILANCE_OFFICER_ROL,
   ValidRoles.ACCOUNTANT_ROL,
   ValidRoles.SUPERVISOR_ROL,
-
 ] as const;
 
-@InputType({ description: 'Credenciales para inicio de sesión con email y contraseña' })
+@InputType({
+  description: 'Credenciales para inicio de sesión con email y contraseña',
+})
 export class LoginEmailInput {
   @Field(() => String, { description: 'Correo electrónico' })
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })
@@ -28,7 +37,10 @@ export class LoginEmailInput {
   @MaxLength(128, { message: 'La contraseña no puede superar 128 caracteres' })
   password: string;
 
-  @Field(() => Boolean, { nullable: true, description: 'Mantener sesión activa por más tiempo' })
+  @Field(() => Boolean, {
+    nullable: true,
+    description: 'Mantener sesión activa por más tiempo',
+  })
   @IsOptional()
   @IsBoolean()
   rememberMe?: boolean;

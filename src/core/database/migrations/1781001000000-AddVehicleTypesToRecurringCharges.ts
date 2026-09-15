@@ -6,7 +6,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Evita que un cargo de carros se aplique a motos y viceversa. Idempotente.
  */
 export class AddVehicleTypesToRecurringCharges1781001000000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "recurring_charges"
@@ -15,6 +14,8 @@ export class AddVehicleTypesToRecurringCharges1781001000000 implements Migration
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "vehicleTypes"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "vehicleTypes"`,
+    );
   }
 }

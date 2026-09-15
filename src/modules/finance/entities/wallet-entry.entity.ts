@@ -1,12 +1,17 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }               from '../../residential-complex/entities/unit.entity';
-import { FeeCharge }          from './fee-charge.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { FeeCharge } from './fee-charge.entity';
 
 export type WalletEntryType = 'CREDIT' | 'DEBIT' | 'ADJUSTMENT';
 
@@ -25,7 +30,6 @@ export type WalletEntryType = 'CREDIT' | 'DEBIT' | 'ADJUSTMENT';
 @Index(['unitId', 'complexId'])
 @Index(['complexId', 'createdAt'])
 export class WalletEntry {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

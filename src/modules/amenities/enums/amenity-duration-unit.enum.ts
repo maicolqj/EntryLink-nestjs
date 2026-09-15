@@ -13,7 +13,7 @@ import { registerEnumType } from '@nestjs/graphql';
  */
 export enum AmenityDurationUnit {
   HOURS = 'HOURS',
-  DAYS  = 'DAYS',
+  DAYS = 'DAYS',
 }
 
 registerEnumType(AmenityDurationUnit, {
@@ -22,10 +22,16 @@ registerEnumType(AmenityDurationUnit, {
 });
 
 export const MINUTES_PER_HOUR = 60;
-export const MINUTES_PER_DAY  = 24 * 60;
+export const MINUTES_PER_DAY = 24 * 60;
 
 /** Límites del negocio por unidad, ya convertidos a minutos. */
 export const DURATION_BOUNDS_MINUTES = {
-  [AmenityDurationUnit.HOURS]: { min: 1 * MINUTES_PER_HOUR, max: 24 * MINUTES_PER_HOUR },
-  [AmenityDurationUnit.DAYS]:  { min: 1 * MINUTES_PER_DAY,  max: 30 * MINUTES_PER_DAY },
+  [AmenityDurationUnit.HOURS]: {
+    min: 1 * MINUTES_PER_HOUR,
+    max: 24 * MINUTES_PER_HOUR,
+  },
+  [AmenityDurationUnit.DAYS]: {
+    min: 1 * MINUTES_PER_DAY,
+    max: 30 * MINUTES_PER_DAY,
+  },
 } as const;

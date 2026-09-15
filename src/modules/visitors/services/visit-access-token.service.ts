@@ -74,10 +74,13 @@ export class VisitAccessTokenService {
 
     let payload: VisitAccessTokenPayload;
     try {
-      payload = await this.jwtService.verifyAsync<VisitAccessTokenPayload>(token, {
-        secret,
-        algorithms: ['HS256'],
-      });
+      payload = await this.jwtService.verifyAsync<VisitAccessTokenPayload>(
+        token,
+        {
+          secret,
+          algorithms: ['HS256'],
+        },
+      );
     } catch {
       return null; // firma inválida o expirado
     }
@@ -90,7 +93,11 @@ export class VisitAccessTokenService {
     });
     if (!record) return null;
 
-    return { visitId: payload.visitId, visitorId: payload.visitorId, jti: payload.jti };
+    return {
+      visitId: payload.visitId,
+      visitorId: payload.visitorId,
+      jti: payload.jti,
+    };
   }
 
   /** Invalida el token (uso único): tras esto cualquier verify() falla. */

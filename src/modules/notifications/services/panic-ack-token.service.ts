@@ -49,7 +49,8 @@ export class PanicAckTokenService implements OnModuleInit {
 
   /** Token para una alerta. Formato: `<epochVencimiento>.<hmacHex>`. */
   sign(panicAlertId: string): string {
-    const exp = Math.floor(Date.now() / 1000) + PanicAckTokenService.TTL_SECONDS;
+    const exp =
+      Math.floor(Date.now() / 1000) + PanicAckTokenService.TTL_SECONDS;
     return `${exp}.${this.digest(panicAlertId, exp)}`;
   }
 
@@ -61,7 +62,8 @@ export class PanicAckTokenService implements OnModuleInit {
     if (separator <= 0) return false;
 
     const exp = Number(token.slice(0, separator));
-    if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
+    if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000))
+      return false;
 
     const provided = token.slice(separator + 1);
     const expected = this.digest(panicAlertId, exp);
@@ -70,13 +72,18 @@ export class PanicAckTokenService implements OnModuleInit {
     // timingSafeEqual, así que se descarta antes por longitud.
     if (provided.length !== expected.length) return false;
     try {
-      return timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+      return timingSafeEqual(
+        Buffer.from(provided, 'hex'),
+        Buffer.from(expected, 'hex'),
+      );
     } catch {
       return false;
     }
   }
 
   private digest(panicAlertId: string, exp: number): string {
-    return createHmac('sha256', this.secret).update(`${panicAlertId}:${exp}`).digest('hex');
+    return createHmac('sha256', this.secret)
+      .update(`${panicAlertId}:${exp}`)
+      .digest('hex');
   }
 }

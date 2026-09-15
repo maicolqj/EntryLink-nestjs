@@ -21,7 +21,10 @@ import { RemoveStaffMemberResponse } from './dto/responses/remove-staff-member.r
 import { CreateStaffMemberResponse } from './dto/responses/create-staff-member.response';
 
 import { Auth } from '../shared/decorators/auth.decorator';
-import { CurrentUser, CurrentUserId } from '../shared/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  CurrentUserId,
+} from '../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../auth/interfaces/jwt-payload.interface';
 
@@ -35,9 +38,16 @@ export class UsersResolver {
 
   @Query(() => UsersListResponse, {
     name: 'users',
-    description: 'Lista paginada de usuarios. Filtrable por status y complexId.',
+    description:
+      'Lista paginada de usuarios. Filtrable por status y complexId.',
   })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
   findAll(
     @CurrentUser() payload: JwtAccessPayload,
     @Args('input', { nullable: true }) filter?: UsersFilterInput,
@@ -50,7 +60,13 @@ export class UsersResolver {
   }
 
   @Query(() => UserInfoCompleteResponse, { name: 'user', nullable: true })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.COMPILANCE_OFFICER_ROL] })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
   findOne(
     @Args('id', { type: () => String }) id: string,
     @CurrentUser() payload: JwtAccessPayload,
@@ -60,7 +76,8 @@ export class UsersResolver {
 
   @Query(() => MeResponse, {
     name: 'me',
-    description: 'Perfil completo del usuario autenticado (usuario o complejo residencial)',
+    description:
+      'Perfil completo del usuario autenticado (usuario o complejo residencial)',
   })
   @Auth()
   async me(@CurrentUser() payload: JwtAccessPayload) {
@@ -153,7 +170,11 @@ export class UsersResolver {
     @Args('input') input: AdminResetUserPasswordInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<SetPasswordResponse> {
-    return this.usersService.adminResetUserPassword(input, payload.complexId, payload);
+    return this.usersService.adminResetUserPassword(
+      input,
+      payload.complexId,
+      payload,
+    );
   }
 
   // ── Otras mutaciones ──────────────────────────────────────────────────────
@@ -169,14 +190,19 @@ export class UsersResolver {
 
   @Mutation(() => User, {
     name: 'updateUserIdentity',
-    description: 'Edita el tipo y número de documento de identidad de un usuario',
+    description:
+      'Edita el tipo y número de documento de identidad de un usuario',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
   updateUserIdentity(
     @Args('input') input: UpdateUserIdentityInput,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
-    return this.usersService.updateUserIdentity(input, payload.complexId, payload);
+    return this.usersService.updateUserIdentity(
+      input,
+      payload.complexId,
+      payload,
+    );
   }
 
   @Mutation(() => User, { description: 'Suspende la cuenta de un usuario' })
@@ -186,7 +212,12 @@ export class UsersResolver {
     @Args('reason') reason: string,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<User> {
-    return this.usersService.suspendUser(userId, reason, payload.complexId, payload);
+    return this.usersService.suspendUser(
+      userId,
+      reason,
+      payload.complexId,
+      payload,
+    );
   }
 
   @Mutation(() => User, { description: 'Reactiva un usuario suspendido' })
@@ -198,7 +229,9 @@ export class UsersResolver {
     return this.usersService.reactivateUser(userId, payload.complexId, payload);
   }
 
-  @Mutation(() => User, { description: 'Elimina (soft delete) un usuario del sistema' })
+  @Mutation(() => User, {
+    description: 'Elimina (soft delete) un usuario del sistema',
+  })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   deleteUser(
     @Args('userId') userId: string,
@@ -207,7 +240,10 @@ export class UsersResolver {
     return this.usersService.deleteUser(userId, payload);
   }
 
-  @Mutation(() => User, { description: 'Restaura un usuario previamente eliminado (soft delete), dejándolo activo' })
+  @Mutation(() => User, {
+    description:
+      'Restaura un usuario previamente eliminado (soft delete), dejándolo activo',
+  })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   restoreUser(
     @Args('userId') userId: string,

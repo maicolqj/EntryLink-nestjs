@@ -2,7 +2,6 @@ import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class UnitBalanceResponse {
-
   @Field()
   unitId: string;
 
@@ -28,7 +27,6 @@ export class UnitBalanceResponse {
 
 @ObjectType()
 export class ComplexFinancialSummaryResponse {
-
   @Field()
   complexId: string;
 
@@ -63,7 +61,7 @@ export class ComplexFinancialSummaryResponse {
   totalMora: number;
 
   @Field(() => Float)
-  collectionRate: number;  // % cobrado vs total emitido
+  collectionRate: number; // % cobrado vs total emitido
 
   @Field(() => Int)
   unitsWithDebt: number;

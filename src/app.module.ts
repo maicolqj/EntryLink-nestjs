@@ -50,8 +50,8 @@ import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './core/infrastructure/socket/socket.module';
 import { SpecialNumbersModule } from './modules/special-numbers/special-numbers.module';
 import { LegalModule } from './modules/legal/legal.module';
-import { PqrfModule }                 from './modules/pqrf/pqrf.module';
-import { VotingModule }               from './modules/voting/voting.module';
+import { PqrfModule } from './modules/pqrf/pqrf.module';
+import { VotingModule } from './modules/voting/voting.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
@@ -152,9 +152,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
             // extensions; Apollo en otros casos los anida en extensions.originalError.
             // Se leen ambas ubicaciones para no perder el status real (antes caía a 500).
             const code =
-              originalError?.errorCode ||
-              ext?.code ||
-              'INTERNAL_SERVER_ERROR';
+              originalError?.errorCode || ext?.code || 'INTERNAL_SERVER_ERROR';
             const statusCode =
               originalError?.statusCode ??
               ext?.statusCode ??

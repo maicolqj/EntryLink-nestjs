@@ -16,12 +16,12 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente: re-ejecutar no duplica (NOT EXISTS por concepto).
  */
 export class MigrateFeeConfigsToRecurringCharges1781000400000 implements MigrationInterface {
-
   private readonly SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Crear RecurringCharge por cada FeeConfig activa migrable
-    await queryRunner.query(`
+    await queryRunner.query(
+      `
       INSERT INTO "recurring_charges"
         ("concept","type","amount","totalInstallments","currentInstallment","isActive",
          "billingDay","incomeAccountId","complexId","unitId","prorateByCoefficient","createdByUserId")
@@ -59,7 +59,9 @@ export class MigrateFeeConfigsToRecurringCharges1781000400000 implements Migrati
           WHERE rc."complexId" = fc."complexId"
             AND lower(btrim(rc."concept")) = lower(btrim(fc."name"))
         )
-    `, [this.SYSTEM_USER]);
+    `,
+      [this.SYSTEM_USER],
+    );
 
     // 2. Desactivar las FeeConfigs ya cubiertas por un RecurringCharge
     await queryRunner.query(`

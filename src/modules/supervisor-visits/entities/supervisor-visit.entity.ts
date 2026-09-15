@@ -14,13 +14,14 @@ import { SupervisorVisitStatus } from '../enums/supervisor-visit-status.enum';
 import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 
-@ObjectType({ description: 'Registro de visita de supervisor a un complejo residencial' })
+@ObjectType({
+  description: 'Registro de visita de supervisor a un complejo residencial',
+})
 @Entity({ name: 'supervisor_visits' })
 @Index(['supervisorId', 'status'])
 @Index(['complexId', 'status'])
 @Index(['supervisorId', 'complexId', 'status'])
 export class SupervisorVisit {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -51,14 +52,23 @@ export class SupervisorVisit {
 
   // ==================== CHECK-OUT ====================
 
-  @Field(() => Date, { nullable: true, description: 'Fecha y hora de check-out (null si visita activa)' })
+  @Field(() => Date, {
+    nullable: true,
+    description: 'Fecha y hora de check-out (null si visita activa)',
+  })
   @Column({ name: 'check_out_at', type: 'timestamptz', nullable: true })
   checkOutAt?: Date;
 
   // ==================== ESTADO ====================
 
-  @Field(() => SupervisorVisitStatus, { description: 'Estado de la visita: ACTIVE o CLOSED' })
-  @Column({ type: 'enum', enum: SupervisorVisitStatus, default: SupervisorVisitStatus.ACTIVE })
+  @Field(() => SupervisorVisitStatus, {
+    description: 'Estado de la visita: ACTIVE o CLOSED',
+  })
+  @Column({
+    type: 'enum',
+    enum: SupervisorVisitStatus,
+    default: SupervisorVisitStatus.ACTIVE,
+  })
   status: SupervisorVisitStatus;
 
   // ==================== AUDITORÍA ====================

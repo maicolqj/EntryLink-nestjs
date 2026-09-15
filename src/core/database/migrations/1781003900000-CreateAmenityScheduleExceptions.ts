@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * para el mismo día serían ambiguas.
  */
 export class CreateAmenityScheduleExceptions1781003900000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "amenity_schedule_exceptions" (
@@ -54,6 +53,8 @@ export class CreateAmenityScheduleExceptions1781003900000 implements MigrationIn
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "amenity_schedule_exceptions"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "amenity_schedule_exceptions"`,
+    );
   }
 }

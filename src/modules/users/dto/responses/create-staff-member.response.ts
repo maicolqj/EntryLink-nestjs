@@ -2,8 +2,8 @@ import { ObjectType, Field, ID, registerEnumType } from '@nestjs/graphql';
 import { UserStatus } from '../../enums/user.enums';
 
 export enum StaffMemberAction {
-  CREATED          = 'CREATED',          // Usuario nuevo creado e incorporado
-  REINTEGRATED     = 'REINTEGRATED',     // Usuario existente reintegrado (ej: guardia que vuelve)
+  CREATED = 'CREATED', // Usuario nuevo creado e incorporado
+  REINTEGRATED = 'REINTEGRATED', // Usuario existente reintegrado (ej: guardia que vuelve)
   ADDED_TO_COMPLEX = 'ADDED_TO_COMPLEX', // Supervisor/Contador añadido a un complejo adicional
 }
 
@@ -11,15 +11,21 @@ registerEnumType(StaffMemberAction, {
   name: 'StaffMemberAction',
   description: 'Resultado de la operación createStaffMember',
   valuesMap: {
-    CREATED:          { description: 'Usuario nuevo creado e incorporado al complejo' },
-    REINTEGRATED:     { description: 'Usuario existente reactivado y reintegrado a este complejo' },
-    ADDED_TO_COMPLEX: { description: 'Usuario existente asignado a este complejo adicional (sin alterar sus otras asignaciones)' },
+    CREATED: { description: 'Usuario nuevo creado e incorporado al complejo' },
+    REINTEGRATED: {
+      description: 'Usuario existente reactivado y reintegrado a este complejo',
+    },
+    ADDED_TO_COMPLEX: {
+      description:
+        'Usuario existente asignado a este complejo adicional (sin alterar sus otras asignaciones)',
+    },
   },
 });
 
-@ObjectType({ description: 'Resultado de crear o reintegrar un miembro del personal' })
+@ObjectType({
+  description: 'Resultado de crear o reintegrar un miembro del personal',
+})
 export class CreateStaffMemberResponse {
-
   @Field(() => ID)
   id: string;
 
@@ -35,10 +41,8 @@ export class CreateStaffMemberResponse {
   @Field(() => String)
   phoneNumber: string;
 
-
   @Field(() => String)
   identity: string;
-
 
   @Field(() => String, { nullable: true })
   complexId?: string;

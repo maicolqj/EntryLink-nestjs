@@ -10,7 +10,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * (`recurring_charges_billingmode_enum`) por si en dev se corre `synchronize`.
  */
 export class AddBillingModeToRecurringCharges1781000500000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -26,7 +25,11 @@ export class AddBillingModeToRecurringCharges1781000500000 implements MigrationI
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "billingMode"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "recurring_charges_billingmode_enum"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "billingMode"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "recurring_charges_billingmode_enum"`,
+    );
   }
 }

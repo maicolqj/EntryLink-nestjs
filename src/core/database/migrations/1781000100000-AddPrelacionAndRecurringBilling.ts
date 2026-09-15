@@ -8,7 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *  - Agrega "lastBilledPeriod" a recurring_charges (idempotencia de causación).
  */
 export class AddPrelacionAndRecurringBilling1781000100000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -39,9 +38,15 @@ export class AddPrelacionAndRecurringBilling1781000100000 implements MigrationIn
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_fee_charges_prelacion"`);
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "lastBilledPeriod"`);
-    await queryRunner.query(`ALTER TABLE "fee_configs"  DROP COLUMN IF EXISTS "prelacionConcept"`);
-    await queryRunner.query(`ALTER TABLE "fee_charges"  DROP COLUMN IF EXISTS "prelacionConcept"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "lastBilledPeriod"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_configs"  DROP COLUMN IF EXISTS "prelacionConcept"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_charges"  DROP COLUMN IF EXISTS "prelacionConcept"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "prelacion_concept_enum"`);
   }
 }

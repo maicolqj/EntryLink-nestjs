@@ -7,8 +7,9 @@ import { IsUUID, IsString, MaxLength, MinLength } from 'class-validator';
  */
 @InputType()
 export class RejectResidentInput {
-
-  @Field(() => String, { description: 'ID del registro de residente a rechazar' })
+  @Field(() => String, {
+    description: 'ID del registro de residente a rechazar',
+  })
   @IsUUID()
   residentId: string;
 

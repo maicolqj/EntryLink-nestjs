@@ -1,19 +1,25 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
-import { FeeFrequency }       from '../enums/fee-frequency.enum';
-import { ChargeType }         from '../enums/charge-type.enum';
-import { PrelacionConcept }   from '../enums/prelacion-concept.enum';
+import { FeeFrequency } from '../enums/fee-frequency.enum';
+import { ChargeType } from '../enums/charge-type.enum';
+import { PrelacionConcept } from '../enums/prelacion-concept.enum';
 import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../enums/fee-config-trigger-type.enum';
-import { ChargeCategory }     from './charge-category.entity';
+import { ChargeCategory } from './charge-category.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }               from '../../residential-complex/entities/unit.entity';
-import { UnitType }           from '../../residential-complex/enums/unit-type.enum';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { UnitType } from '../../residential-complex/enums/unit-type.enum';
 import { FeeConfigTargetRules } from '../dto/inputs/fee-config-target-rules.input';
 
 /**
@@ -28,7 +34,6 @@ import { FeeConfigTargetRules } from '../dto/inputs/fee-config-target-rules.inpu
 @Entity('fee_configs')
 @Index(['complexId', 'isActive'])
 export class FeeConfig {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -84,7 +89,11 @@ export class FeeConfig {
 
   /** Concepto de prelación heredado por los cargos generados desde esta config. */
   @Field(() => PrelacionConcept)
-  @Column({ type: 'enum', enum: PrelacionConcept, default: PrelacionConcept.ORDINARY })
+  @Column({
+    type: 'enum',
+    enum: PrelacionConcept,
+    default: PrelacionConcept.ORDINARY,
+  })
   prelacionConcept: PrelacionConcept;
 
   /**
@@ -123,7 +132,11 @@ export class FeeConfig {
 
   /** ADVANCE: vence en el mismo período. ARREARS: vence en el período siguiente. */
   @Field(() => FeeConfigBillingMode)
-  @Column({ type: 'enum', enum: FeeConfigBillingMode, default: FeeConfigBillingMode.ADVANCE })
+  @Column({
+    type: 'enum',
+    enum: FeeConfigBillingMode,
+    default: FeeConfigBillingMode.ADVANCE,
+  })
   billingMode: FeeConfigBillingMode;
 
   /** Si true, este config NO se aplica en generateCharges; debe aplicarse manualmente por unidad. */
@@ -177,7 +190,11 @@ export class FeeConfig {
   unit?: Unit;
 
   @Field(() => ChargeCategory, { nullable: true })
-  @ManyToOne(() => ChargeCategory, { nullable: true, onDelete: 'SET NULL', eager: false })
+  @ManyToOne(() => ChargeCategory, {
+    nullable: true,
+    onDelete: 'SET NULL',
+    eager: false,
+  })
   @JoinColumn({ name: 'categoryId' })
   category?: ChargeCategory;
 

@@ -16,7 +16,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Fuera de transacción porque agrega un valor a un enum nativo.
  */
 export class PqrfDeadline1781004400000 implements MigrationInterface {
-
   public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {

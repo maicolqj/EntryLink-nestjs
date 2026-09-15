@@ -9,7 +9,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * (notify() es fire-and-forget). Idempotente: ADD VALUE IF NOT EXISTS (PG 12+).
  */
 export class AddDpaSignedNotificationType1781002600000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const [{ exists }] = await queryRunner.query(
       `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notifications_type_enum') AS exists`,

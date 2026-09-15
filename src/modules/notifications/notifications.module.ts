@@ -3,33 +3,33 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 
-import { Notification }         from './entities/notification.entity';
-import { PushSubscription }      from './entities/push-subscription.entity';
-import { NotificationBatch }     from './entities/notification-batch.entity';
-import { PanicAlert }             from './entities/panic-alert.entity';
-import { PanicAlertDelivery }      from './entities/panic-alert-delivery.entity';
+import { Notification } from './entities/notification.entity';
+import { PushSubscription } from './entities/push-subscription.entity';
+import { NotificationBatch } from './entities/notification-batch.entity';
+import { PanicAlert } from './entities/panic-alert.entity';
+import { PanicAlertDelivery } from './entities/panic-alert-delivery.entity';
 import { PanicEscalationSettings } from './entities/panic-escalation-settings.entity';
-import { DevicePushHealth }        from './entities/device-push-health.entity';
+import { DevicePushHealth } from './entities/device-push-health.entity';
 
-import { User }     from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
-import { Role }     from '../roles/entities/role.entity';
+import { Role } from '../roles/entities/role.entity';
 import { SupervisorVisit } from '../supervisor-visits/entities/supervisor-visit.entity';
-import { ResidentsModule }       from '../residents/residents.module';
+import { ResidentsModule } from '../residents/residents.module';
 
-import { NotificationsService }  from './services/notifications.service';
-import { PanicAckTokenService }  from './services/panic-ack-token.service';
-import { PanicController }       from './controllers/panic.controller';
+import { NotificationsService } from './services/notifications.service';
+import { PanicAckTokenService } from './services/panic-ack-token.service';
+import { PanicController } from './controllers/panic.controller';
 import { DeviceHealthController } from './controllers/device-health.controller';
-import { DeviceHealthService }    from './services/device-health.service';
-import { DeviceHealthCron }       from './cron/device-health.cron';
-import { DeviceHealthResolver }   from './resolvers/device-health.resolver';
+import { DeviceHealthService } from './services/device-health.service';
+import { DeviceHealthCron } from './cron/device-health.cron';
+import { DeviceHealthResolver } from './resolvers/device-health.resolver';
 import { NotificationsResolver } from './resolvers/notifications.resolver';
 import { PanicEscalationProcessor } from './queues/panic-escalation.processor';
-import { PANIC_ESCALATION_QUEUE }   from './queues/panic-escalation.queue.constants';
-import { SocketPanicChannel }       from './channels/socket-panic.channel';
-import { EmailPanicChannel }        from './channels/email-panic.channel';
-import { FcmRepushPanicChannel }    from './channels/fcm-repush.channel';
+import { PANIC_ESCALATION_QUEUE } from './queues/panic-escalation.queue.constants';
+import { SocketPanicChannel } from './channels/socket-panic.channel';
+import { EmailPanicChannel } from './channels/email-panic.channel';
+import { FcmRepushPanicChannel } from './channels/fcm-repush.channel';
 import {
   WhatsAppPanicChannel,
   SmsPanicChannel,

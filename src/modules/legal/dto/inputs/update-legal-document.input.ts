@@ -1,5 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { LegalAudience } from '../../enums/legal-audience.enum';
 
 @InputType()
@@ -24,7 +31,8 @@ export class UpdateLegalDocumentInput {
 
   @Field(() => String, {
     nullable: true,
-    description: 'Nuevo .docx en base64. Si se envía, reemplaza el contenido HTML e incrementa la versión.',
+    description:
+      'Nuevo .docx en base64. Si se envía, reemplaza el contenido HTML e incrementa la versión.',
   })
   @IsOptional()
   @IsString()
@@ -40,7 +48,10 @@ export class UpdateLegalDocumentInput {
   @IsBoolean()
   isDownloadable?: boolean;
 
-  @Field(() => String, { nullable: true, description: 'Nuevo PDF descargable en base64. Reemplaza el anterior.' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Nuevo PDF descargable en base64. Reemplaza el anterior.',
+  })
   @IsOptional()
   @IsString()
   pdfBase64?: string;

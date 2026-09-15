@@ -1,12 +1,17 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsNumber, IsPositive,
-  IsArray, ArrayNotEmpty, Matches, MaxLength,
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsPositive,
+  IsArray,
+  ArrayNotEmpty,
+  Matches,
+  MaxLength,
 } from 'class-validator';
 
 @InputType()
 export class CreateDirectChargesInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

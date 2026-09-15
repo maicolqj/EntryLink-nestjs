@@ -21,7 +21,10 @@ export const seedPucForComplex = async (
 
     // code → id (para enlazar parentId de los hijos)
     const codeToId = new Map<string, string>();
-    const existing = await repo.find({ where: { complexId }, select: ['id', 'code'] });
+    const existing = await repo.find({
+      where: { complexId },
+      select: ['id', 'code'],
+    });
     existing.forEach((a) => codeToId.set(a.code, a.id));
 
     // Insertar por nivel ascendente para que el padre exista antes que el hijo
@@ -30,7 +33,9 @@ export const seedPucForComplex = async (
     for (const row of rowsByLevel) {
       if (codeToId.has(row.code)) continue; // idempotencia
 
-      const parentId = row.parentCode ? codeToId.get(row.parentCode) ?? null : null;
+      const parentId = row.parentCode
+        ? (codeToId.get(row.parentCode) ?? null)
+        : null;
 
       const saved = await repo.save(
         repo.create({
@@ -59,8 +64,12 @@ export const seedPucForComplex = async (
 };
 
 /** Siembra el PUC base para TODAS las copropiedades existentes. */
-export const seedPucForAllComplexes = async (dataSource: DataSource): Promise<void> => {
-  const complexes = await dataSource.getRepository(ResidentialComplex).find({ select: ['id'] });
+export const seedPucForAllComplexes = async (
+  dataSource: DataSource,
+): Promise<void> => {
+  const complexes = await dataSource
+    .getRepository(ResidentialComplex)
+    .find({ select: ['id'] });
   if (complexes.length === 0) {
     console.log('  ⏭️  No hay copropiedades; nada que sembrar.');
     return;

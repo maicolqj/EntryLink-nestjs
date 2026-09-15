@@ -12,7 +12,7 @@ export class PermissionDependencyService {
     // Inyección del repositorio de Permission para operaciones de BD
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
-  ) { }
+  ) {}
 
   /**
    * MÉTODO 1: validateCircularDependency
@@ -20,16 +20,13 @@ export class PermissionDependencyService {
    * Ejemplo: Si A depende de B, B no puede depender de A (directa o indirectamente)
    */
   async validateCircularDependency(
-    permissionId: string,     // ID del permiso que se está creando/modificando
-    dependencyIds: string[],  // Array de IDs de permisos de los que depende
+    permissionId: string, // ID del permiso que se está creando/modificando
+    dependencyIds: string[], // Array de IDs de permisos de los que depende
   ): Promise<boolean> {
-
     // Itera sobre cada dependencia propuesta para validarla individualmente
     for (const dependencyId of dependencyIds) {
-
       // Llama al método privado que hace la validación recursiva
       if (await this.hasCircularDependency(permissionId, dependencyId)) {
-
         // Si encuentra dependencia circular, lanza excepción con mensaje descriptivo
         throw new BadRequestException(
           `Dependencia circular detectada entre el permiso ${permissionId} y ${dependencyId}`,
@@ -38,7 +35,9 @@ export class PermissionDependencyService {
     }
 
     // Registra en log que la validación fue exitosa
-    this.logger.debug(`Validación de dependencias circulares exitosa para ${permissionId}`);
+    this.logger.debug(
+      `Validación de dependencias circulares exitosa para ${permissionId}`,
+    );
 
     // Retorna true si no hay dependencias circulares
     return true;
@@ -50,11 +49,10 @@ export class PermissionDependencyService {
    * Algoritmo: DFS (Depth-First Search) para detectar ciclos en el grafo de dependencias
    */
   private async hasCircularDependency(
-    permissionId: string,           // Permiso origen (el que estamos validando)
-    dependencyId: string,           // Permiso actual en la búsqueda
+    permissionId: string, // Permiso origen (el que estamos validando)
+    dependencyId: string, // Permiso actual en la búsqueda
     visited: Set<string> = new Set(), // Conjunto de nodos visitados para evitar loops infinitos
   ): Promise<boolean> {
-
     // CASO BASE 1: Si el permiso depende de sí mismo, hay dependencia circular
     if (permissionId === dependencyId) {
       return true;
@@ -71,7 +69,7 @@ export class PermissionDependencyService {
     // Busca el permiso de dependencia en BD con sus relaciones
     const dependency = await this.permissionRepository.findOne({
       where: { id: dependencyId },
-      relations: ['dependsOn'],  // Carga las dependencias de este permiso
+      relations: ['dependsOn'], // Carga las dependencias de este permiso
     });
 
     // Si no existe el permiso o no tiene dependencias, no hay ciclo
@@ -82,7 +80,13 @@ export class PermissionDependencyService {
     // RECURSIÓN: Verifica cada dependencia de la dependencia actual
     for (const subDependency of dependency.dependsOn) {
       // Llamada recursiva para buscar ciclos en dependencias más profundas
-      if (await this.hasCircularDependency(permissionId, subDependency.id, visited)) {
+      if (
+        await this.hasCircularDependency(
+          permissionId,
+          subDependency.id,
+          visited,
+        )
+      ) {
         return true; // Se encontró un ciclo
       }
     }
@@ -97,7 +101,6 @@ export class PermissionDependencyService {
    * Ejemplo: Si A depende de B, y B depende de C, retorna [B, C]
    */
   async getAllDependencies(permissionId: string): Promise<Permission[]> {
-
     // Set para evitar dependencias duplicadas y loops infinitos
     const visited = new Set<string>();
 
@@ -108,7 +111,9 @@ export class PermissionDependencyService {
     await this.collectDependencies(permissionId, visited, dependencies);
 
     // Log del resultado para debugging
-    this.logger.debug(`Dependencias encontradas para ${permissionId}: ${dependencies.length}`);
+    this.logger.debug(
+      `Dependencias encontradas para ${permissionId}: ${dependencies.length}`,
+    );
 
     return dependencies;
   }
@@ -119,11 +124,10 @@ export class PermissionDependencyService {
    * Usa DFS para recorrer todo el árbol de dependencias
    */
   private async collectDependencies(
-    permissionId: string,         // ID del permiso actual
-    visited: Set<string>,         // Nodos ya visitados
-    dependencies: Permission[],   // Array donde se acumulan las dependencias
+    permissionId: string, // ID del permiso actual
+    visited: Set<string>, // Nodos ya visitados
+    dependencies: Permission[], // Array donde se acumulan las dependencias
   ): Promise<void> {
-
     // Si ya procesamos este permiso, salir para evitar loop infinito
     if (visited.has(permissionId)) {
       return;
@@ -145,9 +149,8 @@ export class PermissionDependencyService {
 
     // Procesar cada dependencia directa
     for (const dependency of permission.dependsOn) {
-
       // Verificar si ya está en el array de dependencias (evitar duplicados)
-      if (!dependencies.find(d => d.id === dependency.id)) {
+      if (!dependencies.find((d) => d.id === dependency.id)) {
         dependencies.push(dependency); // Agregar al resultado
       }
 
@@ -162,27 +165,26 @@ export class PermissionDependencyService {
    * Incluye validación de dependencias transitivas
    */
   async validateUserPermissions(
-    userPermissions: string[],    // Array de IDs de permisos que tiene el usuario
-    requiredPermission: string,   // ID del permiso que se quiere validar
+    userPermissions: string[], // Array de IDs de permisos que tiene el usuario
+    requiredPermission: string, // ID del permiso que se quiere validar
   ): Promise<boolean> {
-
     // Obtener todas las dependencias del permiso requerido (incluyendo transitivas)
     const allDependencies = await this.getAllDependencies(requiredPermission);
 
     // Crear array con el permiso requerido y todas sus dependencias
     const requiredPermissionIds = [
-      requiredPermission,                    // El permiso principal
-      ...allDependencies.map(dep => dep.id), // Todas las dependencias
+      requiredPermission, // El permiso principal
+      ...allDependencies.map((dep) => dep.id), // Todas las dependencias
     ];
 
     // Verificar que el usuario tenga TODOS los permisos necesarios
-    const hasAllPermissions = requiredPermissionIds.every(permId =>
-      userPermissions.includes(permId)
+    const hasAllPermissions = requiredPermissionIds.every((permId) =>
+      userPermissions.includes(permId),
     );
 
     // Log del resultado para auditoría
     this.logger.debug(
-      `Validación de permisos para usuario. Requeridos: ${requiredPermissionIds.length}, Usuario tiene todos: ${hasAllPermissions}`
+      `Validación de permisos para usuario. Requeridos: ${requiredPermissionIds.length}, Usuario tiene todos: ${hasAllPermissions}`,
     );
 
     return hasAllPermissions;
@@ -194,10 +196,9 @@ export class PermissionDependencyService {
    * Incluye validaciones de seguridad antes de la actualización
    */
   async updatePermissionDependencies(
-    permissionId: string,    // ID del permiso a actualizar
+    permissionId: string, // ID del permiso a actualizar
     dependencyIds: string[], // Nuevos IDs de dependencias
   ): Promise<Permission> {
-
     // VALIDACIÓN 1: Verificar dependencias circulares antes de actualizar
     await this.validateCircularDependency(permissionId, dependencyIds);
 
@@ -212,15 +213,16 @@ export class PermissionDependencyService {
     }
 
     // VALIDACIÓN 3: Verificar que todas las nuevas dependencias existen
-    const dependencies = await this.permissionRepository.findByIds(dependencyIds);
+    const dependencies =
+      await this.permissionRepository.findByIds(dependencyIds);
 
     if (dependencies.length !== dependencyIds.length) {
       // Identificar cuáles dependencias no existen
-      const foundIds = dependencies.map(d => d.id);
-      const missingIds = dependencyIds.filter(id => !foundIds.includes(id));
+      const foundIds = dependencies.map((d) => d.id);
+      const missingIds = dependencyIds.filter((id) => !foundIds.includes(id));
 
       throw new BadRequestException(
-        `Algunas dependencias no fueron encontradas: ${missingIds.join(', ')}`
+        `Algunas dependencias no fueron encontradas: ${missingIds.join(', ')}`,
       );
     }
 
@@ -240,7 +242,6 @@ export class PermissionDependencyService {
    * Útil para interfaces gráficas que muestran dependencias como árbol
    */
   async getDependencyTree(permissionId: string): Promise<any> {
-
     // Buscar el permiso raíz con sus dependencias directas
     const permission = await this.permissionRepository.findOne({
       where: { id: permissionId },
@@ -249,7 +250,9 @@ export class PermissionDependencyService {
 
     // Si no existe el permiso, retornar null
     if (!permission) {
-      this.logger.warn(`Permiso no encontrado para árbol de dependencias: ${permissionId}`);
+      this.logger.warn(
+        `Permiso no encontrado para árbol de dependencias: ${permissionId}`,
+      );
       return null;
     }
 
@@ -258,7 +261,6 @@ export class PermissionDependencyService {
      * Construye recursivamente el árbol de dependencias
      */
     const buildTree = async (perm: Permission): Promise<any> => {
-
       // Crear nodo del árbol con información básica del permiso
       const node = {
         id: perm.id,
@@ -270,10 +272,8 @@ export class PermissionDependencyService {
 
       // Si el permiso tiene dependencias, procesarlas recursivamente
       if (perm.dependsOn && perm.dependsOn.length > 0) {
-
         // Procesar cada dependencia
         for (const dependency of perm.dependsOn) {
-
           // Obtener información completa de la dependencia (con sus propias dependencias)
           const fullDependency = await this.permissionRepository.findOne({
             where: { id: dependency.id },
@@ -291,7 +291,9 @@ export class PermissionDependencyService {
     };
 
     // Log y retorno del árbol completo
-    this.logger.debug(`Construyendo árbol de dependencias para ${permissionId}`);
+    this.logger.debug(
+      `Construyendo árbol de dependencias para ${permissionId}`,
+    );
     return await buildTree(permission);
   }
 
@@ -301,21 +303,19 @@ export class PermissionDependencyService {
    * Evita eliminar dependencias que son requeridas por otros permisos
    */
   async validateDependencyRemoval(
-    permissionId: string,     // ID del permiso del cual se quieren remover dependencias
-    dependencyIds: string[],  // IDs de las dependencias que se quieren remover
+    permissionId: string, // ID del permiso del cual se quieren remover dependencias
+    dependencyIds: string[], // IDs de las dependencias que se quieren remover
   ): Promise<{ canRemove: boolean; conflicts: string[] }> {
-
     // Array para almacenar conflictos encontrados
     const conflicts: string[] = [];
 
     // Validar cada dependencia que se quiere remover
     for (const dependencyId of dependencyIds) {
-
       // Buscar otros permisos que dependan de esta dependencia
       const dependentPermissions = await this.permissionRepository
-        .createQueryBuilder('permission')                    // Crear query builder
-        .innerJoin('permission.dependsOn', 'dependency')     // Join con dependencias
-        .where('dependency.id = :dependencyId', { dependencyId })  // Filtrar por dependencia específica
+        .createQueryBuilder('permission') // Crear query builder
+        .innerJoin('permission.dependsOn', 'dependency') // Join con dependencias
+        .where('dependency.id = :dependencyId', { dependencyId }) // Filtrar por dependencia específica
         .andWhere('permission.id != :permissionId', { permissionId }) // Excluir el permiso actual
         .getMany(); // Ejecutar query
 
@@ -323,21 +323,21 @@ export class PermissionDependencyService {
       if (dependentPermissions.length > 0) {
         conflicts.push(
           `La dependencia ${dependencyId} es requerida por: ${dependentPermissions
-            .map(p => p.name)  // Mapear a nombres legibles
-            .join(', ')}`      // Unir con comas
+            .map((p) => p.name) // Mapear a nombres legibles
+            .join(', ')}`, // Unir con comas
         );
       }
     }
 
     // Log del resultado
     this.logger.debug(
-      `Validación de remoción de dependencias. Conflictos encontrados: ${conflicts.length}`
+      `Validación de remoción de dependencias. Conflictos encontrados: ${conflicts.length}`,
     );
 
     // Retornar resultado de la validación
     return {
-      canRemove: conflicts.length === 0,  // Se puede remover si no hay conflictos
-      conflicts,                          // Lista de conflictos encontrados
+      canRemove: conflicts.length === 0, // Se puede remover si no hay conflictos
+      conflicts, // Lista de conflictos encontrados
     };
   }
 }

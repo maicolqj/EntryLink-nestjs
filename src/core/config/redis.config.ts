@@ -36,10 +36,14 @@ export interface RedisModuleConfig {
 export default registerAs('redis', (): RedisModuleConfig => {
   // 📋 Validación de variables de entorno críticas
   const requiredEnvVars = ['REDIS_HOST'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  const missingVars = requiredEnvVars.filter(
+    (varName) => !process.env[varName],
+  );
 
   if (missingVars.length > 0 && process.env.NODE_ENV === 'production') {
-    throw new Error(`Missing required Redis environment variables: ${missingVars.join(', ')}`);
+    throw new Error(
+      `Missing required Redis environment variables: ${missingVars.join(', ')}`,
+    );
   }
 
   // 🔧 Configuración base compartida y optimizada para BullMQ
@@ -229,7 +233,8 @@ export default registerAs('redis', (): RedisModuleConfig => {
 
         // Configuraciones de trabajos por defecto para BullMQ
         defaultJobOptions: {
-          removeOnComplete: parseInt(process.env.BULL_REMOVE_ON_COMPLETE, 10) || 10,
+          removeOnComplete:
+            parseInt(process.env.BULL_REMOVE_ON_COMPLETE, 10) || 10,
           removeOnFail: parseInt(process.env.BULL_REMOVE_ON_FAIL, 10) || 5,
           attempts: parseInt(process.env.BULL_ATTEMPTS, 10) || 3,
           backoff: {
@@ -298,11 +303,15 @@ export const getRedisConfigForEnvironment = (config: RedisModuleConfig) => {
 // 🔧 Función helper para validar configuración
 export const validateRedisConfig = (config: RedisConnectionConfig): boolean => {
   const required = ['host', 'port'];
-  return required.every(key => config[key] !== undefined && config[key] !== null);
+  return required.every(
+    (key) => config[key] !== undefined && config[key] !== null,
+  );
 };
 
 // 🔧 Función helper para testing de conexión Redis
-export const testRedisConnection = async (config: RedisConnectionConfig): Promise<boolean> => {
+export const testRedisConnection = async (
+  config: RedisConnectionConfig,
+): Promise<boolean> => {
   const Redis = require('ioredis');
   const redis = new Redis(config);
 

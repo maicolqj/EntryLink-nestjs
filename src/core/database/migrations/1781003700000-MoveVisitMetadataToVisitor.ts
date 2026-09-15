@@ -19,7 +19,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * histórico. Eliminar esa columna es una decisión aparte y destructiva.
  */
 export class MoveVisitMetadataToVisitor1781003700000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "visitors"

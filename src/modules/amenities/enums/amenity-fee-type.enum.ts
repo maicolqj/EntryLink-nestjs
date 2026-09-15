@@ -2,11 +2,11 @@ import { registerEnumType } from '@nestjs/graphql';
 
 export enum AmenityFeeType {
   /** Sin costo */
-  FREE        = 'FREE',
+  FREE = 'FREE',
   /** Monto fijo por reserva, sin importar la duración */
   PER_BOOKING = 'PER_BOOKING',
   /** feeAmount × horas reservadas (fracción de hora se prorratea) */
-  PER_HOUR    = 'PER_HOUR',
+  PER_HOUR = 'PER_HOUR',
 }
 
 registerEnumType(AmenityFeeType, {

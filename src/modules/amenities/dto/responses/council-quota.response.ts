@@ -8,16 +8,24 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
  * reservas del año es una consulta por zona y por persona: resolverlo dentro
  * del listado de zonas costaría una consulta por cada fila.
  */
-@ObjectType({ description: 'Cupo anual del consejo de administración en una zona común' })
+@ObjectType({
+  description: 'Cupo anual del consejo de administración en una zona común',
+})
 export class AmenityCouncilQuotaResponse {
-
-  @Field(() => Boolean, { description: 'Quien pregunta está marcado como miembro del consejo' })
+  @Field(() => Boolean, {
+    description: 'Quien pregunta está marcado como miembro del consejo',
+  })
   isCouncilMember: boolean;
 
-  @Field(() => Int, { description: 'Reservas gratis al año que concede la zona. 0 = no concede el beneficio' })
+  @Field(() => Int, {
+    description:
+      'Reservas gratis al año que concede la zona. 0 = no concede el beneficio',
+  })
   bookingsPerYear: number;
 
-  @Field(() => Int, { description: 'Cuántas lleva usadas este año en esta zona' })
+  @Field(() => Int, {
+    description: 'Cuántas lleva usadas este año en esta zona',
+  })
   used: number;
 
   @Field(() => Int, { description: 'Cuántas le quedan este año en esta zona' })

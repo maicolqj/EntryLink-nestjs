@@ -20,7 +20,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * zonas y horarios cargados: recrear la tabla los borraría.
  */
 export class AllowOvernightAmenitySchedules1781003800000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "amenity_schedules"

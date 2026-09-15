@@ -26,18 +26,23 @@ describe('VisitorsService.findOrCreate — metadata del documento', () => {
   const visitorRepo = {
     create: jest.fn((data: any) => ({ ...data })),
     save: jest.fn(async (data: any) => {
-      const existing = rows.find(r => r.id === data.id);
-      if (existing) { Object.assign(existing, data); return existing; }
+      const existing = rows.find((r) => r.id === data.id);
+      if (existing) {
+        Object.assign(existing, data);
+        return existing;
+      }
       const row = { id: `vis-${rows.length + 1}`, ...data };
       rows.push(row);
       return row;
     }),
-    findOne: jest.fn(async ({ where }: any) =>
-      rows.find(r =>
-        r.complexId === where.complexId &&
-        r.identity === where.identity &&
-        r.identityType === where.identityType,
-      ) ?? null,
+    findOne: jest.fn(
+      async ({ where }: any) =>
+        rows.find(
+          (r) =>
+            r.complexId === where.complexId &&
+            r.identity === where.identity &&
+            r.identityType === where.identityType,
+        ) ?? null,
     ),
   };
 
@@ -79,7 +84,9 @@ describe('VisitorsService.findOrCreate — metadata del documento', () => {
 
   it('incorpora los campos nuevos que trae un escaneo posterior', async () => {
     await findOrCreate({ nationality: 'COL' });
-    const visitor = await findOrCreate({ birthPlace: 'BOGOTA D.C. (CUNDINAMARCA)' });
+    const visitor = await findOrCreate({
+      birthPlace: 'BOGOTA D.C. (CUNDINAMARCA)',
+    });
 
     expect(visitor.metadata).toEqual({
       nationality: 'COL',
@@ -91,7 +98,7 @@ describe('VisitorsService.findOrCreate — metadata del documento', () => {
     await findOrCreate({ height: '1.60' });
     const visitor = await findOrCreate({ height: '1.68' });
 
-    expect(visitor.metadata!.height).toBe('1.68');
+    expect(visitor.metadata.height).toBe('1.68');
   });
 
   it('no escribe en la BD si la visita no aporta nada nuevo', async () => {

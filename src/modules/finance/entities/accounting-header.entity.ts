@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  ManyToOne, OneToMany, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
@@ -24,7 +30,6 @@ import { moneyColumn } from '../utils/numeric.transformer';
 @Index(['complexId', 'documentDate'])
 @Index(['complexId', 'unitId'])
 export class AccountingHeader {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -53,11 +58,21 @@ export class AccountingHeader {
   memo?: string;
 
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    transformer: moneyColumn,
+  })
   totalDebit: number;
 
   @Field(() => Float)
-  @Column({ type: 'numeric', precision: 18, scale: 2, transformer: moneyColumn })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    transformer: moneyColumn,
+  })
   totalCredit: number;
 
   /** Tercero externo (proveedor). Texto libre o, a futuro, FK a proveedores. */

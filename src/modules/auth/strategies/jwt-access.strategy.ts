@@ -11,7 +11,11 @@ import { ComplexStatus } from '../../residential-complex/enums/complex-status.en
 import { TokenService } from '../services/token.service';
 import { SessionService } from '../services/session.service';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, ComplexErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  ComplexErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -22,7 +26,8 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-    @InjectRepository(ResidentialComplex) private readonly complexRepo: Repository<ResidentialComplex>,
+    @InjectRepository(ResidentialComplex)
+    private readonly complexRepo: Repository<ResidentialComplex>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -104,7 +109,9 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     // Verificar que la sesión siga activa
-    const isActive = await this.sessionService.isSessionActive(payload.sessionId);
+    const isActive = await this.sessionService.isSessionActive(
+      payload.sessionId,
+    );
     if (!isActive) {
       throw new CustomError({
         message: 'Sesión terminada',

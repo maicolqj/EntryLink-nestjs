@@ -34,21 +34,56 @@ import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
  */
 describe('AccountingService', () => {
   let service: AccountingService;
-  let pucRepo: { find: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock; remove: jest.Mock; count: jest.Mock };
-  let recurringRepo: { find: jest.Mock; create: jest.Mock; save: jest.Mock; count: jest.Mock };
+  let pucRepo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+    count: jest.Mock;
+  };
+  let recurringRepo: {
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    count: jest.Mock;
+  };
   let em: any;
   let saved: Record<string, any[]>;
   let store: Record<string, any[]>;
   let pucByCode: Record<string, any>;
 
-  const user = { sub: 'user-1', email: 'admin@test.com', roles: ['COMPLEX_ROL'] } as any;
+  const user = {
+    sub: 'user-1',
+    email: 'admin@test.com',
+    roles: ['COMPLEX_ROL'],
+  } as any;
   const CPX = 'cpx-1';
 
-  const puc = (code: string) => ({ id: `acc-${code}`, code, complexId: CPX, isPostable: true, isActive: true });
+  const puc = (code: string) => ({
+    id: `acc-${code}`,
+    code,
+    complexId: CPX,
+    isPostable: true,
+    isActive: true,
+  });
 
   beforeEach(async () => {
-    saved = { AccountingHeader: [], WalletEntry: [], FeeCharge: [], PropertyAccountStatus: [], DocumentSequence: [], RecurringCharge: [] };
-    store = { FeeCharge: [], WalletEntry: [], PropertyAccountStatus: [], RecurringCharge: [], Unit: [] };
+    saved = {
+      AccountingHeader: [],
+      WalletEntry: [],
+      FeeCharge: [],
+      PropertyAccountStatus: [],
+      DocumentSequence: [],
+      RecurringCharge: [],
+    };
+    store = {
+      FeeCharge: [],
+      WalletEntry: [],
+      PropertyAccountStatus: [],
+      RecurringCharge: [],
+      Unit: [],
+    };
     pucByCode = {};
 
     em = {
@@ -65,7 +100,11 @@ describe('AccountingService', () => {
         const where = opts?.where ?? {};
         if (E.name === 'PucAccount') {
           if (where.code) return pucByCode[where.code] ?? null;
-          if (where.id) return Object.values(pucByCode).find((a: any) => a.id === where.id) ?? null;
+          if (where.id)
+            return (
+              Object.values(pucByCode).find((a: any) => a.id === where.id) ??
+              null
+            );
           return null;
         }
         if (E.name === 'DocumentSequence') return null; // siempre arranca consecutivo en 1
@@ -99,11 +138,23 @@ describe('AccountingService', () => {
       providers: [
         AccountingService,
         { provide: getRepositoryToken(PucAccount), useValue: pucRepo },
-        { provide: getRepositoryToken(RecurringCharge), useValue: recurringRepo },
+        {
+          provide: getRepositoryToken(RecurringCharge),
+          useValue: recurringRepo,
+        },
         { provide: DataSource, useValue: dataSource },
-        { provide: ResidentialComplexService, useValue: { findById: jest.fn() } },
-        { provide: ResidentsService, useValue: { findActiveByUnitInternal: jest.fn(async () => []) } },
-        { provide: NotificationsService, useValue: { notify: jest.fn(async () => []) } },
+        {
+          provide: ResidentialComplexService,
+          useValue: { findById: jest.fn() },
+        },
+        {
+          provide: ResidentsService,
+          useValue: { findActiveByUnitInternal: jest.fn(async () => []) },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { notify: jest.fn(async () => []) },
+        },
         { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
@@ -128,7 +179,9 @@ describe('AccountingService', () => {
 
     it('asienta partida doble balanceada (N débitos = 1 crédito a caja/banco)', async () => {
       pucRepo.find.mockResolvedValue([
-        { id: 'acc-1110' }, { id: 'acc-5135' }, { id: 'acc-5135b' },
+        { id: 'acc-1110' },
+        { id: 'acc-5135' },
+        { id: 'acc-5135b' },
       ]);
 
       const header = await service.registerExpense(input, user);
@@ -150,7 +203,10 @@ describe('AccountingService', () => {
 
     it('rechaza monto total no positivo', async () => {
       pucRepo.find.mockResolvedValue([{ id: 'acc-1110' }, { id: 'acc-5135' }]);
-      const bad = { ...input, lines: [{ pucAccountId: 'acc-5135', amount: 0, memo: 'x' }] };
+      const bad = {
+        ...input,
+        lines: [{ pucAccountId: 'acc-5135', amount: 0, memo: 'x' }],
+      };
       await expect(service.registerExpense(bad, user)).rejects.toMatchObject({
         errorCode: FinanceErrorCode.INVALID_AMOUNT,
       });
@@ -179,7 +235,7 @@ describe('AccountingService', () => {
       const st = await service.recomputeUnitStatus(em, CPX, 'unit-1');
 
       expect(st.currentBalance).toBe(120); // 70 + 50
-      expect(st.prepaidBalance).toBe(60);  // 80 - 20
+      expect(st.prepaidBalance).toBe(60); // 80 - 20
     });
 
     it('prepaidBalance nunca es negativo', async () => {
@@ -198,14 +254,40 @@ describe('AccountingService', () => {
     });
 
     it('imputa el anticipo respetando la prelación (mora antes que ordinaria)', async () => {
-      store.PropertyAccountStatus = [{ complexId: CPX, unitId: 'unit-1', prepaidBalance: 100, currentBalance: 80 }];
+      store.PropertyAccountStatus = [
+        {
+          complexId: CPX,
+          unitId: 'unit-1',
+          prepaidBalance: 100,
+          currentBalance: 80,
+        },
+      ];
       store.FeeCharge = [
-        { id: 'ch-ord', amount: 50, paidAmount: 0, status: ChargeStatus.PENDING, period: '2025-01', createdAt: new Date('2025-01-05'), prelacionConcept: PrelacionConcept.ORDINARY, description: 'Admin' },
-        { id: 'ch-mora', amount: 30, paidAmount: 0, status: ChargeStatus.OVERDUE, period: '2025-01', createdAt: new Date('2025-01-06'), prelacionConcept: PrelacionConcept.INTEREST_MORA, description: 'Mora' },
+        {
+          id: 'ch-ord',
+          amount: 50,
+          paidAmount: 0,
+          status: ChargeStatus.PENDING,
+          period: '2025-01',
+          createdAt: new Date('2025-01-05'),
+          prelacionConcept: PrelacionConcept.ORDINARY,
+          description: 'Admin',
+        },
+        {
+          id: 'ch-mora',
+          amount: 30,
+          paidAmount: 0,
+          status: ChargeStatus.OVERDUE,
+          period: '2025-01',
+          createdAt: new Date('2025-01-06'),
+          prelacionConcept: PrelacionConcept.INTEREST_MORA,
+          description: 'Mora',
+        },
       ];
 
       const res = await service.applyPrepaidBalances(
-        { complexId: CPX, period: '2025-02', dryRun: false } as any, user,
+        { complexId: CPX, period: '2025-02', dryRun: false },
+        user,
       );
 
       expect(res.totalApplied).toBe(80);
@@ -219,21 +301,44 @@ describe('AccountingService', () => {
       expect(debits[1].amount).toBe(50);
 
       // Nota contable 2805 (débito) = 1311 (crédito) por el total aplicado
-      const note = saved.AccountingHeader.find((h) => h.documentType === AccountingDocumentType.ACCOUNTING_NOTE);
+      const note = saved.AccountingHeader.find(
+        (h) => h.documentType === AccountingDocumentType.ACCOUNTING_NOTE,
+      );
       expect(note.totalDebit).toBe(80);
       expect(note.totalCredit).toBe(80);
-      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe('acc-2805');
-      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe('acc-1311');
+      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe(
+        'acc-2805',
+      );
+      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe(
+        'acc-1311',
+      );
     });
 
     it('dryRun no persiste asientos ni movimientos de wallet', async () => {
-      store.PropertyAccountStatus = [{ complexId: CPX, unitId: 'unit-1', prepaidBalance: 100, currentBalance: 50 }];
+      store.PropertyAccountStatus = [
+        {
+          complexId: CPX,
+          unitId: 'unit-1',
+          prepaidBalance: 100,
+          currentBalance: 50,
+        },
+      ];
       store.FeeCharge = [
-        { id: 'ch-1', amount: 50, paidAmount: 0, status: ChargeStatus.PENDING, period: '2025-01', createdAt: new Date('2025-01-05'), prelacionConcept: PrelacionConcept.ORDINARY, description: 'Admin' },
+        {
+          id: 'ch-1',
+          amount: 50,
+          paidAmount: 0,
+          status: ChargeStatus.PENDING,
+          period: '2025-01',
+          createdAt: new Date('2025-01-05'),
+          prelacionConcept: PrelacionConcept.ORDINARY,
+          description: 'Admin',
+        },
       ];
 
       const res = await service.applyPrepaidBalances(
-        { complexId: CPX, period: '2025-02', dryRun: true } as any, user,
+        { complexId: CPX, period: '2025-02', dryRun: true },
+        user,
       );
 
       expect(res.dryRun).toBe(true);
@@ -251,9 +356,14 @@ describe('AccountingService', () => {
       pucByCode['2805'] = puc('2805');
 
       const id = await service.emitCashReceipt(em, {
-        complexId: CPX, unitId: 'unit-1', documentDate: new Date('2025-03-10'),
-        period: '2025-03', appliedToCharges: 100, prepaidExcess: 20,
-        method: PaymentMethod.BANK_TRANSFER, createdByUserId: user.sub,
+        complexId: CPX,
+        unitId: 'unit-1',
+        documentDate: new Date('2025-03-10'),
+        period: '2025-03',
+        appliedToCharges: 100,
+        prepaidExcess: 20,
+        method: PaymentMethod.BANK_TRANSFER,
+        createdByUserId: user.sub,
       });
 
       expect(id).not.toBeNull();
@@ -264,8 +374,12 @@ describe('AccountingService', () => {
       const debit = receipt.lines.find((l: any) => l.debit > 0);
       expect(debit.pucAccountId).toBe('acc-1110'); // banco (no efectivo)
       expect(debit.debit).toBe(120);
-      expect(receipt.lines.find((l: any) => l.pucAccountId === 'acc-1311').credit).toBe(100);
-      expect(receipt.lines.find((l: any) => l.pucAccountId === 'acc-2805').credit).toBe(20);
+      expect(
+        receipt.lines.find((l: any) => l.pucAccountId === 'acc-1311').credit,
+      ).toBe(100);
+      expect(
+        receipt.lines.find((l: any) => l.pucAccountId === 'acc-2805').credit,
+      ).toBe(20);
     });
 
     it('usa caja (1105) cuando el método es efectivo', async () => {
@@ -273,19 +387,33 @@ describe('AccountingService', () => {
       pucByCode['1311'] = puc('1311');
 
       await service.emitCashReceipt(em, {
-        complexId: CPX, unitId: 'unit-1', documentDate: new Date(), period: '2025-03',
-        appliedToCharges: 60, prepaidExcess: 0, method: PaymentMethod.CASH, createdByUserId: user.sub,
+        complexId: CPX,
+        unitId: 'unit-1',
+        documentDate: new Date(),
+        period: '2025-03',
+        appliedToCharges: 60,
+        prepaidExcess: 0,
+        method: PaymentMethod.CASH,
+        createdByUserId: user.sub,
       });
 
-      const debit = saved.AccountingHeader[0].lines.find((l: any) => l.debit > 0);
+      const debit = saved.AccountingHeader[0].lines.find(
+        (l: any) => l.debit > 0,
+      );
       expect(debit.pucAccountId).toBe('acc-1105');
     });
 
     it('best-effort: omite el recibo (null) si la copropiedad no tiene PUC', async () => {
       // pucByCode vacío → requireAccount lanza PUC_ACCOUNT_NOT_FOUND
       const id = await service.emitCashReceipt(em, {
-        complexId: CPX, unitId: 'unit-1', documentDate: new Date(), period: '2025-03',
-        appliedToCharges: 100, prepaidExcess: 0, method: PaymentMethod.CASH, createdByUserId: user.sub,
+        complexId: CPX,
+        unitId: 'unit-1',
+        documentDate: new Date(),
+        period: '2025-03',
+        appliedToCharges: 100,
+        prepaidExcess: 0,
+        method: PaymentMethod.CASH,
+        createdByUserId: user.sub,
       });
       expect(id).toBeNull();
       expect(saved.AccountingHeader).toHaveLength(0);
@@ -299,8 +427,12 @@ describe('AccountingService', () => {
       pucByCode['1311'] = puc('1311');
 
       const id = await service.emitPrepaidApplicationNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 40, period: '2025-03',
-        createdByUserId: user.sub, memo: 'Aplicación manual',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 40,
+        period: '2025-03',
+        createdByUserId: user.sub,
+        memo: 'Aplicación manual',
       });
 
       expect(id).not.toBeNull();
@@ -308,13 +440,20 @@ describe('AccountingService', () => {
       expect(note.documentType).toBe(AccountingDocumentType.ACCOUNTING_NOTE);
       expect(note.totalDebit).toBe(40);
       expect(note.totalCredit).toBe(40);
-      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe('acc-2805');
-      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe('acc-1311');
+      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe(
+        'acc-2805',
+      );
+      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe(
+        'acc-1311',
+      );
     });
 
     it('best-effort: devuelve null si la copropiedad no tiene PUC', async () => {
       const id = await service.emitPrepaidApplicationNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 40, period: '2025-03',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 40,
+        period: '2025-03',
         createdByUserId: user.sub,
       });
       expect(id).toBeNull();
@@ -323,7 +462,10 @@ describe('AccountingService', () => {
 
     it('no asienta nada si el monto es 0', async () => {
       const id = await service.emitPrepaidApplicationNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 0, period: '2025-03',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 0,
+        period: '2025-03',
         createdByUserId: user.sub,
       });
       expect(id).toBeNull();
@@ -338,8 +480,12 @@ describe('AccountingService', () => {
       pucByCode['4210'] = puc('4210');
 
       const id = await service.emitMoraNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 12.5, period: '2025-06',
-        createdByUserId: user.sub, memo: 'Interés mora — Admin (2025-04)',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 12.5,
+        period: '2025-06',
+        createdByUserId: user.sub,
+        memo: 'Interés mora — Admin (2025-04)',
       });
 
       expect(id).not.toBeNull();
@@ -347,13 +493,20 @@ describe('AccountingService', () => {
       expect(note.documentType).toBe(AccountingDocumentType.INVOICE);
       expect(note.totalDebit).toBe(12.5);
       expect(note.totalCredit).toBe(12.5);
-      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe('acc-1345');
-      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe('acc-4210');
+      expect(note.lines.find((l: any) => l.debit > 0).pucAccountId).toBe(
+        'acc-1345',
+      );
+      expect(note.lines.find((l: any) => l.credit > 0).pucAccountId).toBe(
+        'acc-4210',
+      );
     });
 
     it('best-effort: devuelve null si la copropiedad no tiene PUC', async () => {
       const id = await service.emitMoraNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 12.5, period: '2025-06',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 12.5,
+        period: '2025-06',
         createdByUserId: user.sub,
       });
       expect(id).toBeNull();
@@ -362,7 +515,10 @@ describe('AccountingService', () => {
 
     it('no asienta nada si el monto es 0', async () => {
       const id = await service.emitMoraNote(em, {
-        complexId: CPX, unitId: 'unit-1', amount: 0, period: '2025-06',
+        complexId: CPX,
+        unitId: 'unit-1',
+        amount: 0,
+        period: '2025-06',
         createdByUserId: user.sub,
       });
       expect(id).toBeNull();
@@ -395,8 +551,12 @@ describe('AccountingService', () => {
       // La partida doble tiene que cuadrar: es la razón de existir del asiento.
       expect(invoice.totalDebit).toBe(350_000);
       expect(invoice.totalCredit).toBe(350_000);
-      expect(invoice.lines.find((l: any) => l.pucAccountId === 'acc-1311').debit).toBe(350_000);
-      expect(invoice.lines.find((l: any) => l.pucAccountId === 'acc-4295').credit).toBe(350_000);
+      expect(
+        invoice.lines.find((l: any) => l.pucAccountId === 'acc-1311').debit,
+      ).toBe(350_000);
+      expect(
+        invoice.lines.find((l: any) => l.pucAccountId === 'acc-4295').credit,
+      ).toBe(350_000);
       expect(invoice.unitId).toBe('unit-1');
     });
 
@@ -427,13 +587,18 @@ describe('AccountingService', () => {
     it('autoaprovisiona la 4295 bajo el grupo 42 si la copropiedad es anterior a esa cuenta', async () => {
       pucByCode['1311'] = puc('1311');
       pucByCode['42'] = {
-        ...puc('42'), isPostable: false, level: 2,
-        accountClass: 'INCOME', nature: 'CREDIT',
+        ...puc('42'),
+        isPostable: false,
+        level: 2,
+        accountClass: 'INCOME',
+        nature: 'CREDIT',
       };
 
       await service.emitAmenityUnitCharge(em, params);
 
-      const created = (saved.PucAccount ?? []).find((a: any) => a.code === '4295');
+      const created = (saved.PucAccount ?? []).find(
+        (a: any) => a.code === '4295',
+      );
       expect(created).toBeDefined();
       expect(created.isPostable).toBe(true);
       expect(created.parentId).toBe('acc-42');
@@ -445,7 +610,8 @@ describe('AccountingService', () => {
       pucByCode['4295'] = puc('4295');
 
       await service.emitAmenityUnitCharge(em, {
-        ...params, dueDate: new Date('2020-01-31'),
+        ...params,
+        dueDate: new Date('2020-01-31'),
       });
 
       expect(saved.FeeCharge[0].status).toBe(ChargeStatus.OVERDUE);
@@ -461,36 +627,70 @@ describe('AccountingService', () => {
     });
 
     it('idempotencia: omite el recurrente ya causado en el período', async () => {
-      store.RecurringCharge = [{
-        id: 'rc-1', complexId: CPX, isActive: true, billingDay: 5,
-        lastBilledPeriod: '2025-03', type: RecurringChargeType.INDEFINITE,
-        amount: 100, incomeAccountId: 'acc-4225', unitId: 'unit-1', concept: 'Administración',
-      }];
+      store.RecurringCharge = [
+        {
+          id: 'rc-1',
+          complexId: CPX,
+          isActive: true,
+          billingDay: 5,
+          lastBilledPeriod: '2025-03',
+          type: RecurringChargeType.INDEFINITE,
+          amount: 100,
+          incomeAccountId: 'acc-4225',
+          unitId: 'unit-1',
+          concept: 'Administración',
+        },
+      ];
 
-      const res = await service.causeRecurringChargesInternal(CPX, '2025-03', 'sys');
+      const res = await service.causeRecurringChargesInternal(
+        CPX,
+        '2025-03',
+        'sys',
+      );
       expect(res.caused).toBe(0);
       expect(saved.AccountingHeader).toHaveLength(0);
       expect(saved.FeeCharge).toHaveLength(0);
     });
 
     it('causa INVOICE + FeeCharge por unidad y avanza el contador', async () => {
-      store.RecurringCharge = [{
-        id: 'rc-1', complexId: CPX, isActive: true, billingDay: 5,
-        lastBilledPeriod: null, type: RecurringChargeType.INDEFINITE,
-        amount: 100, incomeAccountId: 'acc-4225', unitId: 'unit-1', concept: 'Administración',
-        currentInstallment: 0,
-      }];
+      store.RecurringCharge = [
+        {
+          id: 'rc-1',
+          complexId: CPX,
+          isActive: true,
+          billingDay: 5,
+          lastBilledPeriod: null,
+          type: RecurringChargeType.INDEFINITE,
+          amount: 100,
+          incomeAccountId: 'acc-4225',
+          unitId: 'unit-1',
+          concept: 'Administración',
+          currentInstallment: 0,
+        },
+      ];
 
-      const res = await service.causeRecurringChargesInternal(CPX, '2025-03', 'sys');
+      const res = await service.causeRecurringChargesInternal(
+        CPX,
+        '2025-03',
+        'sys',
+      );
 
       expect(res.caused).toBe(1);
       expect(res.totalAmount).toBe(100);
-      const invoice = saved.AccountingHeader.find((h) => h.documentType === AccountingDocumentType.INVOICE);
+      const invoice = saved.AccountingHeader.find(
+        (h) => h.documentType === AccountingDocumentType.INVOICE,
+      );
       expect(invoice.totalDebit).toBe(100);
-      expect(invoice.lines.find((l: any) => l.debit > 0).pucAccountId).toBe('acc-1311'); // CxC
-      expect(invoice.lines.find((l: any) => l.credit > 0).pucAccountId).toBe('acc-4225'); // ingreso
+      expect(invoice.lines.find((l: any) => l.debit > 0).pucAccountId).toBe(
+        'acc-1311',
+      ); // CxC
+      expect(invoice.lines.find((l: any) => l.credit > 0).pucAccountId).toBe(
+        'acc-4225',
+      ); // ingreso
       expect(saved.FeeCharge).toHaveLength(1);
-      expect(saved.FeeCharge[0].prelacionConcept).toBe(PrelacionConcept.ORDINARY);
+      expect(saved.FeeCharge[0].prelacionConcept).toBe(
+        PrelacionConcept.ORDINARY,
+      );
     });
 
     it('prorratea por coeficiente de copropiedad a nivel de complejo', async () => {
@@ -498,14 +698,28 @@ describe('AccountingService', () => {
         { id: 'unit-1', complexId: CPX, coefficient: 0.6 },
         { id: 'unit-2', complexId: CPX, coefficient: 0.4 },
       ];
-      store.RecurringCharge = [{
-        id: 'rc-1', complexId: CPX, isActive: true, billingDay: 5,
-        lastBilledPeriod: null, type: RecurringChargeType.INDEFINITE,
-        amount: 100, incomeAccountId: 'acc-4225', unitId: null,
-        prorateByCoefficient: true, concept: 'Administración', currentInstallment: 0,
-      }];
+      store.RecurringCharge = [
+        {
+          id: 'rc-1',
+          complexId: CPX,
+          isActive: true,
+          billingDay: 5,
+          lastBilledPeriod: null,
+          type: RecurringChargeType.INDEFINITE,
+          amount: 100,
+          incomeAccountId: 'acc-4225',
+          unitId: null,
+          prorateByCoefficient: true,
+          concept: 'Administración',
+          currentInstallment: 0,
+        },
+      ];
 
-      const res = await service.causeRecurringChargesInternal(CPX, '2025-03', 'sys');
+      const res = await service.causeRecurringChargesInternal(
+        CPX,
+        '2025-03',
+        'sys',
+      );
 
       expect(res.caused).toBe(2);
       expect(res.totalAmount).toBe(100);
@@ -517,14 +731,28 @@ describe('AccountingService', () => {
         { id: 'unit-1', complexId: CPX, coefficient: null },
         { id: 'unit-2', complexId: CPX, coefficient: null },
       ];
-      store.RecurringCharge = [{
-        id: 'rc-1', complexId: CPX, isActive: true, billingDay: 5,
-        lastBilledPeriod: null, type: RecurringChargeType.INDEFINITE,
-        amount: 100, incomeAccountId: 'acc-4225', unitId: null,
-        prorateByCoefficient: true, concept: 'Administración', currentInstallment: 0,
-      }];
+      store.RecurringCharge = [
+        {
+          id: 'rc-1',
+          complexId: CPX,
+          isActive: true,
+          billingDay: 5,
+          lastBilledPeriod: null,
+          type: RecurringChargeType.INDEFINITE,
+          amount: 100,
+          incomeAccountId: 'acc-4225',
+          unitId: null,
+          prorateByCoefficient: true,
+          concept: 'Administración',
+          currentInstallment: 0,
+        },
+      ];
 
-      const res = await service.causeRecurringChargesInternal(CPX, '2025-03', 'sys');
+      const res = await service.causeRecurringChargesInternal(
+        CPX,
+        '2025-03',
+        'sys',
+      );
 
       expect(res.caused).toBe(2);
       expect(saved.FeeCharge.map((c) => c.amount)).toEqual([50, 50]);
@@ -534,8 +762,11 @@ describe('AccountingService', () => {
   // ───────────────────────────────────────────────────────────────────────────
   describe('PUC CRUD — integridad', () => {
     const baseInput = {
-      complexId: CPX, code: '413505', name: 'Cuotas administración',
-      accountClass: AccountClass.INCOME, nature: AccountNature.CREDIT,
+      complexId: CPX,
+      code: '413505',
+      name: 'Cuotas administración',
+      accountClass: AccountClass.INCOME,
+      nature: AccountNature.CREDIT,
     } as any;
 
     it('createPucAccount: crea cuenta hoja cuando el código es único', async () => {
@@ -548,43 +779,81 @@ describe('AccountingService', () => {
     });
 
     it('createPucAccount: rechaza código duplicado', async () => {
-      pucRepo.findOne.mockResolvedValue({ id: 'acc-x', code: '413505', complexId: CPX });
-      await expect(service.createPucAccount(baseInput, user)).rejects.toMatchObject({
+      pucRepo.findOne.mockResolvedValue({
+        id: 'acc-x',
+        code: '413505',
+        complexId: CPX,
+      });
+      await expect(
+        service.createPucAccount(baseInput, user),
+      ).rejects.toMatchObject({
         errorCode: FinanceErrorCode.PUC_ACCOUNT_CODE_DUPLICATE,
       });
     });
 
     it('createPucAccount: con padre deriva level y vuelve al padre no-hoja', async () => {
-      const parent = { id: 'acc-41', code: '41', complexId: CPX, level: 1, isPostable: true };
+      const parent = {
+        id: 'acc-41',
+        code: '41',
+        complexId: CPX,
+        level: 1,
+        isPostable: true,
+      };
       pucRepo.findOne
-        .mockResolvedValueOnce(null)      // dup check
-        .mockResolvedValueOnce(parent);   // parent lookup
-      const acc = await service.createPucAccount({ ...baseInput, parentId: 'acc-41' }, user);
+        .mockResolvedValueOnce(null) // dup check
+        .mockResolvedValueOnce(parent); // parent lookup
+      const acc = await service.createPucAccount(
+        { ...baseInput, parentId: 'acc-41' },
+        user,
+      );
       expect(acc.level).toBe(2);
       // el padre se guardó con isPostable=false
-      expect(pucRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-41', isPostable: false }));
+      expect(pucRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'acc-41', isPostable: false }),
+      );
     });
 
     it('updatePucAccount: bloquea cambio de naturaleza si hay movimientos', async () => {
-      pucRepo.findOne.mockResolvedValue({ id: 'acc-1', code: '413505', complexId: CPX, nature: AccountNature.CREDIT });
+      pucRepo.findOne.mockResolvedValue({
+        id: 'acc-1',
+        code: '413505',
+        complexId: CPX,
+        nature: AccountNature.CREDIT,
+      });
       store.AccountingLine = [{ id: 'l1', pucAccountId: 'acc-1' }];
       await expect(
-        service.updatePucAccount({ id: 'acc-1', complexId: CPX, nature: AccountNature.DEBIT } as any, user),
-      ).rejects.toMatchObject({ errorCode: FinanceErrorCode.PUC_ACCOUNT_HAS_MOVEMENTS });
+        service.updatePucAccount(
+          { id: 'acc-1', complexId: CPX, nature: AccountNature.DEBIT } as any,
+          user,
+        ),
+      ).rejects.toMatchObject({
+        errorCode: FinanceErrorCode.PUC_ACCOUNT_HAS_MOVEMENTS,
+      });
     });
 
     it('togglePucAccount: bloquea desactivar cuenta con movimientos', async () => {
-      pucRepo.findOne.mockResolvedValue({ id: 'acc-1', code: '413505', complexId: CPX, isActive: true });
+      pucRepo.findOne.mockResolvedValue({
+        id: 'acc-1',
+        code: '413505',
+        complexId: CPX,
+        isActive: true,
+      });
       store.AccountingLine = [{ id: 'l1', pucAccountId: 'acc-1' }];
-      await expect(service.togglePucAccount('acc-1', CPX, user)).rejects.toMatchObject({
+      await expect(
+        service.togglePucAccount('acc-1', CPX, user),
+      ).rejects.toMatchObject({
         errorCode: FinanceErrorCode.PUC_ACCOUNT_HAS_MOVEMENTS,
       });
     });
 
     it('deletePucAccount: borra cuenta sin dependencias', async () => {
-      pucRepo.findOne.mockResolvedValue({ id: 'acc-1', code: '413505', complexId: CPX });
+      pucRepo.findOne.mockResolvedValue({
+        id: 'acc-1',
+        code: '413505',
+        complexId: CPX,
+      });
       store.AccountingLine = [];
-      pucRepo.count.mockResolvedValue(0);     // sin hijos
+      pucRepo.count.mockResolvedValue(0); // sin hijos
       recurringRepo.count.mockResolvedValue(0); // sin recurrentes
       const ok = await service.deletePucAccount('acc-1', CPX, user);
       expect(ok).toBe(true);
@@ -592,11 +861,17 @@ describe('AccountingService', () => {
     });
 
     it('deletePucAccount: bloquea si es cuenta de ingreso de un recurrente', async () => {
-      pucRepo.findOne.mockResolvedValue({ id: 'acc-1', code: '413505', complexId: CPX });
+      pucRepo.findOne.mockResolvedValue({
+        id: 'acc-1',
+        code: '413505',
+        complexId: CPX,
+      });
       store.AccountingLine = [];
       pucRepo.count.mockResolvedValue(0);
       recurringRepo.count.mockResolvedValue(1); // en uso
-      await expect(service.deletePucAccount('acc-1', CPX, user)).rejects.toMatchObject({
+      await expect(
+        service.deletePucAccount('acc-1', CPX, user),
+      ).rejects.toMatchObject({
         errorCode: FinanceErrorCode.PUC_ACCOUNT_IN_USE,
       });
     });
@@ -613,7 +888,7 @@ describe('AccountingService', () => {
     it('ADVANCE: vence el último instante del mismo período', () => {
       const d = build('2026-07', FeeConfigBillingMode.ADVANCE);
       expect(d.getFullYear()).toBe(2026);
-      expect(d.getMonth()).toBe(6);   // julio (0-indexed)
+      expect(d.getMonth()).toBe(6); // julio (0-indexed)
       expect(d.getDate()).toBe(31);
       expect(d.getHours()).toBe(23);
       expect(d.getMinutes()).toBe(59);
@@ -621,14 +896,14 @@ describe('AccountingService', () => {
 
     it('ARREARS: vence el último instante del mes siguiente', () => {
       const d = build('2026-07', FeeConfigBillingMode.ARREARS);
-      expect(d.getMonth()).toBe(7);   // agosto
+      expect(d.getMonth()).toBe(7); // agosto
       expect(d.getDate()).toBe(31);
     });
 
     it('ARREARS en diciembre: rueda al año siguiente', () => {
       const d = build('2026-12', FeeConfigBillingMode.ARREARS);
       expect(d.getFullYear()).toBe(2027);
-      expect(d.getMonth()).toBe(0);   // enero
+      expect(d.getMonth()).toBe(0); // enero
       expect(d.getDate()).toBe(31);
     });
 

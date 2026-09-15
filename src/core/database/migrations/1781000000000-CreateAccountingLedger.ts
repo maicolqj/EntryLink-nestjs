@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * coincidir con las entidades TypeORM (el proyecto no usa naming strategy).
  */
 export class CreateAccountingLedger1781000000000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ─── Tipos enum nativos ───────────────────────────────────────
     await queryRunner.query(`
@@ -63,7 +62,9 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
         CONSTRAINT "FK_puc_accounts_complex" FOREIGN KEY ("complexId") REFERENCES "residential_complexes"("id") ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_puc_accounts_postable" ON "puc_accounts" ("complexId","isPostable")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_puc_accounts_postable" ON "puc_accounts" ("complexId","isPostable")`,
+    );
 
     // ─── accounting_headers ───────────────────────────────────────
     await queryRunner.query(`
@@ -90,8 +91,12 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
         CONSTRAINT "FK_accounting_headers_unit"    FOREIGN KEY ("unitId")    REFERENCES "units"("id")                ON DELETE RESTRICT
       )
     `);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_accounting_headers_date" ON "accounting_headers" ("complexId","documentDate")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_accounting_headers_unit" ON "accounting_headers" ("complexId","unitId")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_accounting_headers_date" ON "accounting_headers" ("complexId","documentDate")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_accounting_headers_unit" ON "accounting_headers" ("complexId","unitId")`,
+    );
 
     // ─── accounting_lines ─────────────────────────────────────────
     await queryRunner.query(`
@@ -114,9 +119,15 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
         CONSTRAINT "FK_accounting_lines_unit"    FOREIGN KEY ("unitId")       REFERENCES "units"("id")              ON DELETE RESTRICT
       )
     `);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_header"  ON "accounting_lines" ("headerId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_account" ON "accounting_lines" ("complexId","pucAccountId")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_unit"    ON "accounting_lines" ("complexId","unitId")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_header"  ON "accounting_lines" ("headerId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_account" ON "accounting_lines" ("complexId","pucAccountId")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_accounting_lines_unit"    ON "accounting_lines" ("complexId","unitId")`,
+    );
 
     // ─── property_account_status ──────────────────────────────────
     await queryRunner.query(`
@@ -161,8 +172,12 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
         CONSTRAINT "FK_recurring_charges_unit"    FOREIGN KEY ("unitId")          REFERENCES "units"("id")                ON DELETE CASCADE
       )
     `);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_recurring_charges_active" ON "recurring_charges" ("complexId","isActive")`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_recurring_charges_unit"   ON "recurring_charges" ("complexId","unitId")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_recurring_charges_active" ON "recurring_charges" ("complexId","isActive")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_recurring_charges_unit"   ON "recurring_charges" ("complexId","unitId")`,
+    );
 
     // ─── tenant_financial_configs ─────────────────────────────────
     await queryRunner.query(`
@@ -244,10 +259,18 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_accounting_lines_immutable   ON "accounting_lines"`);
-    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_accounting_headers_immutable ON "accounting_headers"`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS fn_accounting_lines_immutable()`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS fn_accounting_headers_immutable()`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trg_accounting_lines_immutable   ON "accounting_lines"`,
+    );
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trg_accounting_headers_immutable ON "accounting_headers"`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS fn_accounting_lines_immutable()`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS fn_accounting_headers_immutable()`,
+    );
 
     await queryRunner.query(`DROP TABLE IF EXISTS "document_sequences"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "tenant_financial_configs"`);
@@ -261,6 +284,8 @@ export class CreateAccountingLedger1781000000000 implements MigrationInterface {
     await queryRunner.query(`DROP TYPE IF EXISTS "recurring_charge_type_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "account_class_enum"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "account_nature_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "accounting_document_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "accounting_document_type_enum"`,
+    );
   }
 }

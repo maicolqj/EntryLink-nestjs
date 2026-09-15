@@ -4,7 +4,6 @@ import { Vehicle } from '../../entities/vehicle.entity';
 
 @ObjectType()
 export class PaginatedVehiclesResponse {
-
   @Field(() => [Vehicle])
   items: Vehicle[];
 

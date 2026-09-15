@@ -14,7 +14,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * algunas columnas pueden existir de un `synchronize` previo en dev.
  */
 export class AddEarlyPaymentAndMoraFields1781000300000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "fee_configs"
@@ -46,10 +45,20 @@ export class AddEarlyPaymentAndMoraFields1781000300000 implements MigrationInter
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_fee_charges_source"`);
-    await queryRunner.query(`ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "sourceChargeId"`);
-    await queryRunner.query(`ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "earlyPaymentDueDate"`);
-    await queryRunner.query(`ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "normalAmount"`);
-    await queryRunner.query(`ALTER TABLE "fee_configs" DROP COLUMN IF EXISTS "earlyPaymentDueDayOfMonth"`);
-    await queryRunner.query(`ALTER TABLE "fee_configs" DROP COLUMN IF EXISTS "earlyPaymentAmount"`);
+    await queryRunner.query(
+      `ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "sourceChargeId"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "earlyPaymentDueDate"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_charges" DROP COLUMN IF EXISTS "normalAmount"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_configs" DROP COLUMN IF EXISTS "earlyPaymentDueDayOfMonth"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "fee_configs" DROP COLUMN IF EXISTS "earlyPaymentAmount"`,
+    );
   }
 }

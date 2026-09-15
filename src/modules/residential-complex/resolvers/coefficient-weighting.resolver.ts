@@ -11,12 +11,18 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => CoefficientWeighting)
 export class CoefficientWeightingResolver {
-
   constructor(private readonly service: CoefficientWeightingService) {}
 
-  @Query(() => CoefficientWeighting, { name: 'coefficientWeighting', nullable: true })
+  @Query(() => CoefficientWeighting, {
+    name: 'coefficientWeighting',
+    nullable: true,
+  })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.VIEW_RESIDENCES],
   })
   get(

@@ -3,7 +3,6 @@ import { ParkingRecord } from '../../entities/parking-record.entity';
 
 @ObjectType({ description: 'Lista paginada de registros de parqueadero' })
 export class ParkingRecordsResult {
-
   @Field(() => Int)
   total: number;
 

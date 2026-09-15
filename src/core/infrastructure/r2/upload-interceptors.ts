@@ -17,7 +17,7 @@ export const ALLOWED_FILE_MIME_TYPES = [
 ];
 
 interface FileInterceptorOptions {
-  maxSizeMb?:    number;
+  maxSizeMb?: number;
   allowedTypes?: string[];
 }
 
@@ -26,7 +26,10 @@ function makeFileFilter(allowedTypes: string[]) {
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new BadRequestException(`Formato no soportado: ${file.mimetype}`), false);
+      cb(
+        new BadRequestException(`Formato no soportado: ${file.mimetype}`),
+        false,
+      );
     }
   };
 }
@@ -37,8 +40,8 @@ export function singleImageInterceptor(
 ) {
   const { maxSizeMb = 10, allowedTypes = ALLOWED_IMAGE_MIME_TYPES } = options;
   return FileInterceptor(fieldName, {
-    storage:    memoryStorage(),
-    limits:     { fileSize: maxSizeMb * 1024 * 1024 },
+    storage: memoryStorage(),
+    limits: { fileSize: maxSizeMb * 1024 * 1024 },
     fileFilter: makeFileFilter(allowedTypes),
   });
 }
@@ -50,8 +53,8 @@ export function multipleImagesInterceptor(
 ) {
   const { maxSizeMb = 10, allowedTypes = ALLOWED_IMAGE_MIME_TYPES } = options;
   return FilesInterceptor(fieldName, maxCount, {
-    storage:    memoryStorage(),
-    limits:     { fileSize: maxSizeMb * 1024 * 1024 },
+    storage: memoryStorage(),
+    limits: { fileSize: maxSizeMb * 1024 * 1024 },
     fileFilter: makeFileFilter(allowedTypes),
   });
 }
@@ -60,10 +63,11 @@ export function singleDocumentInterceptor(
   fieldName = 'file',
   options: FileInterceptorOptions = {},
 ) {
-  const { maxSizeMb = 20, allowedTypes = ALLOWED_DOCUMENT_MIME_TYPES } = options;
+  const { maxSizeMb = 20, allowedTypes = ALLOWED_DOCUMENT_MIME_TYPES } =
+    options;
   return FileInterceptor(fieldName, {
-    storage:    memoryStorage(),
-    limits:     { fileSize: maxSizeMb * 1024 * 1024 },
+    storage: memoryStorage(),
+    limits: { fileSize: maxSizeMb * 1024 * 1024 },
     fileFilter: makeFileFilter(allowedTypes),
   });
 }
@@ -73,10 +77,11 @@ export function multipleDocumentsInterceptor(
   maxCount = 5,
   options: FileInterceptorOptions = {},
 ) {
-  const { maxSizeMb = 20, allowedTypes = ALLOWED_DOCUMENT_MIME_TYPES } = options;
+  const { maxSizeMb = 20, allowedTypes = ALLOWED_DOCUMENT_MIME_TYPES } =
+    options;
   return FilesInterceptor(fieldName, maxCount, {
-    storage:    memoryStorage(),
-    limits:     { fileSize: maxSizeMb * 1024 * 1024 },
+    storage: memoryStorage(),
+    limits: { fileSize: maxSizeMb * 1024 * 1024 },
     fileFilter: makeFileFilter(allowedTypes),
   });
 }
@@ -88,8 +93,8 @@ export function multipleFilesInterceptor(
 ) {
   const { maxSizeMb = 20, allowedTypes = ALLOWED_FILE_MIME_TYPES } = options;
   return FilesInterceptor(fieldName, maxCount, {
-    storage:    memoryStorage(),
-    limits:     { fileSize: maxSizeMb * 1024 * 1024 },
+    storage: memoryStorage(),
+    limits: { fileSize: maxSizeMb * 1024 * 1024 },
     fileFilter: makeFileFilter(allowedTypes),
   });
 }

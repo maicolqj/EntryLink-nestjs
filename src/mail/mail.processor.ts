@@ -30,7 +30,9 @@ export class MailProcessor extends WorkerHost {
         await this.handlePasswordReset(job as Job<SendPasswordResetJobPayload>);
         break;
       case MAIL_JOBS.SEND_EMAIL_VERIFICATION:
-        await this.handleEmailVerification(job as Job<SendEmailVerificationJobPayload>);
+        await this.handleEmailVerification(
+          job as Job<SendEmailVerificationJobPayload>,
+        );
         break;
       case MAIL_JOBS.SEND_PANIC_ALERT:
         await this.handlePanicAlert(job as Job<SendPanicAlertJobPayload>);
@@ -40,10 +42,14 @@ export class MailProcessor extends WorkerHost {
     }
   }
 
-  private async handlePanicAlert(job: Job<SendPanicAlertJobPayload>): Promise<void> {
+  private async handlePanicAlert(
+    job: Job<SendPanicAlertJobPayload>,
+  ): Promise<void> {
     const d = job.data;
 
-    this.logger.warn(`Procesando correo de pánico — alerta ${d.alertId}, nivel ${d.escalationLevel}`);
+    this.logger.warn(
+      `Procesando correo de pánico — alerta ${d.alertId}, nivel ${d.escalationLevel}`,
+    );
 
     await this.mailerService.sendMail({
       to: d.email,
@@ -52,19 +58,21 @@ export class MailProcessor extends WorkerHost {
       subject: `ALERTA DE PÁNICO — ${d.triggeredByLabel}`,
       template: 'panic-alert',
       context: {
-        name:             d.name,
+        name: d.name,
         triggeredByLabel: d.triggeredByLabel,
-        triggeredAt:      d.triggeredAt,
-        escalationLevel:  d.escalationLevel,
-        locationUrl:      d.locationUrl,
-        year:             new Date().getFullYear(),
+        triggeredAt: d.triggeredAt,
+        escalationLevel: d.escalationLevel,
+        locationUrl: d.locationUrl,
+        year: new Date().getFullYear(),
       },
     });
 
     this.logger.warn(`Correo de pánico enviado — alerta ${d.alertId}`);
   }
 
-  private async handlePasswordReset(job: Job<SendPasswordResetJobPayload>): Promise<void> {
+  private async handlePasswordReset(
+    job: Job<SendPasswordResetJobPayload>,
+  ): Promise<void> {
     const { email, name, resetUrl, expiresInMinutes, userId } = job.data;
 
     this.logger.log(`Procesando envío de email de reset — userId: ${userId}`);
@@ -81,13 +89,19 @@ export class MailProcessor extends WorkerHost {
       },
     });
 
-    this.logger.log(`Email de reset enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`);
+    this.logger.log(
+      `Email de reset enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`,
+    );
   }
 
-  private async handleEmailVerification(job: Job<SendEmailVerificationJobPayload>): Promise<void> {
+  private async handleEmailVerification(
+    job: Job<SendEmailVerificationJobPayload>,
+  ): Promise<void> {
     const { email, name, verificationUrl, expiresInMinutes, userId } = job.data;
 
-    this.logger.log(`Procesando envío de email de verificación — userId: ${userId}`);
+    this.logger.log(
+      `Procesando envío de email de verificación — userId: ${userId}`,
+    );
 
     await this.mailerService.sendMail({
       to: email,
@@ -101,6 +115,8 @@ export class MailProcessor extends WorkerHost {
       },
     });
 
-    this.logger.log(`Email de verificación enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`);
+    this.logger.log(
+      `Email de verificación enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`,
+    );
   }
 }

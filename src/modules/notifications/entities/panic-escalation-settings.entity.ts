@@ -19,7 +19,6 @@ import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 @ObjectType()
 @Entity('panic_escalation_settings')
 export class PanicEscalationSettings {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

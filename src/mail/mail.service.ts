@@ -17,7 +17,9 @@ export class MailService {
     @InjectQueue(MAIL_QUEUE_NAME) private readonly mailQueue: Queue,
   ) {}
 
-  async queuePasswordResetEmail(payload: SendPasswordResetJobPayload): Promise<void> {
+  async queuePasswordResetEmail(
+    payload: SendPasswordResetJobPayload,
+  ): Promise<void> {
     await this.mailQueue.add(MAIL_JOBS.SEND_PASSWORD_RESET, payload, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 2_000 },
@@ -25,10 +27,14 @@ export class MailService {
       removeOnFail: { count: 50 },
     });
 
-    this.logger.log(`Password reset email job enqueued for userId: ${payload.userId}`);
+    this.logger.log(
+      `Password reset email job enqueued for userId: ${payload.userId}`,
+    );
   }
 
-  async queueEmailVerificationEmail(payload: SendEmailVerificationJobPayload): Promise<void> {
+  async queueEmailVerificationEmail(
+    payload: SendEmailVerificationJobPayload,
+  ): Promise<void> {
     await this.mailQueue.add(MAIL_JOBS.SEND_EMAIL_VERIFICATION, payload, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 2_000 },
@@ -36,7 +42,9 @@ export class MailService {
       removeOnFail: { count: 50 },
     });
 
-    this.logger.log(`Email verification job enqueued for userId: ${payload.userId}`);
+    this.logger.log(
+      `Email verification job enqueued for userId: ${payload.userId}`,
+    );
   }
 
   /**
@@ -54,6 +62,8 @@ export class MailService {
       removeOnFail: { count: 100 },
     });
 
-    this.logger.log(`Panic alert email job enqueued for alert: ${payload.alertId}`);
+    this.logger.log(
+      `Panic alert email job enqueued for alert: ${payload.alertId}`,
+    );
   }
 }

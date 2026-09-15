@@ -6,7 +6,7 @@ import { registerEnumType } from '@nestjs/graphql';
  * Pasivo / Patrimonio / Ingreso → CREDITO.
  */
 export enum AccountNature {
-  DEBIT  = 'DEBIT',
+  DEBIT = 'DEBIT',
   CREDIT = 'CREDIT',
 }
 
@@ -17,12 +17,12 @@ registerEnumType(AccountNature, {
 
 /** Clase contable (primer dígito del código PUC). */
 export enum AccountClass {
-  ASSET     = '1', // Activo
+  ASSET = '1', // Activo
   LIABILITY = '2', // Pasivo (anticipos = 2805 ingresos recibidos por anticipado)
-  EQUITY    = '3', // Patrimonio
-  INCOME    = '4', // Ingresos
-  EXPENSE   = '5', // Gastos
-  COST      = '6', // Costos
+  EQUITY = '3', // Patrimonio
+  INCOME = '4', // Ingresos
+  EXPENSE = '5', // Gastos
+  COST = '6', // Costos
 }
 
 registerEnumType(AccountClass, {

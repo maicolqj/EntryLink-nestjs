@@ -1,32 +1,35 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Amenity }         from '../entities/amenity.entity';
+import { Amenity } from '../entities/amenity.entity';
 import { AmenityBlackout } from '../entities/amenity-blackout.entity';
 import { AmenityScheduleException } from '../entities/amenity-schedule-exception.entity';
 import { AmenitiesService } from '../services/amenities.service';
 
-import { CreateAmenityInput }          from '../dto/inputs/create-amenity.input';
-import { UpdateAmenityInput }          from '../dto/inputs/update-amenity.input';
-import { FilterAmenitiesInput }        from '../dto/inputs/filter-amenities.input';
-import { SetAmenitySchedulesInput }    from '../dto/inputs/amenity-schedule.input';
-import { CreateAmenityBlackoutInput }  from '../dto/inputs/create-amenity-blackout.input';
+import { CreateAmenityInput } from '../dto/inputs/create-amenity.input';
+import { UpdateAmenityInput } from '../dto/inputs/update-amenity.input';
+import { FilterAmenitiesInput } from '../dto/inputs/filter-amenities.input';
+import { SetAmenitySchedulesInput } from '../dto/inputs/amenity-schedule.input';
+import { CreateAmenityBlackoutInput } from '../dto/inputs/create-amenity-blackout.input';
 import { UpsertScheduleExceptionInput } from '../dto/inputs/upsert-schedule-exception.input';
-import { AmenityAvailabilityInput }    from '../dto/inputs/amenity-availability.input';
-import { PaginatedAmenitiesResponse }  from '../dto/responses/paginated-amenities.response';
+import { AmenityAvailabilityInput } from '../dto/inputs/amenity-availability.input';
+import { PaginatedAmenitiesResponse } from '../dto/responses/paginated-amenities.response';
 import { AmenityAvailabilityResponse } from '../dto/responses/amenity-availability.response';
-import { PaginationInput }             from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 /** Roles que pueden consultar el catálogo de zonas y su disponibilidad. */
 const READ_ROLES = [
-  ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-  ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
-  ValidRoles.ACCOUNTANT_ROL,  ValidRoles.RESIDENT_ROL,
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+  ValidRoles.SUPERVISOR_ROL,
+  ValidRoles.SECURITY_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
+  ValidRoles.RESIDENT_ROL,
 ];
 
 /** Roles que administran la configuración de las zonas. */
@@ -34,7 +37,6 @@ const ADMIN_ROLES = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
 
 @Resolver(() => Amenity)
 export class AmenitiesResolver {
-
   constructor(private readonly amenitiesService: AmenitiesService) {}
 
   // ================================================================
@@ -43,7 +45,10 @@ export class AmenitiesResolver {
 
   /** Crea una zona común. La configura el administrador del complejo. */
   @Mutation(() => Amenity, { name: 'createAmenity' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   create(
     @Args('input') input: CreateAmenityInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -52,7 +57,10 @@ export class AmenitiesResolver {
   }
 
   @Mutation(() => Amenity, { name: 'updateAmenity' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   update(
     @Args('input') input: UpdateAmenityInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -61,7 +69,10 @@ export class AmenitiesResolver {
   }
 
   @Mutation(() => Boolean, { name: 'deleteAmenity' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   remove(
     @Args('amenityId') amenityId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -71,7 +82,10 @@ export class AmenitiesResolver {
 
   /** Reemplaza el horario semanal completo de la zona. */
   @Mutation(() => Amenity, { name: 'setAmenitySchedules' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   setSchedules(
     @Args('input') input: SetAmenitySchedulesInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -81,7 +95,10 @@ export class AmenitiesResolver {
 
   /** Bloquea la zona en un rango y cancela las reservas que caigan dentro. */
   @Mutation(() => AmenityBlackout, { name: 'createAmenityBlackout' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   createBlackout(
     @Args('input') input: CreateAmenityBlackoutInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -90,7 +107,10 @@ export class AmenitiesResolver {
   }
 
   @Mutation(() => Boolean, { name: 'deleteAmenityBlackout' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   removeBlackout(
     @Args('blackoutId') blackoutId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -103,8 +123,13 @@ export class AmenitiesResolver {
    * calendario del admin para el festivo en que el salón se presta hasta la
    * madrugada del lunes, o para cerrar un día suelto.
    */
-  @Mutation(() => AmenityScheduleException, { name: 'upsertAmenityScheduleException' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Mutation(() => AmenityScheduleException, {
+    name: 'upsertAmenityScheduleException',
+  })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   upsertScheduleException(
     @Args('input') input: UpsertScheduleExceptionInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -114,12 +139,18 @@ export class AmenitiesResolver {
 
   /** Quita la excepción: esa fecha vuelve al horario semanal. */
   @Mutation(() => Boolean, { name: 'deleteAmenityScheduleException' })
-  @Auth({ roles: ADMIN_ROLES, permissions: [ValidPermissions.MANAGE_AMENITIES] })
+  @Auth({
+    roles: ADMIN_ROLES,
+    permissions: [ValidPermissions.MANAGE_AMENITIES],
+  })
   deleteScheduleException(
     @Args('exceptionId') exceptionId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<boolean> {
-    return this.amenitiesService.deleteScheduleException(exceptionId, currentUser);
+    return this.amenitiesService.deleteScheduleException(
+      exceptionId,
+      currentUser,
+    );
   }
 
   // ================================================================
@@ -127,28 +158,40 @@ export class AmenitiesResolver {
   // ================================================================
 
   /** Excepciones de la zona en un rango, para pintar el calendario del admin. */
-  @Query(() => [AmenityScheduleException], { name: 'amenityScheduleExceptions' })
+  @Query(() => [AmenityScheduleException], {
+    name: 'amenityScheduleExceptions',
+  })
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_AMENITIES] })
   scheduleExceptions(
     @Args('amenityId') amenityId: string,
     @Args('from') from: string,
-    @Args('to')   to: string,
+    @Args('to') to: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<AmenityScheduleException[]> {
-    return this.amenitiesService.findScheduleExceptions(amenityId, from, to, currentUser);
+    return this.amenitiesService.findScheduleExceptions(
+      amenityId,
+      from,
+      to,
+      currentUser,
+    );
   }
-
 
   /** Catálogo de zonas comunes del complejo. */
   @Query(() => PaginatedAmenitiesResponse, { name: 'amenities' })
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_AMENITIES] })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterAmenitiesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterAmenitiesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedAmenitiesResponse> {
-    return this.amenitiesService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.amenitiesService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   @Query(() => Amenity, { name: 'amenity' })

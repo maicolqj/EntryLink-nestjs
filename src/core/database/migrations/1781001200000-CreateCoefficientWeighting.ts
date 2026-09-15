@@ -8,7 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * complex_finance_configs). Idempotente.
  */
 export class CreateCoefficientWeighting1781001200000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "coefficient_weightings" (

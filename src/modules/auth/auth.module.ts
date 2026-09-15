@@ -41,7 +41,6 @@ import { ResidentialComplex } from '../residential-complex/entities/residential-
 import { Role } from '../roles/entities/role.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
 
-
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 
@@ -51,7 +50,18 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}), // Configurado sin secret fijo; cada llamada usa su propio secret
-    TypeOrmModule.forFeature([User, ResidentialComplex, OtpCode, RefreshToken, ResidentDevice, WhatsAppLoginChallenge, DeviceApprovalRequest, UserSession, Role, UserRole]),
+    TypeOrmModule.forFeature([
+      User,
+      ResidentialComplex,
+      OtpCode,
+      RefreshToken,
+      ResidentDevice,
+      WhatsAppLoginChallenge,
+      DeviceApprovalRequest,
+      UserSession,
+      Role,
+      UserRole,
+    ]),
     // forwardRef: NotificationsModule alcanza AuthModule por la cadena
     // Residents → ResidentialComplex → Users → Auth.
     forwardRef(() => NotificationsModule),
@@ -85,6 +95,12 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     OtpProducer,
     OtpProcessor,
   ],
-  exports: [AuthService, TokenService, SessionService, JwtModule, PassportModule],
+  exports: [
+    AuthService,
+    TokenService,
+    SessionService,
+    JwtModule,
+    PassportModule,
+  ],
 })
 export class AuthModule {}

@@ -27,7 +27,12 @@ export class SocketService {
     }
   }
 
-  emitToRole(role: string, complexId: string, event: SocketEvent, data: unknown): void {
+  emitToRole(
+    role: string,
+    complexId: string,
+    event: SocketEvent,
+    data: unknown,
+  ): void {
     this.server?.to(`role:${role}:complex:${complexId}`).emit(event, data);
     this.logger.debug(`emit ${event} → role:${role}:complex:${complexId}`);
   }

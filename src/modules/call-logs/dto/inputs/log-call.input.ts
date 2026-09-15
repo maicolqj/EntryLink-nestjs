@@ -11,13 +11,13 @@ import {
 } from 'class-validator';
 
 import { CallDirection } from '../../enums/call-direction.enum';
-import { CallOutcome }   from '../../enums/call-outcome.enum';
+import { CallOutcome } from '../../enums/call-outcome.enum';
 
 @InputType()
 export class LogCallInput {
-
   @Field(() => String)
-  @IsString() @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   complexId: string;
 
   @Field(() => CallDirection)
@@ -29,27 +29,37 @@ export class LogCallInput {
   outcome: CallOutcome;
 
   @Field(() => String)
-  @IsString() @IsNotEmpty() @MaxLength(30)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(30)
   phoneNumber: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   residentId?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString() @MaxLength(200)
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
   residentName?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   unitId?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString() @MaxLength(50)
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
   unitNumber?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString() @MaxLength(100)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   buildingName?: string;
 
   @Field(() => String)
@@ -57,18 +67,22 @@ export class LogCallInput {
   startedAt: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   answeredAt?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   endedAt?: string;
 
   @Field(() => Int)
-  @IsInt() @Min(0)
+  @IsInt()
+  @Min(0)
   durationSeconds: number;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

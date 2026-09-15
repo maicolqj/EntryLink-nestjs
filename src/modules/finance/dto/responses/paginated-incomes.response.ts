@@ -1,7 +1,7 @@
 import { ObjectType, Field, Float } from '@nestjs/graphql';
 import { PaginationReponse } from '../../../shared/dto/responses/pagination-object.response';
-import { DirectIncome }     from '../../entities/direct-income.entity';
-import { IncomeCategory }    from '../../enums/income-category.enum';
+import { DirectIncome } from '../../entities/direct-income.entity';
+import { IncomeCategory } from '../../enums/income-category.enum';
 
 @ObjectType()
 export class IncomeCategoryBreakdown {
@@ -17,7 +17,6 @@ export class IncomeCategoryBreakdown {
 
 @ObjectType()
 export class PaginatedIncomesResponse {
-
   @Field(() => [DirectIncome])
   items: DirectIncome[];
 

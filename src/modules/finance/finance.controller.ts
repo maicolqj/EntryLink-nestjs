@@ -16,11 +16,11 @@ import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { unlink } from 'fs/promises';
 
-import { Auth }       from '../shared/decorators/auth.decorator';
+import { Auth } from '../shared/decorators/auth.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { ValidPermissions } from '../permissions/enums/valid-permissions';
 import { OpeningBalancesImportService } from './import/opening-balances-import.service';
-import { OpeningBalancesImportResult }  from './import/opening-balances-import.constants';
+import { OpeningBalancesImportResult } from './import/opening-balances-import.constants';
 
 const MAX_ROWS = 5000;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -54,7 +54,11 @@ export class FinanceController {
   @Post('import-opening-balances')
   @HttpCode(HttpStatus.OK)
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.GENERATE_CHARGES],
   })
   @UseInterceptors(
@@ -63,7 +67,7 @@ export class FinanceController {
         destination: join(process.cwd(), 'tmp', 'finance-imports'),
         filename: (_req, file, cb) => {
           const unique = randomBytes(8).toString('hex');
-          const ext    = extname(file.originalname).toLowerCase();
+          const ext = extname(file.originalname).toLowerCase();
           cb(null, `opening-balances-${unique}${ext}`);
         },
       }),
@@ -72,7 +76,9 @@ export class FinanceController {
         const ext = extname(file.originalname).toLowerCase();
         if (!ALLOWED_EXTENSIONS.includes(ext)) {
           return cb(
-            new BadRequestException(`Formato no permitido. Use: ${ALLOWED_EXTENSIONS.join(', ')}`),
+            new BadRequestException(
+              `Formato no permitido. Use: ${ALLOWED_EXTENSIONS.join(', ')}`,
+            ),
             false,
           );
         }
@@ -90,18 +96,23 @@ export class FinanceController {
 
     try {
       const complexId: string = req.body?.complexId;
-      const period: string    = req.body?.period;
+      const period: string = req.body?.period;
       // Por seguridad el default es preview: solo escribe con dryRun explícito en "false".
-      const dryRun = String(req.body?.dryRun ?? 'true').toLowerCase() !== 'false';
+      const dryRun =
+        String(req.body?.dryRun ?? 'true').toLowerCase() !== 'false';
 
-      if (!complexId) throw new BadRequestException('El campo complexId es requerido');
-      if (!period)    throw new BadRequestException('El campo period (YYYY-MM) es requerido');
+      if (!complexId)
+        throw new BadRequestException('El campo complexId es requerido');
+      if (!period)
+        throw new BadRequestException('El campo period (YYYY-MM) es requerido');
 
       let rowCount: number;
       try {
         rowCount = await this.openingBalancesImport.countRows(file.path);
       } catch (err: any) {
-        throw new BadRequestException(`No se pudo leer el archivo: ${err?.message ?? 'formato inválido'}`);
+        throw new BadRequestException(
+          `No se pudo leer el archivo: ${err?.message ?? 'formato inválido'}`,
+        );
       }
 
       if (rowCount === 0) {
@@ -123,7 +134,7 @@ export class FinanceController {
 
       this.logger.log(
         `Import saldos apertura — complex: ${complexId} | período: ${period} | ` +
-        `dryRun: ${dryRun} | válidas: ${result.validRows} | errores: ${result.errorRows}`,
+          `dryRun: ${dryRun} | válidas: ${result.validRows} | errores: ${result.errorRows}`,
       );
 
       return result;

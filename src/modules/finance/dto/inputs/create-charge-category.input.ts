@@ -1,9 +1,14 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsOptional, MaxLength, Matches } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
 @InputType()
 export class CreateChargeCategoryInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()
@@ -20,7 +25,9 @@ export class CreateChargeCategoryInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
-  @Matches(/^#[0-9A-Fa-f]{6}$/, { message: 'El color debe ser un valor hex válido (ej: #3B82F6)' })
+  @Matches(/^#[0-9A-Fa-f]{6}$/, {
+    message: 'El color debe ser un valor hex válido (ej: #3B82F6)',
+  })
   color?: string;
 
   @Field()

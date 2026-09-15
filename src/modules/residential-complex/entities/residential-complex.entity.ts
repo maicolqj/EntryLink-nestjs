@@ -30,7 +30,6 @@ import { VisitorParkingConfig } from '../../visitor-parking/entities/visitor-par
 @Index(['slug'], { unique: true, where: '"deleted_at" IS NULL' })
 // @Index(['ownerId'])
 export class ResidentialComplex {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -45,13 +44,19 @@ export class ResidentialComplex {
   @Column({ type: 'varchar', length: 170, unique: true })
   slug: string;
 
-  @Field(() => String, { description: 'Descripción del complejo', nullable: true })
+  @Field(() => String, {
+    description: 'Descripción del complejo',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   description?: string;
 
   // ==================== UBICACIÓN ====================
 
-  @Field(() => String, { description: 'Dirección principal del complejo', nullable: true })
+  @Field(() => String, {
+    description: 'Dirección principal del complejo',
+    nullable: true,
+  })
   @Column({ type: 'varchar', length: 255, nullable: true })
   address?: string;
 
@@ -71,22 +76,36 @@ export class ResidentialComplex {
   @Column({ type: 'varchar', length: 20, nullable: true })
   zipCode?: string;
 
-  @Field(() => Float, { description: 'Latitud GPS del complejo para validación de presencia', nullable: true })
+  @Field(() => Float, {
+    description: 'Latitud GPS del complejo para validación de presencia',
+    nullable: true,
+  })
   @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
   latitude?: number;
 
-  @Field(() => Float, { description: 'Longitud GPS del complejo para validación de presencia', nullable: true })
+  @Field(() => Float, {
+    description: 'Longitud GPS del complejo para validación de presencia',
+    nullable: true,
+  })
   @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
   longitude?: number;
 
-  @Field(() => Int, { description: 'Radio en metros para validar presencia GPS (por defecto 200 m)', nullable: true })
+  @Field(() => Int, {
+    description:
+      'Radio en metros para validar presencia GPS (por defecto 200 m)',
+    nullable: true,
+  })
   @Column({ name: 'gps_radius', type: 'int', nullable: true, default: 200 })
   gpsRadius?: number;
 
   // ==================== CLASIFICACIÓN ====================
 
   @Field(() => ComplexType, { description: 'Tipo de complejo residencial' })
-  @Column({ type: 'enum', enum: ComplexType, default: ComplexType.APARTMENT_COMPLEX })
+  @Column({
+    type: 'enum',
+    enum: ComplexType,
+    default: ComplexType.APARTMENT_COMPLEX,
+  })
   type: ComplexType;
 
   @Field(() => ComplexPlan, { description: 'Plan de suscripción activo' })
@@ -94,7 +113,11 @@ export class ResidentialComplex {
   plan: ComplexPlan;
 
   @Field(() => ComplexStatus, { description: 'Estado operativo del complejo' })
-  @Column({ type: 'enum', enum: ComplexStatus, default: ComplexStatus.PENDING_SETUP })
+  @Column({
+    type: 'enum',
+    enum: ComplexStatus,
+    default: ComplexStatus.PENDING_SETUP,
+  })
   status: ComplexStatus;
 
   @Field(() => String, { description: 'token version', nullable: true })
@@ -103,7 +126,9 @@ export class ResidentialComplex {
 
   // ==================== CAPACIDAD ====================
 
-  @Field(() => Int, { description: 'Máximo de unidades permitidas por el plan' })
+  @Field(() => Int, {
+    description: 'Máximo de unidades permitidas por el plan',
+  })
   @Column({ type: 'int', default: 10 })
   maxUnits: number;
 
@@ -114,17 +139,23 @@ export class ResidentialComplex {
   // en días CALENDARIO: la plataforma no tiene calendario de festivos, e
   // inventarlo daría plazos equivocados con apariencia de exactitud.
 
-  @Field(() => Int, { description: 'Días que tiene el complejo para resolver un PQRF' })
+  @Field(() => Int, {
+    description: 'Días que tiene el complejo para resolver un PQRF',
+  })
   @Column({ name: 'pqrf_resolution_days', type: 'int', default: 15 })
   pqrfResolutionDays: number;
 
   /** Cuántos días antes del vencimiento empieza a recordarse. */
-  @Field(() => Int, { description: 'Días antes del vencimiento en que empiezan los recordatorios' })
+  @Field(() => Int, {
+    description: 'Días antes del vencimiento en que empiezan los recordatorios',
+  })
   @Column({ name: 'pqrf_reminder_lead_days', type: 'int', default: 3 })
   pqrfReminderLeadDays: number;
 
   /** Cada cuánto se insiste dentro de esos días. 0 = sin recordatorios. */
-  @Field(() => Int, { description: 'Horas entre recordatorios. 0 = sin recordatorios' })
+  @Field(() => Int, {
+    description: 'Horas entre recordatorios. 0 = sin recordatorios',
+  })
   @Column({ name: 'pqrf_reminder_interval_hours', type: 'int', default: 24 })
   pqrfReminderIntervalHours: number;
 
@@ -133,8 +164,15 @@ export class ResidentialComplex {
    * consejo. Se cruza con los miembros de HOY: quien deja el consejo deja de
    * contar aunque siga en la lista.
    */
-  @Field(() => [String], { description: 'Consejeros que responden los PQRF. Vacío = todo el consejo' })
-  @Column({ name: 'pqrf_council_resolver_user_ids', type: 'uuid', array: true, default: () => "'{}'" })
+  @Field(() => [String], {
+    description: 'Consejeros que responden los PQRF. Vacío = todo el consejo',
+  })
+  @Column({
+    name: 'pqrf_council_resolver_user_ids',
+    type: 'uuid',
+    array: true,
+    default: () => "'{}'",
+  })
   pqrfCouncilResolverUserIds: string[];
 
   // ==================== VOTACIONES ====================
@@ -143,7 +181,9 @@ export class ResidentialComplex {
    * La administración les muestra las ASAMBLEAS a los residentes. Apagado, el
    * residente no ve el módulo y el servidor rechaza sus votos.
    */
-  @Field(() => Boolean, { description: 'Asambleas visibles para los residentes' })
+  @Field(() => Boolean, {
+    description: 'Asambleas visibles para los residentes',
+  })
   @Column({ name: 'voting_enabled', type: 'boolean', default: false })
   votingEnabled: boolean;
 
@@ -152,7 +192,9 @@ export class ResidentialComplex {
    * aparte: votar algo solo en el consejo no obliga a abrirle el módulo a toda
    * la copropiedad.
    */
-  @Field(() => Boolean, { description: 'Reuniones del consejo visibles para el consejo' })
+  @Field(() => Boolean, {
+    description: 'Reuniones del consejo visibles para el consejo',
+  })
   @Column({ name: 'voting_council_enabled', type: 'boolean', default: false })
   votingCouncilEnabled: boolean;
 
@@ -160,8 +202,16 @@ export class ResidentialComplex {
    * Consejeros con voz pero sin voto (los suplentes, por lo general). Se guarda
    * a quien NO vota para que el consejero que nombren mañana vote por defecto.
    */
-  @Field(() => [String], { description: 'Consejeros con voz pero sin voto en las reuniones del consejo' })
-  @Column({ name: 'voting_council_voice_only_user_ids', type: 'uuid', array: true, default: () => "'{}'" })
+  @Field(() => [String], {
+    description:
+      'Consejeros con voz pero sin voto en las reuniones del consejo',
+  })
+  @Column({
+    name: 'voting_council_voice_only_user_ids',
+    type: 'uuid',
+    array: true,
+    default: () => "'{}'",
+  })
   votingCouncilVoiceOnlyUserIds: string[];
 
   // ==================== CONTACTO ====================
@@ -169,12 +219,15 @@ export class ResidentialComplex {
   @Column({
     type: 'jsonb',
     nullable: true,
-    name: 'country_code'
+    name: 'country_code',
   })
   @Field(() => Country, { description: 'CountryCode' })
   countryCode: Country;
 
-  @Field(() => String, { description: 'Teléfono de administración', nullable: true })
+  @Field(() => String, {
+    description: 'Teléfono de administración',
+    nullable: true,
+  })
   @Column({ type: 'varchar', length: 20, nullable: true })
   phoneNumber?: string;
 
@@ -190,108 +243,209 @@ export class ResidentialComplex {
   @Column({ type: 'varchar', length: 255, nullable: true })
   website?: string;
 
-
   // ==================== IDENTIDAD LEGAL ====================
 
-  @Field(() => String, { description: 'NIT o identificación fiscal', nullable: true })
+  @Field(() => String, {
+    description: 'NIT o identificación fiscal',
+    nullable: true,
+  })
   @Column({ type: 'varchar', length: 30, nullable: true })
   nit?: string;
 
-  @Field(() => String, { description: 'ID del usuario representante legal', nullable: true })
+  @Field(() => String, {
+    description: 'ID del usuario representante legal',
+    nullable: true,
+  })
   @Column({ name: 'legal_representative_id', type: 'uuid', nullable: true })
   legalRepresentativeId?: string;
-
-
-
 
   // ================== RESET DE CONTRASEÑA ==================
 
   /** Token UUID de un solo uso para restablecimiento de contraseña por email. */
-  @Column({ name: 'password_reset_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+  @Column({
+    name: 'password_reset_token',
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+    unique: true,
+    select: false,
+  })
   passwordResetToken?: string;
 
-  @Column({ name: 'password_reset_token_exp', type: 'timestamptz', nullable: true, select: false })
+  @Column({
+    name: 'password_reset_token_exp',
+    type: 'timestamptz',
+    nullable: true,
+    select: false,
+  })
   passwordResetTokenExp?: Date;
 
   // ================== SEGURIDAD ==================
 
-
   @Column({ name: 'failedLoginAttempts', type: 'smallint', default: 0 })
-  @Field(() => Date, { description: 'Date until which the account is blocked due to failed attempts', nullable: true })
+  @Field(() => Date, {
+    description:
+      'Date until which the account is blocked due to failed attempts',
+    nullable: true,
+  })
   failedLoginAttempts: number;
 
   @Column({ name: 'accountLockedUntil', type: 'timestamptz', nullable: true })
-  @Field(() => Date, { description: 'Date until which the account is blocked due to failed attempts', nullable: true })
+  @Field(() => Date, {
+    description:
+      'Date until which the account is blocked due to failed attempts',
+    nullable: true,
+  })
   accountLockedUntil?: Date;
 
   // ================== LOGIN POR QR ==================
 
   /** Token de un solo uso para login por código QR. Oculto por defecto en queries. */
-  @Column({ name: 'qr_login_token', type: 'varchar', length: 36, nullable: true, unique: true, select: false })
+  @Column({
+    name: 'qr_login_token',
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+    unique: true,
+    select: false,
+  })
   qrLoginToken?: string;
 
-  @Column({ name: 'qr_login_token_exp', type: 'timestamptz', nullable: true, select: false })
+  @Column({
+    name: 'qr_login_token_exp',
+    type: 'timestamptz',
+    nullable: true,
+    select: false,
+  })
   qrLoginTokenExp?: Date;
 
   @Column({ name: 'qr_login_token_used', type: 'boolean', default: false })
   qrLoginTokenUsed: boolean;
 
   /** PIN hasheado (bcrypt) de un solo uso para validar el canje del QR. Oculto por defecto. */
-  @Column({ name: 'qr_login_pin', type: 'varchar', length: 72, nullable: true, select: false })
+  @Column({
+    name: 'qr_login_pin',
+    type: 'varchar',
+    length: 72,
+    nullable: true,
+    select: false,
+  })
   qrLoginPin?: string;
 
   // ==================== REGISTRO / ONBOARDING ====================
 
-  @Field(() => Int, { description: 'Total de unidades declaradas al registrar', nullable: true })
+  @Field(() => Int, {
+    description: 'Total de unidades declaradas al registrar',
+    nullable: true,
+  })
   @Column({ name: 'total_units', type: 'int', nullable: true })
   totalUnits?: number;
 
-  @Field(() => Int, { description: 'Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)', nullable: true })
+  @Field(() => Int, {
+    description: 'Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)',
+    nullable: true,
+  })
   @Column({ name: 'number_of_towers', type: 'int', nullable: true })
   numberOfTowers?: number;
 
-  @Field(() => String, { description: 'Nombre del representante legal', nullable: true })
-  @Column({ name: 'legal_representative_name', type: 'varchar', length: 255, nullable: true })
+  @Field(() => String, {
+    description: 'Nombre del representante legal',
+    nullable: true,
+  })
+  @Column({
+    name: 'legal_representative_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   legalRepresentativeName?: string;
 
-  @Field(() => String, { description: 'URL del RUT del complejo (R2)', nullable: true })
+  @Field(() => String, {
+    description: 'URL del RUT del complejo (R2)',
+    nullable: true,
+  })
   @Column({ name: 'rut_file_url', type: 'text', nullable: true })
   rutFileUrl?: string;
 
-  @Field(() => String, { description: 'URL del documento del representante legal (R2)', nullable: true })
+  @Field(() => String, {
+    description: 'URL del documento del representante legal (R2)',
+    nullable: true,
+  })
   @Column({ name: 'legal_rep_document_url', type: 'text', nullable: true })
   legalRepDocumentUrl?: string;
 
-  @Field(() => Date, { description: 'Fecha/hora en que se aceptaron Términos, Privacidad y DPA durante el registro', nullable: true })
+  @Field(() => Date, {
+    description:
+      'Fecha/hora en que se aceptaron Términos, Privacidad y DPA durante el registro',
+    nullable: true,
+  })
   @Column({ name: 'accepted_terms_at', type: 'timestamptz', nullable: true })
   acceptedTermsAt?: Date;
 
-  @Field(() => String, { description: 'URL del DPA (Anexo B2B) firmado, subido por el complejo (R2)', nullable: true })
+  @Field(() => String, {
+    description: 'URL del DPA (Anexo B2B) firmado, subido por el complejo (R2)',
+    nullable: true,
+  })
   @Column({ name: 'signed_dpa_url', type: 'text', nullable: true })
   signedDpaUrl?: string;
 
-  @Field(() => String, { description: 'Nombre del archivo del DPA firmado', nullable: true })
-  @Column({ name: 'signed_dpa_file_name', type: 'varchar', length: 255, nullable: true })
+  @Field(() => String, {
+    description: 'Nombre del archivo del DPA firmado',
+    nullable: true,
+  })
+  @Column({
+    name: 'signed_dpa_file_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   signedDpaFileName?: string;
 
-  @Field(() => Date, { description: 'Fecha de subida del DPA firmado', nullable: true })
-  @Column({ name: 'signed_dpa_uploaded_at', type: 'timestamptz', nullable: true })
+  @Field(() => Date, {
+    description: 'Fecha de subida del DPA firmado',
+    nullable: true,
+  })
+  @Column({
+    name: 'signed_dpa_uploaded_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   signedDpaUploadedAt?: Date;
 
   /** Key de R2 del DPA firmado, para reemplazo. Sin @Field = oculto en GraphQL. */
   @Column({ name: 'signed_dpa_public_id', type: 'text', nullable: true })
   signedDpaPublicId?: string;
 
-  @Field(() => DpaValidationStatus, { description: 'Estado de validación del DPA firmado (revisión del SUPER_ADMIN)', nullable: true })
-  @Column({ name: 'signed_dpa_status', type: 'enum', enum: DpaValidationStatus, nullable: true })
+  @Field(() => DpaValidationStatus, {
+    description:
+      'Estado de validación del DPA firmado (revisión del SUPER_ADMIN)',
+    nullable: true,
+  })
+  @Column({
+    name: 'signed_dpa_status',
+    type: 'enum',
+    enum: DpaValidationStatus,
+    nullable: true,
+  })
   signedDpaStatus?: DpaValidationStatus;
 
-  @Field(() => String, { description: 'Motivo del rechazo del DPA firmado (si fue rechazado)', nullable: true })
+  @Field(() => String, {
+    description: 'Motivo del rechazo del DPA firmado (si fue rechazado)',
+    nullable: true,
+  })
   @Column({ name: 'signed_dpa_rejection_reason', type: 'text', nullable: true })
   signedDpaRejectionReason?: string;
 
-  @Field(() => Date, { description: 'Fecha en que el SUPER_ADMIN revisó (aprobó/rechazó) el DPA firmado', nullable: true })
-  @Column({ name: 'signed_dpa_reviewed_at', type: 'timestamptz', nullable: true })
+  @Field(() => Date, {
+    description:
+      'Fecha en que el SUPER_ADMIN revisó (aprobó/rechazó) el DPA firmado',
+    nullable: true,
+  })
+  @Column({
+    name: 'signed_dpa_reviewed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   signedDpaReviewedAt?: Date;
 
   /** Usuario SUPER_ADMIN que revisó el DPA. Sin @Field = oculto en GraphQL. */
@@ -300,40 +454,58 @@ export class ResidentialComplex {
 
   // ==================== IMÁGENES ====================
 
-  @Field(() => String, { description: 'URL del logo del complejo', nullable: true })
+  @Field(() => String, {
+    description: 'URL del logo del complejo',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   logoUrl?: string;
 
-  @Field(() => String, { description: 'URL de imagen de portada', nullable: true })
+  @Field(() => String, {
+    description: 'URL de imagen de portada',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   coverUrl?: string;
 
-
   @Column({ name: 'last_password_change', type: 'timestamptz', nullable: true })
-  @Field(() => Date, { description: 'Date of last password change', nullable: true })
+  @Field(() => Date, {
+    description: 'Date of last password change',
+    nullable: true,
+  })
   lastPasswordChange?: Date;
 
-
   /* * Indica si el usuario ya estableció su contraseña al menos una vez.
-       * false  → solo accedió por QR sin haber llamado a setInitialPassword.
-       * true   → contraseña activa: puede usar requestPasswordReset por email.
-       */
+   * false  → solo accedió por QR sin haber llamado a setInitialPassword.
+   * true   → contraseña activa: puede usar requestPasswordReset por email.
+   */
   @Column({ name: 'password_set', type: 'boolean', default: false })
-  @Field(() => Boolean, { description: 'Indica si el usuario tiene contraseña establecida' })
+  @Field(() => Boolean, {
+    description: 'Indica si el usuario tiene contraseña establecida',
+  })
   passwordSet: boolean;
   // ==================== CONFIGURACIÓN ====================
 
-  @Field(() => GraphQLJSON, { description: 'Configuración avanzada del complejo', nullable: true })
+  @Field(() => GraphQLJSON, {
+    description: 'Configuración avanzada del complejo',
+    nullable: true,
+  })
   @Column({ type: 'jsonb', nullable: true, default: {} })
   settings?: Record<string, any>;
 
-  @Field(() => [String], { description: 'Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.', nullable: true })
+  @Field(() => [String], {
+    description:
+      'Módulos habilitados para este complejo. Si es null o vacío, todos los módulos están habilitados.',
+    nullable: true,
+  })
   @Column({ type: 'simple-array', nullable: true })
   enabledModules?: string[];
 
   // ==================== AUDITORÍA ====================
 
-  @Field(() => String, { description: 'ID del propietario/administrador principal' })
+  @Field(() => String, {
+    description: 'ID del propietario/administrador principal',
+  })
   @Column({ type: 'uuid', name: 'owner_id', nullable: true })
   ownerId: string;
 
@@ -351,17 +523,26 @@ export class ResidentialComplex {
 
   // ==================== RELACIONES ====================
 
-  @Field(() => User, { description: 'Propietario/administrador principal', nullable: true })
+  @Field(() => User, {
+    description: 'Propietario/administrador principal',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'owner_id' })
   owner?: User;
 
-  @Field(() => User, { description: 'Representante legal del complejo', nullable: true })
+  @Field(() => User, {
+    description: 'Representante legal del complejo',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL', eager: true })
   @JoinColumn({ name: 'legal_representative_id' })
   legalRepresentative?: User;
 
-  @Field(() => [Building], { description: 'Torres o edificios del complejo', nullable: true })
+  @Field(() => [Building], {
+    description: 'Torres o edificios del complejo',
+    nullable: true,
+  })
   @OneToMany(() => Building, (building) => building.complex, { cascade: true })
   buildings?: Building[];
 
@@ -370,7 +551,9 @@ export class ResidentialComplex {
 
   // ==================== CAMPOS CALCULADOS ====================
 
-  @Field(() => [ValidRoles], { description: 'Rol fijo del complejo residencial' })
+  @Field(() => [ValidRoles], {
+    description: 'Rol fijo del complejo residencial',
+  })
   get roles(): ValidRoles[] {
     return [ValidRoles.COMPLEX_ROL];
   }
@@ -399,4 +582,3 @@ export class ResidentialComplex {
       .substring(0, 170);
   }
 }
- 

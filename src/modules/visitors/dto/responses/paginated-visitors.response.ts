@@ -4,7 +4,6 @@ import { Visitor } from '../../entities/visitor.entity';
 
 @ObjectType()
 export class PaginatedVisitorsResponse {
-
   @Field(() => [Visitor])
   items: Visitor[];
 

@@ -2,32 +2,31 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuditLog }                   from '../entities/audit-log.entity';
-import { AuditAction }                from '../enums/audit-action.enum';
-import { AuditEntityType }            from '../enums/audit-entity-type.enum';
-import { FilterAuditLogsInput }       from '../dto/inputs/filter-audit-logs.input';
+import { AuditLog } from '../entities/audit-log.entity';
+import { AuditAction } from '../enums/audit-action.enum';
+import { AuditEntityType } from '../enums/audit-entity-type.enum';
+import { FilterAuditLogsInput } from '../dto/inputs/filter-audit-logs.input';
 import { PaginatedAuditLogsResponse } from '../dto/responses/paginated-audit-logs.response';
-import { RevertAuditResponse }        from '../dto/responses/revert-audit.response';
-import { AuditLogDetailResponse }     from '../dto/responses/audit-log-detail.response';
+import { RevertAuditResponse } from '../dto/responses/revert-audit.response';
+import { AuditLogDetailResponse } from '../dto/responses/audit-log-detail.response';
 
-import { ValidRoles }        from '../../roles/enums/valid-roles';
-import { CustomError }       from '../../shared/utils/errors.utils';
-import { GeneralErrorCode }  from '../../shared/constans/error-codes.constants';
-
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
 export interface LogParams {
-  entityType:       AuditEntityType;
-  entityId:         string;
-  action:           AuditAction;
-  previousValue?:   Record<string, any>;
-  newValue?:        Record<string, any>;
-  performedById:    string;
+  entityType: AuditEntityType;
+  entityId: string;
+  action: AuditAction;
+  previousValue?: Record<string, any>;
+  newValue?: Record<string, any>;
+  performedById: string;
   performedByName?: string;
-  performedByRole:  string;
-  complexId?:       string;
-  description?:     string;
+  performedByRole: string;
+  complexId?: string;
+  description?: string;
   /** Marcar true en operaciones masivas — COMPLEX_ROL no las audita */
-  isBulk?:          boolean;
+  isBulk?: boolean;
 }
 
 @Injectable()
@@ -57,7 +56,8 @@ export class AuditService {
 
   async log(params: LogParams): Promise<void> {
     if (!AuditService.AUDITED_ROLES.has(params.performedByRole)) return;
-    if (params.performedByRole === ValidRoles.COMPLEX_ROL && params.isBulk) return;
+    if (params.performedByRole === ValidRoles.COMPLEX_ROL && params.isBulk)
+      return;
 
     try {
       const referenceNumber = await this.generateReferenceNumber();
@@ -65,17 +65,17 @@ export class AuditService {
       await this.auditRepo.save(
         this.auditRepo.create({
           referenceNumber,
-          entityType:      params.entityType,
-          entityId:        params.entityId,
-          action:          params.action,
-          previousValue:   params.previousValue,
-          newValue:        params.newValue,
-          performedById:   params.performedById,
+          entityType: params.entityType,
+          entityId: params.entityId,
+          action: params.action,
+          previousValue: params.previousValue,
+          newValue: params.newValue,
+          performedById: params.performedById,
           performedByName: params.performedByName,
           performedByRole: params.performedByRole,
-          complexId:       params.complexId,
-          description:     params.description,
-          isReverted:      false,
+          complexId: params.complexId,
+          description: params.description,
+          isReverted: false,
         }),
       );
     } catch (err) {
@@ -94,8 +94,16 @@ export class AuditService {
     callerComplexId?: string,
   ): Promise<PaginatedAuditLogsResponse> {
     const {
-      action, entityType, entityId, performedById, performedByRole,
-      referenceNumber, from, to, limit = 20, offset = 0,
+      action,
+      entityType,
+      entityId,
+      performedById,
+      performedByRole,
+      referenceNumber,
+      from,
+      to,
+      limit = 20,
+      offset = 0,
     } = filter;
 
     const qb = this.auditRepo
@@ -108,7 +116,9 @@ export class AuditService {
     if (callerRole === ValidRoles.SUPER_ADMIN_ROL) {
       // SUPER_ADMIN puede filtrar por complexId opcionalmente
       if (filter.complexId) {
-        qb.andWhere('al.complex_id = :complexId', { complexId: filter.complexId });
+        qb.andWhere('al.complex_id = :complexId', {
+          complexId: filter.complexId,
+        });
       }
     } else {
       // COMPLEX_ROL: solo ve su complejo y solo los roles auditados relevantes
@@ -126,14 +136,21 @@ export class AuditService {
     }
 
     // ── Filtros opcionales adicionales ─────────────────────────────
-    if (action)          qb.andWhere('al.action = :action', { action });
-    if (entityType)      qb.andWhere('al.entity_type = :entityType', { entityType });
-    if (entityId)        qb.andWhere('al.entity_id = :entityId', { entityId });
-    if (performedById)   qb.andWhere('al.performed_by_id = :performedById', { performedById });
-    if (performedByRole) qb.andWhere('al.performed_by_role = :performedByRole', { performedByRole });
-    if (referenceNumber) qb.andWhere('al.reference_number = :referenceNumber', { referenceNumber });
-    if (from)            qb.andWhere('al.createdAt >= :from', { from: new Date(from) });
-    if (to)              qb.andWhere('al.createdAt <= :to', { to: new Date(to) });
+    if (action) qb.andWhere('al.action = :action', { action });
+    if (entityType) qb.andWhere('al.entity_type = :entityType', { entityType });
+    if (entityId) qb.andWhere('al.entity_id = :entityId', { entityId });
+    if (performedById)
+      qb.andWhere('al.performed_by_id = :performedById', { performedById });
+    if (performedByRole)
+      qb.andWhere('al.performed_by_role = :performedByRole', {
+        performedByRole,
+      });
+    if (referenceNumber)
+      qb.andWhere('al.reference_number = :referenceNumber', {
+        referenceNumber,
+      });
+    if (from) qb.andWhere('al.createdAt >= :from', { from: new Date(from) });
+    if (to) qb.andWhere('al.createdAt <= :to', { to: new Date(to) });
 
     const [items, total] = await qb.getManyAndCount();
 
@@ -144,9 +161,14 @@ export class AuditService {
   // REVERTIR ACCIÓN (solo SUPER_ADMIN)
   // ================================================================
 
-  async revert(referenceNumber: string, revertedById: string): Promise<RevertAuditResponse> {
+  async revert(
+    referenceNumber: string,
+    revertedById: string,
+  ): Promise<RevertAuditResponse> {
     // 1. Obtener el registro de auditoría
-    const auditLog = await this.auditRepo.findOne({ where: { referenceNumber } });
+    const auditLog = await this.auditRepo.findOne({
+      where: { referenceNumber },
+    });
     if (!auditLog) {
       throw new CustomError({
         message: `No se encontró ningún registro de auditoría con referencia '${referenceNumber}'.`,
@@ -173,7 +195,7 @@ export class AuditService {
 
     // 2. Encontrar la metadata de la entidad por nombre de clase
     const metadata = this.dataSource.entityMetadatas.find(
-      m => m.name === auditLog.entityType,
+      (m) => m.name === auditLog.entityType,
     );
     if (!metadata) {
       throw new CustomError({
@@ -188,40 +210,43 @@ export class AuditService {
 
     if (!auditLog.previousValue) {
       // Revertir un CREATE = eliminar la entidad
-      const entity = await entityManager.findOne(metadata.target as any, {
+      const entity = await entityManager.findOne(metadata.target, {
         where: { id: auditLog.entityId },
         withDeleted: true,
       });
       if (entity) {
-        await entityManager.remove(metadata.target as any, entity);
+        await entityManager.remove(metadata.target, entity);
       }
     } else {
       // Revertir un UPDATE / DELETE / SUSPEND / etc. = restaurar previousValue
       // Solo se restauran campos seguros (allowlist) — nunca password, tokens ni roles
-      const safeValue = AuditService.sanitizeRevertValue(auditLog.entityType, auditLog.previousValue);
-      await entityManager.save(metadata.target as any, {
+      const safeValue = AuditService.sanitizeRevertValue(
+        auditLog.entityType,
+        auditLog.previousValue,
+      );
+      await entityManager.save(metadata.target, {
         ...safeValue,
         id: auditLog.entityId,
       });
     }
 
     // 4. Marcar el registro de auditoría como revertido
-    auditLog.isReverted   = true;
-    auditLog.revertedAt   = new Date();
+    auditLog.isReverted = true;
+    auditLog.revertedAt = new Date();
     auditLog.revertedById = revertedById;
     await this.auditRepo.save(auditLog);
 
     // 5. Registrar la reversión como nueva entrada de auditoría
     await this.log({
-      entityType:      auditLog.entityType,
-      entityId:        auditLog.entityId,
-      action:          AuditAction.REVERT,
-      previousValue:   auditLog.newValue,
-      newValue:        auditLog.previousValue,
-      performedById:   revertedById,
+      entityType: auditLog.entityType,
+      entityId: auditLog.entityId,
+      action: AuditAction.REVERT,
+      previousValue: auditLog.newValue,
+      newValue: auditLog.previousValue,
+      performedById: revertedById,
       performedByRole: ValidRoles.SUPER_ADMIN_ROL,
-      complexId:       auditLog.complexId,
-      description:     `Reversión del registro ${referenceNumber} (acción original: ${auditLog.action})`,
+      complexId: auditLog.complexId,
+      description: `Reversión del registro ${referenceNumber} (acción original: ${auditLog.action})`,
     });
 
     return {
@@ -235,8 +260,13 @@ export class AuditService {
   // OBTENER UN REGISTRO POR REFERENCIA (enriquecido)
   // ================================================================
 
-  async findByReference(referenceNumber: string, callerComplexId?: string): Promise<AuditLogDetailResponse> {
-    const auditLog = await this.auditRepo.findOne({ where: { referenceNumber } });
+  async findByReference(
+    referenceNumber: string,
+    callerComplexId?: string,
+  ): Promise<AuditLogDetailResponse> {
+    const auditLog = await this.auditRepo.findOne({
+      where: { referenceNumber },
+    });
     if (!auditLog) {
       throw new CustomError({
         message: `Registro de auditoría '${referenceNumber}' no encontrado.`,
@@ -255,7 +285,9 @@ export class AuditService {
 
     const [entityLabel, revertedByName] = await Promise.all([
       this.resolveEntityLabel(auditLog.entityType, auditLog.entityId),
-      auditLog.revertedById ? this.resolveUserName(auditLog.revertedById) : Promise.resolve(undefined),
+      auditLog.revertedById
+        ? this.resolveUserName(auditLog.revertedById)
+        : Promise.resolve(undefined),
     ]);
 
     return { auditLog, entityLabel, revertedByName };
@@ -265,15 +297,20 @@ export class AuditService {
   // HELPERS PRIVADOS DE RESOLUCIÓN
   // ================================================================
 
-  private async resolveEntityLabel(entityType: AuditEntityType, entityId: string): Promise<string | undefined> {
+  private async resolveEntityLabel(
+    entityType: AuditEntityType,
+    entityId: string,
+  ): Promise<string | undefined> {
     try {
-      const metadata = this.dataSource.entityMetadatas.find(m => m.name === entityType);
+      const metadata = this.dataSource.entityMetadatas.find(
+        (m) => m.name === entityType,
+      );
       if (!metadata) return undefined;
 
-      const entity = await this.dataSource.manager.findOne(metadata.target as any, {
+      const entity = (await this.dataSource.manager.findOne(metadata.target, {
         where: { id: entityId },
         withDeleted: true,
-      }) as any;
+      })) as any;
 
       if (!entity) return `[eliminado: ${entityId}]`;
 
@@ -283,7 +320,9 @@ export class AuditService {
         case AuditEntityType.Resident:
           return `${entity.type ?? ''} - unidad: ${entity.unitId ?? entityId}`.trim();
         case AuditEntityType.Vehicle:
-          return [entity.plate, entity.brand, entity.type].filter(Boolean).join(' ');
+          return [entity.plate, entity.brand, entity.type]
+            .filter(Boolean)
+            .join(' ');
         case AuditEntityType.ResidentialComplex:
           return entity.name ?? entityId;
         case AuditEntityType.Building:
@@ -322,15 +361,19 @@ export class AuditService {
 
   private async resolveUserName(userId: string): Promise<string | undefined> {
     try {
-      const metadata = this.dataSource.entityMetadatas.find(m => m.name === 'User');
+      const metadata = this.dataSource.entityMetadatas.find(
+        (m) => m.name === 'User',
+      );
       if (!metadata) return undefined;
 
-      const user = await this.dataSource.manager.findOne(metadata.target as any, {
+      const user = (await this.dataSource.manager.findOne(metadata.target, {
         where: { id: userId },
         withDeleted: true,
-      }) as any;
+      })) as any;
 
-      return user ? ([user.name, user.email].filter(Boolean).join(' - ')) : undefined;
+      return user
+        ? [user.name, user.email].filter(Boolean).join(' - ')
+        : undefined;
     } catch {
       return undefined;
     }
@@ -345,9 +388,16 @@ export class AuditService {
   // ================================================================
 
   private static readonly REVERT_BLOCKED_FIELDS = new Set([
-    'password', 'tokenVersion', 'refreshToken', 'resetPasswordToken',
-    'resetPasswordExpires', 'accountLockedUntil', 'qrLoginToken', 'qrLoginPin',
-    'userRoles', 'roles',
+    'password',
+    'tokenVersion',
+    'refreshToken',
+    'resetPasswordToken',
+    'resetPasswordExpires',
+    'accountLockedUntil',
+    'qrLoginToken',
+    'qrLoginPin',
+    'userRoles',
+    'roles',
   ]);
 
   private static sanitizeRevertValue(
@@ -364,7 +414,7 @@ export class AuditService {
   }
 
   private async generateReferenceNumber(): Promise<string> {
-    const now   = new Date();
+    const now = new Date();
     const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
     const prefix = `AUD-${today}-`;
 

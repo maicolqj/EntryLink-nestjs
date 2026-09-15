@@ -11,15 +11,15 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 
-import { VisitorsService }           from '../services/visitors.service';
-import { ResidentialComplexService }  from '../../residential-complex/services/residential-complex.service';
-import { R2StorageService }           from '../../../core/infrastructure/r2/r2.service';
-import { singleImageInterceptor }     from '../../../core/infrastructure/r2/upload-interceptors';
-import { JwtRestGuard }               from '../../shared/guards/jwt-rest.guard';
-import { JwtAccessPayload }           from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }                 from '../../roles/enums/valid-roles';
-import { CustomError }                from '../../shared/utils/errors.utils';
-import { GeneralErrorCode }           from '../../shared/constans/error-codes.constants';
+import { VisitorsService } from '../services/visitors.service';
+import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { singleImageInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
+import { JwtRestGuard } from '../../shared/guards/jwt-rest.guard';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
 const ALLOWED_ROLES: ValidRoles[] = [
   ValidRoles.SUPER_ADMIN_ROL,
@@ -35,8 +35,8 @@ export class VisitorsController {
 
   constructor(
     private readonly visitorsService: VisitorsService,
-    private readonly complexService:  ResidentialComplexService,
-    private readonly storageService:  R2StorageService,
+    private readonly complexService: ResidentialComplexService,
+    private readonly storageService: R2StorageService,
   ) {}
 
   /**
@@ -56,11 +56,11 @@ export class VisitorsController {
   ) {
     const currentUser = req.user as JwtAccessPayload;
 
-    if (!currentUser.roles?.some(r => ALLOWED_ROLES.includes(r))) {
+    if (!currentUser.roles?.some((r) => ALLOWED_ROLES.includes(r))) {
       throw new CustomError({
-        message:    'No tienes permisos para subir fotos de visitantes',
+        message: 'No tienes permisos para subir fotos de visitantes',
         statusCode: 403,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
@@ -71,8 +71,14 @@ export class VisitorsController {
     // La foto se guarda bajo el complejo dueño del visitante, así que resolvemos
     // el slug antes de subir; de paso confirma que el visitante existe.
     const visitorRecord = await this.visitorsService.findById(visitorId);
-    const complexSlug   = await this.complexService.getSlugById(visitorRecord.complexId);
-    const folder = this.storageService.buildFolder(complexSlug, 'visitors', 'photos');
+    const complexSlug = await this.complexService.getSlugById(
+      visitorRecord.complexId,
+    );
+    const folder = this.storageService.buildFolder(
+      complexSlug,
+      'visitors',
+      'photos',
+    );
 
     let publicId: string | undefined;
     try {
@@ -83,14 +89,18 @@ export class VisitorsController {
       );
       publicId = result.publicId;
 
-      const visitor = await this.visitorsService.updatePhotoUrl(visitorId, result.url);
+      const visitor = await this.visitorsService.updatePhotoUrl(
+        visitorId,
+        result.url,
+      );
       this.logger.log(`Foto subida para visitante ${visitorId}`);
       return { success: true, photoUrl: visitor.photoUrl };
-
     } catch (err: any) {
       if (publicId) {
         this.logger.warn(`Rollback R2: eliminando imagen huérfana ${publicId}`);
-        await this.storageService.deleteByPublicId(publicId).catch(() => undefined);
+        await this.storageService
+          .deleteByPublicId(publicId)
+          .catch(() => undefined);
       }
       throw err;
     }

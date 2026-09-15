@@ -10,12 +10,12 @@ import { registerEnumType } from '@nestjs/graphql';
  * escalamiento — y enchufarlo después no toca la máquina.
  */
 export enum PanicDeliveryChannel {
-  FCM      = 'FCM',
-  SOCKET   = 'SOCKET',
-  EMAIL    = 'EMAIL',
+  FCM = 'FCM',
+  SOCKET = 'SOCKET',
+  EMAIL = 'EMAIL',
   WHATSAPP = 'WHATSAPP',
-  SMS      = 'SMS',
-  VOICE    = 'VOICE',
+  SMS = 'SMS',
+  VOICE = 'VOICE',
 }
 
 registerEnumType(PanicDeliveryChannel, {

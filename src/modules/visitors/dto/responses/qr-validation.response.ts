@@ -1,5 +1,5 @@
 import { ObjectType, Field } from '@nestjs/graphql';
-import { Visit }   from '../../entities/visit.entity';
+import { Visit } from '../../entities/visit.entity';
 import { Visitor } from '../../entities/visitor.entity';
 
 /**
@@ -8,20 +8,25 @@ import { Visitor } from '../../entities/visitor.entity';
  */
 @ObjectType()
 export class QrValidationResponse {
-
-  @Field(() => Boolean, { description: 'Indica si el QR es válido y permite ingreso' })
+  @Field(() => Boolean, {
+    description: 'Indica si el QR es válido y permite ingreso',
+  })
   isValid: boolean;
 
   @Field(() => String, { description: 'Mensaje de resultado del escaneo' })
   message: string;
 
   @Field(() => String, {
-    description: 'Token de acceso de un solo uso. Presente solo cuando isValid === true; debe enviarse a registerVisitorEntry para confirmar el ingreso de una visita programada.',
+    description:
+      'Token de acceso de un solo uso. Presente solo cuando isValid === true; debe enviarse a registerVisitorEntry para confirmar el ingreso de una visita programada.',
     nullable: true,
   })
   accessToken?: string;
 
-  @Field(() => Visit, { description: 'Datos de la visita si el QR es válido', nullable: true })
+  @Field(() => Visit, {
+    description: 'Datos de la visita si el QR es válido',
+    nullable: true,
+  })
   visit?: Visit;
 
   @Field(() => Visitor, { description: 'Datos del visitante', nullable: true })

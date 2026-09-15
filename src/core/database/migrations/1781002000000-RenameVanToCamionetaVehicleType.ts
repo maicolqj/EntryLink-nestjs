@@ -14,7 +14,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * no, en ese enum concreto.
  */
 export class RenameVanToCamionetaVehicleType1781002000000 implements MigrationInterface {
-
   // Un enum nativo por columna (TypeORM no comparte enumName): {tabla}_{columna}_enum
   private readonly enumTypes = [
     'vehicles_type_enum',
@@ -45,7 +44,9 @@ export class RenameVanToCamionetaVehicleType1781002000000 implements MigrationIn
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Renombrar el valor en cada enum nativo (in-place; convierte filas existentes).
     for (const enumName of this.enumTypes) {
-      await queryRunner.query(this.renameValueSql(enumName, 'VAN', 'CAMIONETA'));
+      await queryRunner.query(
+        this.renameValueSql(enumName, 'VAN', 'CAMIONETA'),
+      );
     }
 
     // 2. recurring_charges.vehicleTypes (varchar[]) — reemplazar elemento 'VAN'.
@@ -68,7 +69,9 @@ export class RenameVanToCamionetaVehicleType1781002000000 implements MigrationIn
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     for (const enumName of this.enumTypes) {
-      await queryRunner.query(this.renameValueSql(enumName, 'CAMIONETA', 'VAN'));
+      await queryRunner.query(
+        this.renameValueSql(enumName, 'CAMIONETA', 'VAN'),
+      );
     }
 
     await queryRunner.query(`

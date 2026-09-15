@@ -21,7 +21,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * ya tienen datos del usuario.
  */
 export class AmenityCancellationPolicyAndCouncil1781004000000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "amenities"
@@ -64,10 +63,16 @@ export class AmenityCancellationPolicyAndCouncil1781004000000 implements Migrati
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_residents_council_member"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_amenity_bookings_council_free"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_residents_council_member"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_amenity_bookings_council_free"`,
+    );
 
-    await queryRunner.query(`ALTER TABLE "residents" DROP COLUMN IF EXISTS "is_council_member"`);
+    await queryRunner.query(
+      `ALTER TABLE "residents" DROP COLUMN IF EXISTS "is_council_member"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "amenity_bookings"

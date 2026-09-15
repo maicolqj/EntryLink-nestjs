@@ -1,5 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { VisitType } from '../../enums/visit-type.enum';
 import GraphQLJSON from 'graphql-type-json';
 
@@ -9,7 +16,6 @@ import GraphQLJSON from 'graphql-type-json';
  */
 @InputType()
 export class RegisterWalkInInput {
-
   // ---- Datos del visitante (si no existe en BD, se crea automáticamente) ----
 
   @Field(() => String)
@@ -27,13 +33,19 @@ export class RegisterWalkInInput {
   @MaxLength(30)
   visitorIdentity: string;
 
-  @Field(() => String, { nullable: true, description: 'Teléfono del visitante' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Teléfono del visitante',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(20)
   visitorPhone?: string;
 
-  @Field(() => String, { nullable: true, description: 'URL de la foto capturada en portería' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'URL de la foto capturada en portería',
+  })
   @IsOptional()
   @IsString()
   visitorPhotoUrl?: string;
@@ -44,7 +56,10 @@ export class RegisterWalkInInput {
    * sanguíneo. Se guardan en `visitors.metadata` —describen a la persona, no a
    * la visita— fusionándose con lo que el visitante ya tuviera.
    */
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Datos del documento; se guardan en el visitante' })
+  @Field(() => GraphQLJSON, {
+    nullable: true,
+    description: 'Datos del documento; se guardan en el visitante',
+  })
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
@@ -74,13 +89,19 @@ export class RegisterWalkInInput {
   @MaxLength(255)
   purpose?: string;
 
-  @Field(() => String, { description: 'Placa del vehículo (si aplica)', nullable: true })
+  @Field(() => String, {
+    description: 'Placa del vehículo (si aplica)',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(10)
   vehiclePlate?: string;
 
-  @Field(() => String, { description: 'Observaciones del guardia', nullable: true })
+  @Field(() => String, {
+    description: 'Observaciones del guardia',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

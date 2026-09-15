@@ -1,14 +1,19 @@
 import { InputType, Field } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum,
-  MaxLength, IsInt, Min, Max,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  MaxLength,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 import { PackageType } from '../../enums/package-type.enum';
 
 @InputType()
 export class RegisterPackageInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

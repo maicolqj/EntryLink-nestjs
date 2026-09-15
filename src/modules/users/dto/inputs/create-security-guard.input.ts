@@ -27,7 +27,9 @@ export class CreateSecurityGuardInput {
   @Field(() => String)
   @IsString()
   @IsNotEmpty()
-  @Matches(/^3\d{9}$/, { message: 'Número de celular colombiano inválido (ej: 3001234567)' })
+  @Matches(/^3\d{9}$/, {
+    message: 'Número de celular colombiano inválido (ej: 3001234567)',
+  })
   phoneNumber: string;
 
   @Field(() => String)
@@ -47,16 +49,22 @@ export class CreateSecurityGuardInput {
   @MinLength(8)
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
-    message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
+    message:
+      'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
   password: string;
 
-  @Field(() => String, { description: 'ID del complejo al que se asigna el guardia' })
+  @Field(() => String, {
+    description: 'ID del complejo al que se asigna el guardia',
+  })
   @IsUUID('4')
   @IsNotEmpty()
   complexId: string;
 
-  @Field(() => String, { nullable: true, description: 'Turno asignado (MAÑANA, TARDE, NOCHE)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Turno asignado (MAÑANA, TARDE, NOCHE)',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(50)

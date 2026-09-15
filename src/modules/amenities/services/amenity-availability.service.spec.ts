@@ -1,16 +1,19 @@
 import { Repository } from 'typeorm';
 
-import { AmenityAvailabilityService, ClosedReason } from './amenity-availability.service';
-import { Amenity }         from '../entities/amenity.entity';
+import {
+  AmenityAvailabilityService,
+  ClosedReason,
+} from './amenity-availability.service';
+import { Amenity } from '../entities/amenity.entity';
 import { AmenitySchedule } from '../entities/amenity-schedule.entity';
 import { AmenityBlackout } from '../entities/amenity-blackout.entity';
-import { AmenityBooking }  from '../entities/amenity-booking.entity';
+import { AmenityBooking } from '../entities/amenity-booking.entity';
 import { AmenityScheduleException } from '../entities/amenity-schedule-exception.entity';
 
-import { AmenityStatus }        from '../enums/amenity-status.enum';
-import { AmenityBookingMode }   from '../enums/amenity-booking-mode.enum';
+import { AmenityStatus } from '../enums/amenity-status.enum';
+import { AmenityBookingMode } from '../enums/amenity-booking-mode.enum';
 import { AmenityBookingStatus } from '../enums/amenity-booking-status.enum';
-import { AmenityDurationUnit }  from '../enums/amenity-duration-unit.enum';
+import { AmenityDurationUnit } from '../enums/amenity-duration-unit.enum';
 
 /**
  * Specs del motor de disponibilidad. Los repositorios se sustituyen por listas
@@ -22,36 +25,44 @@ import { AmenityDurationUnit }  from '../enums/amenity-duration-unit.enum';
  */
 
 const schedule = (
-  dayOfWeek: number, openTime: string, closeTime: string,
-): AmenitySchedule => ({ dayOfWeek, openTime, closeTime, isActive: true } as AmenitySchedule);
+  dayOfWeek: number,
+  openTime: string,
+  closeTime: string,
+): AmenitySchedule =>
+  ({ dayOfWeek, openTime, closeTime, isActive: true }) as AmenitySchedule;
 
-const blackout = (startAt: Date, endAt: Date, reason = 'Mantenimiento'): AmenityBlackout =>
-  ({ startAt, endAt, reason } as AmenityBlackout);
+const blackout = (
+  startAt: Date,
+  endAt: Date,
+  reason = 'Mantenimiento',
+): AmenityBlackout => ({ startAt, endAt, reason }) as AmenityBlackout;
 
 const booking = (startAt: Date, endAt: Date): AmenityBooking =>
-  ({ startAt, endAt, status: AmenityBookingStatus.APPROVED } as AmenityBooking);
+  ({ startAt, endAt, status: AmenityBookingStatus.APPROVED }) as AmenityBooking;
 
-const amenityOf = (partial: Partial<Amenity> = {}): Amenity => ({
-  id: 'amenity-1',
-  complexId: 'complex-1',
-  name: 'Zona BBQ',
-  status: AmenityStatus.ACTIVE,
-  bookingMode: AmenityBookingMode.SLOT,
-  durationUnit: AmenityDurationUnit.HOURS,
-  slotDurationMinutes: 120,
-  minDurationMinutes: 60,
-  maxDurationMinutes: 480,
-  capacity: 0,
-  maxSimultaneousBookings: 1,
-  advanceBookingDays: 30,
-  minAdvanceDays: 0,
-  ...partial,
-} as Amenity);
+const amenityOf = (partial: Partial<Amenity> = {}): Amenity =>
+  ({
+    id: 'amenity-1',
+    complexId: 'complex-1',
+    name: 'Zona BBQ',
+    status: AmenityStatus.ACTIVE,
+    bookingMode: AmenityBookingMode.SLOT,
+    durationUnit: AmenityDurationUnit.HOURS,
+    slotDurationMinutes: 120,
+    minDurationMinutes: 60,
+    maxDurationMinutes: 480,
+    capacity: 0,
+    maxSimultaneousBookings: 1,
+    advanceBookingDays: 30,
+    minAdvanceDays: 0,
+    ...partial,
+  }) as Amenity;
 
 /** Repo falso que ignora el `where` y devuelve siempre las filas dadas. */
-const repoOf = <T>(rows: T[]): Repository<T> => ({
-  find: jest.fn().mockResolvedValue(rows),
-} as unknown as Repository<T>);
+const repoOf = <T>(rows: T[]): Repository<T> =>
+  ({
+    find: jest.fn().mockResolvedValue(rows),
+  }) as unknown as Repository<T>;
 
 /** El próximo lunes a medianoche, para que las pruebas no dependan del día real. */
 const nextMonday = (): Date => {
@@ -73,9 +84,16 @@ const iso = (day: Date): string => {
 };
 
 const exception = (
-  date: string, partial: Partial<AmenityScheduleException> = {},
+  date: string,
+  partial: Partial<AmenityScheduleException> = {},
 ): AmenityScheduleException =>
-  ({ date, isClosed: false, openTime: null, closeTime: null, ...partial } as AmenityScheduleException);
+  ({
+    date,
+    isClosed: false,
+    openTime: null,
+    closeTime: null,
+    ...partial,
+  }) as AmenityScheduleException;
 
 const build = (
   schedules: AmenitySchedule[],
@@ -84,11 +102,13 @@ const build = (
   exceptions: AmenityScheduleException[] = [],
 ): AmenityAvailabilityService =>
   new AmenityAvailabilityService(
-    repoOf(schedules), repoOf(blackouts), repoOf(bookings), repoOf(exceptions),
+    repoOf(schedules),
+    repoOf(blackouts),
+    repoOf(bookings),
+    repoOf(exceptions),
   );
 
 describe('AmenityAvailabilityService', () => {
-
   // ── Generación de franjas ────────────────────────────────────────
   describe('modo SLOT', () => {
     it('parte la ventana en franjas de la duración configurada', async () => {
@@ -96,7 +116,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '08:00', '14:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days).toHaveLength(1);
@@ -113,7 +135,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '08:00', '13:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots).toHaveLength(2);
@@ -129,7 +153,9 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ maxSimultaneousBookings: 1 }), iso(monday), iso(monday),
+        amenityOf({ maxSimultaneousBookings: 1 }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots[0].capacityUsed).toBe(1);
@@ -148,7 +174,9 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ maxSimultaneousBookings: 4 }), iso(monday), iso(monday),
+        amenityOf({ maxSimultaneousBookings: 4 }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots[0].capacityUsed).toBe(1);
@@ -166,14 +194,26 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].openWindows).toHaveLength(2);
-      expect(days[0].openWindows[0]).toEqual({ startAt: at(monday, 8), endAt: at(monday, 12) });
-      expect(days[0].openWindows[1]).toEqual({ startAt: at(monday, 14), endAt: at(monday, 18) });
+      expect(days[0].openWindows[0]).toEqual({
+        startAt: at(monday, 8),
+        endAt: at(monday, 12),
+      });
+      expect(days[0].openWindows[1]).toEqual({
+        startAt: at(monday, 14),
+        endAt: at(monday, 18),
+      });
       // Ninguna franja invade el bloqueo.
-      expect(days[0].slots.every(s => s.endAt <= at(monday, 12) || s.startAt >= at(monday, 14))).toBe(true);
+      expect(
+        days[0].slots.every(
+          (s) => s.endAt <= at(monday, 12) || s.startAt >= at(monday, 14),
+        ),
+      ).toBe(true);
     });
 
     it('cierra el día cuando el bloqueo cubre todo el horario', async () => {
@@ -184,7 +224,9 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(false);
@@ -201,7 +243,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(2, '08:00', '18:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(false);
@@ -213,7 +257,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '08:00', '18:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ status: AmenityStatus.MAINTENANCE }), iso(monday), iso(monday),
+        amenityOf({ status: AmenityStatus.MAINTENANCE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(false);
@@ -228,7 +274,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(far.getDay(), '08:00', '18:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ advanceBookingDays: 7 }), iso(far), iso(far),
+        amenityOf({ advanceBookingDays: 7 }),
+        iso(far),
+        iso(far),
       );
 
       expect(days[0].isOpen).toBe(false);
@@ -246,11 +294,17 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '08:00', '12:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(wednesday),
+        amenityOf(),
+        iso(monday),
+        iso(wednesday),
       );
 
       expect(days).toHaveLength(3);
-      expect(days.map(d => d.date)).toEqual([iso(monday), iso(new Date(monday.getTime() + 86400000)), iso(wednesday)]);
+      expect(days.map((d) => d.date)).toEqual([
+        iso(monday),
+        iso(new Date(monday.getTime() + 86400000)),
+        iso(wednesday),
+      ]);
     });
 
     it('respeta dos franjas del mismo día separadas por el almuerzo', async () => {
@@ -261,7 +315,9 @@ describe('AmenityAvailabilityService', () => {
       ]);
 
       const { days } = await service.getAvailability(
-        amenityOf(), iso(monday), iso(monday),
+        amenityOf(),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].openWindows).toHaveLength(2);
@@ -291,7 +347,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '12:00', '05:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(true);
@@ -309,7 +367,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '00:00', '00:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(true);
@@ -325,7 +385,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '22:00', '02:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ slotDurationMinutes: 120 }), iso(monday), iso(monday),
+        amenityOf({ slotDurationMinutes: 120 }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots).toHaveLength(2);
@@ -342,7 +404,9 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].openWindows).toHaveLength(1);
@@ -355,7 +419,9 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '00:00', '00:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].openWindows[0].startAt).toEqual(at(monday, 0));
@@ -368,11 +434,17 @@ describe('AmenityAvailabilityService', () => {
     it('cierra la fecha aunque el horario semanal la tenga abierta', async () => {
       const monday = nextMonday();
       const service = build(
-        [schedule(1, '08:00', '18:00')], [], [],
+        [schedule(1, '08:00', '18:00')],
+        [],
+        [],
         [exception(iso(monday), { isClosed: true, reason: 'Asamblea' })],
       );
 
-      const { days } = await service.getAvailability(amenityOf(), iso(monday), iso(monday));
+      const { days } = await service.getAvailability(
+        amenityOf(),
+        iso(monday),
+        iso(monday),
+      );
 
       expect(days[0].isOpen).toBe(false);
       expect(days[0].closedReason).toBe(ClosedReason.CERRADO_ESE_DIA);
@@ -381,12 +453,16 @@ describe('AmenityAvailabilityService', () => {
     it('REEMPLAZA el horario semanal, no se suma a él', async () => {
       const monday = nextMonday();
       const service = build(
-        [schedule(1, '08:00', '12:00')], [], [],
+        [schedule(1, '08:00', '12:00')],
+        [],
+        [],
         [exception(iso(monday), { openTime: '18:00', closeTime: '22:00' })],
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       // Solo la ventana de la excepción: la de la semana desaparece ese día.
@@ -399,12 +475,16 @@ describe('AmenityAvailabilityService', () => {
       const monday = nextMonday();
       // Sin horario de lunes; la excepción lo abre igual (festivo).
       const service = build(
-        [schedule(2, '08:00', '18:00')], [], [],
+        [schedule(2, '08:00', '18:00')],
+        [],
+        [],
         [exception(iso(monday), { openTime: '12:00', closeTime: '20:00' })],
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(true);
@@ -415,12 +495,16 @@ describe('AmenityAvailabilityService', () => {
       const monday = nextMonday();
       const tuesday = new Date(monday.getTime() + 86400000);
       const service = build(
-        [], [], [],
+        [],
+        [],
+        [],
         [exception(iso(monday), { openTime: '12:00', closeTime: '05:00' })],
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].openWindows[0].endAt).toEqual(at(tuesday, 5));
@@ -430,11 +514,17 @@ describe('AmenityAvailabilityService', () => {
       const monday = nextMonday();
       const tuesday = new Date(monday.getTime() + 86400000);
       const service = build(
-        [schedule(1, '08:00', '18:00'), schedule(2, '08:00', '18:00')], [], [],
+        [schedule(1, '08:00', '18:00'), schedule(2, '08:00', '18:00')],
+        [],
+        [],
         [exception(iso(monday), { isClosed: true })],
       );
 
-      const { days } = await service.getAvailability(amenityOf(), iso(monday), iso(tuesday));
+      const { days } = await service.getAvailability(
+        amenityOf(),
+        iso(monday),
+        iso(tuesday),
+      );
 
       expect(days[0].isOpen).toBe(false);
       expect(days[1].isOpen).toBe(true);
@@ -449,13 +539,19 @@ describe('AmenityAvailabilityService', () => {
       const service = build([schedule(1, '08:00', '18:00')]);
 
       const { days } = await service.getAvailability(
-        amenityOf({ durationUnit: AmenityDurationUnit.DAYS, slotDurationMinutes: 1440 }),
-        iso(monday), iso(monday),
+        amenityOf({
+          durationUnit: AmenityDurationUnit.DAYS,
+          slotDurationMinutes: 1440,
+        }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots).toHaveLength(1);
       expect(days[0].slots[0].startAt).toEqual(at(monday, 0));
-      expect(days[0].slots[0].endAt).toEqual(at(new Date(monday.getTime() + 86400000), 0));
+      expect(days[0].slots[0].endAt).toEqual(
+        at(new Date(monday.getTime() + 86400000), 0),
+      );
       expect(days[0].slots[0].isAvailable).toBe(true);
     });
 
@@ -469,8 +565,12 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ durationUnit: AmenityDurationUnit.DAYS, maxSimultaneousBookings: 1 }),
-        iso(monday), iso(monday),
+        amenityOf({
+          durationUnit: AmenityDurationUnit.DAYS,
+          maxSimultaneousBookings: 1,
+        }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots[0].capacityUsed).toBe(1);
@@ -483,7 +583,8 @@ describe('AmenityAvailabilityService', () => {
 
       const { days } = await service.getAvailability(
         amenityOf({ durationUnit: AmenityDurationUnit.DAYS }),
-        iso(monday), iso(monday),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].isOpen).toBe(false);
@@ -502,7 +603,9 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE }), iso(monday), iso(monday),
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].slots).toHaveLength(0);
@@ -524,8 +627,12 @@ describe('AmenityAvailabilityService', () => {
       );
 
       const { days } = await service.getAvailability(
-        amenityOf({ bookingMode: AmenityBookingMode.RANGE, maxSimultaneousBookings: 3 }),
-        iso(monday), iso(monday),
+        amenityOf({
+          bookingMode: AmenityBookingMode.RANGE,
+          maxSimultaneousBookings: 3,
+        }),
+        iso(monday),
+        iso(monday),
       );
 
       expect(days[0].busy).toHaveLength(1);
@@ -539,9 +646,15 @@ describe('AmenityAvailabilityService', () => {
       const monday = nextMonday();
       const wednesday = new Date(monday.getTime() + 2 * 86400000);
       // Lunes y martes abiertos todo el dia: entre ellos no hay cierre real.
-      const service = build([schedule(1, '00:00', '00:00'), schedule(2, '00:00', '00:00')]);
+      const service = build([
+        schedule(1, '00:00', '00:00'),
+        schedule(2, '00:00', '00:00'),
+      ]);
 
-      const windows = await service.getContinuousWindowsForDay('amenity-1', monday);
+      const windows = await service.getContinuousWindowsForDay(
+        'amenity-1',
+        monday,
+      );
 
       expect(windows).toHaveLength(1);
       expect(windows[0].startAt).toEqual(at(monday, 0));
@@ -550,9 +663,15 @@ describe('AmenityAvailabilityService', () => {
 
     it('deja periodos separados cuando la zona si cierra entre un dia y otro', async () => {
       const monday = nextMonday();
-      const service = build([schedule(1, '08:00', '18:00'), schedule(2, '08:00', '18:00')]);
+      const service = build([
+        schedule(1, '08:00', '18:00'),
+        schedule(2, '08:00', '18:00'),
+      ]);
 
-      const windows = await service.getContinuousWindowsForDay('amenity-1', monday);
+      const windows = await service.getContinuousWindowsForDay(
+        'amenity-1',
+        monday,
+      );
 
       expect(windows).toHaveLength(2);
       expect(windows[0].endAt).toEqual(at(monday, 18));
@@ -566,7 +685,10 @@ describe('AmenityAvailabilityService', () => {
         [blackout(at(tuesday, 0), at(tuesday, 2))],
       );
 
-      const windows = await service.getContinuousWindowsForDay('amenity-1', monday);
+      const windows = await service.getContinuousWindowsForDay(
+        'amenity-1',
+        monday,
+      );
 
       expect(windows).toHaveLength(2);
       expect(windows[0].endAt).toEqual(at(monday, 24));

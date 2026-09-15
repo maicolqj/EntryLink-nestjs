@@ -8,9 +8,15 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
  * exponga queda al alcance de quien logre adivinarlo. La app ya conoce el
  * correo — lo escribió — y aquí solo necesita saber cuándo seguir.
  */
-@ObjectType({ description: 'Estado de verificación del correo de un supervisor recién registrado' })
+@ObjectType({
+  description:
+    'Estado de verificación del correo de un supervisor recién registrado',
+})
 export class SupervisorVerificationStatusResponse {
-  @Field(() => Boolean, { description: 'True cuando el supervisor ya abrió el enlace y su cuenta quedó activa' })
+  @Field(() => Boolean, {
+    description:
+      'True cuando el supervisor ya abrió el enlace y su cuenta quedó activa',
+  })
   verified: boolean;
 
   @Field(() => Int, {

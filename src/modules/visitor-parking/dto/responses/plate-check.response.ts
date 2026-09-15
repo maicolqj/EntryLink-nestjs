@@ -7,7 +7,6 @@ import { Vehicle } from '../../../vehicles/entities/vehicle.entity';
  */
 @ObjectType()
 export class PlateCheckResponse {
-
   @Field(() => Boolean, { description: 'Placa registrada en el complejo' })
   isRegistered: boolean;
 
@@ -17,6 +16,9 @@ export class PlateCheckResponse {
   @Field(() => String, { description: 'Mensaje explicativo para el guardia' })
   message: string;
 
-  @Field(() => Vehicle, { description: 'Datos del vehículo si está registrado', nullable: true })
+  @Field(() => Vehicle, {
+    description: 'Datos del vehículo si está registrado',
+    nullable: true,
+  })
   vehicle?: Vehicle;
 }

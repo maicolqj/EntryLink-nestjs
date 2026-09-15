@@ -1,20 +1,19 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Visitor }                   from '../entities/visitor.entity';
-import { VisitorsService }           from '../services/visitors.service';
-import { BlacklistVisitorInput }     from '../dto/inputs/blacklist-visitor.input';
+import { Visitor } from '../entities/visitor.entity';
+import { VisitorsService } from '../services/visitors.service';
+import { BlacklistVisitorInput } from '../dto/inputs/blacklist-visitor.input';
 import { PaginatedVisitorsResponse } from '../dto/responses/paginated-visitors.response';
-import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => Visitor)
 export class VisitorsResolver {
-
   constructor(private readonly visitorsService: VisitorsService) {}
 
   // ================================================================
@@ -26,7 +25,11 @@ export class VisitorsResolver {
    */
   @Mutation(() => Visitor, { name: 'blacklistVisitor' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.RESIDENT_ROL,
+    ],
     permissions: [ValidPermissions.BLACKLIST_VISITOR],
   })
   blacklist(
@@ -41,7 +44,11 @@ export class VisitorsResolver {
    */
   @Mutation(() => Visitor, { name: 'removeVisitorFromBlacklist' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.RESIDENT_ROL,
+    ],
     permissions: [ValidPermissions.BLACKLIST_VISITOR],
   })
   removeFromBlacklist(
@@ -61,19 +68,27 @@ export class VisitorsResolver {
   @Query(() => PaginatedVisitorsResponse, { name: 'visitors' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITORS],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('search',     { nullable: true }) search?: string,
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('search', { nullable: true }) search?: string,
     @Args('onlyBlacklisted', { nullable: true }) onlyBlacklisted?: boolean,
     @CurrentUser() _currentUser?: JwtAccessPayload,
   ): Promise<PaginatedVisitorsResponse> {
-    return this.visitorsService.findByComplex(complexId, pagination, search, onlyBlacklisted);
+    return this.visitorsService.findByComplex(
+      complexId,
+      pagination,
+      search,
+      onlyBlacklisted,
+    );
   }
 
   /**
@@ -82,14 +97,14 @@ export class VisitorsResolver {
   @Query(() => Visitor, { name: 'visitor' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VISITORS],
   })
-  findOne(
-    @Args('id') id: string,
-  ): Promise<Visitor> {
+  findOne(@Args('id') id: string): Promise<Visitor> {
     return this.visitorsService.findById(id);
   }
 }

@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Aditiva y reversible: solo crea tablas nuevas.
  */
 export class CreatePanicEscalation1781003400000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -72,10 +71,16 @@ export class CreatePanicEscalation1781003400000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_panic_alert_deliveries_alert_channel"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_panic_alert_deliveries_alert"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_panic_alert_deliveries_alert_channel"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_panic_alert_deliveries_alert"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "panic_alert_deliveries"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "panic_escalation_settings"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "panic_delivery_channel_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "panic_delivery_channel_enum"`,
+    );
   }
 }

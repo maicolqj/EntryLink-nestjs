@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { extname } from 'path';
@@ -12,38 +8,41 @@ import { generateSystemCode } from '../../users/utils/system-code.util';
 
 import type ExcelJS from 'exceljs';
 
-import { ResidentImportRowData, ResidentImportError } from '../queues/residents-import.constants';
-import { Resident }      from '../entities/resident.entity';
+import {
+  ResidentImportRowData,
+  ResidentImportError,
+} from '../queues/residents-import.constants';
+import { Resident } from '../entities/resident.entity';
 import { ResidentStatus } from '../enums/resident-status.enum';
-import { ResidentType }  from '../enums/resident-type.enum';
+import { ResidentType } from '../enums/resident-type.enum';
 
-import { User }     from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { UserStatus } from '../../users/enums/user.enums';
-import { Role }     from '../../roles/entities/role.entity';
+import { Role } from '../../roles/entities/role.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
-import { Unit }     from '../../residential-complex/entities/unit.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { Building } from '../../residential-complex/entities/building.entity';
 
 // Column indices (1-based) matching the spec table order
 const COL = {
-  NAME:                    1,
-  LAST_NAME:               2,
-  EMAIL:                   3,
-  PHONE:                   4,
-  IDENTITY:                5,
-  UNIT_NUMBER:             6,
-  EN_EDIFICIO:             7,
-  EDIFICIO:                8,
-  TYPE:                    9,
-  START_DATE:             10,
-  END_DATE:               11,
-  IS_MAIN_RESIDENT:       12,
+  NAME: 1,
+  LAST_NAME: 2,
+  EMAIL: 3,
+  PHONE: 4,
+  IDENTITY: 5,
+  UNIT_NUMBER: 6,
+  EN_EDIFICIO: 7,
+  EDIFICIO: 8,
+  TYPE: 9,
+  START_DATE: 10,
+  END_DATE: 11,
+  IS_MAIN_RESIDENT: 12,
   EMERGENCY_CONTACT_NAME: 13,
   EMERGENCY_CONTACT_LAST: 14,
-  EMERGENCY_CONTACT_PHONE:15,
-  NOTES:                  16,
+  EMERGENCY_CONTACT_PHONE: 15,
+  NOTES: 16,
 } as const;
 
 export interface ImportProcessResult {
@@ -53,18 +52,25 @@ export interface ImportProcessResult {
   errors: ResidentImportError[];
 }
 
-type ProgressCallback = (done: number, total: number, successCount: number, errorCount: number) => void;
+type ProgressCallback = (
+  done: number,
+  total: number,
+  successCount: number,
+  errorCount: number,
+) => void;
 
 @Injectable()
 export class ResidentsImportService {
   private readonly logger = new Logger(ResidentsImportService.name);
 
   constructor(
-    @InjectRepository(User)      private readonly userRepo:     Repository<User>,
-    @InjectRepository(Role)      private readonly roleRepo:     Repository<Role>,
-    @InjectRepository(Unit)      private readonly unitRepo:     Repository<Unit>,
-    @InjectRepository(Building)  private readonly buildingRepo: Repository<Building>,
-    @InjectRepository(Resident)  private readonly residentRepo: Repository<Resident>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
+    @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
+    @InjectRepository(Resident)
+    private readonly residentRepo: Repository<Resident>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -91,9 +97,9 @@ export class ResidentsImportService {
     sheet.eachRow((row, rowIndex) => {
       if (rowIndex === 1) return; // skip header
 
-      const name      = this.cellStr(row.getCell(COL.NAME));
-      const lastName  = this.cellStr(row.getCell(COL.LAST_NAME));
-      const email     = this.cellStr(row.getCell(COL.EMAIL)).toLowerCase();
+      const name = this.cellStr(row.getCell(COL.NAME));
+      const lastName = this.cellStr(row.getCell(COL.LAST_NAME));
+      const email = this.cellStr(row.getCell(COL.EMAIL)).toLowerCase();
 
       // skip completely empty rows
       if (!name && !lastName && !email) return;
@@ -103,19 +109,24 @@ export class ResidentsImportService {
         name,
         lastName,
         email,
-        phoneNumber:             this.cellStr(row.getCell(COL.PHONE)) || undefined,
-        identityNumber:          this.cellStr(row.getCell(COL.IDENTITY)) || undefined,
-        unitNumber:              this.cellStr(row.getCell(COL.UNIT_NUMBER)),
-        enEdificio:              this.parseBoolean(row.getCell(COL.EN_EDIFICIO).value),
-        buildingName:            this.cellStr(row.getCell(COL.EDIFICIO)) || undefined,
-        typeRaw:                 this.cellStr(row.getCell(COL.TYPE)),
-        startDateRaw:            row.getCell(COL.START_DATE).value,
-        endDateRaw:              row.getCell(COL.END_DATE).value || undefined,
-        isMainResident:          this.parseBoolean(row.getCell(COL.IS_MAIN_RESIDENT).value),
-        emergencyContactName:    this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_NAME)) || undefined,
-        emergencyContactLastName: this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_LAST)) || undefined,
-        emergencyContactPhone:   this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_PHONE)) || undefined,
-        notes:                   this.cellStr(row.getCell(COL.NOTES)) || undefined,
+        phoneNumber: this.cellStr(row.getCell(COL.PHONE)) || undefined,
+        identityNumber: this.cellStr(row.getCell(COL.IDENTITY)) || undefined,
+        unitNumber: this.cellStr(row.getCell(COL.UNIT_NUMBER)),
+        enEdificio: this.parseBoolean(row.getCell(COL.EN_EDIFICIO).value),
+        buildingName: this.cellStr(row.getCell(COL.EDIFICIO)) || undefined,
+        typeRaw: this.cellStr(row.getCell(COL.TYPE)),
+        startDateRaw: row.getCell(COL.START_DATE).value,
+        endDateRaw: row.getCell(COL.END_DATE).value || undefined,
+        isMainResident: this.parseBoolean(
+          row.getCell(COL.IS_MAIN_RESIDENT).value,
+        ),
+        emergencyContactName:
+          this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_NAME)) || undefined,
+        emergencyContactLastName:
+          this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_LAST)) || undefined,
+        emergencyContactPhone:
+          this.cellStr(row.getCell(COL.EMERGENCY_CONTACT_PHONE)) || undefined,
+        notes: this.cellStr(row.getCell(COL.NOTES)) || undefined,
       });
     });
 
@@ -144,7 +155,12 @@ export class ResidentsImportService {
     for (const row of rows) {
       const identifier = row.email || row.name || `fila ${row.rowIndex}`;
       try {
-        await this.processSingleRow(row, complexId, approvedByUserId, residentRole);
+        await this.processSingleRow(
+          row,
+          complexId,
+          approvedByUserId,
+          residentRole,
+        );
         successCount++;
       } catch (err: any) {
         errors.push({
@@ -152,10 +168,17 @@ export class ResidentsImportService {
           identifier,
           message: err?.message ?? 'Error desconocido',
         });
-        this.logger.warn(`Error fila ${row.rowIndex} (${identifier}): ${err?.message}`);
+        this.logger.warn(
+          `Error fila ${row.rowIndex} (${identifier}): ${err?.message}`,
+        );
       }
 
-      onProgress(successCount + errors.length, total, successCount, errors.length);
+      onProgress(
+        successCount + errors.length,
+        total,
+        successCount,
+        errors.length,
+      );
     }
 
     return {
@@ -179,9 +202,9 @@ export class ResidentsImportService {
       throw new Error(validationErrors.join('; '));
     }
 
-    const type      = this.parseType(row.typeRaw);
+    const type = this.parseType(row.typeRaw);
     const startDate = this.parseDate(row.startDateRaw);
-    const endDate   = row.endDateRaw ? this.parseDate(row.endDateRaw) : undefined;
+    const endDate = row.endDateRaw ? this.parseDate(row.endDateRaw) : undefined;
 
     if (!startDate) {
       throw new Error(`Fecha de ingreso inválida: '${row.startDateRaw}'`);
@@ -230,23 +253,23 @@ export class ResidentsImportService {
       } else {
         // Create new user
         const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
-        const systemCode    = generateSystemCode();
+        const systemCode = generateSystemCode();
 
         const newUser = manager.create(User, {
-          name:                   row.name.trim().toUpperCase(),
-          lastName:               row.lastName.trim().toUpperCase(),
-          email:                  row.email.trim().toLowerCase(),
-          password:               dummyPassword,
-          phoneNumber:            row.phoneNumber?.trim(),
-          identity:               row.identityNumber?.trim(),
+          name: row.name.trim().toUpperCase(),
+          lastName: row.lastName.trim().toUpperCase(),
+          email: row.email.trim().toLowerCase(),
+          password: dummyPassword,
+          phoneNumber: row.phoneNumber?.trim(),
+          identity: row.identityNumber?.trim(),
           systemCode,
           complexId,
-          status:                 UserStatus.ACTIVE,
-          phoneVerified:          false,
-          emailVerified:          false,
-          identityVerified:       false,
+          status: UserStatus.ACTIVE,
+          phoneVerified: false,
+          emailVerified: false,
+          identityVerified: false,
           acceptTermsAdnConditions: false,
-          acceptsMarketing:       false,
+          acceptsMarketing: false,
         });
 
         const savedUser = await manager.save(User, newUser);
@@ -280,25 +303,29 @@ export class ResidentsImportService {
       }
 
       const resident = manager.create(Resident, {
-        userId:                   resolvedUserId,
-        unitId:                   unit.id,
+        userId: resolvedUserId,
+        unitId: unit.id,
         complexId,
         type,
-        isMainResident:           row.isMainResident,
-        status:                   ResidentStatus.ACTIVE,
+        isMainResident: row.isMainResident,
+        status: ResidentStatus.ACTIVE,
         startDate,
         endDate,
-        emergencyContactName:     row.emergencyContactName,
+        emergencyContactName: row.emergencyContactName,
         emergencyContactLastName: row.emergencyContactLastName,
-        emergencyContactPhone:    row.emergencyContactPhone,
-        notes:                    row.notes,
-        approvedAt:               new Date(),
-        approvedByUserId:         approvedByUserId ?? undefined,
+        emergencyContactPhone: row.emergencyContactPhone,
+        notes: row.notes,
+        approvedAt: new Date(),
+        approvedByUserId: approvedByUserId ?? undefined,
       });
 
       await manager.save(Resident, resident);
 
-      await manager.update('units', { id: unit.id }, { status: UnitStatus.OCCUPIED });
+      await manager.update(
+        'units',
+        { id: unit.id },
+        { status: UnitStatus.OCCUPIED },
+      );
     });
   }
 
@@ -323,7 +350,9 @@ export class ResidentsImportService {
       });
 
       if (!building) {
-        throw new Error(`Edificio '${buildingName}' no encontrado en el complejo`);
+        throw new Error(
+          `Edificio '${buildingName}' no encontrado en el complejo`,
+        );
       }
 
       const unit = await manager.findOne(Unit, {
@@ -361,37 +390,39 @@ export class ResidentsImportService {
 
   private validateRow(row: ResidentImportRowData): string[] {
     const errors: string[] = [];
-    if (!row.name?.trim())       errors.push('nombre requerido');
-    if (!row.lastName?.trim())   errors.push('apellido requerido');
-    if (!row.email?.trim())      errors.push('email requerido');
+    if (!row.name?.trim()) errors.push('nombre requerido');
+    if (!row.lastName?.trim()) errors.push('apellido requerido');
+    if (!row.email?.trim()) errors.push('email requerido');
     if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
       errors.push(`email inválido: '${row.email}'`);
     }
     if (!row.unitNumber?.trim()) errors.push('unidad requerida');
-    if (!row.startDateRaw)       errors.push('fechaIngreso requerida');
+    if (!row.startDateRaw) errors.push('fechaIngreso requerida');
     return errors;
   }
 
   private parseType(raw: string): ResidentType {
     const val = (raw ?? '').trim().toUpperCase();
     const map: Record<string, ResidentType> = {
-      PROPIETARIO:   ResidentType.OWNER,
-      OWNER:         ResidentType.OWNER,
-      ARRENDATARIO:  ResidentType.TENANT,
-      INQUILINO:     ResidentType.TENANT,
-      TENANT:        ResidentType.TENANT,
-      FAMILIAR:      ResidentType.FAMILY_MEMBER,
+      PROPIETARIO: ResidentType.OWNER,
+      OWNER: ResidentType.OWNER,
+      ARRENDATARIO: ResidentType.TENANT,
+      INQUILINO: ResidentType.TENANT,
+      TENANT: ResidentType.TENANT,
+      FAMILIAR: ResidentType.FAMILY_MEMBER,
       FAMILY_MEMBER: ResidentType.FAMILY_MEMBER,
-      CUIDADOR:      ResidentType.CARETAKER,
-      CARETAKER:     ResidentType.CARETAKER,
+      CUIDADOR: ResidentType.CARETAKER,
+      CARETAKER: ResidentType.CARETAKER,
     };
     return map[val] ?? ResidentType.OWNER;
   }
 
   private parseBoolean(raw: unknown): boolean {
     if (typeof raw === 'boolean') return raw;
-    if (typeof raw === 'number')  return raw !== 0;
-    const str = String(raw ?? '').trim().toUpperCase();
+    if (typeof raw === 'number') return raw !== 0;
+    const str = String(raw ?? '')
+      .trim()
+      .toUpperCase();
     return ['SI', 'YES', 'TRUE', '1', 'S', 'Y'].includes(str);
   }
 
@@ -425,7 +456,8 @@ export class ResidentsImportService {
   private cellStr(cell: ExcelJS.Cell): string {
     const val = cell?.value;
     if (val === null || val === undefined) return '';
-    if (typeof val === 'object' && 'text' in val) return String((val as any).text).trim();
+    if (typeof val === 'object' && 'text' in val)
+      return String((val as any).text).trim();
     if (val instanceof Date) return val.toISOString();
     return String(val).trim();
   }
@@ -451,5 +483,4 @@ export class ResidentsImportService {
 
     return workbook;
   }
-
 }

@@ -1,31 +1,30 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
-import { Notification }                   from '../entities/notification.entity';
+import { Notification } from '../entities/notification.entity';
 import { NotificationsService } from '../services/notifications.service';
-import { FilterNotificationsInput }       from '../dto/inputs/filter-notifications.input';
-import { SavePushSubscriptionInput }      from '../dto/inputs/save-push-subscription.input';
-import { SaveMobileTokenInput }           from '../dto/inputs/save-mobile-token.input';
-import { SendNotificationInput }          from '../dto/inputs/send-notification.input';
+import { FilterNotificationsInput } from '../dto/inputs/filter-notifications.input';
+import { SavePushSubscriptionInput } from '../dto/inputs/save-push-subscription.input';
+import { SaveMobileTokenInput } from '../dto/inputs/save-mobile-token.input';
+import { SendNotificationInput } from '../dto/inputs/send-notification.input';
 import { PaginatedNotificationsResponse } from '../dto/responses/paginated-notifications.response';
-import { UnreadCountResponse }            from '../dto/responses/unread-count.response';
-import { PushSubscriptionResult }              from '../dto/responses/push-subscription-result.response';
-import { SendNotificationResult }              from '../dto/responses/send-notification.response';
-import { SentNotificationPaginatedResult }     from '../dto/responses/sent-notifications.response';
-import { TriggerPanicAlertResult }             from '../dto/responses/trigger-panic-alert.response';
-import { PanicAlert }                         from '../entities/panic-alert.entity';
-import { RequestSecurityCallResult }           from '../dto/responses/request-security-call.response';
-import { NotificationDetailResponse }          from '../dto/responses/notification-detail.response';
-import { PaginationInput }                     from '../../shared/dto/inputs/pagination.input';
+import { UnreadCountResponse } from '../dto/responses/unread-count.response';
+import { PushSubscriptionResult } from '../dto/responses/push-subscription-result.response';
+import { SendNotificationResult } from '../dto/responses/send-notification.response';
+import { SentNotificationPaginatedResult } from '../dto/responses/sent-notifications.response';
+import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.response';
+import { PanicAlert } from '../entities/panic-alert.entity';
+import { RequestSecurityCallResult } from '../dto/responses/request-security-call.response';
+import { NotificationDetailResponse } from '../dto/responses/notification-detail.response';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { Public }           from '../../shared/decorators/public.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { Public } from '../../shared/decorators/public.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 @Resolver(() => Notification)
 export class NotificationsResolver {
-
   constructor(private readonly notificationsService: NotificationsService) {}
 
   // ================================================================
@@ -93,14 +92,16 @@ export class NotificationsResolver {
    * El routing de destinatarios se determina automáticamente según el rol del activador.
    */
   @Mutation(() => TriggerPanicAlertResult, { name: 'triggerPanicAlert' })
-  @Auth({ roles: [
-    ValidRoles.RESIDENT_ROL,
-    ValidRoles.SECURITY_ROL,
-    ValidRoles.COMPLEX_ROL,
-    ValidRoles.ACCOUNTANT_ROL,
-    ValidRoles.SUPERVISOR_ROL,
-    ValidRoles.COMPILANCE_OFFICER_ROL,
-  ] })
+  @Auth({
+    roles: [
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
   triggerPanicAlert(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -118,7 +119,10 @@ export class NotificationsResolver {
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<RequestSecurityCallResult> {
-    return this.notificationsService.requestSecurityCall(complexId, currentUser);
+    return this.notificationsService.requestSecurityCall(
+      complexId,
+      currentUser,
+    );
   }
 
   /**
@@ -140,7 +144,10 @@ export class NotificationsResolver {
     @Args('notificationId') notificationId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Notification> {
-    return this.notificationsService.acknowledgePanicAlert(notificationId, currentUser);
+    return this.notificationsService.acknowledgePanicAlert(
+      notificationId,
+      currentUser,
+    );
   }
 
   /**
@@ -164,7 +171,10 @@ export class NotificationsResolver {
     @Args('falseAlarm', { nullable: true }) falseAlarm?: boolean,
   ): Promise<PanicAlert> {
     return this.notificationsService.resolvePanicAlert(
-      panicAlertId, currentUser, resolutionNotes, falseAlarm ?? false,
+      panicAlertId,
+      currentUser,
+      resolutionNotes,
+      falseAlarm ?? false,
     );
   }
 
@@ -178,7 +188,10 @@ export class NotificationsResolver {
     @Args('notificationId') notificationId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<boolean> {
-    return this.notificationsService.deleteNotification(notificationId, currentUser);
+    return this.notificationsService.deleteNotification(
+      notificationId,
+      currentUser,
+    );
   }
 
   /**
@@ -209,7 +222,10 @@ export class NotificationsResolver {
     @Args('deviceToken') deviceToken: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PushSubscriptionResult> {
-    return this.notificationsService.deactivateMobileToken(deviceToken, currentUser);
+    return this.notificationsService.deactivateMobileToken(
+      deviceToken,
+      currentUser,
+    );
   }
 
   // ================================================================
@@ -224,10 +240,16 @@ export class NotificationsResolver {
   findByUser(
     @CurrentUser() currentUser: JwtAccessPayload,
     @Args('complexId', { nullable: true }) complexId: string | null = null,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterNotificationsInput = {},
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterNotificationsInput = {},
   ): Promise<PaginatedNotificationsResponse> {
-    return this.notificationsService.findByUser(complexId, pagination, filters, currentUser);
+    return this.notificationsService.findByUser(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -244,11 +266,16 @@ export class NotificationsResolver {
     ],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterNotificationsInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterNotificationsInput = {},
   ): Promise<PaginatedNotificationsResponse> {
-    return this.notificationsService.findByComplex(complexId, pagination, filters);
+    return this.notificationsService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+    );
   }
 
   /**
@@ -266,7 +293,11 @@ export class NotificationsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
     @Args('complexId', { nullable: true }) complexId: string | null = null,
   ): Promise<NotificationDetailResponse> {
-    return this.notificationsService.findOneDetail(notificationId, complexId, currentUser);
+    return this.notificationsService.findOneDetail(
+      notificationId,
+      complexId,
+      currentUser,
+    );
   }
 
   /**
@@ -282,7 +313,7 @@ export class NotificationsResolver {
     return this.notificationsService.getUnreadCount(complexId, currentUser);
   }
 
-  /** 
+  /**
    * Historial paginado de envíos masivos realizados por el usuario autenticado.
    * Solo disponible para administradores del complejo y supervisores.
    */
@@ -295,11 +326,16 @@ export class NotificationsResolver {
     ],
   })
   sentNotifications(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<SentNotificationPaginatedResult> {
-    return this.notificationsService.sentNotifications(complexId, pagination, currentUser);
+    return this.notificationsService.sentNotifications(
+      complexId,
+      pagination,
+      currentUser,
+    );
   }
 
   /**
@@ -332,5 +368,4 @@ export class NotificationsResolver {
   ): Promise<Notification[]> {
     return this.notificationsService.activePanicAlerts(complexId);
   }
-
 }

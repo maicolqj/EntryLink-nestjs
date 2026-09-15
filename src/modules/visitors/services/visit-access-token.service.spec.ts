@@ -15,9 +15,15 @@ describe('VisitAccessTokenService', () => {
   // Cache en memoria que imita la API de CacheService (set/get/delete por jti).
   const store = new Map<string, unknown>();
   const cacheMock = {
-    set: jest.fn(async ({ key, data }: any) => { store.set(`${key.prefix}:${key.key}`, data); }),
-    get: jest.fn(async ({ key }: any) => store.get(`${key.prefix}:${key.key}`) ?? null),
-    delete: jest.fn(async ({ key }: any) => { store.delete(`${key.prefix}:${key.key}`); }),
+    set: jest.fn(async ({ key, data }: any) => {
+      store.set(`${key.prefix}:${key.key}`, data);
+    }),
+    get: jest.fn(
+      async ({ key }: any) => store.get(`${key.prefix}:${key.key}`) ?? null,
+    ),
+    delete: jest.fn(async ({ key }: any) => {
+      store.delete(`${key.prefix}:${key.key}`);
+    }),
   };
 
   beforeEach(async () => {
@@ -48,7 +54,7 @@ describe('VisitAccessTokenService', () => {
     const token = await service.issue('visit-1', 'vtr-1');
     const payload = await service.verify(token);
 
-    await service.consume(payload!.jti);
+    await service.consume(payload.jti);
 
     expect(await service.verify(token)).toBeNull();
   });
@@ -56,7 +62,12 @@ describe('VisitAccessTokenService', () => {
   it('token con firma de otro secreto → null', async () => {
     const foreign = new JwtService({});
     const token = await foreign.signAsync(
-      { visitId: 'visit-1', visitorId: 'vtr-1', jti: 'x', type: 'visit_access' },
+      {
+        visitId: 'visit-1',
+        visitorId: 'vtr-1',
+        jti: 'x',
+        type: 'visit_access',
+      },
       { secret: 'otro-secreto', algorithm: 'HS256' },
     );
     // Aunque registremos el jti en cache, la firma no coincide con JWT_ACCESS_SECRET.

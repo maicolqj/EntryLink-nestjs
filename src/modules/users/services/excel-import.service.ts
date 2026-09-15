@@ -45,7 +45,8 @@ export class ExcelImportService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
     @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>,
-    @InjectRepository(Resident) private readonly residentRepo: Repository<Resident>,
+    @InjectRepository(Resident)
+    private readonly residentRepo: Repository<Resident>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -66,7 +67,9 @@ export class ExcelImportService {
     const sheet = workbook.worksheets[0];
 
     if (!sheet) {
-      throw new BadRequestException('El archivo Excel no contiene hojas de trabajo');
+      throw new BadRequestException(
+        'El archivo Excel no contiene hojas de trabajo',
+      );
     }
 
     const rows: ResidentRowData[] = [];
@@ -84,7 +87,16 @@ export class ExcelImportService {
 
       if (!name && !lastName && !phoneNumber) return; // Fila vacía
 
-      rows.push({ name, lastName, phoneNumber, identityNumber, email, unitNumber, tower, rowIndex });
+      rows.push({
+        name,
+        lastName,
+        phoneNumber,
+        identityNumber,
+        email,
+        unitNumber,
+        tower,
+        rowIndex,
+      });
     });
 
     return rows;
@@ -107,7 +119,9 @@ export class ExcelImportService {
     });
 
     if (!residentRole) {
-      throw new BadRequestException('El rol RESIDENT_ROL no está configurado en el sistema');
+      throw new BadRequestException(
+        'El rol RESIDENT_ROL no está configurado en el sistema',
+      );
     }
 
     const total = rows.length;
@@ -118,7 +132,12 @@ export class ExcelImportService {
 
       for (const row of batch) {
         try {
-          await this.processSingleRow(row, complexId, adminUserId, residentRole);
+          await this.processSingleRow(
+            row,
+            complexId,
+            adminUserId,
+            residentRole,
+          );
           successCount++;
         } catch (error: any) {
           errors.push({
@@ -187,7 +206,9 @@ export class ExcelImportService {
       const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
 
       // 5. Crear usuario
-      const email = row.email?.trim().toLowerCase() ?? this.generateDefaultEmail(row.phoneNumber);
+      const email =
+        row.email?.trim().toLowerCase() ??
+        this.generateDefaultEmail(row.phoneNumber);
 
       const user = manager.create(User, {
         name: row.name.trim().toUpperCase(),
@@ -240,7 +261,8 @@ export class ExcelImportService {
     if (!/^3\d{9}$/.test(row.phoneNumber?.trim() ?? '')) {
       errors.push(`Teléfono inválido: '${row.phoneNumber}'`);
     }
-    if (!row.identityNumber?.trim()) errors.push('Número de identificación requerido');
+    if (!row.identityNumber?.trim())
+      errors.push('Número de identificación requerido');
     if (!row.unitNumber?.trim()) errors.push('Número de unidad requerido');
     if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
       errors.push(`Email inválido: '${row.email}'`);
@@ -256,7 +278,8 @@ export class ExcelImportService {
   private cellString(cell: ExcelJS.Cell): string {
     const val = cell?.value;
     if (val === null || val === undefined) return '';
-    if (typeof val === 'object' && 'text' in val) return String((val as any).text);
+    if (typeof val === 'object' && 'text' in val)
+      return String((val as any).text);
     return String(val).trim();
   }
 

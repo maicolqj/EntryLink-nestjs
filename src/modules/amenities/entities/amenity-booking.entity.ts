@@ -12,10 +12,10 @@ import {
 import { ObjectType, Field, ID, Int, Float } from '@nestjs/graphql';
 
 import { AmenityBookingStatus } from '../enums/amenity-booking-status.enum';
-import { Amenity }              from './amenity.entity';
-import { Unit }                 from '../../residential-complex/entities/unit.entity';
-import { ResidentialComplex }   from '../../residential-complex/entities/residential-complex.entity';
-import { moneyColumn }          from '../../finance/utils/numeric.transformer';
+import { Amenity } from './amenity.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { moneyColumn } from '../../finance/utils/numeric.transformer';
 
 /**
  * Reserva de una zona común por parte de una unidad.
@@ -41,7 +41,6 @@ import { moneyColumn }          from '../../finance/utils/numeric.transformer';
 @Index(['amenityId', 'startAt', 'endAt'])
 @Index(['accessCode'])
 export class AmenityBooking {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -102,13 +101,22 @@ export class AmenityBooking {
 
   /** Nombre congelado de quien reservó, para el listado de portería. */
   @Field(() => String, { nullable: true })
-  @Column({ name: 'requested_by_name', type: 'varchar', length: 180, nullable: true })
+  @Column({
+    name: 'requested_by_name',
+    type: 'varchar',
+    length: 180,
+    nullable: true,
+  })
   requestedByName?: string | null;
 
   // ─── Estado ───────────────────────────────────────────────────────────────
 
   @Field(() => AmenityBookingStatus)
-  @Column({ type: 'varchar', length: 20, default: AmenityBookingStatus.PENDING })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: AmenityBookingStatus.PENDING,
+  })
   status: AmenityBookingStatus;
 
   @Field(() => String, { nullable: true })
@@ -120,7 +128,12 @@ export class AmenityBooking {
   approvedAt?: Date | null;
 
   @Field(() => String, { nullable: true })
-  @Column({ name: 'rejection_reason', type: 'varchar', length: 300, nullable: true })
+  @Column({
+    name: 'rejection_reason',
+    type: 'varchar',
+    length: 300,
+    nullable: true,
+  })
   rejectionReason?: string | null;
 
   @Field(() => String, { nullable: true })
@@ -132,7 +145,12 @@ export class AmenityBooking {
   cancelledAt?: Date | null;
 
   @Field(() => String, { nullable: true })
-  @Column({ name: 'cancellation_reason', type: 'varchar', length: 300, nullable: true })
+  @Column({
+    name: 'cancellation_reason',
+    type: 'varchar',
+    length: 300,
+    nullable: true,
+  })
   cancellationReason?: string | null;
 
   // ─── Control de acceso en portería ────────────────────────────────────────
@@ -162,7 +180,14 @@ export class AmenityBooking {
 
   /** Tarifa calculada al momento de reservar (congelada: la zona puede cambiarla después). */
   @Field(() => Float)
-  @Column({ name: 'fee_amount', type: 'numeric', precision: 12, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    name: 'fee_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   feeAmount: number;
 
   /** Cargo de la TARIFA en finanzas. Null cuando la reserva es gratuita. */
@@ -176,13 +201,22 @@ export class AmenityBooking {
    * cuenta sobre lo ya reservado, y apagar el beneficio en la zona no puede
    * reescribir lo que el residente ya usó.
    */
-  @Field(() => Boolean, { description: 'Nació gratis por el cupo anual del consejo de administración' })
+  @Field(() => Boolean, {
+    description: 'Nació gratis por el cupo anual del consejo de administración',
+  })
   @Column({ name: 'is_council_free_booking', type: 'boolean', default: false })
   isCouncilFreeBooking: boolean;
 
   /** Penalización efectivamente cobrada por cancelar fuera del plazo. 0 si no hubo. */
   @Field(() => Float)
-  @Column({ name: 'late_cancellation_amount', type: 'numeric', precision: 12, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    name: 'late_cancellation_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   lateCancellationAmount: number;
 
   /**
@@ -202,7 +236,14 @@ export class AmenityBooking {
 
   /** Valor cargado a la unidad por daños. 0 si no hubo. */
   @Field(() => Float)
-  @Column({ name: 'damage_amount', type: 'numeric', precision: 12, scale: 2, default: 0, transformer: moneyColumn })
+  @Column({
+    name: 'damage_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
   damageAmount: number;
 
   /** Explicación del cobro. Es lo que el residente ve junto al cargo. */

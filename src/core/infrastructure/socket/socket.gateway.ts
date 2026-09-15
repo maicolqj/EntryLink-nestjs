@@ -24,7 +24,9 @@ import { WsExceptionFilter } from './ws-exception.filter';
   },
   transports: ['websocket', 'polling'],
 })
-export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class SocketGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -55,7 +57,9 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         if (!token) return next(new Error('No autorizado'));
 
         const payload = await this.tokenService.verifyAccessToken(token);
-        const isActive = await this.sessionService.isSessionActive(payload.sessionId);
+        const isActive = await this.sessionService.isSessionActive(
+          payload.sessionId,
+        );
         if (!isActive) return next(new Error('No autorizado'));
 
         client.data.user = payload;
@@ -100,7 +104,8 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const user = client.data?.user;
     if (!unitId || !user) return;
 
-    const unitComplexId = await this.unitService.findComplexIdByUnitInternal(unitId);
+    const unitComplexId =
+      await this.unitService.findComplexIdByUnitInternal(unitId);
     if (unitComplexId !== user.complexId) return;
 
     await client.join(`unit:${unitId}`);

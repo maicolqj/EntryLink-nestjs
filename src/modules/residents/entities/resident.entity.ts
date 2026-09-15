@@ -12,13 +12,15 @@ import {
 } from 'typeorm';
 import { ObjectType, Field } from '@nestjs/graphql';
 
-import { ResidentType }   from '../enums/resident-type.enum';
+import { ResidentType } from '../enums/resident-type.enum';
 import { ResidentStatus } from '../enums/resident-status.enum';
-import { User }           from '../../users/entities/user.entity';
-import { Unit }           from '../../residential-complex/entities/unit.entity';
+import { User } from '../../users/entities/user.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 
-@ObjectType({ description: 'Relación entre un Usuario y una Unidad dentro de un Complejo' })
+@ObjectType({
+  description: 'Relación entre un Usuario y una Unidad dentro de un Complejo',
+})
 @Entity({ name: 'residents' })
 // Un usuario solo puede ser residente ACTIVO en una unidad por complejo
 @Index(['userId', 'complexId', 'status'])
@@ -26,22 +28,29 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Index(['complexId', 'status'])
 @Index(['approvedByUserId'])
 export class Resident {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   // ==================== TIPO Y ESTADO ====================
 
-  @Field(() => ResidentType, { description: 'Rol del residente respecto a la unidad' })
+  @Field(() => ResidentType, {
+    description: 'Rol del residente respecto a la unidad',
+  })
   @Column({ type: 'enum', enum: ResidentType, default: ResidentType.OWNER })
   type: ResidentType;
 
   @Field(() => ResidentStatus, { description: 'Estado actual del residente' })
-  @Column({ type: 'enum', enum: ResidentStatus, default: ResidentStatus.PENDING_APPROVAL })
+  @Column({
+    type: 'enum',
+    enum: ResidentStatus,
+    default: ResidentStatus.PENDING_APPROVAL,
+  })
   status: ResidentStatus;
 
-  @Field(() => Boolean, { description: 'Es el residente principal de la unidad' })
+  @Field(() => Boolean, {
+    description: 'Es el residente principal de la unidad',
+  })
   @Column({ name: 'is_main_resident', type: 'boolean', default: false })
   isMainResident: boolean;
 
@@ -56,7 +65,10 @@ export class Resident {
   @Column({ name: 'start_date', type: 'date' })
   startDate: Date;
 
-  @Field(() => Date, { description: 'Fecha de fin de contrato (para arrendatarios)', nullable: true })
+  @Field(() => Date, {
+    description: 'Fecha de fin de contrato (para arrendatarios)',
+    nullable: true,
+  })
   @Column({ name: 'end_date', type: 'date', nullable: true })
   endDate?: Date;
 
@@ -70,16 +82,40 @@ export class Resident {
 
   // ==================== CONTACTO DE EMERGENCIA ====================
 
-  @Field(() => String, { description: 'Nombre del contacto de emergencia', nullable: true })
-  @Column({ name: 'emergency_contact_name', type: 'varchar', length: 200, nullable: true })
+  @Field(() => String, {
+    description: 'Nombre del contacto de emergencia',
+    nullable: true,
+  })
+  @Column({
+    name: 'emergency_contact_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   emergencyContactName?: string;
 
-  @Field(() => String, { description: 'Apellido del contacto de emergencia', nullable: true })
-  @Column({ name: 'emergency_contact_last_name', type: 'varchar', length: 200, nullable: true })
+  @Field(() => String, {
+    description: 'Apellido del contacto de emergencia',
+    nullable: true,
+  })
+  @Column({
+    name: 'emergency_contact_last_name',
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
   emergencyContactLastName?: string;
 
-  @Field(() => String, { description: 'Teléfono del contacto de emergencia', nullable: true })
-  @Column({ name: 'emergency_contact_phone', type: 'varchar', length: 20, nullable: true })
+  @Field(() => String, {
+    description: 'Teléfono del contacto de emergencia',
+    nullable: true,
+  })
+  @Column({
+    name: 'emergency_contact_phone',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   emergencyContactPhone?: string;
 
   // ==================== APROBACIÓN (COMPLIANCE OFFICER) ====================
@@ -88,17 +124,26 @@ export class Resident {
   @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })
   approvedAt?: Date;
 
-  @Field(() => String, { description: 'Razón de rechazo por el Compliance Officer', nullable: true })
+  @Field(() => String, {
+    description: 'Razón de rechazo por el Compliance Officer',
+    nullable: true,
+  })
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason?: string;
 
-  @Field(() => String, { description: 'ID del Compliance Officer que aprobó/rechazó', nullable: true })
+  @Field(() => String, {
+    description: 'ID del Compliance Officer que aprobó/rechazó',
+    nullable: true,
+  })
   @Column({ name: 'approved_by_user_id', type: 'uuid', nullable: true })
   approvedByUserId?: string;
 
   // ==================== OBSERVACIONES ====================
 
-  @Field(() => String, { description: 'Notas internas del administrador', nullable: true })
+  @Field(() => String, {
+    description: 'Notas internas del administrador',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
@@ -112,7 +157,9 @@ export class Resident {
   @Column({ name: 'unit_id', type: 'uuid' })
   unitId: string;
 
-  @Field(() => String, { description: 'ID del complejo (desnormalizado para multi-tenant)' })
+  @Field(() => String, {
+    description: 'ID del complejo (desnormalizado para multi-tenant)',
+  })
   @Column({ name: 'complex_id', type: 'uuid' })
   complexId: string;
 
@@ -142,12 +189,18 @@ export class Resident {
   @JoinColumn({ name: 'unit_id' })
   unit?: Unit;
 
-  @Field(() => ResidentialComplex, { description: 'Complejo al que pertenece', nullable: true })
+  @Field(() => ResidentialComplex, {
+    description: 'Complejo al que pertenece',
+    nullable: true,
+  })
   @ManyToOne(() => ResidentialComplex, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { description: 'Compliance Officer que aprobó/rechazó', nullable: true })
+  @Field(() => User, {
+    description: 'Compliance Officer que aprobó/rechazó',
+    nullable: true,
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'approved_by_user_id' })
   approvedByUser?: User;
@@ -158,10 +211,14 @@ export class Resident {
   @BeforeUpdate()
   normalizeFields() {
     if (this.emergencyContactName) {
-      this.emergencyContactName = this.emergencyContactName.trim().toUpperCase();
+      this.emergencyContactName = this.emergencyContactName
+        .trim()
+        .toUpperCase();
     }
     if (this.emergencyContactLastName) {
-      this.emergencyContactLastName = this.emergencyContactLastName.trim().toUpperCase();
+      this.emergencyContactLastName = this.emergencyContactLastName
+        .trim()
+        .toUpperCase();
     }
     if (this.moveOutReason) {
       this.moveOutReason = this.moveOutReason.trim();
