@@ -49,6 +49,8 @@ import { SupervisorVisitStatus } from '../../supervisor-visits/enums/supervisor-
 import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
 import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 import { NotificationsService } from '../../notifications/services/notifications.service';
@@ -82,6 +84,7 @@ export class ResidentialComplexService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
+    private readonly socketService: SocketService,
   ) {}
 
   // ================================================================
@@ -679,6 +682,21 @@ export class ResidentialComplexService {
     const updated = await this.complexRepo.save(complex);
     this.logger.log(
       `Módulos actualizados para complejo ${complexId}: [${modules.join(', ')}]`,
+    );
+
+    // El guard del servidor lee esta lista cacheada en cada petición: si no se
+    // borra aquí, apagar un módulo seguiría dejando pasar las llamadas hasta
+    // que venza el TTL.
+    await this.cacheService.delete({ key: BK.complexModules.one(complexId) });
+
+    // Una sola lista para los dos frentes: la web arma su menú lateral y la app
+    // sus accesos del inicio con esto mismo. Se manda la lista completa y no un
+    // "cambió algo" porque el cliente no tiene con qué recalcularla, y pedirla
+    // de vuelta serían tantas consultas como clientes conectados.
+    this.socketService.emitToComplex(
+      complexId,
+      SocketEvent.COMPLEX_MODULES_UPDATED,
+      { complexId, enabledModules: updated.enabledModules ?? [] },
     );
 
     for (const listener of this.modulesListeners) {

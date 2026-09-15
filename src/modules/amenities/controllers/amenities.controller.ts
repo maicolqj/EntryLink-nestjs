@@ -21,9 +21,12 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 /** Tope de fotos que puede acumular una zona. Coincide con el ArrayMaxSize del input. */
 const MAX_IMAGES_PER_AMENITY = 10;
 
+@RequireModule(ComplexModule.ZONAS_COMUNES)
 @Controller('amenities')
 export class AmenitiesController {
   private readonly logger = new Logger(AmenitiesController.name);

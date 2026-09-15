@@ -25,6 +25,8 @@ import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 /**
  * La autorización va por ROL y no por permiso a propósito: los permisos viajan
  * en el JWT que se emitió al iniciar sesión, y un permiso nuevo no le llegaría
@@ -34,6 +36,7 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 const ADMIN = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
 const VOTERS = [ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL];
 
+@RequireModule(ComplexModule.VOTACIONES)
 @Resolver(() => VotingMeeting)
 export class VotingResolver {
   constructor(private readonly votingService: VotingService) {}

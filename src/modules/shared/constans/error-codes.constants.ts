@@ -322,6 +322,11 @@ export enum ComplexErrorCode {
   PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
   GEOCODING_ADDRESS_NOT_FOUND = 'GEOCODING_ADDRESS_NOT_FOUND',
   GEOCODING_SERVICE_UNAVAILABLE = 'GEOCODING_SERVICE_UNAVAILABLE',
+  /**
+   * El complejo no tiene contratado —o tiene apagado— el módulo que atiende la
+   * operación. El front lo usa para explicar en vez de mostrar un 403 pelado.
+   */
+  COMPLEX_MODULE_DISABLED = 'COMPLEX_MODULE_DISABLED',
 }
 
 export enum AmenityErrorCode {

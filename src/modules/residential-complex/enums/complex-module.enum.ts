@@ -18,6 +18,8 @@ export enum ComplexModule {
   ZONAS_COMUNES = 'ZONAS_COMUNES',
   PQRF = 'PQRF',
   VOTACIONES = 'VOTACIONES',
+  MASCOTAS = 'MASCOTAS',
+  MANTENIMIENTO = 'MANTENIMIENTO',
 }
 
 registerEnumType(ComplexModule, {
