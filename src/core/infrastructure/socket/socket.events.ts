@@ -35,6 +35,17 @@ export enum SocketEvent {
   /** Las votaciones se volvieron visibles —o dejaron de serlo— para los residentes. */
   VOTING_AVAILABILITY = 'voting:availability',
 
+  /**
+   * El SUPER_ADMIN prendió o apagó módulos de un complejo.
+   *
+   * Va a la sala del complejo, donde están TODOS sus clientes conectados —la
+   * administración en la web y los residentes en la app—, porque el menú de
+   * ambos se arma con la misma lista. Sin esto, apagar finanzas deja la opción
+   * visible hasta que cada quien cierre sesión, y el que entre se lleva un
+   * error en vez de una pantalla.
+   */
+  COMPLEX_MODULES_UPDATED = 'complex:modules:updated',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
   RESIDENT_IMPORT_DONE = 'resident:import:done',

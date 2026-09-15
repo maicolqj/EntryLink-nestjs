@@ -23,6 +23,8 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 /**
  * Quien puede tocar la bandeja de radicados.
  *
@@ -41,6 +43,7 @@ const INBOX_ROLES = [
   ValidRoles.RESIDENT_ROL,
 ];
 
+@RequireModule(ComplexModule.PQRF)
 @Resolver(() => Pqrf)
 export class PqrfResolver {
   constructor(private readonly pqrfService: PqrfService) {}

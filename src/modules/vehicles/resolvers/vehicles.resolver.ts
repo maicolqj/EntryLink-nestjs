@@ -19,6 +19,9 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
+@RequireModule(ComplexModule.VEHICULOS)
 @Resolver(() => Vehicle)
 export class VehiclesResolver {
   constructor(private readonly vehiclesService: VehiclesService) {}
