@@ -35,6 +35,9 @@ export enum SocketEvent {
   /** Las votaciones se volvieron visibles —o dejaron de serlo— para los residentes. */
   VOTING_AVAILABILITY = 'voting:availability',
 
+  /** Cambió el estado de un reporte de convivencia: el tablero se repinta. */
+  PET_INCIDENT_UPDATED = 'pet:incident:updated',
+
   /**
    * El SUPER_ADMIN prendió o apagó módulos de un complejo.
    *
