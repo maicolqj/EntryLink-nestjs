@@ -7,6 +7,7 @@ import { SupervisorVisitService } from './services/supervisor-visit.service';
 import { SupervisorAccessRequestService } from './services/supervisor-access-request.service';
 import { SupervisorVisitResolver } from './resolvers/supervisor-visit.resolver';
 import { RevokeInactiveAssignmentsCron } from './cron/revoke-inactive-assignments.cron';
+import { AccessRequestNotificationDetailProvider } from './providers/access-request-notification-detail.provider';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
 import { UserComplexAssignment } from '../users/entities/user-complex-assignment.entity';
 import { User } from '../users/entities/user.entity';
@@ -28,6 +29,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     SupervisorAccessRequestService,
     SupervisorVisitResolver,
     RevokeInactiveAssignmentsCron,
+    // El expediente que se ve al abrir el aviso de "nueva solicitud de acceso".
+    AccessRequestNotificationDetailProvider,
   ],
   exports: [SupervisorVisitService, SupervisorAccessRequestService],
 })

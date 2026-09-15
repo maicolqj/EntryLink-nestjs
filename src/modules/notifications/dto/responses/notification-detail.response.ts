@@ -5,6 +5,7 @@ import { NotificationType } from '../../enums/notification-type.enum';
 import { NotificationPriority } from '../../enums/notification-priority.enum';
 import { NotificationActionType } from '../../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../../enums/notification-action-result.enum';
+import { NotificationEntitySnapshot } from './notification-snapshot.response';
 
 /**
  * Información del usuario relacionado a la notificación
@@ -109,6 +110,18 @@ export class NotificationDetailResponse {
   @Field(() => String, { nullable: true })
   entityType?: string;
 
+  /**
+   * Todo lo que hay detrás del aviso: los datos de la solicitud, su estado de
+   * HOY y las fotos. Un título y dos líneas de cuerpo no alcanzan para decidir
+   * —"Se registró KODA y está pendiente de validación" no dice de qué raza es,
+   * en qué unidad vive ni cómo se ve el animal—, y quien tiene que aprobar
+   * terminaba abriendo otra pantalla a buscarlo.
+   *
+   * Nulo solo si la notificación no apunta a nada.
+   */
+  @Field(() => NotificationEntitySnapshot, { nullable: true })
+  entity?: NotificationEntitySnapshot | null;
+
   // ─── Trazabilidad ─────────────────────────────────────────────
 
   @Field(() => String, { nullable: true })
@@ -117,6 +130,10 @@ export class NotificationDetailResponse {
   /** Datos completos del usuario que originó la notificación. */
   @Field(() => NotificationUserInfo, { nullable: true })
   createdByUser?: NotificationUserInfo;
+
+  /** Destacada por su destinatario ("importante"), como la estrella del correo. */
+  @Field()
+  isStarred: boolean;
 
   // ─── Acciones requeridas ──────────────────────────────────────
 

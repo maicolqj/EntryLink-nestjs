@@ -18,6 +18,7 @@ import { ResidentialComplexModule } from '../residential-complex/residential-com
 import { ResidentsModule } from '../residents/residents.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { VisitsNotificationDetailProvider } from './providers/visits-notification-detail.provider';
 
 @Module({
   imports: [
@@ -31,6 +32,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
   ],
   controllers: [VisitorsController],
   providers: [
+    // Expediente que se ve al abrir un aviso de este módulo.
+    VisitsNotificationDetailProvider,
     VisitorsService,
     VisitsService,
     VisitAccessTokenService,

@@ -364,3 +364,21 @@ export enum AmenityErrorCode {
   DAMAGE_ALREADY_CHARGED = 'DAMAGE_ALREADY_CHARGED',
   DAMAGE_NOT_CHARGEABLE_YET = 'DAMAGE_NOT_CHARGEABLE_YET',
 }
+
+/**
+ * Acciones ejecutadas desde el aviso (`executeNotificationAction`).
+ *
+ * Los descriptores que viaja el expediente son para PINTAR; la autorización se
+ * vuelve a evaluar aquí. Estos códigos son los que ve la web cuando el estado
+ * cambió entre que se abrió el aviso y se pulsó el botón —otro administrador ya
+ * resolvió el caso, o el plazo de descargos sigue corriendo.
+ */
+export enum NotificationActionErrorCode {
+  /** El módulo dueño del asunto no expone acciones. */
+  NOTIFICATION_ACTION_UNSUPPORTED = 'NOTIFICATION_ACTION_UNSUPPORTED',
+  /** El código no está entre las acciones de HOY para quien la pide. */
+  NOTIFICATION_ACTION_UNAVAILABLE = 'NOTIFICATION_ACTION_UNAVAILABLE',
+  /** Existe, pero el trámite no la permite todavía. */
+  NOTIFICATION_ACTION_BLOCKED = 'NOTIFICATION_ACTION_BLOCKED',
+  NOTIFICATION_ACTION_FIELD_REQUIRED = 'NOTIFICATION_ACTION_FIELD_REQUIRED',
+}

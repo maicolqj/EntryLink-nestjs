@@ -12,6 +12,7 @@ import { ResidentialComplexModule } from '../residential-complex/residential-com
 import { ResidentsModule } from '../residents/residents.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
+import { PqrfNotificationDetailProvider } from './providers/pqrf-notification-detail.provider';
 
 @Module({
   imports: [
@@ -22,7 +23,13 @@ import { AuditModule } from '../audit/audit.module';
     NotificationsModule, // aviso a la instancia destinataria
     AuditModule,
   ],
-  providers: [PqrfService, PqrfResolver, PqrfCron],
+  providers: [
+    // Expediente que se ve al abrir un aviso de este módulo.
+    PqrfNotificationDetailProvider,
+    PqrfService,
+    PqrfResolver,
+    PqrfCron,
+  ],
   exports: [PqrfService],
 })
 export class PqrfModule {}

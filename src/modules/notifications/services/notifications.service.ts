@@ -39,6 +39,11 @@ import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
 import { PanicAlertType } from '../enums/panic-alert-type.enum';
 import { CreateNotificationPayload } from '../dto/inputs/create-notification.input';
 import { FilterNotificationsInput } from '../dto/inputs/filter-notifications.input';
+import {
+  BulkNotificationAction,
+  BulkNotificationActionInput,
+} from '../dto/inputs/bulk-notification-action.input';
+import { BulkNotificationActionResult } from '../dto/responses/bulk-notification-action.response';
 import { SavePushSubscriptionInput } from '../dto/inputs/save-push-subscription.input';
 import { SaveMobileTokenInput } from '../dto/inputs/save-mobile-token.input';
 import { SendNotificationInput } from '../dto/inputs/send-notification.input';
@@ -54,6 +59,9 @@ import {
   NotificationDetailResponse,
   NotificationUserInfo,
 } from '../dto/responses/notification-detail.response';
+import { NotificationSnapshotService } from './notification-snapshot.service';
+import { ExecuteNotificationActionInput } from '../dto/inputs/execute-notification-action.input';
+import { NotificationEntitySnapshot } from '../dto/responses/notification-snapshot.response';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
@@ -163,6 +171,7 @@ export class NotificationsService implements OnModuleInit {
     @Inject(forwardRef(() => ResidentsService))
     private readonly residentsService: ResidentsService,
     private readonly socketService: SocketService,
+    private readonly snapshotService: NotificationSnapshotService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -653,6 +662,109 @@ export class NotificationsService implements OnModuleInit {
     return this.notifRepo.save(notif);
   }
 
+  /**
+   * Destaca o quita la estrella de una notificación del propio usuario.
+   *
+   * Es lo que separa "urgente para el sistema" de "pendiente para mí": la
+   * prioridad la puso el módulo que emitió el aviso, y no hay forma de que
+   * sepa que este paquete es justo el que un residente lleva tres días
+   * reclamando.
+   *
+   * Los broadcasts quedan fuera por la misma razón que el estado de lectura:
+   * son UN registro compartido por todos los destinatarios, así que destacarlo
+   * se lo destacaría a todo el complejo.
+   */
+  async setStarred(
+    notificationId: string,
+    starred: boolean,
+    currentUser: JwtAccessPayload,
+  ): Promise<Notification> {
+    const notif = await this.findByIdOrFail(notificationId);
+    this.assertRecipient(notif, currentUser);
+
+    if (notif.isBroadcast) {
+      throw new CustomError({
+        message: 'Los avisos masivos no se pueden destacar',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    if (notif.isStarred === starred) return notif;
+
+    notif.isStarred = starred;
+    return this.notifRepo.save(notif);
+  }
+
+  /**
+   * Aplica una acción a varias notificaciones de una vez.
+   *
+   * Existe para que la selección múltiple de la bandeja no dispare veinte
+   * mutaciones: son veinte viajes, veinte transacciones y una lista que se va
+   * repintando de a poco mientras el usuario mira. Aquí es UNA sentencia.
+   *
+   * El alcance es siempre el mismo y no depende del rol: las filas de las que
+   * este usuario es destinatario. Un administrador puede borrar de a una la
+   * notificación de otro (ver `deleteNotification`) porque a veces hay que
+   * limpiar un aviso mal enviado; en lote no, porque "seleccionar todo" en una
+   * bandeja compartida barrería el buzón ajeno sin que nadie lo note.
+   *
+   * Los avisos masivos quedan fuera por lo de siempre: son UNA fila compartida
+   * por todo el complejo. Se informan como `skipped`, no como error: que la
+   * selección entera falle por un comunicado en medio obliga a adivinar cuál
+   * estorba.
+   */
+  async bulkAction(
+    input: BulkNotificationActionInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<BulkNotificationActionResult> {
+    const requested = input.notificationIds.length;
+    const ids = [...new Set(input.notificationIds)].filter((id) => isUUID(id));
+
+    if (ids.length === 0) return { affected: 0, skipped: requested };
+
+    const scope = {
+      ids,
+      userId: currentUser.sub,
+    };
+
+    const OWN_ROWS =
+      'id IN (:...ids) AND "recipientUserId" = :userId AND "isBroadcast" = false';
+
+    let affected = 0;
+
+    if (input.action === BulkNotificationAction.DELETE) {
+      const result = await this.notifRepo
+        .createQueryBuilder()
+        .delete()
+        .from(Notification)
+        .where(OWN_ROWS, scope)
+        .execute();
+      affected = result.affected ?? 0;
+    } else {
+      const patch =
+        input.action === BulkNotificationAction.MARK_READ
+          ? { isRead: true, readAt: new Date() }
+          : input.action === BulkNotificationAction.MARK_UNREAD
+            ? { isRead: false, readAt: null }
+            : { isStarred: input.action === BulkNotificationAction.STAR };
+
+      const result = await this.notifRepo
+        .createQueryBuilder()
+        .update(Notification)
+        .set(patch)
+        .where(OWN_ROWS, scope)
+        .execute();
+      affected = result.affected ?? 0;
+    }
+
+    this.logger.debug(
+      `[Bandeja] ${input.action} sobre ${affected}/${requested} avisos — usuario ${currentUser.sub}`,
+    );
+
+    return { affected, skipped: Math.max(0, requested - affected) };
+  }
+
   /** Marca como leídas todas las notificaciones no leídas dirigidas al usuario autenticado */
   async markAllAsRead(
     complexId: string | null,
@@ -987,6 +1099,17 @@ export class NotificationsService implements OnModuleInit {
     if (filters.isRead !== undefined) {
       qb.andWhere('n.isRead = :isRead', { isRead: filters.isRead });
     }
+    if (filters.isStarred !== undefined) {
+      qb.andWhere('n.isStarred = :isStarred', { isStarred: filters.isStarred });
+    }
+    if (filters.search?.trim()) {
+      // ILIKE y no búsqueda de texto completo: el buzón se consulta siempre
+      // acotado a un usuario y a un complejo, así que el conjunto es pequeño y
+      // montar un índice tsvector aquí sería pagar mantenimiento por nada.
+      qb.andWhere('(n.title ILIKE :search OR n.body ILIKE :search)', {
+        search: `%${filters.search.trim()}%`,
+      });
+    }
 
     qb.orderBy('n.createdAt', 'DESC');
 
@@ -1028,6 +1151,17 @@ export class NotificationsService implements OnModuleInit {
     if (filters.isRead !== undefined) {
       qb.andWhere('n.isRead = :isRead', { isRead: filters.isRead });
     }
+    if (filters.isStarred !== undefined) {
+      qb.andWhere('n.isStarred = :isStarred', { isStarred: filters.isStarred });
+    }
+    if (filters.search?.trim()) {
+      // ILIKE y no búsqueda de texto completo: el buzón se consulta siempre
+      // acotado a un usuario y a un complejo, así que el conjunto es pequeño y
+      // montar un índice tsvector aquí sería pagar mantenimiento por nada.
+      qb.andWhere('(n.title ILIKE :search OR n.body ILIKE :search)', {
+        search: `%${filters.search.trim()}%`,
+      });
+    }
 
     qb.orderBy('n.createdAt', 'DESC');
 
@@ -1060,11 +1194,18 @@ export class NotificationsService implements OnModuleInit {
    *  - El propio destinatario puede consultarla.
    *  - Roles admin/staff pueden consultar cualquier notificación del complejo.
    */
-  async findOneDetail(
+  /**
+   * La notificación que este usuario tiene derecho a abrir.
+   *
+   * Vive aparte porque el detalle ya no es lo único que la necesita: ejecutar
+   * una acción desde el aviso pasa por el mismo control, y dos copias de un
+   * chequeo de acceso terminan, siempre, con una desactualizada.
+   */
+  async findOneForUser(
     notificationId: string,
     complexId: string | null,
     currentUser: JwtAccessPayload,
-  ): Promise<NotificationDetailResponse> {
+  ): Promise<Notification> {
     this.assertValidUuid(notificationId);
 
     // SUPER_ADMIN puede abrir el detalle de cualquier complejo (busca solo por id).
@@ -1111,6 +1252,46 @@ export class NotificationsService implements OnModuleInit {
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
+
+    return notif;
+  }
+
+  /**
+   * Ejecuta una acción del expediente —dar curso a un reporte, aprobar una
+   * ficha, multar— sin salir del aviso.
+   *
+   * Aquí solo se resuelve QUÉ notificación es y si este usuario puede abrirla;
+   * qué se puede hacer con ella lo decide el módulo dueño del asunto, que es
+   * quien conoce el trámite. Ver `NotificationSnapshotService.execute`.
+   */
+  async executeEntityAction(
+    input: ExecuteNotificationActionInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<NotificationEntitySnapshot> {
+    const notif = await this.findOneForUser(
+      input.notificationId,
+      input.complexId ?? null,
+      currentUser,
+    );
+
+    return this.snapshotService.execute(
+      notif,
+      currentUser,
+      input.actionCode,
+      input.values ?? {},
+    );
+  }
+
+  async findOneDetail(
+    notificationId: string,
+    complexId: string | null,
+    currentUser: JwtAccessPayload,
+  ): Promise<NotificationDetailResponse> {
+    const notif = await this.findOneForUser(
+      notificationId,
+      complexId,
+      currentUser,
+    );
 
     // ── Recopilar IDs de usuarios relevantes (sin nulls ni duplicados) ─────────
     // NOTA: recipientUserId puede ser complexId (no un usuario real) en notificaciones
@@ -1166,6 +1347,13 @@ export class NotificationsService implements OnModuleInit {
       return userMap.get(userId);
     };
 
+    // El expediente se arma aquí y no en un resolver aparte para que quien abre
+    // el aviso reciba TODO en una sola consulta: el detalle y el expediente se
+    // leen juntos o la pantalla parpadea dos veces.
+    const entity = notif.entityType
+      ? await this.snapshotService.build(notif, currentUser)
+      : null;
+
     return {
       id: notif.id,
       type: notif.type,
@@ -1173,10 +1361,12 @@ export class NotificationsService implements OnModuleInit {
       title: notif.title,
       body: notif.body,
       metadata: notif.metadata,
+      entity,
       isBroadcast: notif.isBroadcast,
       targetRoles: notif.targetRoles,
       isRead: notif.isRead,
       readAt: notif.readAt,
+      isStarred: notif.isStarred,
       recipientUserId: notif.recipientUserId,
       recipientUser: buildUserInfo(notif.recipientUserId),
       complexId: notif.complexId,
