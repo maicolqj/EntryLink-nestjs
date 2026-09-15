@@ -29,6 +29,13 @@ const EXT_TO_CONTENT_TYPE: Record<string, string> = {
   webp: 'image/webp',
   heic: 'image/heic',
   pdf: 'application/pdf',
+  // Videos cortos de evidencia (mantenimiento). Sin estos, el archivo se sube
+  // como application/octet-stream y el navegador lo descarga en vez de
+  // reproducirlo.
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  '3gp': 'video/3gpp',
 };
 
 @Injectable()

@@ -49,6 +49,9 @@ export enum SocketEvent {
    */
   COMPLEX_MODULES_UPDATED = 'complex:modules:updated',
 
+  /** Cambió algo en un ticket de mantenimiento: el tablero y el mapa se repintan. */
+  MAINTENANCE_TICKET_UPDATED = 'maintenance:ticket:updated',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
   RESIDENT_IMPORT_DONE = 'resident:import:done',

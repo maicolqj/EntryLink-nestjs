@@ -260,6 +260,65 @@ export class ResidentialComplex {
   @Column({ name: 'pets_expiry_reminder_days', type: 'int', default: 30 })
   petsExpiryReminderDays: number;
 
+  // ==================== MANTENIMIENTO DE ZONAS COMUNES ====================
+
+  // El encendido del módulo tampoco vive aquí: es `enabledModules` con
+  // MANTENIMIENTO. Lo que sigue son las reglas de operación, que sí cambian de
+  // un conjunto a otro.
+
+  /**
+   * ¿El residente puede reportar, o solo la administración y la portería?
+   *
+   * Nace en `true`: un módulo de reportes que arranca sin quien reporte es una
+   * pantalla vacía. El conjunto que prefiera canalizar todo por portería lo
+   * apaga.
+   */
+  @Field(() => Boolean, {
+    description: 'Los residentes pueden radicar tickets de mantenimiento',
+  })
+  @Column({
+    name: 'maintenance_resident_reporting_enabled',
+    type: 'boolean',
+    default: true,
+  })
+  maintenanceResidentReportingEnabled: boolean;
+
+  /** Días que espera un ticket reparado antes de cerrarse sin confirmación. */
+  @Field(() => Int, { description: 'Días para el autocierre de un reparado' })
+  @Column({ name: 'maintenance_auto_close_days', type: 'int', default: 7 })
+  maintenanceAutoCloseDays: number;
+
+  /** Días que tiene quien reportó para decir que el arreglo no sirvió. */
+  @Field(() => Int, { description: 'Días para reabrir un ticket cerrado' })
+  @Column({ name: 'maintenance_reopen_window_days', type: 'int', default: 7 })
+  maintenanceReopenWindowDays: number;
+
+  /** Ventana en la que dos reportes del mismo sitio se consideran el mismo daño. */
+  @Field(() => Int, { description: 'Horas para detectar reportes duplicados' })
+  @Column({
+    name: 'maintenance_duplicate_window_hours',
+    type: 'int',
+    default: 48,
+  })
+  maintenanceDuplicateWindowHours: number;
+
+  /**
+   * Error máximo del GPS, en metros, para pintar el pin como confiable.
+   *
+   * Cien metros por defecto: es lo que suele reportar un celular a cielo
+   * abierto entre dos torres. Por encima de eso el punto existe pero el mapa no
+   * puede dibujarlo como si fuera exacto.
+   */
+  @Field(() => Int, {
+    description: 'Precisión mínima del GPS para pintar el pin (metros)',
+  })
+  @Column({
+    name: 'maintenance_gps_accuracy_meters',
+    type: 'int',
+    default: 100,
+  })
+  maintenanceGpsAccuracyMeters: number;
+
   // ==================== CONTACTO ====================
 
   @Column({
