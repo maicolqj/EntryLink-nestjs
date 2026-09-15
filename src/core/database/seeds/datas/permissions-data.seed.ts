@@ -717,7 +717,7 @@ export const PERMISSIONS_TO_SEED = [
     dependsOn: [ValidPermissions.VIEW_PET_INCIDENTS],
   },
   {
-    id: 'e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b',
+    id: 'a04517ca-c93c-4bdd-a132-ab0ae8d42dc3',
     name: ValidPermissions.VIEW_MAINTENANCE_TICKETS,
     label: 'Ver Tickets de Mantenimiento',
     group: 'MAINTENANCE',
@@ -739,7 +739,7 @@ export const PERMISSIONS_TO_SEED = [
     dependsOn: [],
   },
   {
-    id: 'a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d',
+    id: 'ff688532-aa00-440a-a926-105f864c5597',
     name: ValidPermissions.MANAGE_MAINTENANCE_TICKETS,
     label: 'Gestionar Tickets de Mantenimiento',
     group: 'MAINTENANCE',
@@ -750,7 +750,7 @@ export const PERMISSIONS_TO_SEED = [
     dependsOn: [ValidPermissions.VIEW_MAINTENANCE_TICKETS],
   },
   {
-    id: 'b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e',
+    id: 'fa2f276e-5002-47e3-a28a-1f7c8fce2a76',
     name: ValidPermissions.CLOSE_MAINTENANCE_TICKET,
     label: 'Cerrar Tickets de Mantenimiento',
     group: 'MAINTENANCE',
