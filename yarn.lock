@@ -1959,10 +1959,10 @@
   resolved "https://registry.yarnpkg.com/@nestjs/passport/-/passport-12.0.0.tgz#b37af80aed4370cdbf81c65b0ca7f503e1add09f"
   integrity sha512-FM9ioo2Dyj+cC7aeO4g19ijAXoRaHlW/GQZFbgXsM4Z9pyQedA8yOseb7ivfqlPwUKJlH9PFgeWniu6c0vb6dw==
 
-"@nestjs/platform-express@^12.0.0":
-  version "12.0.0"
-  resolved "https://registry.yarnpkg.com/@nestjs/platform-express/-/platform-express-12.0.0.tgz#0c5bae04485009fefcb0318ebb43978a8ec060c4"
-  integrity sha512-34H2cHJyVs2EkCbR9RrPPXEbANOEMQSxNapD1QyRBFyGyr3YvMB2nwbp0R6EM2WexxGoyrfb9CqJfDz3AknNQA==
+"@nestjs/platform-express@^11.1.29":
+  version "11.2.5"
+  resolved "https://registry.yarnpkg.com/@nestjs/platform-express/-/platform-express-11.2.5.tgz#ba9c3d66f7467d270c495634ab7c378d129c8b1c"
+  integrity sha512-R3LSHqgPQo7ZTdYqA39lvdHS2RBnVJUePKIpL+cr1oB3HtYj9qPdhdmS307eLDc1VeTPFXAnSuVfcG9lMDEFSw==
   dependencies:
     cors "2.8.6"
     express "5.2.1"
@@ -5160,18 +5160,6 @@ foreground-child@^3.1.0, foreground-child@^3.3.1:
   dependencies:
     cross-spawn "^7.0.6"
     signal-exit "^4.0.1"
-
-form-data@^2.5.5:
-  version "2.5.5"
-  resolved "https://registry.npmjs.org/form-data/-/form-data-2.5.5.tgz"
-  integrity sha512-jqdObeR2rxZZbPSGL+3VckHMYtu+f9//KXBsVny6JSX/pa38Fy+bGjuG8eW/H6USNQWhLi8Num++cU2yOCNz4A==
-  dependencies:
-    asynckit "^0.4.0"
-    combined-stream "^1.0.8"
-    es-set-tostringtag "^2.1.0"
-    hasown "^2.0.2"
-    mime-types "^2.1.35"
-    safe-buffer "^5.2.1"
 
 form-data@^4.0.0, form-data@^4.0.5, form-data@^4.0.6:
   version "4.0.6"
@@ -8900,15 +8888,6 @@ restore-cursor@^5.0.0:
   dependencies:
     onetime "^7.0.0"
     signal-exit "^4.1.0"
-
-retry-request@^7.0.0:
-  version "7.0.2"
-  resolved "https://registry.npmjs.org/retry-request/-/retry-request-7.0.2.tgz"
-  integrity sha512-dUOvLMJ0/JJYEn8NrpOaGNE7X3vpI5XlZS/u0ANjqtcZVKnIxP7IgCFwrKTxENw29emmwug53awKtaMm4i9g5w==
-  dependencies:
-    "@types/request" "^2.48.8"
-    extend "^3.0.2"
-    teeny-request "^9.0.0"
 
 retry-request@^8.0.2:
   version "8.0.4"
