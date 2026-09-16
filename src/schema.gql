@@ -350,6 +350,7 @@ type ResidentialComplex {
 
   """Días de anticipación del aviso de vencimiento"""
   petsExpiryReminderDays: Int!
+
   """CountryCode"""
   countryCode: Country!
 
@@ -4767,6 +4768,7 @@ type PaginatedPetIncidentsResponse {
   items: [PetIncident!]!
   pagination: PaginationReponse!
 }
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -5326,6 +5328,7 @@ input FilterPetIncidentsInput {
   dateFrom: String
   dateTo: String
 }
+
 type Mutation {
   """
   Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL
