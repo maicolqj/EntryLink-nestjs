@@ -86,6 +86,8 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
       ValidPermissions.REPORT_PET_INCIDENT,
       ValidPermissions.VIEW_MAINTENANCE_TICKETS,
       ValidPermissions.REPORT_MAINTENANCE_TICKET,
+      ValidPermissions.VIEW_MARKETPLACE,
+      ValidPermissions.PUBLISH_LISTING,
     ],
     frontName: 'Residente',
     icon: 'home',
@@ -114,6 +116,8 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
       ValidPermissions.REPORT_PET_INCIDENT,
       ValidPermissions.VIEW_MAINTENANCE_TICKETS,
       ValidPermissions.REPORT_MAINTENANCE_TICKET,
+      ValidPermissions.VIEW_MARKETPLACE,
+      ValidPermissions.PUBLISH_LISTING,
     ],
     frontName: 'Consejo de administración',
     icon: 'account_balance',
@@ -205,6 +209,13 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
       ValidPermissions.MANAGE_MAINTENANCE_LOCATIONS,
       ValidPermissions.MANAGE_MAINTENANCE_VENDORS,
       ValidPermissions.MANAGE_MAINTENANCE_SLA,
+      // La administración modera la vitrina, no publica en ella: si algún día
+      // necesita vender algo del conjunto, se le concede PUBLISH_LISTING desde
+      // la pantalla de roles.
+      ValidPermissions.VIEW_MARKETPLACE,
+      ValidPermissions.MODERATE_LISTINGS,
+      ValidPermissions.MANAGE_LISTING_REPORTS,
+      ValidPermissions.MANAGE_MARKETPLACE_SETTINGS,
     ],
     frontName: 'Administrador de Complejo',
     icon: 'office-building',

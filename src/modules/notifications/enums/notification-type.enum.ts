@@ -87,7 +87,7 @@ export enum NotificationType {
   PET_STATEMENT_RECEIVED = 'PET_STATEMENT_RECEIVED', // La unidad presentó descargos (admin)
   PET_DOCUMENT_EXPIRING = 'PET_DOCUMENT_EXPIRING', // Vence la vacuna antirrábica o la póliza
   PET_REMOVED = 'PET_REMOVED', // Ficha eliminada o retirada del censo (admin)
-  
+
   // ── Mantenimiento de zonas comunes ─────────────────────────────
   MAINTENANCE_TICKET_REPORTED = 'MAINTENANCE_TICKET_REPORTED', // Reporte nuevo (admin y supervisor)
   MAINTENANCE_TICKET_ASSIGNED = 'MAINTENANCE_TICKET_ASSIGNED', // Ya hay responsable (reportante y asignado)
@@ -97,6 +97,16 @@ export enum NotificationType {
   MAINTENANCE_TICKET_REOPENED = 'MAINTENANCE_TICKET_REOPENED', // El arreglo no sirvió (admin)
   MAINTENANCE_SLA_BREACHED = 'MAINTENANCE_SLA_BREACHED', // Se venció el plazo comprometido (admin, consejo si es crítico)
   MAINTENANCE_RATING_REQUESTED = 'MAINTENANCE_RATING_REQUESTED', // Recordatorio de calificación (reportante)
+
+  // ── Clasificados y comercio interno ────────────────────────────
+  LISTING_PENDING_REVIEW = 'LISTING_PENDING_REVIEW', // Publicación esperando aprobación (admin)
+  LISTING_APPROVED = 'LISTING_APPROVED', // Ya está visible en la vitrina (publicador)
+  LISTING_REJECTED = 'LISTING_REJECTED', // No se aprobó, con motivo (publicador)
+  LISTING_INTEREST = 'LISTING_INTEREST', // Alguien pulsó "me interesa" (publicador)
+  LISTING_REPORTED = 'LISTING_REPORTED', // Un vecino reportó una publicación (admin)
+  LISTING_PAUSED_BY_REPORTS = 'LISTING_PAUSED_BY_REPORTS', // Se ocultó sola por reportes (publicador y admin)
+  LISTING_EXPIRING = 'LISTING_EXPIRING', // Vence la vigencia: renovar o dejarla caer (publicador)
+  LISTING_EXPIRED = 'LISTING_EXPIRED', // Venció y salió de la vitrina (publicador)
 
   // ── Cuenta / Perfil ────────────────────────────────────────────
   PROFILE_UPDATED = 'PROFILE_UPDATED', // Datos personales del usuario modificados

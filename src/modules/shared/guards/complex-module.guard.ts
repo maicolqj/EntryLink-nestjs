@@ -39,6 +39,7 @@ const MODULE_LABELS: Partial<Record<ComplexModule, string>> = {
   [ComplexModule.MASCOTAS]: 'Mascotas',
   [ComplexModule.MANTENIMIENTO]: 'Mantenimiento',
   [ComplexModule.NOTAS]: 'Notas',
+  [ComplexModule.CLASIFICADOS]: 'Clasificados',
 };
 
 /**

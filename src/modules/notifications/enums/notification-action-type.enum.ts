@@ -15,6 +15,7 @@ export enum NotificationActionType {
   VISIT_APPROVAL = 'VISIT_APPROVAL', // Visita walk-in esperando entrada
   ACCESS_REQUEST = 'ACCESS_REQUEST', // Solicitud de acceso de supervisor
   ACKNOWLEDGE = 'ACKNOWLEDGE', // Reconocer alerta (pánico, emergencia)
+  LISTING_APPROVAL = 'LISTING_APPROVAL', // Publicación de clasificados por revisar
 }
 
 registerEnumType(NotificationActionType, {
@@ -37,6 +38,10 @@ registerEnumType(NotificationActionType, {
     },
     ACKNOWLEDGE: {
       description: 'Alerta que requiere confirmación — [Reconocer]',
+    },
+    LISTING_APPROVAL: {
+      description:
+        'Publicación de clasificados por revisar — [Aprobar] [Rechazar]',
     },
   },
 });

@@ -393,6 +393,25 @@ export enum ValidPermissions {
   /** Definir los plazos de atención comprometidos. ➜ Nivel: [HIGH] | Requiere: [MANAGE_MAINTENANCE_TICKETS] */
   MANAGE_MAINTENANCE_SLA = 'MANAGE_MAINTENANCE_SLA',
 
+  // ═══════════════════════════════════════════════════════
+  // CLASIFICADOS Y COMERCIO INTERNO
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver la vitrina de clasificados del conjunto. ➜ Nivel: [LOW] */
+  VIEW_MARKETPLACE = 'VIEW_MARKETPLACE',
+
+  /** Publicar un aviso. Lo tiene el residente. ➜ Nivel: [LOW] | Requiere: [VIEW_MARKETPLACE] */
+  PUBLISH_LISTING = 'PUBLISH_LISTING',
+
+  /** Aprobar, rechazar y retirar publicaciones. ➜ Nivel: [HIGH] | Requiere: [VIEW_MARKETPLACE] */
+  MODERATE_LISTINGS = 'MODERATE_LISTINGS',
+
+  /** Resolver los reportes de abuso sobre publicaciones. ➜ Nivel: [HIGH] | Requiere: [MODERATE_LISTINGS] */
+  MANAGE_LISTING_REPORTS = 'MANAGE_LISTING_REPORTS',
+
+  /** Definir categorías, vigencia y política de moderación. ➜ Nivel: [HIGH] | Requiere: [VIEW_MARKETPLACE] */
+  MANAGE_MARKETPLACE_SETTINGS = 'MANAGE_MARKETPLACE_SETTINGS',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }
