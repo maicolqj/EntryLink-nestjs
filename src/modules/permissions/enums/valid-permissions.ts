@@ -368,6 +368,31 @@ export enum ValidPermissions {
   /** Validar, desestimar y sancionar reportes. ➜ Nivel: [HIGH] | Requiere: [VIEW_PET_INCIDENTS] */
   MANAGE_PET_INCIDENTS = 'MANAGE_PET_INCIDENTS',
 
+  // ═══════════════════════════════════════════════════════
+  // MANTENIMIENTO DE ZONAS COMUNES
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver los tickets de mantenimiento. ➜ Nivel: [LOW] */
+  VIEW_MAINTENANCE_TICKETS = 'VIEW_MAINTENANCE_TICKETS',
+
+  /** Reportar un daño en zonas comunes. Lo tiene el residente y la portería. ➜ Nivel: [LOW] */
+  REPORT_MAINTENANCE_TICKET = 'REPORT_MAINTENANCE_TICKET',
+
+  /** Revisar, asignar y mover tickets en el tablero. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_TICKETS = 'MANAGE_MAINTENANCE_TICKETS',
+
+  /** Cerrar un ticket sin esperar la confirmación del residente. ➜ Nivel: [MEDIUM] | Requiere: [MANAGE_MAINTENANCE_TICKETS] */
+  CLOSE_MAINTENANCE_TICKET = 'CLOSE_MAINTENANCE_TICKET',
+
+  /** Administrar los puntos QR/NFC del conjunto. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_LOCATIONS = 'MANAGE_MAINTENANCE_LOCATIONS',
+
+  /** Administrar el directorio de proveedores externos. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_VENDORS = 'MANAGE_MAINTENANCE_VENDORS',
+
+  /** Definir los plazos de atención comprometidos. ➜ Nivel: [HIGH] | Requiere: [MANAGE_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_SLA = 'MANAGE_MAINTENANCE_SLA',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }

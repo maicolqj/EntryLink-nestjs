@@ -87,6 +87,16 @@ export enum NotificationType {
   PET_STATEMENT_RECEIVED = 'PET_STATEMENT_RECEIVED', // La unidad presentó descargos (admin)
   PET_DOCUMENT_EXPIRING = 'PET_DOCUMENT_EXPIRING', // Vence la vacuna antirrábica o la póliza
   PET_REMOVED = 'PET_REMOVED', // Ficha eliminada o retirada del censo (admin)
+  
+  // ── Mantenimiento de zonas comunes ─────────────────────────────
+  MAINTENANCE_TICKET_REPORTED = 'MAINTENANCE_TICKET_REPORTED', // Reporte nuevo (admin y supervisor)
+  MAINTENANCE_TICKET_ASSIGNED = 'MAINTENANCE_TICKET_ASSIGNED', // Ya hay responsable (reportante y asignado)
+  MAINTENANCE_TICKET_UPDATED = 'MAINTENANCE_TICKET_UPDATED', // Cambió el estado o hay novedad (reportante)
+  MAINTENANCE_TICKET_RESOLVED = 'MAINTENANCE_TICKET_RESOLVED', // Reparado: falta confirmar y calificar
+  MAINTENANCE_TICKET_REJECTED = 'MAINTENANCE_TICKET_REJECTED', // El reporte no procede, con motivo
+  MAINTENANCE_TICKET_REOPENED = 'MAINTENANCE_TICKET_REOPENED', // El arreglo no sirvió (admin)
+  MAINTENANCE_SLA_BREACHED = 'MAINTENANCE_SLA_BREACHED', // Se venció el plazo comprometido (admin, consejo si es crítico)
+  MAINTENANCE_RATING_REQUESTED = 'MAINTENANCE_RATING_REQUESTED', // Recordatorio de calificación (reportante)
 
   // ── Cuenta / Perfil ────────────────────────────────────────────
   PROFILE_UPDATED = 'PROFILE_UPDATED', // Datos personales del usuario modificados
