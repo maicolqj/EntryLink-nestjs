@@ -59,7 +59,7 @@
     "@nestjs/core": "^11.1.29",
     "@nestjs/graphql": "^13.4.4",
     "@nestjs/jwt": "^11.0.2",
-    "@nestjs/passport": "^11.0.5",
+    "@nestjs/passport": "^12.0.0",
     "@nestjs/platform-express": "^11.1.29",
     "@nestjs/platform-socket.io": "^11.1.29",
     "@nestjs/schedule": "^6.1.3",
