@@ -21,6 +21,8 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 const ALLOWED_ROLES: ValidRoles[] = [
   ValidRoles.SUPER_ADMIN_ROL,
   ValidRoles.COMPLEX_ROL,
@@ -28,6 +30,7 @@ const ALLOWED_ROLES: ValidRoles[] = [
   ValidRoles.RESIDENT_ROL,
 ];
 
+@RequireModule(ComplexModule.VEHICULOS)
 @Controller('vehicles')
 @UseGuards(JwtRestGuard)
 export class VehiclesController {

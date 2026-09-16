@@ -25,6 +25,8 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -33,6 +35,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 const MAX_FILE_SIZE_MB = 10;
 
+@RequireModule(ComplexModule.PAQUETES)
 @Controller('packages')
 @UseGuards(JwtRestGuard)
 export class PackagesController {

@@ -19,6 +19,20 @@ export const BK = {
     TTL: 120, // 2 min — se llama en cada operación como auth check
   },
 
+  /**
+   * Módulos habilitados del complejo.
+   *
+   * Va aparte de `complex.one` porque lo lee un guard en CADA petición de los
+   * módulos protegidos y solo necesita una lista de texto: cachear la ficha
+   * completa del complejo para preguntar eso sería mover un mueble para buscar
+   * una llave. Se borra al moverse el interruptor, así que el TTL solo cubre un
+   * borrado perdido.
+   */
+  complexModules: {
+    one: (id: string) => ({ prefix: 'cpxmod', key: id }),
+    TTL: 600, // 10 min
+  },
+
   /** Torres / Edificios */
   building: {
     list: (complexId: string, page: number, limit: number) => ({

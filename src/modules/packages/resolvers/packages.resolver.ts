@@ -14,6 +14,9 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
+@RequireModule(ComplexModule.PAQUETES)
 @Resolver(() => Package)
 export class PackagesResolver {
   constructor(private readonly packagesService: PackagesService) {}

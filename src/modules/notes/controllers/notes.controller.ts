@@ -23,6 +23,9 @@ import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 import { Auth } from '../../shared/decorators/auth.decorator';
 
+import { RequireModule } from '../../shared/decorators/require-module.decorator';
+import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
+@RequireModule(ComplexModule.NOTAS)
 @Controller('notes')
 export class NotesController {
   private readonly logger = new Logger(NotesController.name);
