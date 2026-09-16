@@ -35,6 +35,9 @@ export enum SocketEvent {
   /** Las votaciones se volvieron visibles —o dejaron de serlo— para los residentes. */
   VOTING_AVAILABILITY = 'voting:availability',
 
+  /** Cambió el estado de un reporte de convivencia: el tablero se repinta. */
+  PET_INCIDENT_UPDATED = 'pet:incident:updated',
+
   /**
    * El SUPER_ADMIN prendió o apagó módulos de un complejo.
    *
@@ -45,6 +48,9 @@ export enum SocketEvent {
    * error en vez de una pantalla.
    */
   COMPLEX_MODULES_UPDATED = 'complex:modules:updated',
+
+  /** Cambió algo en un ticket de mantenimiento: el tablero y el mapa se repintan. */
+  MAINTENANCE_TICKET_UPDATED = 'maintenance:ticket:updated',
 
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',

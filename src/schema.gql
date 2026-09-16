@@ -140,6 +140,21 @@ enum ValidPermissions {
   CREATE_AMENITY_BOOKING
   APPROVE_AMENITY_BOOKING
   CHECK_IN_AMENITY_BOOKING
+  VIEW_PETS
+  REGISTER_PET
+  EDIT_PET
+  APPROVE_PET
+  REMOVE_PET
+  VIEW_PET_INCIDENTS
+  REPORT_PET_INCIDENT
+  MANAGE_PET_INCIDENTS
+  VIEW_MAINTENANCE_TICKETS
+  REPORT_MAINTENANCE_TICKET
+  MANAGE_MAINTENANCE_TICKETS
+  CLOSE_MAINTENANCE_TICKET
+  MANAGE_MAINTENANCE_LOCATIONS
+  MANAGE_MAINTENANCE_VENDORS
+  MANAGE_MAINTENANCE_SLA
   SUPERADMIN
 }
 
@@ -330,6 +345,33 @@ type ResidentialComplex {
 
   """Consejeros con voz pero sin voto en las reuniones del consejo"""
   votingCouncilVoiceOnlyUserIds: [String!]!
+
+  """Máximo de mascotas por unidad. 0 = sin límite"""
+  petsMaxPerUnit: Int!
+
+  """Los residentes pueden reportar incumplimientos"""
+  petsResidentReportingEnabled: Boolean!
+
+  """Días de plazo para presentar descargos"""
+  petsStatementDays: Int!
+
+  """Días de anticipación del aviso de vencimiento"""
+  petsExpiryReminderDays: Int!
+
+  """Los residentes pueden radicar tickets de mantenimiento"""
+  maintenanceResidentReportingEnabled: Boolean!
+
+  """Días para el autocierre de un reparado"""
+  maintenanceAutoCloseDays: Int!
+
+  """Días para reabrir un ticket cerrado"""
+  maintenanceReopenWindowDays: Int!
+
+  """Horas para detectar reportes duplicados"""
+  maintenanceDuplicateWindowHours: Int!
+
+  """Precisión mínima del GPS para pintar el pin (metros)"""
+  maintenanceGpsAccuracyMeters: Int!
 
   """CountryCode"""
   countryCode: Country!
@@ -1579,6 +1621,11 @@ enum AuditEntityType {
   AmenityBooking
   VotingMeeting
   VotingQuestion
+  Pet
+  PetIncident
+  MaintenanceTicket
+  MaintenanceVendor
+  MaintenanceLocationTag
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -1707,6 +1754,27 @@ enum NotificationType {
   AMENITY_BOOKING_CANCELLED
   AMENITY_BOOKING_NO_SHOW
   AMENITY_DAMAGE_CHARGED
+  PET_REGISTERED
+  PET_APPROVED
+  PET_REJECTED
+  PET_SUSPENDED
+  PET_REACTIVATED
+  PET_INCIDENT_REPORTED
+  PET_INCIDENT_VALIDATED
+  PET_INCIDENT_DISMISSED
+  PET_WARNING_ISSUED
+  PET_FINE_CHARGED
+  PET_STATEMENT_RECEIVED
+  PET_DOCUMENT_EXPIRING
+  PET_REMOVED
+  MAINTENANCE_TICKET_REPORTED
+  MAINTENANCE_TICKET_ASSIGNED
+  MAINTENANCE_TICKET_UPDATED
+  MAINTENANCE_TICKET_RESOLVED
+  MAINTENANCE_TICKET_REJECTED
+  MAINTENANCE_TICKET_REOPENED
+  MAINTENANCE_SLA_BREACHED
+  MAINTENANCE_RATING_REQUESTED
   PROFILE_UPDATED
   NEW_DEVICE_LINKED
   LOGIN_APPROVAL_REQUEST
@@ -4434,6 +4502,670 @@ type AmenityCouncilQuotaResponse {
   year: Int!
 }
 
+"""Mascota registrada por un residente"""
+type Pet {
+  id: String!
+
+  """Nombre de la mascota"""
+  name: String!
+
+  """Especie"""
+  species: PetSpecies!
+
+  """Raza"""
+  breed: String
+
+  """Color predominante"""
+  color: String
+
+  """Señas particulares (manchas, collar, cicatrices)"""
+  distinguishingMarks: String
+
+  """Sexo"""
+  sex: PetSex
+
+  """Porte"""
+  size: PetSize
+
+  """Fecha de nacimiento (aproximada si no se conoce)"""
+  birthDate: String
+
+  """URL de la foto (R2)"""
+  photoUrl: String
+
+  """Tiene microchip implantado"""
+  hasMicrochip: Boolean!
+
+  """Número del microchip"""
+  microchipCode: String
+
+  """Pertenece a una raza de manejo especial"""
+  isSpecialBreed: Boolean!
+
+  """Aseguradora de la póliza de RC extracontractual"""
+  insuranceCompany: String
+
+  """Número de la póliza de RC extracontractual"""
+  insurancePolicyNumber: String
+
+  """Vencimiento de la póliza"""
+  insuranceExpiresAt: String
+
+  """URL del carné de vacunación (R2)"""
+  vaccinationCardUrl: String
+
+  """Fecha de la última vacuna antirrábica"""
+  rabiesVaccineAt: String
+
+  """Esterilizada"""
+  sterilized: Boolean
+
+  """Estado dentro del complejo"""
+  status: PetStatus!
+
+  """Fecha de aprobación"""
+  approvedAt: DateTime
+
+  """Razón del rechazo o la suspensión"""
+  rejectionReason: String
+
+  """Notas internas de la administración"""
+  notes: String
+
+  """Residente responsable de la mascota"""
+  residentId: String
+
+  """Unidad donde vive la mascota"""
+  unitId: String!
+
+  """Complejo (multi-tenant)"""
+  complexId: String!
+  createdByUserId: String
+
+  """Usuario que aprobó o rechazó la ficha"""
+  approvedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  resident: Resident
+  unit: Unit
+  complex: ResidentialComplex
+  approvedByUser: User
+}
+
+"""Especie de la mascota"""
+enum PetSpecies {
+  """Perro"""
+  DOG
+
+  """Gato"""
+  CAT
+
+  """Otra especie (ave, roedor, reptil…)"""
+  OTHER
+}
+
+"""Sexo de la mascota"""
+enum PetSex {
+  """Macho"""
+  MALE
+
+  """Hembra"""
+  FEMALE
+
+  """Sin determinar"""
+  UNKNOWN
+}
+
+"""Porte de la mascota"""
+enum PetSize {
+  """Pequeño (hasta ~10 kg)"""
+  SMALL
+
+  """Mediano (~10 a 25 kg)"""
+  MEDIUM
+
+  """Grande (más de ~25 kg)"""
+  LARGE
+}
+
+"""Estado de la mascota dentro del complejo"""
+enum PetStatus {
+  """Esperando validación de la ficha"""
+  PENDING_APPROVAL
+
+  """Censada y autorizada"""
+  ACTIVE
+
+  """Ficha rechazada"""
+  REJECTED
+
+  """Autorización suspendida"""
+  SUSPENDED
+
+  """Retirada del complejo"""
+  REMOVED
+
+  """Fallecida"""
+  DECEASED
+}
+
+"""Descargo de la unidad ante un reporte"""
+type PetIncidentStatement {
+  id: String!
+  incidentId: String!
+
+  """Texto del descargo"""
+  text: String!
+
+  """Soportes adjuntos (R2)"""
+  imageUrls: [String!]
+  authorUserId: String
+
+  """Rol de quien responde, congelado al momento del descargo"""
+  authorRole: String
+  authorName: String
+  complexId: String!
+  createdAt: DateTime!
+  incident: PetIncident
+  author: User
+}
+
+"""Reporte de convivencia asociado a una mascota"""
+type PetIncident {
+  id: String!
+
+  """Número del reporte, consecutivo"""
+  code: String!
+  consecutive: Int!
+  type: PetIncidentType!
+  severity: PetIncidentSeverity!
+
+  """Relato de lo ocurrido"""
+  description: String!
+
+  """Fotos de evidencia (R2)"""
+  photoUrls: [String!]
+
+  """SHA-256 de cada foto, en el orden de photoUrls"""
+  photoHashes: [String!]
+
+  """Momento del hecho, según quien reporta"""
+  occurredAt: DateTime!
+
+  """Lugar del hecho (pasillo, zona verde, ascensor…)"""
+  location: String
+  lat: Float
+  lng: Float
+
+  """Mascota señalada. Null mientras no se identifique"""
+  petId: String
+
+  """Unidad señalada. Null mientras no se identifique"""
+  unitId: String
+  reportedByUserId: String
+
+  """Rol de quien reportó, congelado al radicar"""
+  reportedByRole: String
+  reportedByName: String
+
+  """Unidad desde la que se reportó"""
+  reportedByUnitId: String
+  status: PetIncidentStatus!
+  reviewedByUserId: String
+  reviewedAt: DateTime
+
+  """Vencimiento del plazo de descargos"""
+  statementDueAt: DateTime
+
+  """Decisión de la administración"""
+  resolutionNotes: String
+  resolvedAt: DateTime
+
+  """Valor de la multa cargada a la unidad"""
+  fineAmount: Float
+  fineChargeId: String
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  pet: Pet
+  unit: Unit
+  complex: ResidentialComplex
+  statements: [PetIncidentStatement!]
+}
+
+"""Motivo del reporte de convivencia"""
+enum PetIncidentType {
+  """Deposiciones no recogidas"""
+  WASTE_NOT_PICKED_UP
+
+  """Uso de zonas no autorizadas"""
+  UNAUTHORIZED_AREA
+
+  """Sin correa o sin bozal"""
+  NO_LEASH_OR_MUZZLE
+
+  """Ruido o ladridos persistentes"""
+  NOISE
+
+  """Agresión o mordedura"""
+  AGGRESSION
+
+  """Mascota suelta o sin acompañante"""
+  UNATTENDED
+
+  """Maltrato o abandono del animal"""
+  ANIMAL_ABUSE
+
+  """Otro motivo"""
+  OTHER
+}
+
+"""Gravedad del incidente reportado"""
+enum PetIncidentSeverity {
+  """Falta leve"""
+  LOW
+
+  """Falta reiterada o con molestia a terceros"""
+  MEDIUM
+
+  """Riesgo para personas o animales"""
+  HIGH
+}
+
+"""Estado del reporte de convivencia"""
+enum PetIncidentStatus {
+  """Pendiente de revisión"""
+  REPORTED
+
+  """Notificado, en plazo de descargos"""
+  UNDER_DEFENSE
+
+  """Desestimado"""
+  DISMISSED
+
+  """Resuelto con llamado de atención"""
+  WARNED
+
+  """Resuelto con multa"""
+  FINED
+}
+
+type PaginatedPetsResponse {
+  items: [Pet!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedPetIncidentsResponse {
+  items: [PetIncident!]!
+  pagination: PaginationReponse!
+}
+
+"""Anotación en la bitácora de un ticket"""
+type MaintenanceTicketEvent {
+  id: ID!
+  ticketId: String!
+  type: MaintenanceEventType!
+  message: String
+  fromStatus: MaintenanceTicketStatus
+  toStatus: MaintenanceTicketStatus
+
+  """Fotos de avance (R2)"""
+  imageUrls: [String!]
+  imageHashes: [String!]
+  isInternal: Boolean!
+  authorUserId: String
+  authorRole: String
+  authorName: String
+  complexId: String!
+  createdAt: DateTime!
+  ticket: MaintenanceTicket
+  author: User
+}
+
+"""Tipo de anotación en la bitácora del ticket"""
+enum MaintenanceEventType {
+  CREATED
+  TRIAGED
+  ASSIGNED
+  STATUS_CHANGED
+  PROGRESS
+  COMMENT
+  RESOLVED
+  REOPENED
+  CLOSED
+  RATED
+  ENDORSED
+  SLA_BREACHED
+}
+
+"""Estado del ticket en el tablero de mantenimiento"""
+enum MaintenanceTicketStatus {
+  NEW
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+  REJECTED
+  DUPLICATE
+}
+
+"""Punto de ubicación con QR o NFC dentro del complejo"""
+type MaintenanceLocationTag {
+  id: ID!
+
+  """Código impreso en el sticker"""
+  code: String!
+
+  """Nombre visible del punto"""
+  name: String!
+  description: String
+  kind: MaintenanceTagKind!
+  buildingId: String
+  floor: Int
+  amenityId: String
+  lat: Float
+  lng: Float
+  defaultCategory: MaintenanceCategory
+  isActive: Boolean!
+  complexId: String!
+  createdByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  building: Building
+  amenity: Amenity
+  complex: ResidentialComplex
+}
+
+"""Soporte físico del punto de ubicación"""
+enum MaintenanceTagKind {
+  QR
+  NFC
+  BOTH
+}
+
+"""Tipo de daño reportado en zonas comunes"""
+enum MaintenanceCategory {
+  ILUMINACION
+  ELECTRICO
+  PLOMERIA
+  ESTRUCTURA
+  ASCENSORES
+  PUERTAS_Y_ACCESOS
+  SEGURIDAD
+  ASEO
+  JARDINERIA
+  PISCINA
+  GAS
+  OTRO
+}
+
+"""Proveedor externo de mantenimiento"""
+type MaintenanceVendor {
+  id: ID!
+  name: String!
+
+  """NIT o cédula"""
+  legalId: String
+  contactName: String
+  phone: String
+  email: String
+  specialties: [MaintenanceCategory!]
+  notes: String
+  isActive: Boolean!
+  complexId: String!
+  createdByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  complex: ResidentialComplex
+}
+
+"""Ticket de mantenimiento en zonas comunes"""
+type MaintenanceTicket {
+  id: ID!
+
+  """Número del ticket, consecutivo"""
+  code: String!
+  consecutive: Int!
+
+  """Resumen corto del daño"""
+  title: String!
+  description: String!
+  category: MaintenanceCategory!
+  priority: MaintenancePriority!
+  visibility: MaintenanceVisibility!
+
+  """Fotos del daño (R2)"""
+  photoUrls: [String!]
+  photoHashes: [String!]
+
+  """Video corto del daño (R2)"""
+  videoUrl: String
+  videoHash: String
+  occurredAt: DateTime!
+  locationType: MaintenanceLocationType!
+
+  """Referencia escrita del sitio (junto al parqueadero 45)"""
+  locationText: String
+  lat: Float
+  lng: Float
+  gpsAccuracyMeters: Int
+  buildingId: String
+  floor: Int
+  amenityId: String
+  locationTagId: String
+  reportedByUserId: String
+
+  """Rol de quien reportó, congelado al radicar"""
+  reportedByRole: String
+  reportedByName: String
+  reportedByUnitId: String
+  endorsementCount: Int!
+  status: MaintenanceTicketStatus!
+  triagedByUserId: String
+  triagedAt: DateTime
+  assigneeType: MaintenanceAssigneeType
+
+  """Personal interno asignado"""
+  assignedUserId: String
+
+  """Proveedor externo asignado"""
+  vendorId: String
+  assignedByUserId: String
+  assignedAt: DateTime
+  scheduledFor: DateTime
+  slaHours: Int
+
+  """Vencimiento del SLA"""
+  slaDueAt: DateTime
+  slaBreachedAt: DateTime
+  startedAt: DateTime
+  onHoldReason: String
+  resolutionNotes: String
+
+  """Fotos de la reparación terminada (R2)"""
+  closurePhotoUrls: [String!]
+  closurePhotoHashes: [String!]
+  resolvedByUserId: String
+  resolvedAt: DateTime
+  actualCost: Float
+  closedAt: DateTime
+  closedByUserId: String
+  rejectionReason: String
+
+  """Ticket original cuando este se marcó como duplicado"""
+  duplicateOfTicketId: String
+
+  """Calificación de 1 a 5"""
+  rating: Int
+  ratingComment: String
+  ratedAt: DateTime
+  reopenCount: Int!
+  lastReopenedAt: DateTime
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  building: Building
+  amenity: Amenity
+  locationTag: MaintenanceLocationTag
+  vendor: MaintenanceVendor
+  assignedUser: User
+  reportedByUnit: Unit
+  complex: ResidentialComplex
+  events: [MaintenanceTicketEvent!]
+}
+
+"""Prioridad de atención del ticket de mantenimiento"""
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+"""Alcance de lectura del ticket dentro del complejo"""
+enum MaintenanceVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+"""Método con el que se fijó la ubicación del daño"""
+enum MaintenanceLocationType {
+  GPS
+  TAG
+  TREE
+  AMENITY
+}
+
+"""Naturaleza del responsable asignado al ticket"""
+enum MaintenanceAssigneeType {
+  INTERNAL
+  VENDOR
+}
+
+"""Plazo de atención comprometido por categoría"""
+type MaintenanceSlaConfig {
+  id: ID!
+  category: MaintenanceCategory!
+  priority: MaintenancePriority!
+
+  """Horas para asignar responsable"""
+  responseHours: Int!
+
+  """Horas para dejarlo reparado"""
+  resolutionHours: Int!
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  complex: ResidentialComplex
+}
+
+type PaginatedMaintenanceTicketsResponse {
+  items: [MaintenanceTicket!]!
+  pagination: PaginationReponse!
+}
+
+type MaintenanceBoardColumn {
+  status: MaintenanceTicketStatus!
+  total: Int!
+  tickets: [MaintenanceTicket!]!
+}
+
+type MaintenanceBoardResponse {
+  columns: [MaintenanceBoardColumn!]!
+
+  """Tickets abiertos con el SLA vencido"""
+  overdueCount: Int!
+}
+
+"""Punto del mapa de incidencias"""
+type MaintenanceMapPinResponse {
+  id: ID!
+  code: String!
+  title: String!
+  category: MaintenanceCategory!
+  priority: MaintenancePriority!
+  status: MaintenanceTicketStatus!
+  locationType: MaintenanceLocationType!
+  lat: Float!
+  lng: Float!
+  gpsAccuracyMeters: Int
+  isPrecise: Boolean!
+  isOverdue: Boolean!
+  endorsementCount: Int!
+  createdAt: DateTime!
+}
+
+"""Concentración de incidencias por sitio"""
+type MaintenanceHeatmapCell {
+  """Identificador del sitio agrupado"""
+  key: String!
+
+  """Nombre visible del sitio"""
+  label: String!
+  total: Int!
+
+  """Los que siguen sin resolver"""
+  openCount: Int!
+
+  """Los que vencieron su plazo"""
+  overdueCount: Int!
+
+  """Categoría que más se repite en el sitio"""
+  topCategory: MaintenanceCategory
+  lat: Float
+  lng: Float
+}
+
+type MaintenanceStatusCount {
+  status: MaintenanceTicketStatus!
+  count: Int!
+}
+
+type MaintenanceCategoryCount {
+  category: MaintenanceCategory!
+  count: Int!
+}
+
+"""Resumen de mantenimiento del complejo"""
+type MaintenanceStatsResponse {
+  totalTickets: Int!
+  openTickets: Int!
+  overdueTickets: Int!
+  byStatus: [MaintenanceStatusCount!]!
+  byCategory: [MaintenanceCategoryCount!]!
+
+  """Horas promedio entre radicar y resolver"""
+  averageResolutionHours: Float
+
+  """Porcentaje de resueltos dentro del plazo"""
+  slaComplianceRate: Float
+
+  """Calificación promedio"""
+  averageRating: Float
+  ratedTickets: Int!
+
+  """Costo acumulado de las reparaciones cerradas"""
+  totalCost: Float
+}
+
+"""Opciones de ubicación para radicar un ticket"""
+type MaintenanceReportOptionsResponse {
+  buildings: [Building!]!
+  amenities: [Amenity!]!
+  tags: [MaintenanceLocationTag!]!
+  residentReportingEnabled: Boolean!
+
+  """Error máximo del GPS aceptado como ubicación confiable"""
+  gpsAccuracyMeters: Int!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -4633,6 +5365,25 @@ type Query {
 
   """El consejo y quién tiene voto"""
   votingCouncilMembers(complexId: String!): [VotingCouncilMember!]!
+  pets(complexId: String!, pagination: PaginationInput, filters: FilterPetsInput): PaginatedPetsResponse!
+  myPets(complexId: String!): [Pet!]!
+  petsByUnit(unitId: String!): [Pet!]!
+  pet(id: String!): Pet!
+  petIncidents(complexId: String!, pagination: PaginationInput, filters: FilterPetIncidentsInput): PaginatedPetIncidentsResponse!
+  petIncident(id: String!): PetIncident!
+  petIncidentsByPet(petId: String!): [PetIncident!]!
+  maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
+  maintenanceTicket(id: String!): MaintenanceTicket!
+  maintenanceBoard(complexId: String!, filters: FilterMaintenanceTicketsInput): MaintenanceBoardResponse!
+  maintenanceMapPins(complexId: String!, filters: FilterMaintenanceTicketsInput): [MaintenanceMapPinResponse!]!
+  maintenanceHeatmap(complexId: String!, days: Int = 90): [MaintenanceHeatmapCell!]!
+  maintenanceStats(complexId: String!, days: Int = 90): MaintenanceStatsResponse!
+  maintenanceDuplicateCandidates(input: CheckMaintenanceDuplicateInput!): [MaintenanceTicket!]!
+  maintenanceLocationTags(complexId: String!, onlyActive: Boolean = true): [MaintenanceLocationTag!]!
+  maintenanceReportOptions(complexId: String!): MaintenanceReportOptionsResponse!
+  maintenanceLocationTagByCode(complexId: String!, code: String!): MaintenanceLocationTag!
+  maintenanceVendors(complexId: String!, onlyActive: Boolean = true): [MaintenanceVendor!]!
+  maintenanceSlaConfigs(complexId: String!): [MaintenanceSlaConfig!]!
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
@@ -4958,6 +5709,71 @@ input FilterPqrfInput {
 
   """Busca en el número de radicado y en el asunto"""
   search: String
+}
+
+input FilterPetsInput {
+  """Busca por nombre, raza, color o microchip"""
+  search: String
+  status: PetStatus
+  species: PetSpecies
+
+  """Solo razas de manejo especial"""
+  isSpecialBreed: Boolean
+  unitId: String
+  residentId: String
+}
+
+input FilterPetIncidentsInput {
+  """Busca por número del reporte o por el relato"""
+  search: String
+  status: PetIncidentStatus
+  type: PetIncidentType
+  severity: PetIncidentSeverity
+  petId: String
+  unitId: String
+
+  """Solo los reportes sin mascota identificada"""
+  onlyUnidentified: String
+  dateFrom: String
+  dateTo: String
+}
+
+input FilterMaintenanceTicketsInput {
+  """Busca por número del ticket, título o descripción"""
+  search: String
+
+  """Varios estados a la vez: el tablero pide columnas, no una"""
+  statuses: [MaintenanceTicketStatus!]
+  category: MaintenanceCategory
+  priority: MaintenancePriority
+  buildingId: String
+  amenityId: String
+  locationTagId: String
+  assigneeType: MaintenanceAssigneeType
+  assignedUserId: String
+  vendorId: String
+  onlyOverdue: Boolean
+  onlyUnassigned: Boolean
+  onlyMine: Boolean
+
+  """Calificación exacta 1-5"""
+  rating: Int
+  dateFrom: String
+  dateTo: String
+}
+
+input CheckMaintenanceDuplicateInput {
+  complexId: String!
+  category: MaintenanceCategory!
+  locationType: MaintenanceLocationType!
+  locationTagCode: String
+  buildingId: String
+  floor: Int
+  amenityId: String
+  lat: Float
+  lng: Float
+  gpsAccuracyMeters: Int
+  locationText: String
 }
 
 type Mutation {
@@ -5358,6 +6174,34 @@ type Mutation {
 
   """Un voto por unidad (asamblea) o por consejero"""
   castVote(questionId: String!, optionId: String!): VotingQuestion!
+  updatePet(input: UpdatePetInput!): Pet!
+  approvePet(input: ApprovePetInput!): Pet!
+  rejectPet(petId: String!, reason: String!): Pet!
+  suspendPet(petId: String!, reason: String!): Pet!
+  reactivatePet(petId: String!): Pet!
+  removePet(petId: String!, reason: String): Boolean!
+  validatePetIncident(input: ValidatePetIncidentInput!): PetIncident!
+  dismissPetIncident(incidentId: String!, reason: String!): PetIncident!
+  sanctionPetIncident(input: SanctionPetIncidentInput!): PetIncident!
+  addPetIncidentStatement(input: CreatePetIncidentStatementInput!): PetIncident!
+  triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
+  assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
+  changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
+  rejectMaintenanceTicket(ticketId: String!, reason: String!): MaintenanceTicket!
+  markMaintenanceTicketDuplicate(ticketId: String!, originalTicketId: String!): MaintenanceTicket!
+  closeMaintenanceTicket(ticketId: String!): MaintenanceTicket!
+  endorseMaintenanceTicket(ticketId: String!, comment: String): MaintenanceTicket!
+  addMaintenanceComment(input: AddMaintenanceCommentInput!): MaintenanceTicket!
+  rateMaintenanceTicket(input: RateMaintenanceTicketInput!): MaintenanceTicket!
+  reopenMaintenanceTicket(ticketId: String!, reason: String!): MaintenanceTicket!
+  createMaintenanceLocationTag(input: CreateMaintenanceLocationTagInput!): MaintenanceLocationTag!
+  updateMaintenanceLocationTag(input: UpdateMaintenanceLocationTagInput!): MaintenanceLocationTag!
+  deactivateMaintenanceLocationTag(id: String!): MaintenanceLocationTag!
+  createMaintenanceVendor(input: CreateMaintenanceVendorInput!): MaintenanceVendor!
+  updateMaintenanceVendor(input: UpdateMaintenanceVendorInput!): MaintenanceVendor!
+  deactivateMaintenanceVendor(id: String!): MaintenanceVendor!
+  upsertMaintenanceSla(input: UpsertMaintenanceSlaInput!): MaintenanceSlaConfig!
+  removeMaintenanceSla(id: String!): Boolean!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -7045,4 +7889,188 @@ input UpdateVotingQuestionInput {
   weighting: VoteWeighting
   secrecy: VoteSecrecy
   options: [String!]
+}
+
+input UpdatePetInput {
+  petId: String!
+  name: String
+  species: PetSpecies
+  breed: String
+  color: String
+
+  """Señas particulares"""
+  distinguishingMarks: String
+  sex: PetSex
+  size: PetSize
+  birthDate: String
+  hasMicrochip: Boolean
+  microchipCode: String
+  isSpecialBreed: Boolean
+  insuranceCompany: String
+  insurancePolicyNumber: String
+  insuranceExpiresAt: String
+  rabiesVaccineAt: String
+  sterilized: Boolean
+  notes: String
+}
+
+input ApprovePetInput {
+  petId: String!
+
+  """Notas internas de la administración"""
+  notes: String
+}
+
+input ValidatePetIncidentInput {
+  incidentId: String!
+
+  """Mascota a la que se le atribuye el hecho"""
+  petId: String
+
+  """Unidad responsable. Se deduce de la mascota si se envía"""
+  unitId: String
+
+  """Permite corregir la gravedad que puso quien reportó"""
+  severity: PetIncidentSeverity
+  notes: String
+}
+
+input SanctionPetIncidentInput {
+  incidentId: String!
+
+  """Llamado de atención o multa"""
+  sanction: PetSanction!
+
+  """Valor de la multa. Requerido si sanction = FINE"""
+  fineAmount: Float
+
+  """Motivación de la decisión"""
+  resolutionNotes: String!
+}
+
+"""Sanción con la que se cierra un reporte validado"""
+enum PetSanction {
+  """Llamado de atención"""
+  WARNING
+
+  """Multa cargada a la unidad"""
+  FINE
+}
+
+input CreatePetIncidentStatementInput {
+  incidentId: String!
+
+  """Respuesta de la unidad"""
+  text: String!
+}
+
+input TriageMaintenanceTicketInput {
+  ticketId: String!
+  category: MaintenanceCategory
+  priority: MaintenancePriority
+  visibility: MaintenanceVisibility
+
+  """Horas de SLA para este ticket. Si no llega, la política del complejo"""
+  slaHours: Int
+  notes: String
+}
+
+input AssignMaintenanceTicketInput {
+  ticketId: String!
+  assigneeType: MaintenanceAssigneeType!
+  assignedUserId: String
+  vendorId: String
+  scheduledFor: DateTime
+  notes: String
+}
+
+input ChangeMaintenanceStatusInput {
+  ticketId: String!
+  status: MaintenanceTicketStatus!
+  message: String
+}
+
+input AddMaintenanceCommentInput {
+  ticketId: String!
+  message: String!
+  isInternal: Boolean = false
+}
+
+input RateMaintenanceTicketInput {
+  ticketId: String!
+
+  """De 1 a 5"""
+  rating: Int!
+  comment: String
+}
+
+input CreateMaintenanceLocationTagInput {
+  complexId: String!
+  code: String!
+  name: String!
+  description: String
+  kind: MaintenanceTagKind
+  buildingId: String
+
+  """Negativo para sótanos"""
+  floor: Int
+  amenityId: String
+  lat: Float
+  lng: Float
+  defaultCategory: MaintenanceCategory
+}
+
+input UpdateMaintenanceLocationTagInput {
+  name: String
+  description: String
+  kind: MaintenanceTagKind
+  buildingId: String
+
+  """Negativo para sótanos"""
+  floor: Int
+  amenityId: String
+  lat: Float
+  lng: Float
+  defaultCategory: MaintenanceCategory
+  id: String!
+  isActive: Boolean
+}
+
+input CreateMaintenanceVendorInput {
+  complexId: String!
+  name: String!
+
+  """NIT o cédula"""
+  legalId: String
+  contactName: String
+  phone: String
+  email: String
+  specialties: [MaintenanceCategory!]
+  notes: String
+}
+
+input UpdateMaintenanceVendorInput {
+  name: String
+
+  """NIT o cédula"""
+  legalId: String
+  contactName: String
+  phone: String
+  email: String
+  specialties: [MaintenanceCategory!]
+  notes: String
+  id: String!
+  isActive: Boolean
+}
+
+input UpsertMaintenanceSlaInput {
+  complexId: String!
+  category: MaintenanceCategory!
+  priority: MaintenancePriority!
+
+  """Horas para asignar responsable"""
+  responseHours: Int!
+
+  """Horas para dejarlo reparado"""
+  resolutionHours: Int!
 }

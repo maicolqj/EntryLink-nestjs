@@ -340,6 +340,59 @@ export enum ValidPermissions {
   /** Registrar ingreso y salida a la zona común en portería. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITY_BOOKINGS] */
   CHECK_IN_AMENITY_BOOKING = 'CHECK_IN_AMENITY_BOOKING',
 
+  // ═══════════════════════════════════════════════════════
+  // MASCOTAS Y CONVIVENCIA
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver el censo de mascotas del complejo. ➜ Nivel: [LOW] */
+  VIEW_PETS = 'VIEW_PETS',
+
+  /** Registrar una mascota. Lo tiene el residente. ➜ Nivel: [LOW] */
+  REGISTER_PET = 'REGISTER_PET',
+
+  /** Editar la ficha de una mascota. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PETS] */
+  EDIT_PET = 'EDIT_PET',
+
+  /** Aprobar, rechazar o suspender fichas de mascotas. ➜ Nivel: [HIGH] | Requiere: [VIEW_PETS] */
+  APPROVE_PET = 'APPROVE_PET',
+
+  /** Retirar una mascota del censo. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PETS] */
+  REMOVE_PET = 'REMOVE_PET',
+
+  /** Ver los reportes de convivencia. ➜ Nivel: [LOW] */
+  VIEW_PET_INCIDENTS = 'VIEW_PET_INCIDENTS',
+
+  /** Reportar un incumplimiento. Lo tiene cualquier residente y la portería. ➜ Nivel: [LOW] */
+  REPORT_PET_INCIDENT = 'REPORT_PET_INCIDENT',
+
+  /** Validar, desestimar y sancionar reportes. ➜ Nivel: [HIGH] | Requiere: [VIEW_PET_INCIDENTS] */
+  MANAGE_PET_INCIDENTS = 'MANAGE_PET_INCIDENTS',
+
+  // ═══════════════════════════════════════════════════════
+  // MANTENIMIENTO DE ZONAS COMUNES
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver los tickets de mantenimiento. ➜ Nivel: [LOW] */
+  VIEW_MAINTENANCE_TICKETS = 'VIEW_MAINTENANCE_TICKETS',
+
+  /** Reportar un daño en zonas comunes. Lo tiene el residente y la portería. ➜ Nivel: [LOW] */
+  REPORT_MAINTENANCE_TICKET = 'REPORT_MAINTENANCE_TICKET',
+
+  /** Revisar, asignar y mover tickets en el tablero. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_TICKETS = 'MANAGE_MAINTENANCE_TICKETS',
+
+  /** Cerrar un ticket sin esperar la confirmación del residente. ➜ Nivel: [MEDIUM] | Requiere: [MANAGE_MAINTENANCE_TICKETS] */
+  CLOSE_MAINTENANCE_TICKET = 'CLOSE_MAINTENANCE_TICKET',
+
+  /** Administrar los puntos QR/NFC del conjunto. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_LOCATIONS = 'MANAGE_MAINTENANCE_LOCATIONS',
+
+  /** Administrar el directorio de proveedores externos. ➜ Nivel: [HIGH] | Requiere: [VIEW_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_VENDORS = 'MANAGE_MAINTENANCE_VENDORS',
+
+  /** Definir los plazos de atención comprometidos. ➜ Nivel: [HIGH] | Requiere: [MANAGE_MAINTENANCE_TICKETS] */
+  MANAGE_MAINTENANCE_SLA = 'MANAGE_MAINTENANCE_SLA',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }

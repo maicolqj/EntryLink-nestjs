@@ -1367,6 +1367,63 @@ export class AccountingService {
       createdByUserId: string;
     },
   ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
+    return this.emitOtherIncomeUnitCharge(em, params, {
+      invoiceMemo: 'Factura zona común',
+      debitMemo: 'Causación zona común',
+      creditMemo: 'Ingreso zona común',
+    });
+  }
+
+  /**
+   * Multa de convivencia por mascotas cargada a la cuenta de la unidad.
+   *
+   * Va por el mismo camino que el cobro de zonas comunes —la 4295 se llama
+   * justamente "otros ingresos (multas, zonas comunes)"— pero con memos
+   * propios: en los libros tiene que poder distinguirse una multa de una
+   * tarifa de salón, porque no se discuten ni se exoneran igual.
+   *
+   * El número del reporte va dentro de `description` y termina en el estado de
+   * cuenta: la unidad sabe qué expediente le están cobrando.
+   */
+  async emitPetFineCharge(
+    em: EntityManager,
+    params: {
+      complexId: string;
+      unitId: string;
+      amount: number;
+      period: string;
+      dueDate: Date;
+      documentDate: Date;
+      description: string;
+      createdByUserId: string;
+    },
+  ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
+    return this.emitOtherIncomeUnitCharge(em, params, {
+      invoiceMemo: 'Multa de convivencia',
+      debitMemo: 'Causación multa de convivencia',
+      creditMemo: 'Ingreso por multa de convivencia',
+    });
+  }
+
+  /**
+   * Cuerpo común de los cargos a la unidad que se reconocen contra la 4295.
+   * Los memos los pone quien llama: es lo único que cambia entre un daño en el
+   * salón social y una multa por mascotas.
+   */
+  private async emitOtherIncomeUnitCharge(
+    em: EntityManager,
+    params: {
+      complexId: string;
+      unitId: string;
+      amount: number;
+      period: string;
+      dueDate: Date;
+      documentDate: Date;
+      description: string;
+      createdByUserId: string;
+    },
+    memos: { invoiceMemo: string; debitMemo: string; creditMemo: string },
+  ): Promise<{ chargeId: string; accountingHeaderId: string | null }> {
     const amount = round2(params.amount);
 
     const incomeAcc = await this.ensureCommonAreaIncomeAccount(
@@ -1388,7 +1445,7 @@ export class AccountingService {
         ))
           throw e;
         this.logger.warn(
-          `[amenityUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`,
+          `[otherIncomeUnitCharge] PUC no configurado para complejo ${params.complexId}; factura omitida`,
         );
       }
     }
@@ -1424,7 +1481,7 @@ export class AccountingService {
         consecutive,
         documentDate: params.documentDate,
         period: params.period,
-        memo: `Factura zona común — ${params.description}`,
+        memo: `${memos.invoiceMemo} — ${params.description}`,
         totalDebit: amount,
         totalCredit: amount,
         createdByUserId: params.createdByUserId,
@@ -1435,7 +1492,7 @@ export class AccountingService {
             pucAccountId: receivableAcc.id,
             debit: amount,
             credit: 0,
-            memo: `Causación zona común — ${params.description}`,
+            memo: `${memos.debitMemo} — ${params.description}`,
             unitId: params.unitId,
             complexId: params.complexId,
           },
@@ -1443,7 +1500,7 @@ export class AccountingService {
             pucAccountId: incomeAcc.id,
             debit: 0,
             credit: amount,
-            memo: `Ingreso zona común — ${params.description}`,
+            memo: `${memos.creditMemo} — ${params.description}`,
             unitId: params.unitId,
             complexId: params.complexId,
           },
