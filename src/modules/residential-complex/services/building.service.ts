@@ -5,14 +5,17 @@ import { UnitStatus } from '../enums/unit-status.enum';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 
-import { Building }               from '../entities/building.entity';
-import { CreateBuildingInput }    from '../dto/inputs/create-building.input';
-import { UpdateBuildingInput }    from '../dto/inputs/update-building.input';
+import { Building } from '../entities/building.entity';
+import { CreateBuildingInput } from '../dto/inputs/create-building.input';
+import { UpdateBuildingInput } from '../dto/inputs/update-building.input';
 import { PaginatedBuildingsResponse } from '../dto/responses/paginated-buildings.response';
-import { PaginationInput }        from '../../shared/dto/inputs/pagination.input';
-import { CustomError }            from '../../shared/utils/errors.utils';
-import { ComplexErrorCode, GeneralErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }       from '../../shared/interfaces/jwt-payload.interface';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import {
+  ComplexErrorCode,
+  GeneralErrorCode,
+} from '../../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from './residential-complex.service';
 
 @Injectable()
@@ -36,20 +39,24 @@ export class BuildingService {
   ): Promise<Building> {
     if (!input.complexId) {
       throw new CustomError({
-        message: 'Debe especificar el ID del complejo (complexId) en el que desea crear la torre',
+        message:
+          'Debe especificar el ID del complejo (complexId) en el que desea crear la torre',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
 
     // Verificar que el complejo exista y el usuario tenga acceso
-    const complex = await this.complexService.findById(input.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      input.complexId,
+      currentUser,
+    );
 
     // Verificar nombre único dentro del complejo
     const existing = await this.buildingRepo.findOne({
       where: {
         complexId: input.complexId,
-        name:      input.name.toUpperCase().trim(),
+        name: input.name.toUpperCase().trim(),
         deletedAt: IsNull(),
       },
     });
@@ -63,9 +70,11 @@ export class BuildingService {
     }
 
     const building = this.buildingRepo.create(input);
-    const saved    = await this.buildingRepo.save(building);
+    const saved = await this.buildingRepo.save(building);
     await this.cacheService.deleteByPrefix(BK.building.prefix(input.complexId));
-    this.logger.log(`Torre creada: ${saved.id} — "${saved.name}" en complejo ${input.complexId}`);
+    this.logger.log(
+      `Torre creada: ${saved.id} — "${saved.name}" en complejo ${input.complexId}`,
+    );
     return saved;
   }
 
@@ -82,7 +91,9 @@ export class BuildingService {
 
     const { page, limit } = pagination;
     const cacheKey = BK.building.list(complexId, page, limit);
-    const cached = await this.cacheService.get<PaginatedBuildingsResponse>({ key: cacheKey });
+    const cached = await this.cacheService.get<PaginatedBuildingsResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const skip = (page - 1) * limit;
@@ -107,16 +118,20 @@ export class BuildingService {
     const result: PaginatedBuildingsResponse = {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
 
-    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.building.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: result,
+      options: { ttl: BK.building.TTL },
+    });
     return result;
   }
 
@@ -124,12 +139,9 @@ export class BuildingService {
   // BUSCAR POR ID
   // ================================================================
 
-  async findById(
-    id: string,
-    currentUser: JwtAccessPayload,
-  ): Promise<Building> {
+  async findById(id: string, currentUser: JwtAccessPayload): Promise<Building> {
     const building = await this.buildingRepo.findOne({
-      where:     { id, deletedAt: IsNull() },
+      where: { id, deletedAt: IsNull() },
       relations: ['complex', 'units'],
     });
 
@@ -161,7 +173,7 @@ export class BuildingService {
       const conflict = await this.buildingRepo.findOne({
         where: {
           complexId: building.complexId,
-          name:      input.name.toUpperCase().trim(),
+          name: input.name.toUpperCase().trim(),
           deletedAt: IsNull(),
         },
       });
@@ -189,7 +201,7 @@ export class BuildingService {
     id: string,
     currentUser: JwtAccessPayload,
   ): Promise<Building> {
-    const building  = await this.findById(id, currentUser);
+    const building = await this.findById(id, currentUser);
     building.status = !building.status;
     const saved = await this.buildingRepo.save(building);
     await this.cacheService.deleteByPrefix(BK.building.prefix(saved.complexId));
@@ -208,9 +220,14 @@ export class BuildingService {
 
     building.deletedAt = new Date();
     await this.buildingRepo.save(building);
-    await this.cacheService.deleteByPrefix(BK.building.prefix(building.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.building.prefix(building.complexId),
+    );
     this.logger.warn(`Torre eliminada (soft): ${id}`);
 
-    return { success: true, message: `Torre "${building.name}" eliminada correctamente` };
+    return {
+      success: true,
+      message: `Torre "${building.name}" eliminada correctamente`,
+    };
   }
 }

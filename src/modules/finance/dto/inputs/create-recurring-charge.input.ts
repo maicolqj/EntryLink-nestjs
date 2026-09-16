@@ -1,7 +1,17 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
-  IsUUID, IsPositive, IsNotEmpty, IsOptional, IsString,
-  MaxLength, IsEnum, IsInt, Min, Max, IsBoolean, IsArray,
+  IsUUID,
+  IsPositive,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsEnum,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+  IsArray,
 } from 'class-validator';
 
 import { Type } from 'class-transformer';
@@ -15,7 +25,6 @@ import { FeeConfigTargetRulesInput } from './fee-config-target-rules.input';
 
 @InputType()
 export class CreateRecurringChargeInput {
-
   @Field()
   @IsUUID()
   complexId: string;
@@ -53,7 +62,10 @@ export class CreateRecurringChargeInput {
    * Modo de facturación. ARREARS (mes vencido) por defecto: vence el `billingDay`
    * del mes siguiente al causado, así un cargo causado hoy no nace vencido.
    */
-  @Field(() => FeeConfigBillingMode, { nullable: true, defaultValue: FeeConfigBillingMode.ARREARS })
+  @Field(() => FeeConfigBillingMode, {
+    nullable: true,
+    defaultValue: FeeConfigBillingMode.ARREARS,
+  })
   @IsOptional()
   @IsEnum(FeeConfigBillingMode)
   billingMode?: FeeConfigBillingMode;
@@ -76,13 +88,19 @@ export class CreateRecurringChargeInput {
   prorateByCoefficient?: boolean;
 
   /** Método de reparto. Default FIXED_PER_UNIT (el monto es por cada unidad). */
-  @Field(() => RecurringChargeDistribution, { nullable: true, defaultValue: RecurringChargeDistribution.FIXED_PER_UNIT })
+  @Field(() => RecurringChargeDistribution, {
+    nullable: true,
+    defaultValue: RecurringChargeDistribution.FIXED_PER_UNIT,
+  })
   @IsOptional()
   @IsEnum(RecurringChargeDistribution)
   distribution?: RecurringChargeDistribution;
 
   /** Asignación: MANUAL (segmentada) o VEHICLE (por cada vehículo activo). */
-  @Field(() => RecurringChargeTrigger, { nullable: true, defaultValue: RecurringChargeTrigger.MANUAL })
+  @Field(() => RecurringChargeTrigger, {
+    nullable: true,
+    defaultValue: RecurringChargeTrigger.MANUAL,
+  })
   @IsOptional()
   @IsEnum(RecurringChargeTrigger)
   triggerType?: RecurringChargeTrigger;

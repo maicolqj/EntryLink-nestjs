@@ -41,7 +41,10 @@ export class DeviceApprovalResolver {
     @Args('identity', { type: () => String }) identity: string,
     @Context() context: any,
   ): Promise<DeviceApprovalResponse> {
-    return this.deviceApprovalService.requestApproval(identity, this.deviceInfo(context));
+    return this.deviceApprovalService.requestApproval(
+      identity,
+      this.deviceInfo(context),
+    );
   }
 
   @Public()
@@ -55,7 +58,10 @@ export class DeviceApprovalResolver {
     @Args('challengeId', { type: () => ID }) challengeId: string,
     @Context() context: any,
   ): Promise<DeviceApprovalStatusResponse> {
-    return this.deviceApprovalService.getStatus(challengeId, this.deviceInfo(context));
+    return this.deviceApprovalService.getStatus(
+      challengeId,
+      this.deviceInfo(context),
+    );
   }
 
   @Public()
@@ -67,10 +73,15 @@ export class DeviceApprovalResolver {
   })
   async redeemDeviceApproval(
     @Args('challengeId', { type: () => ID }) challengeId: string,
-    @Args('accessCode', { type: () => String, nullable: true }) accessCode: string | undefined,
+    @Args('accessCode', { type: () => String, nullable: true })
+    accessCode: string | undefined,
     @Context() context: any,
   ): Promise<AuthResponse> {
-    return this.deviceApprovalService.redeem(challengeId, this.deviceInfo(context), accessCode);
+    return this.deviceApprovalService.redeem(
+      challengeId,
+      this.deviceInfo(context),
+      accessCode,
+    );
   }
 
   // ── Dispositivo de confianza (con sesión) ─────────────────────────────────
@@ -98,22 +109,34 @@ export class DeviceApprovalResolver {
     @Args('approvalId', { type: () => ID }) approvalId: string,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<boolean> {
-    return this.deviceApprovalService.approve(approvalId, payload.sub, payload.sessionId);
+    return this.deviceApprovalService.approve(
+      approvalId,
+      payload.sub,
+      payload.sessionId,
+    );
   }
 
   @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
   @Mutation(() => Boolean, {
     name: 'denyDeviceApproval',
-    description: 'Rechaza el ingreso. Es terminal: el solicitante debe pedir una nueva autorización.',
+    description:
+      'Rechaza el ingreso. Es terminal: el solicitante debe pedir una nueva autorización.',
   })
   async denyDeviceApproval(
     @Args('approvalId', { type: () => ID }) approvalId: string,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<boolean> {
-    return this.deviceApprovalService.deny(approvalId, payload.sub, payload.sessionId);
+    return this.deviceApprovalService.deny(
+      approvalId,
+      payload.sub,
+      payload.sessionId,
+    );
   }
 
   private deviceInfo(context: any) {
-    return buildDeviceInfo(context, this.configService.getOrThrow<string>('FINGERPRINT_SECRET'));
+    return buildDeviceInfo(
+      context,
+      this.configService.getOrThrow<string>('FINGERPRINT_SECRET'),
+    );
   }
 }

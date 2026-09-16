@@ -30,12 +30,13 @@ import { Amenity } from './amenity.entity';
  * copropiedad decide qué días son especiales, y no siempre coinciden con los
  * festivos oficiales.
  */
-@ObjectType({ description: 'Horario especial de una zona común para una fecha puntual' })
+@ObjectType({
+  description: 'Horario especial de una zona común para una fecha puntual',
+})
 @Entity({ name: 'amenity_schedule_exceptions' })
 @Index(['amenityId', 'date'], { unique: true })
 @Index(['complexId', 'date'])
 export class AmenityScheduleException {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -62,12 +63,18 @@ export class AmenityScheduleException {
   @Column({ type: 'date' })
   date: string;
 
-  @Field(() => Boolean, { description: 'true: la zona no abre ese día, sin importar el horario semanal' })
+  @Field(() => Boolean, {
+    description:
+      'true: la zona no abre ese día, sin importar el horario semanal',
+  })
   @Column({ name: 'is_closed', type: 'boolean', default: false })
   isClosed: boolean;
 
   /** Null cuando `isClosed`. Hora de pared, como el horario semanal. */
-  @Field(() => String, { nullable: true, description: 'Hora de apertura HH:mm' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Hora de apertura HH:mm',
+  })
   @Column({ name: 'open_time', type: 'time', nullable: true })
   openTime?: string | null;
 

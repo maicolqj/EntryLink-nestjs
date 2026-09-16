@@ -2,9 +2,9 @@ import { registerEnumType } from '@nestjs/graphql';
 
 export enum CallOutcome {
   ANSWERED = 'ANSWERED',
-  MISSED   = 'MISSED',
+  MISSED = 'MISSED',
   REJECTED = 'REJECTED',
-  FAILED   = 'FAILED',
+  FAILED = 'FAILED',
 }
 
 registerEnumType(CallOutcome, {

@@ -3,7 +3,6 @@ import { IsString, IsNotEmpty, Matches } from 'class-validator';
 
 @InputType()
 export class GenerateChargesInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

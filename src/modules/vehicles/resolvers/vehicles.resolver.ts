@@ -1,27 +1,26 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { Vehicle }                   from '../entities/vehicle.entity';
-import { VehiclesService }           from '../services/vehicles.service';
-import { RegisterVehicleInput }      from '../dto/inputs/register-vehicle.input';
-import { UpdateVehicleInput }        from '../dto/inputs/update-vehicle.input';
-import { FilterVehiclesInput }       from '../dto/inputs/filter-vehicles.input';
-import { ApproveVehicleInput }       from '../dto/inputs/approve-vehicle.input';
+import { Vehicle } from '../entities/vehicle.entity';
+import { VehiclesService } from '../services/vehicles.service';
+import { RegisterVehicleInput } from '../dto/inputs/register-vehicle.input';
+import { UpdateVehicleInput } from '../dto/inputs/update-vehicle.input';
+import { FilterVehiclesInput } from '../dto/inputs/filter-vehicles.input';
+import { ApproveVehicleInput } from '../dto/inputs/approve-vehicle.input';
 import { PaginatedVehiclesResponse } from '../dto/responses/paginated-vehicles.response';
-import { ConfigureRotationInput }    from '../dto/inputs/configure-rotation.input';
-import { ParkingRotationConfig }     from '../entities/parking-rotation-config.entity';
-import { RotationStatusResponse }    from '../dto/responses/rotation-status.response';
-import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
+import { ConfigureRotationInput } from '../dto/inputs/configure-rotation.input';
+import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
+import { RotationStatusResponse } from '../dto/responses/rotation-status.response';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
 
 @Resolver(() => Vehicle)
 export class VehiclesResolver {
-
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   // ================================================================
@@ -35,7 +34,11 @@ export class VehiclesResolver {
    */
   @Mutation(() => Vehicle, { name: 'registerVehicle' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.RESIDENT_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_VEHICLE],
   })
   register(
@@ -51,7 +54,11 @@ export class VehiclesResolver {
    */
   @Mutation(() => Vehicle, { name: 'updateVehicle' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.RESIDENT_ROL,
+    ],
     permissions: [ValidPermissions.EDIT_VEHICLE],
   })
   update(
@@ -101,12 +108,16 @@ export class VehiclesResolver {
    */
   @Mutation(() => Vehicle, { name: 'suspendVehicle' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
     permissions: [ValidPermissions.APPROVE_VEHICLE],
   })
   suspend(
     @Args('vehicleId') vehicleId: string,
-    @Args('reason')    reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Vehicle> {
     return this.vehiclesService.suspend(vehicleId, reason, currentUser);
@@ -117,7 +128,11 @@ export class VehiclesResolver {
    */
   @Mutation(() => Vehicle, { name: 'reactivateVehicle' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ],
     permissions: [ValidPermissions.APPROVE_VEHICLE],
   })
   reactivate(
@@ -132,7 +147,11 @@ export class VehiclesResolver {
    */
   @Mutation(() => Boolean, { name: 'removeVehicle' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.RESIDENT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.RESIDENT_ROL,
+    ],
     permissions: [ValidPermissions.REMOVE_VEHICLE],
   })
   async remove(
@@ -153,19 +172,27 @@ export class VehiclesResolver {
   @Query(() => PaginatedVehiclesResponse, { name: 'vehicles' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.ACCOUNTANT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VEHICLES],
   })
   findByComplex(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterVehiclesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterVehiclesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedVehiclesResponse> {
-    return this.vehiclesService.findByComplex(complexId, pagination, filters, currentUser);
+    return this.vehiclesService.findByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   /**
@@ -174,8 +201,10 @@ export class VehiclesResolver {
   @Query(() => [Vehicle], { name: 'vehiclesByResident' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.RESIDENT_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VEHICLES],
   })
@@ -208,13 +237,15 @@ export class VehiclesResolver {
   @Query(() => PlateCheckResponse, { name: 'checkPlate' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.SECURITY_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
     ],
     permissions: [ValidPermissions.CHECK_PLATE],
   })
   checkPlate(
-    @Args('plate')     plate: string,
+    @Args('plate') plate: string,
     @Args('complexId') complexId: string,
   ): Promise<PlateCheckResponse> {
     return this.vehiclesService.checkPlate(plate, complexId);
@@ -226,8 +257,10 @@ export class VehiclesResolver {
   @Query(() => Vehicle, { name: 'vehicle' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.SECURITY_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_VEHICLES],
@@ -270,10 +303,12 @@ export class VehiclesResolver {
   @Query(() => RotationStatusResponse, { name: 'rotationStatus' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,  ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
     ],
-    permissions: [ValidPermissions.VIEW_ROTATION], 
+    permissions: [ValidPermissions.VIEW_ROTATION],
   })
   rotationStatus(
     @Args('complexId') complexId: string,

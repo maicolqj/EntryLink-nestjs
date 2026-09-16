@@ -13,7 +13,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente: `ADD VALUE IF NOT EXISTS` (PG 12+).
  */
 export class AddSecurityCallRequestNotificationType1781001500000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const [{ exists }] = await queryRunner.query(
       `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notifications_type_enum') AS exists`,

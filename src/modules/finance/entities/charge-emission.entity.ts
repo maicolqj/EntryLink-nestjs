@@ -1,15 +1,20 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 
 import { ChargeEmissionStatus } from '../enums/charge-emission-status.enum';
 import { FeeConfigBillingMode } from '../enums/fee-config-billing-mode.enum';
-import { ChargeRule }          from '../dto/inputs/charge-rule.input';
-import { ResidentialComplex }  from '../../residential-complex/entities/residential-complex.entity';
-import { ChargeCategory }      from './charge-category.entity';
+import { ChargeRule } from '../dto/inputs/charge-rule.input';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { ChargeCategory } from './charge-category.entity';
 
 /**
  * Emisión de un cargo en un período (ej. "Cuota de Administración 2025-03").
@@ -28,7 +33,6 @@ import { ChargeCategory }      from './charge-category.entity';
 @Index(['complexId', 'period'])
 @Index(['complexId', 'conceptName', 'period'], { unique: true })
 export class ChargeEmission {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -50,7 +54,11 @@ export class ChargeEmission {
   period: string;
 
   @Field(() => ChargeEmissionStatus)
-  @Column({ type: 'enum', enum: ChargeEmissionStatus, default: ChargeEmissionStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: ChargeEmissionStatus,
+    default: ChargeEmissionStatus.DRAFT,
+  })
   status: ChargeEmissionStatus;
 
   @Field(() => Date)
@@ -59,7 +67,11 @@ export class ChargeEmission {
 
   /** ADVANCE: vence en el mismo período. ARREARS: vence en el siguiente. */
   @Field(() => FeeConfigBillingMode)
-  @Column({ type: 'enum', enum: FeeConfigBillingMode, default: FeeConfigBillingMode.ADVANCE })
+  @Column({
+    type: 'enum',
+    enum: FeeConfigBillingMode,
+    default: FeeConfigBillingMode.ADVANCE,
+  })
   billingMode: FeeConfigBillingMode;
 
   // ─── Reglas de cálculo (embebidas) ────────────────────────────
@@ -104,7 +116,11 @@ export class ChargeEmission {
   complex: ResidentialComplex;
 
   @Field(() => ChargeCategory, { nullable: true })
-  @ManyToOne(() => ChargeCategory, { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => ChargeCategory, {
+    eager: false,
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'categoryId' })
   category?: ChargeCategory | null;
 

@@ -2,27 +2,34 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Package }                  from '../entities/package.entity';
-import { PackageStatus }            from '../enums/package-status.enum';
-import { RegisterPackageInput }     from '../dto/inputs/register-package.input';
-import { ConfirmDeliveryInput }     from '../dto/inputs/confirm-delivery.input';
-import { FilterPackagesInput }      from '../dto/inputs/filter-packages.input';
+import { Package } from '../entities/package.entity';
+import { PackageStatus } from '../enums/package-status.enum';
+import { RegisterPackageInput } from '../dto/inputs/register-package.input';
+import { ConfirmDeliveryInput } from '../dto/inputs/confirm-delivery.input';
+import { FilterPackagesInput } from '../dto/inputs/filter-packages.input';
 import { PaginatedPackagesResponse } from '../dto/responses/paginated-packages.response';
 
-import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
-import { CustomError }               from '../../shared/utils/errors.utils';
-import { GeneralErrorCode, LogisticsErrorCode, ComplexErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }          from '../../shared/interfaces/jwt-payload.interface';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import {
+  GeneralErrorCode,
+  LogisticsErrorCode,
+  ComplexErrorCode,
+} from '../../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { UnitService }               from '../../residential-complex/services/unit.service';
-import { ResidentsService }          from '../../residents/services/residents.service';
-import { NotificationsService }      from '../../notifications/services/notifications.service';
-import { NotificationType }          from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
-import { SocketService }             from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent }               from '../../../core/infrastructure/socket/socket.events';
-import { CacheService }              from '../../../core/infrastructure/cache/cache.service';
-import { BK, filterKey }             from '../../../core/infrastructure/cache/business-cache.constants';
+import { UnitService } from '../../residential-complex/services/unit.service';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { SocketService } from '../../../core/infrastructure/socket/socket.service';
+import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import {
+  BK,
+  filterKey,
+} from '../../../core/infrastructure/cache/business-cache.constants';
 
 @Injectable()
 export class PackagesService {
@@ -69,21 +76,28 @@ export class PackagesService {
     const pkg = this.packageRepo.create({
       ...input,
       status: PackageStatus.RECEIVED,
-      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : undefined,
+      registeredByUserId:
+        currentUser.entityType === 'user' ? currentUser.sub : undefined,
     });
 
     const saved = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(saved.complexId));
 
-    this.socketService.emitToComplex(saved.complexId, SocketEvent.PACKAGE_REGISTERED, {
-      packageId: saved.id,
-      unitId: saved.unitId,
-      senderName: saved.senderName,
-      trackingCode: saved.trackingCode,
-    });
+    this.socketService.emitToComplex(
+      saved.complexId,
+      SocketEvent.PACKAGE_REGISTERED,
+      {
+        packageId: saved.id,
+        unitId: saved.unitId,
+        senderName: saved.senderName,
+        trackingCode: saved.trackingCode,
+      },
+    );
 
-    this.notifyResidents(saved).catch(err =>
-      this.logger.warn(`Error al notificar paquete ${saved.id}: ${err?.message}`),
+    this.notifyResidents(saved).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete ${saved.id}: ${err?.message}`,
+      ),
     );
 
     return saved;
@@ -112,20 +126,26 @@ export class PackagesService {
     title: string,
     body: string,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(pkg.unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents = await this.residentsService.findActiveByUnitInternal(
+      pkg.unitId,
+    );
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
-      complexId:  pkg.complexId,
+      complexId: pkg.complexId,
       userIds,
       type,
       priority,
       title,
       body,
-      entityId:   pkg.id,
+      entityId: pkg.id,
       entityType: 'package',
-      metadata:   { packageId: pkg.id, unitId: pkg.unitId, trackingCode: pkg.trackingCode },
+      metadata: {
+        packageId: pkg.id,
+        unitId: pkg.unitId,
+        trackingCode: pkg.trackingCode,
+      },
     });
   }
 
@@ -147,15 +167,19 @@ export class PackagesService {
       });
     }
 
-    pkg.status     = PackageStatus.NOTIFIED;
+    pkg.status = PackageStatus.NOTIFIED;
     pkg.notifiedAt = new Date();
 
     const notified = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(notified.complexId));
-    this.socketService.emitToComplex(notified.complexId, SocketEvent.PACKAGE_READY, {
-      packageId: notified.id,
-      unitId: notified.unitId,
-    });
+    this.socketService.emitToComplex(
+      notified.complexId,
+      SocketEvent.PACKAGE_READY,
+      {
+        packageId: notified.id,
+        unitId: notified.unitId,
+      },
+    );
 
     this.notifyUnitResidents(
       notified,
@@ -163,7 +187,11 @@ export class PackagesService {
       NotificationPriority.NORMAL,
       '📦 Paquete listo para retirar',
       `Tu paquete de ${notified.senderName} está listo para retirar en portería.`,
-    ).catch(err => this.logger.warn(`Error al notificar paquete listo ${notified.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete listo ${notified.id}: ${err?.message}`,
+      ),
+    );
 
     return notified;
   }
@@ -192,10 +220,14 @@ export class PackagesService {
 
     const ready = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(ready.complexId));
-    this.socketService.emitToComplex(ready.complexId, SocketEvent.PACKAGE_READY, {
-      packageId: ready.id,
-      unitId: ready.unitId,
-    });
+    this.socketService.emitToComplex(
+      ready.complexId,
+      SocketEvent.PACKAGE_READY,
+      {
+        packageId: ready.id,
+        unitId: ready.unitId,
+      },
+    );
 
     this.notifyUnitResidents(
       ready,
@@ -203,7 +235,11 @@ export class PackagesService {
       NotificationPriority.NORMAL,
       '📦 Paquete listo para retirar',
       `Tu paquete de ${ready.senderName} está confirmado y listo para retirar en portería.`,
-    ).catch(err => this.logger.warn(`Error al notificar paquete listo para retirar ${ready.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete listo para retirar ${ready.id}: ${err?.message}`,
+      ),
+    );
 
     return ready;
   }
@@ -220,7 +256,11 @@ export class PackagesService {
     const pkg = await this.findByIdOrFail(packageId);
     await this.complexService.findById(pkg.complexId, currentUser);
 
-    const allowedStatuses = [PackageStatus.RECEIVED, PackageStatus.NOTIFIED, PackageStatus.READY_FOR_PICKUP];
+    const allowedStatuses = [
+      PackageStatus.RECEIVED,
+      PackageStatus.NOTIFIED,
+      PackageStatus.READY_FOR_PICKUP,
+    ];
     if (!allowedStatuses.includes(pkg.status)) {
       throw new CustomError({
         message: `No se puede entregar un paquete en estado ${pkg.status}`,
@@ -229,20 +269,25 @@ export class PackagesService {
       });
     }
 
-    pkg.status              = PackageStatus.DELIVERED;
-    pkg.deliveredAt         = new Date();
-    pkg.deliveredByUserId   = currentUser.entityType === 'user' ? currentUser.sub : undefined;
-    if (receivedByName)     pkg.receivedByName     = receivedByName;
+    pkg.status = PackageStatus.DELIVERED;
+    pkg.deliveredAt = new Date();
+    pkg.deliveredByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : undefined;
+    if (receivedByName) pkg.receivedByName = receivedByName;
     if (receivedByIdentity) pkg.receivedByIdentity = receivedByIdentity;
-    if (notes)              pkg.notes              = notes;
+    if (notes) pkg.notes = notes;
 
     const delivered = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(delivered.complexId));
-    this.socketService.emitToComplex(delivered.complexId, SocketEvent.PACKAGE_DELIVERED, {
-      packageId: delivered.id,
-      unitId: delivered.unitId,
-      deliveredAt: delivered.deliveredAt,
-    });
+    this.socketService.emitToComplex(
+      delivered.complexId,
+      SocketEvent.PACKAGE_DELIVERED,
+      {
+        packageId: delivered.id,
+        unitId: delivered.unitId,
+        deliveredAt: delivered.deliveredAt,
+      },
+    );
 
     this.notifyUnitResidents(
       delivered,
@@ -250,7 +295,11 @@ export class PackagesService {
       NotificationPriority.NORMAL,
       '📦 Paquete entregado',
       `Tu paquete de ${delivered.senderName} fue entregado${delivered.receivedByName ? ` a ${delivered.receivedByName}` : ''}.`,
-    ).catch(err => this.logger.warn(`Error al notificar paquete entregado ${delivered.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete entregado ${delivered.id}: ${err?.message}`,
+      ),
+    );
 
     return delivered;
   }
@@ -266,7 +315,11 @@ export class PackagesService {
     const pkg = await this.findByIdOrFail(packageId);
     await this.complexService.findById(pkg.complexId, currentUser);
 
-    const allowedStatuses = [PackageStatus.RECEIVED, PackageStatus.NOTIFIED, PackageStatus.READY_FOR_PICKUP];
+    const allowedStatuses = [
+      PackageStatus.RECEIVED,
+      PackageStatus.NOTIFIED,
+      PackageStatus.READY_FOR_PICKUP,
+    ];
     if (!allowedStatuses.includes(pkg.status)) {
       throw new CustomError({
         message: `No se puede devolver un paquete en estado ${pkg.status}`,
@@ -275,8 +328,8 @@ export class PackagesService {
       });
     }
 
-    pkg.status       = PackageStatus.RETURNED;
-    pkg.returnedAt   = new Date();
+    pkg.status = PackageStatus.RETURNED;
+    pkg.returnedAt = new Date();
     pkg.returnReason = reason;
 
     const returned = await this.packageRepo.save(pkg);
@@ -288,7 +341,11 @@ export class PackagesService {
       NotificationPriority.NORMAL,
       '📦 Paquete devuelto',
       `Tu paquete de ${returned.senderName} fue devuelto al remitente. Motivo: ${reason}.`,
-    ).catch(err => this.logger.warn(`Error al notificar paquete devuelto ${returned.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete devuelto ${returned.id}: ${err?.message}`,
+      ),
+    );
 
     return returned;
   }
@@ -304,7 +361,10 @@ export class PackagesService {
     const pkg = await this.findByIdOrFail(packageId);
     await this.complexService.findById(pkg.complexId, currentUser);
 
-    if (pkg.status === PackageStatus.DELIVERED || pkg.status === PackageStatus.LOST) {
+    if (
+      pkg.status === PackageStatus.DELIVERED ||
+      pkg.status === PackageStatus.LOST
+    ) {
       throw new CustomError({
         message: `No se puede marcar como perdido un paquete en estado ${pkg.status}`,
         statusCode: HttpStatus.BAD_REQUEST,
@@ -312,9 +372,9 @@ export class PackagesService {
       });
     }
 
-    pkg.status       = PackageStatus.LOST;
+    pkg.status = PackageStatus.LOST;
     pkg.returnReason = reason; // reutilizamos el campo para el motivo
-    pkg.returnedAt   = new Date();
+    pkg.returnedAt = new Date();
 
     const lost = await this.packageRepo.save(pkg);
     await this.cacheService.deleteByPrefix(BK.pkg.prefix(lost.complexId));
@@ -325,7 +385,11 @@ export class PackagesService {
       NotificationPriority.HIGH,
       '📦 Paquete extraviado',
       `Tu paquete de ${lost.senderName} fue reportado como extraviado. Motivo: ${reason}. Contacta a administración.`,
-    ).catch(err => this.logger.warn(`Error al notificar paquete perdido ${lost.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar paquete perdido ${lost.id}: ${err?.message}`,
+      ),
+    );
 
     return lost;
   }
@@ -364,8 +428,14 @@ export class PackagesService {
   ): Promise<PaginatedPackagesResponse> {
     // findMyProfile valida que exista un residente ACTIVO de este usuario en el
     // complejo (lanza si no) y devuelve su unidad.
-    const resident = await this.residentsService.findMyProfile(currentUser.sub, complexId);
-    return this.queryPackages(complexId, pagination, { ...filters, unitId: resident.unitId });
+    const resident = await this.residentsService.findMyProfile(
+      currentUser.sub,
+      complexId,
+    );
+    return this.queryPackages(complexId, pagination, {
+      ...filters,
+      unitId: resident.unitId,
+    });
   }
 
   /** Núcleo de la consulta paginada de paquetes (cache + filtros). */
@@ -375,8 +445,15 @@ export class PackagesService {
     filters: FilterPackagesInput,
   ): Promise<PaginatedPackagesResponse> {
     const { page, limit } = pagination;
-    const cacheKey = BK.pkg.list(complexId, page, limit, filterKey(filters ?? {}));
-    const cached = await this.cacheService.get<PaginatedPackagesResponse>({ key: cacheKey });
+    const cacheKey = BK.pkg.list(
+      complexId,
+      page,
+      limit,
+      filterKey(filters ?? {}),
+    );
+    const cached = await this.cacheService.get<PaginatedPackagesResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const qb = this.packageRepo
@@ -384,14 +461,25 @@ export class PackagesService {
       .where('pkg.complexId = :complexId', { complexId })
       .andWhere('pkg.deletedAt IS NULL');
 
-    if (filters.status)       qb.andWhere('pkg.status = :status',   { status: filters.status });
-    if (filters.type)         qb.andWhere('pkg.type = :type',        { type: filters.type });
-    if (filters.unitId)       qb.andWhere('pkg.unitId = :unitId',    { unitId: filters.unitId });
-    if (filters.trackingCode) qb.andWhere('pkg.trackingCode ILIKE :tc', { tc: `%${filters.trackingCode}%` });
-    if (filters.receivedFrom) qb.andWhere('pkg.receivedAt >= :from', { from: new Date(filters.receivedFrom) });
-    if (filters.receivedUntil) qb.andWhere('pkg.receivedAt <= :until', { until: new Date(filters.receivedUntil) });
+    if (filters.status)
+      qb.andWhere('pkg.status = :status', { status: filters.status });
+    if (filters.type) qb.andWhere('pkg.type = :type', { type: filters.type });
+    if (filters.unitId)
+      qb.andWhere('pkg.unitId = :unitId', { unitId: filters.unitId });
+    if (filters.trackingCode)
+      qb.andWhere('pkg.trackingCode ILIKE :tc', {
+        tc: `%${filters.trackingCode}%`,
+      });
+    if (filters.receivedFrom)
+      qb.andWhere('pkg.receivedAt >= :from', {
+        from: new Date(filters.receivedFrom),
+      });
+    if (filters.receivedUntil)
+      qb.andWhere('pkg.receivedAt <= :until', {
+        until: new Date(filters.receivedUntil),
+      });
 
-    qb.leftJoinAndSelect('pkg.unit',    'unit')
+    qb.leftJoinAndSelect('pkg.unit', 'unit')
       .leftJoinAndSelect('pkg.complex', 'complex')
       .orderBy('pkg.receivedAt', 'DESC');
 
@@ -406,15 +494,19 @@ export class PackagesService {
     const result: PaginatedPackagesResponse = {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
-    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.pkg.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: result,
+      options: { ttl: BK.pkg.TTL },
+    });
     return result;
   }
 
@@ -443,7 +535,11 @@ export class PackagesService {
       order: { receivedAt: 'ASC' },
     });
 
-    await this.cacheService.set({ key: cacheKey, data: pending, options: { ttl: BK.pkg.TTL } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: pending,
+      options: { ttl: BK.pkg.TTL },
+    });
     return pending;
   }
 
@@ -473,7 +569,7 @@ export class PackagesService {
 
   private async findByIdOrFail(packageId: string): Promise<Package> {
     const pkg = await this.packageRepo.findOne({
-      where: { id: packageId, deletedAt: null as any },
+      where: { id: packageId, deletedAt: null },
       relations: ['unit', 'complex'],
     });
     if (!pkg) {

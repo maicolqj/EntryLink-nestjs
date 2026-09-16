@@ -1,12 +1,18 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEnum, IsString, IsNotEmpty, MaxLength, MinLength, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsString,
+  IsNotEmpty,
+  MaxLength,
+  MinLength,
+  IsUUID,
+} from 'class-validator';
 
-import { PqrfType }      from '../../enums/pqrf-type.enum';
+import { PqrfType } from '../../enums/pqrf-type.enum';
 import { PqrfAddressee } from '../../enums/pqrf-addressee.enum';
 
 @InputType()
 export class CreatePqrfInput {
-
   @Field()
   @IsUUID()
   complexId: string;

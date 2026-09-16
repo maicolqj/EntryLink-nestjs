@@ -5,7 +5,6 @@ import { PaginationReponse } from '../../../shared/dto/responses/pagination-obje
 
 @ObjectType({ description: 'Radicados PQRF paginados' })
 export class PaginatedPqrfResponse {
-
   @Field(() => [Pqrf])
   items: Pqrf[];
 

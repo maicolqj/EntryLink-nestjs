@@ -10,6 +10,6 @@ export class PermissionDependencyResponse {
   @Field(() => ValidPermissions)
   name: ValidPermissions;
 
-  @Field(() => String, {nullable: true})
+  @Field(() => String, { nullable: true })
   description?: string;
 }

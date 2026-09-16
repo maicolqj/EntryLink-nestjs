@@ -1,5 +1,5 @@
-import { InputType, Field } from "@nestjs/graphql";
-import { IsOptional, IsDateString } from "class-validator";
+import { InputType, Field } from '@nestjs/graphql';
+import { IsOptional, IsDateString } from 'class-validator';
 
 @InputType()
 export class DateRangeInput {

@@ -7,340 +7,339 @@ import { registerEnumType } from '@nestjs/graphql';
  */
 
 export enum ValidPermissions {
-
   // ═══════════════════════════════════════════════════════
   // staf
   // ═══════════════════════════════════════════════════════
 
   /** Ver lista de usuarios y perfil básico. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_USERS                = 'VIEW_USERS',
+  VIEW_USERS = 'VIEW_USERS',
 
   /** Ver datos sensibles: email, teléfono, dirección. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_USERS] */
-  VIEW_SENSITIVE_USER_DATA  = 'VIEW_SENSITIVE_USER_DATA',
+  VIEW_SENSITIVE_USER_DATA = 'VIEW_SENSITIVE_USER_DATA',
 
   /** Crear nuevos usuarios en el sistema. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_USERS] */
-  CREATE_USER               = 'CREATE_USER',
+  CREATE_USER = 'CREATE_USER',
 
   /** Editar datos de un usuario. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_USERS] */
-  EDIT_USER                 = 'EDIT_USER',
+  EDIT_USER = 'EDIT_USER',
 
   /** Bloquear/desbloquear cuenta de usuario. ➜ Nivel: [HIGH] | Requiere: [VIEW_USERS] */
-  BLOCK_USER                = 'BLOCK_USER',
+  BLOCK_USER = 'BLOCK_USER',
 
   /** Eliminar usuarios del sistema. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_USERS] */
-  DELETE_USER               = 'DELETE_USER',
+  DELETE_USER = 'DELETE_USER',
 
   /** CONTROL TOTAL USUARIOS. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_USERS, DELETE_USER, BLOCK_USER] */
-  MANAGE_USERS              = 'MANAGE_USERS',
+  MANAGE_USERS = 'MANAGE_USERS',
 
   // ═══════════════════════════════════════════════════════
   // ROLES Y PERMISOS
   // ═══════════════════════════════════════════════════════
 
   /** Ver roles disponibles. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_ROLES                = 'VIEW_ROLES',
+  VIEW_ROLES = 'VIEW_ROLES',
 
   /** Crear nuevos roles. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_ROLES] */
-  CREATE_ROLE               = 'CREATE_ROLE',
+  CREATE_ROLE = 'CREATE_ROLE',
 
   /** Editar roles existentes. ➜ Nivel: [HIGH] | Requiere: [VIEW_ROLES] */
-  EDIT_ROLE                 = 'EDIT_ROLE',
+  EDIT_ROLE = 'EDIT_ROLE',
 
   /** Asignar/remover permisos en un rol. ➜ Nivel: [CRITICAL] | Requiere: [EDIT_ROLE] */
-  ASSIGN_PERMISSIONS        = 'ASSIGN_PERMISSIONS',
+  ASSIGN_PERMISSIONS = 'ASSIGN_PERMISSIONS',
 
   /** Eliminar roles. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_ROLES] */
-  DELETE_ROLE               = 'DELETE_ROLE',
+  DELETE_ROLE = 'DELETE_ROLE',
 
   /** Control total sobre roles y permisos. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_ROLES, ASSIGN_PERMISSIONS] */
-  MANAGE_ROLES              = 'MANAGE_ROLES',
+  MANAGE_ROLES = 'MANAGE_ROLES',
 
   // ═══════════════════════════════════════════════════════
   // RESIDENTS
   // ═══════════════════════════════════════════════════════
 
   /** Ver lista de RESIDENTES. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_RESIDENTS             = 'VIEW_RECIDENTS',
+  VIEW_RESIDENTS = 'VIEW_RECIDENTS',
 
   /** Crear nuevos RESIDENTES. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_RECIDENTS] */
-  CREATE_RESIDENTS            = 'CREATE_RECIDENTS',
+  CREATE_RESIDENTS = 'CREATE_RECIDENTS',
 
   /** Editar datos de RESIDENTES. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_RECIDENTS] */
-  EDIT_RESIDENTS              = 'EDIT_RECIDENTS',
+  EDIT_RESIDENTS = 'EDIT_RECIDENTS',
 
   /** Ver ubicación en tiempo real. ➜ Nivel: [HIGH] | Requiere: [VIEW_RECIDENTS] */
-  VIEW_RECIDENTS_LOCATION      = 'VIEW_RECIDENTS_LOCATION',
+  VIEW_RECIDENTS_LOCATION = 'VIEW_RECIDENTS_LOCATION',
 
   /** Bloquear/desbloquear conductor. ➜ Nivel: [HIGH] | Requiere: [VIEW_RECIDENTS] */
-  BLOCK_RESIDENTS             = 'BLOCK_RECIDENTS',
+  BLOCK_RESIDENTS = 'BLOCK_RECIDENTS',
 
   /** Eliminar RESIDENTES. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_RECIDENTS] */
-  DELETE_RESIDENTS            = 'DELETE_RECIDENTS',
+  DELETE_RESIDENTS = 'DELETE_RECIDENTS',
 
   /** Control total sobre RESIDENTES. ➜ Nivel: [HIGH] | Requiere: [VIEW_RECIDENTS, BLOCK_RECIDENTS] */
-  MANAGE_RESIDENTS         = 'MANAGE_RECIDENTS',
+  MANAGE_RESIDENTS = 'MANAGE_RECIDENTS',
 
   /** Aprobar solicitudes de residencia. ➜ Nivel: [HIGH] | Requiere: [VIEW_RECIDENTS] */
-  APPROVE_RESIDENT         = 'APPROVE_RESIDENT',
+  APPROVE_RESIDENT = 'APPROVE_RESIDENT',
 
   /** Rechazar solicitudes de residencia. ➜ Nivel: [HIGH] | Requiere: [VIEW_RECIDENTS] */
-  REJECT_RESIDENT          = 'REJECT_RESIDENT',
+  REJECT_RESIDENT = 'REJECT_RESIDENT',
 
   // ═══════════════════════════════════════════════════════
   // PACKAGES
   // ═══════════════════════════════════════════════════════
 
   /** Ver todos los pedidos del sistema. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_PACKAGES               = 'VIEW_PACKAGES',
+  VIEW_PACKAGES = 'VIEW_PACKAGES',
 
   /** Crear pedidos. ➜ Nivel: [LOW] | Requiere: [] */
-  CREATE_PACKAGE              = 'CREATE_PACKAGE',
+  CREATE_PACKAGE = 'CREATE_PACKAGE',
 
   /** Editar pedidos existentes. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PACKAGES] */
-  EDIT_PACKAGE                = 'EDIT_PACKAGE',
+  EDIT_PACKAGE = 'EDIT_PACKAGE',
 
   /** Asignar conductor a un pedido. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PACKAGES, VIEW_DRIVERS] */
   // ASSIGN_DRIVER_TO_PACKAGE    = 'ASSIGN_DRIVER_TO_PACKAGE',
 
   /** Exportar datos de pedidos. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PACKAGES] */
-  EXPORT_PACKAGES             = 'EXPORT_PACKAGES',
+  EXPORT_PACKAGES = 'EXPORT_PACKAGES',
 
   /** Cancelar pedidos. ➜ Nivel: [HIGH] | Requiere: [VIEW_PACKAGES] */
   // CANCEL_PACKAGE              = 'CANCEL_PACKAGE',
 
   /** Control total sobre pedidos. ➜ Nivel: [HIGH] | Requiere: [VIEW_PACKAGES, CANCEL_PACKAGE] */
-  MANAGE_PACKAGES             = 'MANAGE_PACKAGES',
+  MANAGE_PACKAGES = 'MANAGE_PACKAGES',
 
   // ═══════════════════════════════════════════════════════
   // RECIDENCIAS Y PRODUCTOS
   // ═══════════════════════════════════════════════════════
 
   /** Ver RECIDENCIAS. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_RESIDENCES               = 'VIEW_RESIDENCES',
+  VIEW_RESIDENCES = 'VIEW_RESIDENCES',
 
   /** Crear RECIDENCIAS. ➜ Nivel: [MEDIUM] | Requiere: [] */
-  CREATE_RESIDENCE              = 'CREATE_RESIDENCE',
+  CREATE_RESIDENCE = 'CREATE_RESIDENCE',
 
   /** Editar RECIDENCIAS. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_RESIDENCES] */
-  EDIT_RESIDENCE                = 'EDIT_RESIDENCE',
+  EDIT_RESIDENCE = 'EDIT_RESIDENCE',
 
   /** Activar/desactivar tienda. ➜ Nivel: [HIGH] | Requiere: [VIEW_RESIDENCES] */
-  TOGGLE_RESIDENCE_STATUS       = 'TOGGLE_RESIDENCE_STATUS',
+  TOGGLE_RESIDENCE_STATUS = 'TOGGLE_RESIDENCE_STATUS',
 
   /** Eliminar RECIDENCIAS. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_RESIDENCES] */
-  DELETE_RESIDENCE              = 'DELETE_RESIDENCE',
+  DELETE_RESIDENCE = 'DELETE_RESIDENCE',
 
   /** Control total sobre RECIDENCIAS. ➜ Nivel: [HIGH] | Requiere: [VIEW_RESIDENCES] */
-  MANAGE_RESIDENCES             = 'MANAGE_RESIDENCES',
+  MANAGE_RESIDENCES = 'MANAGE_RESIDENCES',
 
   /** Ver catálogo de productos. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_PRODUCTS             = 'VIEW_PRODUCTS',
+  VIEW_PRODUCTS = 'VIEW_PRODUCTS',
 
   /** Gestionar productos (Crear, Editar, Borrar). ➜ Nivel: [MEDIUM] | Requiere: [VIEW_PRODUCTS] */
-  MANAGE_PRODUCTS           = 'MANAGE_PRODUCTS',
+  MANAGE_PRODUCTS = 'MANAGE_PRODUCTS',
 
   // ═══════════════════════════════════════════════════════
   // REPORTES Y CONFIGURACIÓN
   // ═══════════════════════════════════════════════════════
 
   /** Ver reportes y analíticas. ➜ Nivel: [MEDIUM] | Requiere: [] */
-  VIEW_REPORTS              = 'VIEW_REPORTS',
+  VIEW_REPORTS = 'VIEW_REPORTS',
 
   /** Exportar reportes a Excel/PDF. ➜ Nivel: [HIGH] | Requiere: [VIEW_REPORTS] */
-  EXPORT_REPORTS            = 'EXPORT_REPORTS',
+  EXPORT_REPORTS = 'EXPORT_REPORTS',
 
   /** Ver configuración del sistema. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_SETTINGS             = 'VIEW_SETTINGS',
+  VIEW_SETTINGS = 'VIEW_SETTINGS',
 
   /** Editar configuración del sistema. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_SETTINGS] */
-  EDIT_SETTINGS             = 'EDIT_SETTINGS',
+  EDIT_SETTINGS = 'EDIT_SETTINGS',
 
   /** Ver notificaciones del sistema. ➜ Nivel: [LOW] | Requiere: [] */
-  VIEW_NOTIFICATIONS        = 'VIEW_NOTIFICATIONS',
+  VIEW_NOTIFICATIONS = 'VIEW_NOTIFICATIONS',
 
   /** Enviar notificaciones masivas. ➜ Nivel: [HIGH] | Requiere: [VIEW_NOTIFICATIONS] */
-  SEND_NOTIFICATIONS        = 'SEND_NOTIFICATIONS',
+  SEND_NOTIFICATIONS = 'SEND_NOTIFICATIONS',
 
   // ═══════════════════════════════════════════════════════
   // VISITANTES Y VISITAS
   // ═══════════════════════════════════════════════════════
 
   /** Ver lista de visitantes registrados. ➜ Nivel: [LOW] */
-  VIEW_VISITORS              = 'VIEW_VISITORS',
+  VIEW_VISITORS = 'VIEW_VISITORS',
 
   /** Ver historial de visitas del complejo. ➜ Nivel: [LOW] */
-  VIEW_VISITS                = 'VIEW_VISITS',
+  VIEW_VISITS = 'VIEW_VISITS',
 
   /** Registrar llegada de visitante (walk-in / delivery). ➜ Nivel: [MEDIUM] */
-  REGISTER_VISITOR_ENTRY     = 'REGISTER_VISITOR_ENTRY',
+  REGISTER_VISITOR_ENTRY = 'REGISTER_VISITOR_ENTRY',
 
   /** Registrar salida de visitante. ➜ Nivel: [MEDIUM] */
-  REGISTER_VISITOR_EXIT      = 'REGISTER_VISITOR_EXIT',
+  REGISTER_VISITOR_EXIT = 'REGISTER_VISITOR_EXIT',
 
   /** Agendar visita y generar QR (por residentes). ➜ Nivel: [LOW] */
-  SCHEDULE_VISIT             = 'SCHEDULE_VISIT',
+  SCHEDULE_VISIT = 'SCHEDULE_VISIT',
 
   /** Aprobar o denegar una visita walk-in (por residentes). ➜ Nivel: [LOW] */
-  APPROVE_VISIT              = 'APPROVE_VISIT',
+  APPROVE_VISIT = 'APPROVE_VISIT',
 
   /** Bloquear o desbloquear un visitante. ➜ Nivel: [HIGH] */
-  BLACKLIST_VISITOR          = 'BLACKLIST_VISITOR',
+  BLACKLIST_VISITOR = 'BLACKLIST_VISITOR',
 
   // ═══════════════════════════════════════════════════════
   // VEHÍCULOS
   // ═══════════════════════════════════════════════════════
 
   /** Ver vehículos registrados en el complejo. ➜ Nivel: [LOW] */
-  VIEW_VEHICLES              = 'VIEW_VEHICLES',
+  VIEW_VEHICLES = 'VIEW_VEHICLES',
 
   /** Registrar un vehículo nuevo. ➜ Nivel: [MEDIUM] */
-  REGISTER_VEHICLE           = 'REGISTER_VEHICLE',
+  REGISTER_VEHICLE = 'REGISTER_VEHICLE',
 
   /** Editar datos de un vehículo. ➜ Nivel: [MEDIUM] */
-  EDIT_VEHICLE               = 'EDIT_VEHICLE',
+  EDIT_VEHICLE = 'EDIT_VEHICLE',
 
   /** Aprobar, rechazar o suspender vehículos. ➜ Nivel: [HIGH] */
-  APPROVE_VEHICLE            = 'APPROVE_VEHICLE',
+  APPROVE_VEHICLE = 'APPROVE_VEHICLE',
 
   /** Retirar definitivamente un vehículo del complejo. ➜ Nivel: [HIGH] */
-  REMOVE_VEHICLE             = 'REMOVE_VEHICLE',
+  REMOVE_VEHICLE = 'REMOVE_VEHICLE',
 
   /** Consultar placa en portería. ➜ Nivel: [LOW] */
-  CHECK_PLATE                = 'CHECK_PLATE',
+  CHECK_PLATE = 'CHECK_PLATE',
 
   /** Configurar y ejecutar la rotación de parqueaderos del complejo. ➜ Nivel: [HIGH] */
-  MANAGE_PARKING_ROTATION    = 'MANAGE_PARKING_ROTATION',
+  MANAGE_PARKING_ROTATION = 'MANAGE_PARKING_ROTATION',
 
   /** Configurar parámetros de rotación (slots, intervalo). ➜ Nivel: [HIGH] */
-  CONFIGURE_ROTATION         = 'CONFIGURE_ROTATION',
+  CONFIGURE_ROTATION = 'CONFIGURE_ROTATION',
 
   /** Ejecutar manualmente un ciclo de rotación. ➜ Nivel: [HIGH] */
-  EXECUTE_ROTATION           = 'EXECUTE_ROTATION',
+  EXECUTE_ROTATION = 'EXECUTE_ROTATION',
 
   /** Ver el estado actual de la rotación de parqueaderos. ➜ Nivel: [LOW] */
-  VIEW_ROTATION              = 'VIEW_ROTATION',
+  VIEW_ROTATION = 'VIEW_ROTATION',
 
   // ═══════════════════════════════════════════════════════
   // FINANZAS
   // ═══════════════════════════════════════════════════════
 
   /** Ver configuraciones de cuotas del complejo. ➜ Nivel: [LOW] */
-  VIEW_FEE_CONFIGS           = 'VIEW_FEE_CONFIGS',
+  VIEW_FEE_CONFIGS = 'VIEW_FEE_CONFIGS',
 
   /** Crear/editar/desactivar configuraciones de cuotas. ➜ Nivel: [HIGH] */
-  MANAGE_FEE_CONFIGS         = 'MANAGE_FEE_CONFIGS',
+  MANAGE_FEE_CONFIGS = 'MANAGE_FEE_CONFIGS',
 
   /** Ver cargos (cuotas generadas) de unidades. ➜ Nivel: [LOW] */
-  VIEW_CHARGES               = 'VIEW_CHARGES',
+  VIEW_CHARGES = 'VIEW_CHARGES',
 
   /** Generar cargos para un período de facturación. ➜ Nivel: [HIGH] */
-  GENERATE_CHARGES           = 'GENERATE_CHARGES',
+  GENERATE_CHARGES = 'GENERATE_CHARGES',
 
   /** Exonerar / cancelar un cargo. ➜ Nivel: [HIGH] */
-  WAIVE_CHARGE               = 'WAIVE_CHARGE',
+  WAIVE_CHARGE = 'WAIVE_CHARGE',
 
   /** Ver pagos registrados. ➜ Nivel: [LOW] */
-  VIEW_PAYMENTS              = 'VIEW_PAYMENTS',
+  VIEW_PAYMENTS = 'VIEW_PAYMENTS',
 
   /** Registrar un pago de un residente. ➜ Nivel: [MEDIUM] */
-  REGISTER_PAYMENT           = 'REGISTER_PAYMENT',
+  REGISTER_PAYMENT = 'REGISTER_PAYMENT',
 
   /** Revertir / anular un pago registrado. ➜ Nivel: [HIGH] */
-  REVERSE_PAYMENT            = 'REVERSE_PAYMENT',
+  REVERSE_PAYMENT = 'REVERSE_PAYMENT',
 
   /** Ver balance y estado de cuenta de unidades. ➜ Nivel: [LOW] */
-  VIEW_ACCOUNT_BALANCE       = 'VIEW_ACCOUNT_BALANCE',
+  VIEW_ACCOUNT_BALANCE = 'VIEW_ACCOUNT_BALANCE',
 
   /** Ver reportes financieros del complejo. ➜ Nivel: [MEDIUM] */
-  VIEW_FINANCIAL_REPORTS     = 'VIEW_FINANCIAL_REPORTS',
+  VIEW_FINANCIAL_REPORTS = 'VIEW_FINANCIAL_REPORTS',
 
   /** Ver listado de gastos operativos del complejo. ➜ Nivel: [LOW] */
-  VIEW_EXPENSES              = 'VIEW_EXPENSES',
+  VIEW_EXPENSES = 'VIEW_EXPENSES',
 
   /** Registrar y revertir gastos operativos del complejo. ➜ Nivel: [HIGH] */
-  MANAGE_EXPENSES            = 'MANAGE_EXPENSES',
+  MANAGE_EXPENSES = 'MANAGE_EXPENSES',
 
   // ═══════════════════════════════════════════════════════
   // NOTAS / MINUTAS
   // ═══════════════════════════════════════════════════════
 
   /** Ver notas/minutas del complejo. ➜ Nivel: [LOW] */
-  VIEW_NOTES                 = 'VIEW_NOTES',
+  VIEW_NOTES = 'VIEW_NOTES',
 
   /** Crear notas/minutas operativas. ➜ Nivel: [MEDIUM] */
-  CREATE_NOTE                = 'CREATE_NOTE',
+  CREATE_NOTE = 'CREATE_NOTE',
 
   /** Eliminar notas (solo SUPER_ADMIN). ➜ Nivel: [CRITICAL] */
-  DELETE_NOTE                = 'DELETE_NOTE',
+  DELETE_NOTE = 'DELETE_NOTE',
 
   // ═══════════════════════════════════════════════════════
   // PQRF
   // ═══════════════════════════════════════════════════════
 
   /** Ver los radicados dirigidos a la propia instancia. ➜ Nivel: [MEDIUM] */
-  VIEW_PQRF                  = 'VIEW_PQRF',
+  VIEW_PQRF = 'VIEW_PQRF',
 
   /** Radicar un PQRF. Lo tiene el residente. ➜ Nivel: [LOW] */
-  CREATE_PQRF                = 'CREATE_PQRF',
+  CREATE_PQRF = 'CREATE_PQRF',
 
   // ═══════════════════════════════════════════════════════
   // LLAMADAS
   // ═══════════════════════════════════════════════════════
 
   /** Ver historial de llamadas del complejo. ➜ Nivel: [LOW] */
-  VIEW_CALL_LOGS             = 'VIEW_CALL_LOGS',
+  VIEW_CALL_LOGS = 'VIEW_CALL_LOGS',
 
   /** Registrar una llamada realizada/recibida. ➜ Nivel: [LOW] */
-  LOG_CALL                   = 'LOG_CALL',
+  LOG_CALL = 'LOG_CALL',
 
   // ═══════════════════════════════════════════════════════
   // MENSAJES ENVIADOS
   // ═══════════════════════════════════════════════════════
 
   /** Ver historial de mensajes enviados del complejo. ➜ Nivel: [LOW] */
-  VIEW_SENT_MESSAGES         = 'VIEW_SENT_MESSAGES',
+  VIEW_SENT_MESSAGES = 'VIEW_SENT_MESSAGES',
 
   /** Enviar y registrar mensaje a residentes. ➜ Nivel: [MEDIUM] */
-  SEND_MESSAGE               = 'SEND_MESSAGE',
+  SEND_MESSAGE = 'SEND_MESSAGE',
 
   // ═══════════════════════════════════════════════════════
   // NÚMEROS ESPECIALES
   // ═══════════════════════════════════════════════════════
 
   /** Ver números especiales del complejo. ➜ Nivel: [LOW] */
-  VIEW_SPECIAL_NUMBERS       = 'VIEW_SPECIAL_NUMBERS',
+  VIEW_SPECIAL_NUMBERS = 'VIEW_SPECIAL_NUMBERS',
 
   /** Crear números especiales. ➜ Nivel: [MEDIUM] */
-  CREATE_SPECIAL_NUMBER      = 'CREATE_SPECIAL_NUMBER',
+  CREATE_SPECIAL_NUMBER = 'CREATE_SPECIAL_NUMBER',
 
   /** Editar números especiales. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_SPECIAL_NUMBERS] */
-  EDIT_SPECIAL_NUMBER        = 'EDIT_SPECIAL_NUMBER',
+  EDIT_SPECIAL_NUMBER = 'EDIT_SPECIAL_NUMBER',
 
   /** Eliminar números especiales. ➜ Nivel: [HIGH] | Requiere: [VIEW_SPECIAL_NUMBERS] */
-  DELETE_SPECIAL_NUMBER      = 'DELETE_SPECIAL_NUMBER',
+  DELETE_SPECIAL_NUMBER = 'DELETE_SPECIAL_NUMBER',
 
   // ═══════════════════════════════════════════════════════
   // ZONAS COMUNES / RESERVAS
   // ═══════════════════════════════════════════════════════
 
   /** Ver zonas comunes del complejo y su disponibilidad. ➜ Nivel: [LOW] */
-  VIEW_AMENITIES             = 'VIEW_AMENITIES',
+  VIEW_AMENITIES = 'VIEW_AMENITIES',
 
   /** Crear, editar y programar zonas comunes. ➜ Nivel: [HIGH] | Requiere: [VIEW_AMENITIES] */
-  MANAGE_AMENITIES           = 'MANAGE_AMENITIES',
+  MANAGE_AMENITIES = 'MANAGE_AMENITIES',
 
   /** Ver reservas de zonas comunes del complejo. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITIES] */
-  VIEW_AMENITY_BOOKINGS      = 'VIEW_AMENITY_BOOKINGS',
+  VIEW_AMENITY_BOOKINGS = 'VIEW_AMENITY_BOOKINGS',
 
   /** Crear una reserva de zona común. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITIES] */
-  CREATE_AMENITY_BOOKING     = 'CREATE_AMENITY_BOOKING',
+  CREATE_AMENITY_BOOKING = 'CREATE_AMENITY_BOOKING',
 
   /** Aprobar o rechazar reservas de zonas comunes. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_AMENITY_BOOKINGS] */
-  APPROVE_AMENITY_BOOKING    = 'APPROVE_AMENITY_BOOKING',
+  APPROVE_AMENITY_BOOKING = 'APPROVE_AMENITY_BOOKING',
 
   /** Registrar ingreso y salida a la zona común en portería. ➜ Nivel: [LOW] | Requiere: [VIEW_AMENITY_BOOKINGS] */
-  CHECK_IN_AMENITY_BOOKING   = 'CHECK_IN_AMENITY_BOOKING',
+  CHECK_IN_AMENITY_BOOKING = 'CHECK_IN_AMENITY_BOOKING',
 
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
-  SUPERADMIN                = 'SUPERADMIN',
+  SUPERADMIN = 'SUPERADMIN',
 }

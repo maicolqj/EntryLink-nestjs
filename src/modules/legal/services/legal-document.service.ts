@@ -14,23 +14,55 @@ import { LegalDocument } from '../entities/legal-document.entity';
 import { LegalAudience } from '../enums/legal-audience.enum';
 import { CreateLegalDocumentInput } from '../dto/inputs/create-legal-document.input';
 import { UpdateLegalDocumentInput } from '../dto/inputs/update-legal-document.input';
-import { R2StorageService, PLATFORM_SCOPE } from '../../../core/infrastructure/r2/r2.service';
+import {
+  R2StorageService,
+  PLATFORM_SCOPE,
+} from '../../../core/infrastructure/r2/r2.service';
 import { decodeBase64File } from '../../shared/utils/base64-file.utils';
 
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'p', 'a', 'ul', 'ol', 'li', 'blockquote',
-    'strong', 'em', 'b', 'i', 'u', 's', 'br', 'hr',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'sup', 'sub', 'span', 'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'p',
+    'a',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'strong',
+    'em',
+    'b',
+    'i',
+    'u',
+    's',
+    'br',
+    'hr',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'sup',
+    'sub',
+    'span',
+    'div',
   ],
   allowedAttributes: {
     a: ['href', 'name', 'target', 'rel'],
     '*': ['id'],
   },
   transformTags: {
-    a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer', target: '_blank' }, true),
+    a: sanitizeHtml.simpleTransform(
+      'a',
+      { rel: 'noopener noreferrer', target: '_blank' },
+      true,
+    ),
   },
 };
 
@@ -45,7 +77,11 @@ export class LegalDocumentService {
   ) {}
 
   /** Sube un PDF (base64) a R2 y devuelve {url, publicId}. */
-  private async uploadPdf(base64: string, slug: string, fileName?: string): Promise<{ url: string; publicId: string }> {
+  private async uploadPdf(
+    base64: string,
+    slug: string,
+    fileName?: string,
+  ): Promise<{ url: string; publicId: string }> {
     const buffer = decodeBase64File(base64, 'El PDF');
     // Firma de PDF: "%PDF"
     if (buffer.subarray(0, 4).toString('ascii') !== '%PDF') {
@@ -53,7 +89,12 @@ export class LegalDocumentService {
     }
     // Documento de la plataforma, no de un complejo → carpeta `_platform`
     const folder = this.storage.buildFolder(PLATFORM_SCOPE, 'legal', slug);
-    const result = await this.storage.uploadBuffer(buffer, folder, fileName ?? `${slug}.pdf`, 'raw');
+    const result = await this.storage.uploadBuffer(
+      buffer,
+      folder,
+      fileName ?? `${slug}.pdf`,
+      'raw',
+    );
     return { url: result.url, publicId: result.publicId };
   }
 
@@ -67,7 +108,9 @@ export class LegalDocumentService {
       rawHtml = result.value;
     } catch (err: any) {
       this.logger.error(`Error convirtiendo .docx: ${err.message}`);
-      throw new BadRequestException('No se pudo procesar el archivo .docx. Verifica que sea un Word válido.');
+      throw new BadRequestException(
+        'No se pudo procesar el archivo .docx. Verifica que sea un Word válido.',
+      );
     }
 
     const html = sanitizeHtml(rawHtml, SANITIZE_OPTIONS).trim();
@@ -93,7 +136,8 @@ export class LegalDocumentService {
     const doc = await this.repo.findOne({
       where: { slug, isPublished: true, audience: LegalAudience.PUBLIC },
     });
-    if (!doc) throw new NotFoundException(`Documento legal "${slug}" no encontrado`);
+    if (!doc)
+      throw new NotFoundException(`Documento legal "${slug}" no encontrado`);
     return doc;
   }
 
@@ -121,19 +165,30 @@ export class LegalDocumentService {
     return doc;
   }
 
-  async create(input: CreateLegalDocumentInput, userId: string): Promise<LegalDocument> {
+  async create(
+    input: CreateLegalDocumentInput,
+    userId: string,
+  ): Promise<LegalDocument> {
     const existing = await this.repo.findOne({ where: { slug: input.slug } });
     if (existing) {
-      throw new ConflictException(`Ya existe un documento con el slug "${input.slug}"`);
+      throw new ConflictException(
+        `Ya existe un documento con el slug "${input.slug}"`,
+      );
     }
 
-    const contentHtml = input.docxBase64 ? await this.docxToHtml(input.docxBase64) : undefined;
+    const contentHtml = input.docxBase64
+      ? await this.docxToHtml(input.docxBase64)
+      : undefined;
 
     let downloadFileUrl: string | undefined;
     let downloadFilePublicId: string | undefined;
     let downloadFileName: string | undefined;
     if (input.pdfBase64) {
-      const uploaded = await this.uploadPdf(input.pdfBase64, input.slug, input.pdfFileName);
+      const uploaded = await this.uploadPdf(
+        input.pdfBase64,
+        input.slug,
+        input.pdfFileName,
+      );
       downloadFileUrl = uploaded.url;
       downloadFilePublicId = uploaded.publicId;
       downloadFileName = input.pdfFileName ?? `${input.slug}.pdf`;
@@ -141,7 +196,9 @@ export class LegalDocumentService {
 
     const isDownloadable = input.isDownloadable ?? false;
     if (isDownloadable && !downloadFileUrl) {
-      throw new BadRequestException('Para marcar el documento como descargable debes subir un PDF.');
+      throw new BadRequestException(
+        'Para marcar el documento como descargable debes subir un PDF.',
+      );
     }
 
     const doc = this.repo.create({
@@ -164,7 +221,11 @@ export class LegalDocumentService {
     return saved;
   }
 
-  async update(id: string, input: UpdateLegalDocumentInput, userId: string): Promise<LegalDocument> {
+  async update(
+    id: string,
+    input: UpdateLegalDocumentInput,
+    userId: string,
+  ): Promise<LegalDocument> {
     const doc = await this.findById(id);
 
     if (input.title !== undefined) doc.title = input.title;
@@ -180,7 +241,11 @@ export class LegalDocumentService {
     let oldPdfPublicId: string | undefined;
     if (input.pdfBase64) {
       oldPdfPublicId = doc.downloadFilePublicId;
-      const uploaded = await this.uploadPdf(input.pdfBase64, doc.slug, input.pdfFileName);
+      const uploaded = await this.uploadPdf(
+        input.pdfBase64,
+        doc.slug,
+        input.pdfFileName,
+      );
       doc.downloadFileUrl = uploaded.url;
       doc.downloadFilePublicId = uploaded.publicId;
       doc.downloadFileName = input.pdfFileName ?? `${doc.slug}.pdf`;
@@ -188,14 +253,18 @@ export class LegalDocumentService {
 
     if (input.isDownloadable !== undefined) {
       if (input.isDownloadable && !doc.downloadFileUrl) {
-        throw new BadRequestException('Para marcar el documento como descargable debes subir un PDF.');
+        throw new BadRequestException(
+          'Para marcar el documento como descargable debes subir un PDF.',
+        );
       }
       doc.isDownloadable = input.isDownloadable;
     }
 
     if (input.isPublished !== undefined) {
       if (input.isPublished && !doc.contentHtml && !doc.downloadFileUrl) {
-        throw new BadRequestException('No puedes publicar un documento sin contenido ni archivo descargable.');
+        throw new BadRequestException(
+          'No puedes publicar un documento sin contenido ni archivo descargable.',
+        );
       }
       doc.isPublished = input.isPublished;
     }
@@ -205,10 +274,14 @@ export class LegalDocumentService {
 
     // Best-effort: elimina el PDF anterior tras guardar el nuevo
     if (oldPdfPublicId && oldPdfPublicId !== saved.downloadFilePublicId) {
-      await this.storage.deleteByPublicId(oldPdfPublicId, 'raw').catch(() => {});
+      await this.storage
+        .deleteByPublicId(oldPdfPublicId, 'raw')
+        .catch(() => {});
     }
 
-    this.logger.log(`Documento legal actualizado: ${saved.slug} (v${saved.version})`);
+    this.logger.log(
+      `Documento legal actualizado: ${saved.slug} (v${saved.version})`,
+    );
     return saved;
   }
 

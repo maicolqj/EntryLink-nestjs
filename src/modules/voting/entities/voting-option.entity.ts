@@ -15,7 +15,6 @@ import { VotingQuestion } from './voting-question.entity';
 @Entity({ name: 'voting_options' })
 @Index('IDX_voting_options_question', ['questionId'])
 export class VotingOption {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -24,7 +23,9 @@ export class VotingOption {
   @Column({ name: 'question_id', type: 'uuid' })
   questionId: string;
 
-  @ManyToOne(() => VotingQuestion, question => question.options, { onDelete: 'CASCADE' })
+  @ManyToOne(() => VotingQuestion, (question) => question.options, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'question_id' })
   question?: VotingQuestion;
 

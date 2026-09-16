@@ -3,7 +3,6 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 /** Resultado de disparar una prueba de humo de push. */
 @ObjectType()
 export class PushHealthCheckResult {
-
   /** Id de la fila de salud; el cliente lo usa para consultar el resultado. */
   @Field()
   healthId: string;
@@ -15,7 +14,6 @@ export class PushHealthCheckResult {
 /** Estado de entrega de un dispositivo, para el wizard y el banner de la app. */
 @ObjectType()
 export class DevicePushHealthStatus {
-
   @Field()
   healthId: string;
 

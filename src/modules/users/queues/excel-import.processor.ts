@@ -29,7 +29,9 @@ export class ExcelImportProcessor extends WorkerHost {
     }
   }
 
-  private async handleResidentImport(job: Job<ExcelImportJobPayload>): Promise<ImportResult> {
+  private async handleResidentImport(
+    job: Job<ExcelImportJobPayload>,
+  ): Promise<ImportResult> {
     const { filePath, complexId, adminUserId, importId } = job.data;
 
     this.logger.log(`Procesando importación Excel — importId: ${importId}`);
@@ -49,18 +51,18 @@ export class ExcelImportProcessor extends WorkerHost {
         rows,
         complexId,
         adminUserId,
-        async (progress: number) => job.updateProgress(20 + Math.floor(progress * 0.8)),
+        async (progress: number) =>
+          job.updateProgress(20 + Math.floor(progress * 0.8)),
       );
 
       await job.updateProgress(100);
 
       this.logger.log(
         `Importación completada — importId: ${importId} | ` +
-        `ok: ${result.successCount} | errores: ${result.errorCount}`,
+          `ok: ${result.successCount} | errores: ${result.errorCount}`,
       );
 
       return { ...result, importId };
-
     } finally {
       // Limpiar archivo temporal siempre, incluso si hay error
       try {

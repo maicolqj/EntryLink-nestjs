@@ -75,10 +75,15 @@ async function bootstrap() {
     }
   };
 
-  const restJson = express.json({ limit: REST_BODY_LIMIT, verify: saveRawBody });
+  const restJson = express.json({
+    limit: REST_BODY_LIMIT,
+    verify: saveRawBody,
+  });
   const graphqlJson = express.json({ limit: GRAPHQL_BODY_LIMIT });
   app.use((req: any, res: any, next: any) =>
-    req.path === '/graphql' ? graphqlJson(req, res, next) : restJson(req, res, next),
+    req.path === '/graphql'
+      ? graphqlJson(req, res, next)
+      : restJson(req, res, next),
   );
 
   // urlencoded solo para metadata de formularios REST (no afecta multipart/form-data de Multer)
@@ -88,7 +93,12 @@ async function bootstrap() {
   app.useGlobalFilters(new UniversalExceptionFilter());
 
   app.setGlobalPrefix(prefix, {
-    exclude: ['/graphql', 'admin/bull-board', 'admin/bull-board/*path', 'health'],
+    exclude: [
+      '/graphql',
+      'admin/bull-board',
+      'admin/bull-board/*path',
+      'health',
+    ],
   });
 
   app.useGlobalPipes(
@@ -98,7 +108,7 @@ async function bootstrap() {
       transform: true,
       transformOptions: { enableImplicitConversion: true },
       stopAtFirstError: true,
-    })
+    }),
   );
 
   const timeZone = process.env.TZ || 'America/Bogota';

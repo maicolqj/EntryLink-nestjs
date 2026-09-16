@@ -12,11 +12,11 @@ import { registerEnumType } from '@nestjs/graphql';
  * entrega; si nadie reconoció, el problema es de respuesta.
  */
 export enum PanicAlertStatus {
-  PENDING      = 'PENDING',
-  DELIVERED    = 'DELIVERED',
+  PENDING = 'PENDING',
+  DELIVERED = 'DELIVERED',
   ACKNOWLEDGED = 'ACKNOWLEDGED',
-  RESOLVED     = 'RESOLVED',
-  FALSE_ALARM  = 'FALSE_ALARM',
+  RESOLVED = 'RESOLVED',
+  FALSE_ALARM = 'FALSE_ALARM',
 }
 
 registerEnumType(PanicAlertStatus, {

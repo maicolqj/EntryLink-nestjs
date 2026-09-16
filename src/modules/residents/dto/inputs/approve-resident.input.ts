@@ -6,12 +6,16 @@ import { IsUUID, IsOptional, IsString, MaxLength } from 'class-validator';
  */
 @InputType()
 export class ApproveResidentInput {
-
-  @Field(() => String, { description: 'ID del registro de residente a aprobar' })
+  @Field(() => String, {
+    description: 'ID del registro de residente a aprobar',
+  })
   @IsUUID()
   residentId: string;
 
-  @Field(() => String, { description: 'Notas opcionales del Compliance Officer', nullable: true })
+  @Field(() => String, {
+    description: 'Notas opcionales del Compliance Officer',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

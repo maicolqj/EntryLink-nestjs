@@ -1,27 +1,32 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { ChargeEmission }       from '../entities/charge-emission.entity';
+import { ChargeEmission } from '../entities/charge-emission.entity';
 import { ChargeEmissionStatus } from '../enums/charge-emission-status.enum';
 import { CreateChargeEmissionInput } from '../dto/inputs/create-charge-emission.input';
 import { ChargeEmissionPreviewResponse } from '../dto/responses/charge-emission-preview.response';
 import { ChargeEmissionService } from '../services/charge-emission.service';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 /** Roles que pueden emitir/confirmar cargos (admin del complejo y contador). */
-const EMIT_ROLES = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL];
+const EMIT_ROLES = [
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
+];
 const VIEW_ROLES = [
-  ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-  ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
+  ValidRoles.COMPILANCE_OFFICER_ROL,
 ];
 
 @Resolver(() => ChargeEmission)
 export class ChargeEmissionResolver {
-
   constructor(private readonly service: ChargeEmissionService) {}
 
   // ─── Queries ──────────────────────────────────────────────────
@@ -31,7 +36,8 @@ export class ChargeEmissionResolver {
   chargeEmissions(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
-    @Args('status', { type: () => ChargeEmissionStatus, nullable: true }) status?: ChargeEmissionStatus,
+    @Args('status', { type: () => ChargeEmissionStatus, nullable: true })
+    status?: ChargeEmissionStatus,
     @Args('period', { nullable: true }) period?: string,
   ): Promise<ChargeEmission[]> {
     return this.service.chargeEmissions(complexId, currentUser, status, period);
@@ -58,7 +64,10 @@ export class ChargeEmissionResolver {
   // ─── Mutations ────────────────────────────────────────────────
 
   @Mutation(() => ChargeEmission, { name: 'createChargeEmission' })
-  @Auth({ roles: EMIT_ROLES, permissions: [ValidPermissions.MANAGE_FEE_CONFIGS] })
+  @Auth({
+    roles: EMIT_ROLES,
+    permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
+  })
   createChargeEmission(
     @Args('input') input: CreateChargeEmissionInput,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -67,7 +76,10 @@ export class ChargeEmissionResolver {
   }
 
   @Mutation(() => ChargeEmission, { name: 'confirmChargeEmission' })
-  @Auth({ roles: EMIT_ROLES, permissions: [ValidPermissions.MANAGE_FEE_CONFIGS] })
+  @Auth({
+    roles: EMIT_ROLES,
+    permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
+  })
   confirmChargeEmission(
     @Args('emissionId') emissionId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -76,7 +88,10 @@ export class ChargeEmissionResolver {
   }
 
   @Mutation(() => ChargeEmission, { name: 'cancelChargeEmission' })
-  @Auth({ roles: EMIT_ROLES, permissions: [ValidPermissions.MANAGE_FEE_CONFIGS] })
+  @Auth({
+    roles: EMIT_ROLES,
+    permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
+  })
   cancelChargeEmission(
     @Args('emissionId') emissionId: string,
     @CurrentUser() currentUser: JwtAccessPayload,

@@ -29,10 +29,10 @@ export class CacheService implements OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {
     // Initialize in constructor so this.client is never undefined when
     // other modules' onModuleInit / onApplicationBootstrap hooks run.
-    const host     = this.configService.get<string>('REDIS_HOST', 'localhost');
-    const port     = this.configService.get<number>('REDIS_PORT', 6379);
+    const host = this.configService.get<string>('REDIS_HOST', 'localhost');
+    const port = this.configService.get<number>('REDIS_PORT', 6379);
     const password = this.configService.get<string>('REDIS_PASSWORD');
-    const db       = this.configService.get<number>('REDIS_DB', 0);
+    const db = this.configService.get<number>('REDIS_DB', 0);
 
     this.client = new Redis({
       host,
@@ -61,7 +61,9 @@ export class CacheService implements OnModuleDestroy {
       if (!raw) return null;
       return JSON.parse(raw) as T;
     } catch (error: any) {
-      this.logger.warn(`Cache GET error [${this.buildKey(options.key)}]: ${error.message}`);
+      this.logger.warn(
+        `Cache GET error [${this.buildKey(options.key)}]: ${error.message}`,
+      );
       return null; // Fail open: si Redis falla, continuamos sin cache
     }
   }
@@ -78,7 +80,9 @@ export class CacheService implements OnModuleDestroy {
         await this.client.set(k, serialized);
       }
     } catch (error: any) {
-      this.logger.warn(`Cache SET error [${this.buildKey(options.key)}]: ${error.message}`);
+      this.logger.warn(
+        `Cache SET error [${this.buildKey(options.key)}]: ${error.message}`,
+      );
     }
   }
 
@@ -86,7 +90,9 @@ export class CacheService implements OnModuleDestroy {
     try {
       await this.client.del(this.buildKey(options.key));
     } catch (error: any) {
-      this.logger.warn(`Cache DEL error [${this.buildKey(options.key)}]: ${error.message}`);
+      this.logger.warn(
+        `Cache DEL error [${this.buildKey(options.key)}]: ${error.message}`,
+      );
     }
   }
 
@@ -109,22 +115,34 @@ export class CacheService implements OnModuleDestroy {
 
       let cursor = '0';
       do {
-        const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        const [nextCursor, keys] = await this.client.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          200,
+        );
         cursor = nextCursor;
         if (keys.length > 0) {
           // `del` vuelve a anteponer el prefijo, así que hay que devolverle la
           // clave lógica; pasarle la real produciría `cache:cache:…`.
-          await this.client.del(...keys.map(k => this.stripPrefix(k, keyPrefix)));
+          await this.client.del(
+            ...keys.map((k) => this.stripPrefix(k, keyPrefix)),
+          );
         }
       } while (cursor !== '0');
     } catch (error: any) {
-      this.logger.warn(`Cache DEL_PREFIX error [${rawPrefix}]: ${error.message}`);
+      this.logger.warn(
+        `Cache DEL_PREFIX error [${rawPrefix}]: ${error.message}`,
+      );
     }
   }
 
   /** Quita el `keyPrefix` de una clave devuelta por SCAN. */
   private stripPrefix(key: string, keyPrefix: string): string {
-    return keyPrefix && key.startsWith(keyPrefix) ? key.slice(keyPrefix.length) : key;
+    return keyPrefix && key.startsWith(keyPrefix)
+      ? key.slice(keyPrefix.length)
+      : key;
   }
 
   // ── Helper ───────────────────────────────────────────────────────────────

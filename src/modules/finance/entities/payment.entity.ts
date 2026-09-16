@@ -1,15 +1,20 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
-import { PaymentMethod }      from '../enums/payment-method.enum';
+import { PaymentMethod } from '../enums/payment-method.enum';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }               from '../../residential-complex/entities/unit.entity';
-import { FeeCharge }          from './fee-charge.entity';
-import { User }               from '../../users/entities/user.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { FeeCharge } from './fee-charge.entity';
+import { User } from '../../users/entities/user.entity';
 
 /**
  * Pago registrado contra un cargo específico.
@@ -23,7 +28,6 @@ import { User }               from '../../users/entities/user.entity';
 @Index(['complexId', 'unitId'])
 @Index(['complexId', 'paidAt'])
 export class Payment {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

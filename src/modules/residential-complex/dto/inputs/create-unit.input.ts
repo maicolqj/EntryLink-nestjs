@@ -1,27 +1,43 @@
 import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
-  IsString, IsOptional, IsUUID, IsEnum,
-  MaxLength, MinLength, IsInt, Min, Max, IsNumber, IsBoolean,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsEnum,
+  MaxLength,
+  MinLength,
+  IsInt,
+  Min,
+  Max,
+  IsNumber,
+  IsBoolean,
 } from 'class-validator';
 import { UnitType } from '../../enums/unit-type.enum';
 
 @InputType()
 export class CreateUnitInput {
-
-  @Field(() => String, { description: 'Número o código de la unidad. Ej: "101", "B-302"' })
+  @Field(() => String, {
+    description: 'Número o código de la unidad. Ej: "101", "B-302"',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(20)
   number: string;
 
-  @Field(() => Int, { description: 'Piso donde se ubica la unidad', defaultValue: 1 })
+  @Field(() => Int, {
+    description: 'Piso donde se ubica la unidad',
+    defaultValue: 1,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(200)
   floor?: number;
 
-  @Field(() => UnitType, { description: 'Tipo de unidad', defaultValue: UnitType.APARTMENT })
+  @Field(() => UnitType, {
+    description: 'Tipo de unidad',
+    defaultValue: UnitType.APARTMENT,
+  })
   @IsOptional()
   @IsEnum(UnitType)
   type?: UnitType;
@@ -60,12 +76,18 @@ export class CreateUnitInput {
   @Max(5)
   storageRooms?: number;
 
-  @Field(() => Boolean, { description: 'Si la unidad usa/paga ascensor', nullable: true })
+  @Field(() => Boolean, {
+    description: 'Si la unidad usa/paga ascensor',
+    nullable: true,
+  })
   @IsOptional()
   @IsBoolean()
   hasElevator?: boolean;
 
-  @Field(() => Int, { description: 'Número de pisos de la casa (solo casas)', nullable: true })
+  @Field(() => Int, {
+    description: 'Número de pisos de la casa (solo casas)',
+    nullable: true,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -78,7 +100,10 @@ export class CreateUnitInput {
   @MaxLength(500)
   description?: string;
 
-  @Field(() => Float, { description: 'Coeficiente de copropiedad (fracción, suma=1). Ej: 0.012345', nullable: true })
+  @Field(() => Float, {
+    description: 'Coeficiente de copropiedad (fracción, suma=1). Ej: 0.012345',
+    nullable: true,
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -89,7 +114,10 @@ export class CreateUnitInput {
   @IsUUID()
   complexId: string;
 
-  @Field(() => String, { description: 'ID de la torre (opcional, para complejos con edificios)', nullable: true })
+  @Field(() => String, {
+    description: 'ID de la torre (opcional, para complejos con edificios)',
+    nullable: true,
+  })
   @IsOptional()
   @IsUUID()
   buildingId?: string;

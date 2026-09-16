@@ -1,12 +1,17 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsBoolean,
-  IsNumber, IsPositive, Min, Max,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  IsPositive,
+  Min,
+  Max,
 } from 'class-validator';
 
 @InputType()
 export class UpsertComplexFinanceConfigInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

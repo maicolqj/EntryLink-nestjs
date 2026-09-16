@@ -13,7 +13,10 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Request } from 'express';
 
@@ -48,7 +51,12 @@ export class ResidentialComplexController {
           if (ALLOWED_DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
             cb(null, true);
           } else {
-            cb(new BadRequestException(`Formato no soportado: ${file.mimetype}. Solo se aceptan PDFs.`), false);
+            cb(
+              new BadRequestException(
+                `Formato no soportado: ${file.mimetype}. Solo se aceptan PDFs.`,
+              ),
+              false,
+            );
           }
         },
       },
@@ -56,17 +64,26 @@ export class ResidentialComplexController {
   )
   async register(
     @UploadedFiles()
-    files: { rutFile?: Express.Multer.File[]; legalRepDocument?: Express.Multer.File[] },
+    files: {
+      rutFile?: Express.Multer.File[];
+      legalRepDocument?: Express.Multer.File[];
+    },
     @Body() body: RegisterComplexDto,
   ) {
     if (!files?.rutFile?.[0]) {
       throw new BadRequestException('El archivo RUT (rutFile) es obligatorio');
     }
     if (!files?.legalRepDocument?.[0]) {
-      throw new BadRequestException('El documento del representante legal (legalRepDocument) es obligatorio');
+      throw new BadRequestException(
+        'El documento del representante legal (legalRepDocument) es obligatorio',
+      );
     }
 
-    return this.complexService.registerComplex(body, files.rutFile[0], files.legalRepDocument[0]);
+    return this.complexService.registerComplex(
+      body,
+      files.rutFile[0],
+      files.legalRepDocument[0],
+    );
   }
 
   /**
@@ -92,25 +109,39 @@ export class ResidentialComplexController {
         if (file.mimetype === 'application/pdf') {
           cb(null, true);
         } else {
-          cb(new BadRequestException(`Formato no soportado: ${file.mimetype}. El DPA firmado debe ser un PDF.`), false);
+          cb(
+            new BadRequestException(
+              `Formato no soportado: ${file.mimetype}. El DPA firmado debe ser un PDF.`,
+            ),
+            false,
+          );
         }
       },
     }),
   )
-  async uploadSignedDpa(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  async uploadSignedDpa(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file) {
       throw new BadRequestException('El archivo (file) es obligatorio');
     }
 
     const currentUser = req.user as JwtAccessPayload;
     if (!currentUser.roles?.includes(ValidRoles.COMPLEX_ROL)) {
-      throw new ForbiddenException('Solo la cuenta del complejo puede subir su DPA firmado');
+      throw new ForbiddenException(
+        'Solo la cuenta del complejo puede subir su DPA firmado',
+      );
     }
 
     // La sesión de complejo lleva sub = complex.id; si viniera de un usuario con
     // complejo asociado, complexId manda. Mismo criterio que el resolver.
     const complexId = currentUser.complexId ?? currentUser.sub;
 
-    return this.complexService.attachSignedDpaFile(complexId, file.buffer, file.originalname);
+    return this.complexService.attachSignedDpaFile(
+      complexId,
+      file.buffer,
+      file.originalname,
+    );
   }
 }

@@ -53,8 +53,8 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
       };
     };
 
-    const apq       = body.extensions?.persistedQuery;
-    const hash      = apq?.sha256Hash;
+    const apq = body.extensions?.persistedQuery;
+    const hash = apq?.sha256Hash;
     const queryInBody = body.query;
 
     // ── No APQ extension ─────────────────────────────────────────────────────
@@ -93,7 +93,9 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
         }
       }
 
-      this.logger.warn(`[APQ] hash-only request not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}`);
+      this.logger.warn(
+        `[APQ] hash-only request not in manifest — hash: ${hash} op: ${body.operationName ?? 'anonymous'}`,
+      );
       res.status(200).json({
         errors: [
           {
@@ -134,7 +136,9 @@ export class PersistedQueriesMiddleware implements NestMiddleware {
 
     // Dev: verify hash then cache for future hash-only requests.
     const normalizedQuery = stripIgnoredCharacters(queryInBody);
-    const actualHash      = createHash('sha256').update(normalizedQuery).digest('hex');
+    const actualHash = createHash('sha256')
+      .update(normalizedQuery)
+      .digest('hex');
 
     if (actualHash !== hash) {
       this.logger.warn(

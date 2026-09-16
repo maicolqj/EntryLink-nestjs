@@ -1,62 +1,64 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
-import { ChargeCategory }                              from '../entities/charge-category.entity';
-import { ComplexFinanceConfig }                        from '../entities/complex-finance-config.entity';
-import { UpsertComplexFinanceConfigInput }             from '../dto/inputs/upsert-complex-finance-config.input';
-import { FeeConfig }                                   from '../entities/fee-config.entity';
-import { FeeCharge }                                   from '../entities/fee-charge.entity';
-import { Payment }                                     from '../entities/payment.entity';
-import { FinanceService }                              from '../services/finance.service';
-import { CreateChargeCategoryInput }                   from '../dto/inputs/create-charge-category.input';
-import { UpdateChargeCategoryInput }                   from '../dto/inputs/update-charge-category.input';
-import { CreateFeeConfigInput }                        from '../dto/inputs/create-fee-config.input';
-import { UpdateFeeConfigInput }                        from '../dto/inputs/update-fee-config.input';
-import { GenerateChargesInput }                        from '../dto/inputs/generate-charges.input';
-import { RegisterPaymentInput }                        from '../dto/inputs/register-payment.input';
-import { FilterChargesInput }                          from '../dto/inputs/filter-charges.input';
-import { CreateDirectChargesInput }                    from '../dto/inputs/create-direct-charges.input';
-import { RegisterBulkPaymentInput }                    from '../dto/inputs/register-bulk-payment.input';
+import { ChargeCategory } from '../entities/charge-category.entity';
+import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity';
+import { UpsertComplexFinanceConfigInput } from '../dto/inputs/upsert-complex-finance-config.input';
+import { FeeConfig } from '../entities/fee-config.entity';
+import { FeeCharge } from '../entities/fee-charge.entity';
+import { Payment } from '../entities/payment.entity';
+import { FinanceService } from '../services/finance.service';
+import { CreateChargeCategoryInput } from '../dto/inputs/create-charge-category.input';
+import { UpdateChargeCategoryInput } from '../dto/inputs/update-charge-category.input';
+import { CreateFeeConfigInput } from '../dto/inputs/create-fee-config.input';
+import { UpdateFeeConfigInput } from '../dto/inputs/update-fee-config.input';
+import { GenerateChargesInput } from '../dto/inputs/generate-charges.input';
+import { RegisterPaymentInput } from '../dto/inputs/register-payment.input';
+import { FilterChargesInput } from '../dto/inputs/filter-charges.input';
+import { CreateDirectChargesInput } from '../dto/inputs/create-direct-charges.input';
+import { RegisterBulkPaymentInput } from '../dto/inputs/register-bulk-payment.input';
 import {
   CreateWalletCreditInput,
   ApplyWalletToChargeInput,
   ApplyMoraInput,
 } from '../dto/inputs/wallet.input';
-import { PaginatedChargesResponse }                    from '../dto/responses/paginated-charges.response';
-import { GenerateChargesResponse }                     from '../dto/responses/generate-charges.response';
-import { CreateDirectChargesResponse }                 from '../dto/responses/create-direct-charges.response';
-import { RegisterBulkPaymentResponse }                 from '../dto/responses/register-bulk-payment.response';
-import { UnitBalanceResponse, ComplexFinancialSummaryResponse } from '../dto/responses/unit-balance.response';
+import { PaginatedChargesResponse } from '../dto/responses/paginated-charges.response';
+import { GenerateChargesResponse } from '../dto/responses/generate-charges.response';
+import { CreateDirectChargesResponse } from '../dto/responses/create-direct-charges.response';
+import { RegisterBulkPaymentResponse } from '../dto/responses/register-bulk-payment.response';
+import {
+  UnitBalanceResponse,
+  ComplexFinancialSummaryResponse,
+} from '../dto/responses/unit-balance.response';
 import {
   WalletEntryObject,
   UnitWalletResponse,
   WalletSummaryPaginated,
   ApplyWalletResult,
 } from '../dto/responses/wallet.response';
-import { UnitAccountStatementResponse }                from '../dto/responses/account-statement.response';
+import { UnitAccountStatementResponse } from '../dto/responses/account-statement.response';
 import {
   UnitFinancialStatusPaginated,
   MoraApplicationResult,
 } from '../dto/responses/financial-status.response';
-import { PaginationInput }                             from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { ComplexExpense }                                from '../entities/complex-expense.entity';
-import { RegisterExpenseInput }                          from '../dto/inputs/register-expense.input';
-import { FilterExpensesInput }                           from '../dto/inputs/filter-expenses.input';
-import { PaginatedExpensesResponse }                     from '../dto/responses/paginated-expenses.response';
-import { DirectIncome }                                  from '../entities/direct-income.entity';
-import { RegisterDirectIncomeInput }                     from '../dto/inputs/register-direct-income.input';
-import { FilterIncomesInput }                            from '../dto/inputs/filter-incomes.input';
-import { PaginatedIncomesResponse }                      from '../dto/responses/paginated-incomes.response';
+import { ComplexExpense } from '../entities/complex-expense.entity';
+import { RegisterExpenseInput } from '../dto/inputs/register-expense.input';
+import { FilterExpensesInput } from '../dto/inputs/filter-expenses.input';
+import { PaginatedExpensesResponse } from '../dto/responses/paginated-expenses.response';
+import { DirectIncome } from '../entities/direct-income.entity';
+import { RegisterDirectIncomeInput } from '../dto/inputs/register-direct-income.input';
+import { FilterIncomesInput } from '../dto/inputs/filter-incomes.input';
+import { PaginatedIncomesResponse } from '../dto/responses/paginated-incomes.response';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver()
 export class FinanceResolver {
-
   constructor(private readonly financeService: FinanceService) {}
 
   // ================================================================
@@ -66,8 +68,10 @@ export class FinanceResolver {
   @Query(() => ComplexFinanceConfig, { name: 'complexFinanceConfig' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FEE_CONFIGS],
   })
@@ -80,7 +84,11 @@ export class FinanceResolver {
 
   @Mutation(() => ComplexFinanceConfig, { name: 'upsertComplexFinanceConfig' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   upsertComplexFinanceConfig(
@@ -97,8 +105,10 @@ export class FinanceResolver {
   @Query(() => [ChargeCategory], { name: 'chargeCategories' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FEE_CONFIGS],
   })
@@ -111,7 +121,11 @@ export class FinanceResolver {
 
   @Mutation(() => ChargeCategory, { name: 'createChargeCategory' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   createChargeCategory(
@@ -123,7 +137,11 @@ export class FinanceResolver {
 
   @Mutation(() => ChargeCategory, { name: 'updateChargeCategory' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   updateChargeCategory(
@@ -135,7 +153,11 @@ export class FinanceResolver {
 
   @Mutation(() => Boolean, { name: 'deleteChargeCategory' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   deleteChargeCategory(
@@ -151,7 +173,11 @@ export class FinanceResolver {
 
   @Mutation(() => FeeConfig, { name: 'createFeeConfig' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   createFeeConfig(
@@ -163,7 +189,11 @@ export class FinanceResolver {
 
   @Mutation(() => FeeConfig, { name: 'updateFeeConfig' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   updateFeeConfig(
@@ -187,7 +217,11 @@ export class FinanceResolver {
 
   @Mutation(() => FeeConfig, { name: 'toggleFeeConfig' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   toggleFeeConfig(
@@ -200,8 +234,10 @@ export class FinanceResolver {
   @Query(() => [FeeConfig], { name: 'feeConfigs' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FEE_CONFIGS],
   })
@@ -218,7 +254,11 @@ export class FinanceResolver {
 
   @Mutation(() => GenerateChargesResponse, { name: 'generateCharges' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.GENERATE_CHARGES],
   })
   generateCharges(
@@ -230,12 +270,16 @@ export class FinanceResolver {
 
   @Mutation(() => FeeCharge, { name: 'waiveCharge' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.WAIVE_CHARGE],
   })
   waiveCharge(
     @Args('chargeId') chargeId: string,
-    @Args('reason')   reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<FeeCharge> {
     return this.financeService.waiveCharge(chargeId, reason, currentUser);
@@ -243,7 +287,11 @@ export class FinanceResolver {
 
   @Mutation(() => CreateDirectChargesResponse, { name: 'createDirectCharges' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.GENERATE_CHARGES],
   })
   createDirectCharges(
@@ -260,7 +308,8 @@ export class FinanceResolver {
   @Mutation(() => Payment, { name: 'registerPayment' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
       ValidRoles.ACCOUNTANT_ROL,
     ],
     permissions: [ValidPermissions.REGISTER_PAYMENT],
@@ -275,7 +324,8 @@ export class FinanceResolver {
   @Mutation(() => RegisterBulkPaymentResponse, { name: 'registerBulkPayment' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
       ValidRoles.ACCOUNTANT_ROL,
     ],
     permissions: [ValidPermissions.REGISTER_PAYMENT],
@@ -289,12 +339,16 @@ export class FinanceResolver {
 
   @Mutation(() => Payment, { name: 'reversePayment' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.REVERSE_PAYMENT],
   })
   reversePayment(
     @Args('paymentId') paymentId: string,
-    @Args('reason')    reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Payment> {
     return this.financeService.reversePayment(paymentId, reason, currentUser);
@@ -306,7 +360,11 @@ export class FinanceResolver {
 
   @Mutation(() => WalletEntryObject, { name: 'createWalletCredit' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_PAYMENT],
   })
   createWalletCredit(
@@ -318,7 +376,11 @@ export class FinanceResolver {
 
   @Mutation(() => ApplyWalletResult, { name: 'applyWalletToCharge' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.REGISTER_PAYMENT],
   })
   applyWalletToCharge(
@@ -330,7 +392,11 @@ export class FinanceResolver {
 
   @Mutation(() => MoraApplicationResult, { name: 'applyMoraToPeriod' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.GENERATE_CHARGES],
   })
   applyMoraToPeriod(
@@ -346,7 +412,11 @@ export class FinanceResolver {
    */
   @Mutation(() => MoraApplicationResult, { name: 'applyMoraAllPeriods' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.GENERATE_CHARGES],
   })
   applyMoraAllPeriods(
@@ -363,25 +433,35 @@ export class FinanceResolver {
   @Query(() => PaginatedChargesResponse, { name: 'charges' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_CHARGES],
   })
   findCharges(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterChargesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterChargesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedChargesResponse> {
-    return this.financeService.findChargesByComplex(complexId, pagination, filters, currentUser);
+    return this.financeService.findChargesByComplex(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   @Query(() => [Payment], { name: 'paymentsByCharge' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_PAYMENTS],
@@ -400,47 +480,59 @@ export class FinanceResolver {
   @Query(() => UnitBalanceResponse, { name: 'unitBalance' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_ACCOUNT_BALANCE],
   })
   getUnitBalance(
-    @Args('unitId')    unitId: string,
+    @Args('unitId') unitId: string,
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitBalanceResponse> {
     return this.financeService.getUnitBalance(unitId, complexId, currentUser);
   }
 
-  @Query(() => ComplexFinancialSummaryResponse, { name: 'complexFinancialSummary' })
+  @Query(() => ComplexFinancialSummaryResponse, {
+    name: 'complexFinancialSummary',
+  })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FINANCIAL_REPORTS],
   })
   getComplexFinancialSummary(
     @Args('complexId') complexId: string,
-    @Args('period')    period: string,
+    @Args('period') period: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<ComplexFinancialSummaryResponse> {
-    return this.financeService.getComplexFinancialSummary(complexId, period, currentUser);
+    return this.financeService.getComplexFinancialSummary(
+      complexId,
+      period,
+      currentUser,
+    );
   }
 
   @Query(() => UnitWalletResponse, { name: 'unitWallet' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_ACCOUNT_BALANCE],
   })
   getUnitWallet(
-    @Args('unitId')    unitId: string,
+    @Args('unitId') unitId: string,
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitWalletResponse> {
@@ -450,54 +542,78 @@ export class FinanceResolver {
   @Query(() => WalletSummaryPaginated, { name: 'walletsSummary' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FINANCIAL_REPORTS],
   })
   getWalletsSummary(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<WalletSummaryPaginated> {
-    return this.financeService.getWalletsSummary(complexId, pagination, currentUser);
+    return this.financeService.getWalletsSummary(
+      complexId,
+      pagination,
+      currentUser,
+    );
   }
 
   @Query(() => UnitAccountStatementResponse, { name: 'unitAccountStatement' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.RESIDENT_ROL,
     ],
     permissions: [ValidPermissions.VIEW_ACCOUNT_BALANCE],
   })
   getUnitAccountStatement(
-    @Args('unitId')                                   unitId: string,
-    @Args('complexId')                                complexId: string,
-    @Args('period', { nullable: true })               period: string,
-    @Args('limit',  { type: () => Int, nullable: true })  limit: number,
-    @Args('offset', { type: () => Int, nullable: true })  offset: number,
+    @Args('unitId') unitId: string,
+    @Args('complexId') complexId: string,
+    @Args('period', { nullable: true }) period: string,
+    @Args('limit', { type: () => Int, nullable: true }) limit: number,
+    @Args('offset', { type: () => Int, nullable: true }) offset: number,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitAccountStatementResponse> {
-    return this.financeService.getUnitAccountStatement(unitId, complexId, period, currentUser, limit, offset);
+    return this.financeService.getUnitAccountStatement(
+      unitId,
+      complexId,
+      period,
+      currentUser,
+      limit,
+      offset,
+    );
   }
 
   @Query(() => UnitFinancialStatusPaginated, { name: 'unitsFinancialStatus' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_FINANCIAL_REPORTS],
   })
   getUnitsFinancialStatus(
-    @Args('complexId')                      complexId: string,
-    @Args('status',     { nullable: true }) status: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('complexId') complexId: string,
+    @Args('status', { nullable: true }) status: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<UnitFinancialStatusPaginated> {
-    return this.financeService.getUnitsFinancialStatus(complexId, status, pagination, currentUser);
+    return this.financeService.getUnitsFinancialStatus(
+      complexId,
+      status,
+      pagination,
+      currentUser,
+    );
   }
 
   // ================================================================
@@ -506,7 +622,11 @@ export class FinanceResolver {
 
   @Mutation(() => ComplexExpense, { name: 'registerExpense' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_EXPENSES],
   })
   registerExpense(
@@ -518,12 +638,16 @@ export class FinanceResolver {
 
   @Mutation(() => ComplexExpense, { name: 'reverseExpense' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_EXPENSES],
   })
   reverseExpense(
     @Args('expenseId') expenseId: string,
-    @Args('reason')    reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<ComplexExpense> {
     return this.financeService.reverseExpense(expenseId, reason, currentUser);
@@ -532,25 +656,37 @@ export class FinanceResolver {
   @Query(() => PaginatedExpensesResponse, { name: 'complexExpenses' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_EXPENSES],
   })
   getComplexExpenses(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterExpensesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterExpensesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedExpensesResponse> {
-    return this.financeService.getComplexExpenses(complexId, pagination, filters, currentUser);
+    return this.financeService.getComplexExpenses(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 
   // ── Ingresos directos (caja/banco) ──────────────────────────────────────────
 
   @Mutation(() => DirectIncome, { name: 'registerDirectIncome' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_EXPENSES],
   })
   registerDirectIncome(
@@ -562,31 +698,47 @@ export class FinanceResolver {
 
   @Mutation(() => DirectIncome, { name: 'reverseDirectIncome' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_EXPENSES],
   })
   reverseDirectIncome(
     @Args('incomeId') incomeId: string,
-    @Args('reason')   reason: string,
+    @Args('reason') reason: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<DirectIncome> {
-    return this.financeService.reverseDirectIncome(incomeId, reason, currentUser);
+    return this.financeService.reverseDirectIncome(
+      incomeId,
+      reason,
+      currentUser,
+    );
   }
 
   @Query(() => PaginatedIncomesResponse, { name: 'complexIncomes' })
   @Auth({
     roles: [
-      ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-      ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
     permissions: [ValidPermissions.VIEW_EXPENSES],
   })
   getComplexIncomes(
-    @Args('complexId')                      complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
-    @Args('filters',    { nullable: true }) filters: FilterIncomesInput = {},
+    @Args('complexId') complexId: string,
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('filters', { nullable: true }) filters: FilterIncomesInput = {},
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedIncomesResponse> {
-    return this.financeService.getComplexIncomes(complexId, pagination, filters, currentUser);
+    return this.financeService.getComplexIncomes(
+      complexId,
+      pagination,
+      filters,
+      currentUser,
+    );
   }
 }

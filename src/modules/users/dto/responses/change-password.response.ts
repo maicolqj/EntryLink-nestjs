@@ -10,4 +10,4 @@ export class ChangePasswordResponse {
 
   @Field(() => Date, { nullable: true })
   changedAt?: Date;
-} 
+}

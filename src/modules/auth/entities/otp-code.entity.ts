@@ -38,7 +38,12 @@ export class OtpCode {
   attempts: number;
 
   /** IP desde donde se solicitó el OTP (para auditoría) */
-  @Column({ name: 'requested_from_ip', type: 'varchar', length: 45, nullable: true })
+  @Column({
+    name: 'requested_from_ip',
+    type: 'varchar',
+    length: 45,
+    nullable: true,
+  })
   requestedFromIp?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

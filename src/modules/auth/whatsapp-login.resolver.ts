@@ -35,7 +35,10 @@ export class WhatsAppLoginResolver {
     @Args('identity', { type: () => String }) identity: string,
     @Context() context: any,
   ): Promise<WhatsAppLoginChallengeResponse> {
-    return this.whatsAppLoginService.requestChallenge(identity, this.deviceInfo(context));
+    return this.whatsAppLoginService.requestChallenge(
+      identity,
+      this.deviceInfo(context),
+    );
   }
 
   @Public()
@@ -61,7 +64,10 @@ export class WhatsAppLoginResolver {
     @Args('challengeId', { type: () => ID }) challengeId: string,
     @Context() context: any,
   ): Promise<WhatsAppLoginStatusResponse> {
-    return this.whatsAppLoginService.getStatus(challengeId, this.deviceInfo(context));
+    return this.whatsAppLoginService.getStatus(
+      challengeId,
+      this.deviceInfo(context),
+    );
   }
 
   @Public()
@@ -73,13 +79,21 @@ export class WhatsAppLoginResolver {
   })
   async redeemWhatsAppLoginChallenge(
     @Args('challengeId', { type: () => ID }) challengeId: string,
-    @Args('accessCode', { type: () => String, nullable: true }) accessCode: string | undefined,
+    @Args('accessCode', { type: () => String, nullable: true })
+    accessCode: string | undefined,
     @Context() context: any,
   ): Promise<AuthResponse> {
-    return this.whatsAppLoginService.redeem(challengeId, this.deviceInfo(context), accessCode);
+    return this.whatsAppLoginService.redeem(
+      challengeId,
+      this.deviceInfo(context),
+      accessCode,
+    );
   }
 
   private deviceInfo(context: any) {
-    return buildDeviceInfo(context, this.configService.getOrThrow<string>('FINGERPRINT_SECRET'));
+    return buildDeviceInfo(
+      context,
+      this.configService.getOrThrow<string>('FINGERPRINT_SECRET'),
+    );
   }
 }

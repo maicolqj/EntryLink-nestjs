@@ -4,7 +4,6 @@ import { Package } from '../../entities/package.entity';
 
 @ObjectType()
 export class PaginatedPackagesResponse {
-
   @Field(() => [Package])
   items: Package[];
 

@@ -1,5 +1,5 @@
-import { ValidPermissions } from "../../permissions/enums/valid-permissions";
-import { ValidRoles } from "../../roles/enums/valid-roles";
+import { ValidPermissions } from '../../permissions/enums/valid-permissions';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 export interface JwtAccessPayload {
   sub: string;

@@ -15,7 +15,11 @@ import { PaginatedVisitorVehiclesResponse } from '../dto/responses/paginated-vis
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { GeneralErrorCode, ParkingErrorCode, ResidentErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  GeneralErrorCode,
+  ParkingErrorCode,
+  ResidentErrorCode,
+} from '../../shared/constans/error-codes.constants';
 
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
@@ -41,7 +45,6 @@ export class VisitorParkingService {
   private readonly logger = new Logger(VisitorParkingService.name);
 
   constructor(
-
     @InjectRepository(VisitorVehicle)
     private readonly vehicleRepo: Repository<VisitorVehicle>,
 
@@ -50,8 +53,7 @@ export class VisitorParkingService {
 
     @InjectRepository(VisitorParkingRate)
     private readonly visitorRateRepo: Repository<VisitorParkingRate>,
-  
-  
+
     @InjectRepository(VisitorParkingRate)
     private readonly rateRepo: Repository<VisitorParkingRate>,
 
@@ -70,8 +72,7 @@ export class VisitorParkingService {
     private readonly notificationsService: NotificationsService,
     private readonly accountingService: AccountingService,
     private readonly dataSource: DataSource,
-
-  ) { }
+  ) {}
 
   // ================================================================
   // GESTIÓN DE TARIFAS
@@ -86,7 +87,7 @@ export class VisitorParkingService {
     currentUser: JwtAccessPayload,
   ): Promise<VisitorParkingRate> {
     const { complexId, vehicleType, rateType } = input;
-    this.logger.warn(`DATOS DE INGRESO ${JSON.stringify(input, null, 5)}`)
+    this.logger.warn(`DATOS DE INGRESO ${JSON.stringify(input, null, 5)}`);
     await this.complexService.findById(input.complexId, currentUser);
 
     let rate = await this.rateRepo.findOne({
@@ -132,8 +133,7 @@ export class VisitorParkingService {
     });
   }
 
-
-    // ================================================================
+  // ================================================================
   // OBTENER CONFIGURACIÓN
   // ================================================================
 
@@ -141,11 +141,10 @@ export class VisitorParkingService {
     return this.configRepo.findOne({ where: { complexId } });
   }
 
-
-    private async generateInvoiceNumber(complexId: string): Promise<string> {
-    const now   = new Date();
+  private async generateInvoiceNumber(complexId: string): Promise<string> {
+    const now = new Date();
     const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    const prefix  = `PKG-${today}-`;
+    const prefix = `PKG-${today}-`;
 
     // Contar cuántos registros de HOY ya existen en este complejo
     const count = await this.vehicleRepo
@@ -195,13 +194,20 @@ export class VisitorParkingService {
     input: RegisterVisitorVehicleInput,
     currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-    const complex = await this.complexService.findById(input.complexId, currentUser);
+    const complex = await this.complexService.findById(
+      input.complexId,
+      currentUser,
+    );
     // En sesiones de tipo 'complex' el sub del JWT es el id del complejo, no un user.
     // Para los FK hacia `users` usamos el owner del complejo (un user real).
-    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
+    const actingUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
 
     // Validar que el residente anfitrión existe y está activo
-    const resident = await this.residentsService.findById(input.hostResidentId, currentUser);
+    const resident = await this.residentsService.findById(
+      input.hostResidentId,
+      currentUser,
+    );
 
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
@@ -234,7 +240,8 @@ export class VisitorParkingService {
       // Solo asignar si quien registra es un usuario real.
       // Cuando entityType === 'complex', sub es el UUID del complejo (no existe en users)
       // y causaría una FK violation en registered_by_user_id.
-      registeredByUserId: currentUser.entityType === 'user' ? currentUser.sub : null,
+      registeredByUserId:
+        currentUser.entityType === 'user' ? currentUser.sub : null,
       invoiceNumber,
     });
 
@@ -247,7 +254,13 @@ export class VisitorParkingService {
       entityType: AuditEntityType.VisitorVehicle,
       entityId: saved.id,
       action: AuditAction.CREATE,
-      newValue: { id: saved.id, plate: saved.plate, vehicleType: saved.vehicleType, status: saved.status, entryTime: saved.entryDate },
+      newValue: {
+        id: saved.id,
+        plate: saved.plate,
+        vehicleType: saved.vehicleType,
+        status: saved.status,
+        entryTime: saved.entryDate,
+      },
       performedById: actingUserId,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -258,12 +271,10 @@ export class VisitorParkingService {
     return this.loadRelations(saved.id);
   }
 
-
   async registerExit(
     input: ResgiterExitVehicle,
     currentUser: JwtAccessPayload,
   ): Promise<VisitorVehicle> {
-
     const { paymentMethod, visitorVehicleId } = input;
     // 1. Obtener registro y validar
     const record = await this.vehicleRepo.findOne({
@@ -280,8 +291,12 @@ export class VisitorParkingService {
 
     // Verifica acceso al complejo y resuelve el user que registra la salida.
     // En sesiones 'complex' el sub del JWT es el complejo → usamos su owner (user real).
-    const complex = await this.complexService.findById(record.complexId, currentUser);
-    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
+    const complex = await this.complexService.findById(
+      record.complexId,
+      currentUser,
+    );
+    const actingUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
 
     // 2. Obtener la tarifa activa para este registro
     // Las tarifas se filtran por complexId (multi-tenant); configId es el id
@@ -291,7 +306,7 @@ export class VisitorParkingService {
         complexId: record.complexId,
         vehicleType: record.vehicleType,
         isActive: true,
-      }
+      },
     });
 
     if (!activeRate) {
@@ -333,8 +348,13 @@ export class VisitorParkingService {
       }
 
       // APLICAR TOPE MÁXIMO DIARIO
-      if (activeRate.maxDailyAmount && total > Number(activeRate.maxDailyAmount)) {
-        this.logger.debug(`Aplicando tope máximo: ${total} -> ${activeRate.maxDailyAmount}`);
+      if (
+        activeRate.maxDailyAmount &&
+        total > Number(activeRate.maxDailyAmount)
+      ) {
+        this.logger.debug(
+          `Aplicando tope máximo: ${total} -> ${activeRate.maxDailyAmount}`,
+        );
         total = Number(activeRate.maxDailyAmount);
       }
     } else {
@@ -344,10 +364,14 @@ export class VisitorParkingService {
     total = Number(total.toFixed(2));
 
     const period = `${exitDate.getFullYear()}-${String(exitDate.getMonth() + 1).padStart(2, '0')}`;
-    const chargeToUnit = input.paymentMethod === ParkingPaymentMethod.CHARGE_TO_UNIT;
+    const chargeToUnit =
+      input.paymentMethod === ParkingPaymentMethod.CHARGE_TO_UNIT;
 
     if (chargeToUnit && !record.hostResident?.unitId) {
-      throw new CustomError({ message: 'Registro sin unidad asignada.', statusCode: 400 });
+      throw new CustomError({
+        message: 'Registro sin unidad asignada.',
+        statusCode: 400,
+      });
     }
 
     // 5-6. Registrar salida + reflejar el dinero en finanzas (mismo TX):
@@ -357,11 +381,15 @@ export class VisitorParkingService {
       let newStatus: ParkingRecordStatus = ParkingRecordStatus.PAID;
 
       if (chargeToUnit) {
-        const dueDate = new Date(exitDate.getFullYear(), exitDate.getMonth() + 1, 0); // fin de mes
+        const dueDate = new Date(
+          exitDate.getFullYear(),
+          exitDate.getMonth() + 1,
+          0,
+        ); // fin de mes
         if (total > 0) {
           await this.accountingService.emitVisitorParkingUnitCharge(em, {
             complexId: record.complexId,
-            unitId: record.hostResident.unitId!,
+            unitId: record.hostResident.unitId,
             amount: total,
             period,
             dueDate,
@@ -393,7 +421,9 @@ export class VisitorParkingService {
       return em.save(VisitorVehicle, record);
     });
 
-    this.logger.log(`Salida Exitosa: ${saved.plate} - Cobrado: $${total} (${durationMinutes} min)`);
+    this.logger.log(
+      `Salida Exitosa: ${saved.plate} - Cobrado: $${total} (${durationMinutes} min)`,
+    );
 
     return saved;
   }
@@ -427,13 +457,18 @@ export class VisitorParkingService {
       });
     }
 
-    const complex = await this.complexService.findById(vehicle.complexId, currentUser);
-    const actingUserId = currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
+    const complex = await this.complexService.findById(
+      vehicle.complexId,
+      currentUser,
+    );
+    const actingUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : complex.ownerId;
 
     vehicle.status = ParkingRecordStatus.CANCELLED;
     vehicle.cancellationReason = cancellationReason;
     // Solo asignar si quien cancela es un usuario real (ver registerEntry).
-    vehicle.cancelledByUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
+    vehicle.cancelledByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
 
     const saved = await this.vehicleRepo.save(vehicle);
 
@@ -494,10 +529,14 @@ export class VisitorParkingService {
     }
 
     if (input.maxCapacity !== undefined) config.maxCapacity = input.maxCapacity;
-    if (input.gracePeriodMinutes !== undefined) config.gracePeriodMinutes = input.gracePeriodMinutes;
-    if (input.receiptMessage !== undefined) config.receiptMessage = input.receiptMessage;
-    if (input.showLogoOnReceipt !== undefined) config.showLogoOnReceipt = input.showLogoOnReceipt;
-    if (input.activeRateId !== undefined) config.activeRateId = input.activeRateId;
+    if (input.gracePeriodMinutes !== undefined)
+      config.gracePeriodMinutes = input.gracePeriodMinutes;
+    if (input.receiptMessage !== undefined)
+      config.receiptMessage = input.receiptMessage;
+    if (input.showLogoOnReceipt !== undefined)
+      config.showLogoOnReceipt = input.showLogoOnReceipt;
+    if (input.activeRateId !== undefined)
+      config.activeRateId = input.activeRateId;
     if (input.currency !== undefined) config.currency = input.currency;
 
     const saved = await this.configRepo.save(config);
@@ -518,13 +557,19 @@ export class VisitorParkingService {
           );
         } else {
           await this.visitorRateRepo.save(
-            this.visitorRateRepo.create({ ...rateInput, configId: saved.id, complexId: input.complexId }),
+            this.visitorRateRepo.create({
+              ...rateInput,
+              configId: saved.id,
+              complexId: input.complexId,
+            }),
           );
         }
       }
     }
 
-    this.logger.log(`Configuración de parqueadero visitante actualizada — complejo: ${input.complexId}`);
+    this.logger.log(
+      `Configuración de parqueadero visitante actualizada — complejo: ${input.complexId}`,
+    );
 
     return this.configRepo.findOne({
       where: { complexId: input.complexId },
@@ -548,7 +593,13 @@ export class VisitorParkingService {
 
     return this.vehicleRepo.find({
       where: { complexId, status: ParkingRecordStatus.OPEN },
-      relations: ['hostResident', 'hostResident.user', 'hostResident.unit', 'hostResident.unit.building', 'registeredByUser'],
+      relations: [
+        'hostResident',
+        'hostResident.user',
+        'hostResident.unit',
+        'hostResident.unit.building',
+        'registeredByUser',
+      ],
       order: { entryDate: 'ASC' },
     });
   }
@@ -578,15 +629,21 @@ export class VisitorParkingService {
     }
 
     if (filters.vehicleType) {
-      qb.andWhere('vv.vehicleType = :vehicleType', { vehicleType: filters.vehicleType });
+      qb.andWhere('vv.vehicleType = :vehicleType', {
+        vehicleType: filters.vehicleType,
+      });
     }
 
     if (filters.plate) {
-      qb.andWhere('vv.plate ILIKE :plate', { plate: `%${filters.plate.toUpperCase()}%` });
+      qb.andWhere('vv.plate ILIKE :plate', {
+        plate: `%${filters.plate.toUpperCase()}%`,
+      });
     }
 
     if (filters.hostResidentId) {
-      qb.andWhere('vv.hostResident_id = :hostResidentId', { hostResidentId: filters.hostResidentId });
+      qb.andWhere('vv.hostResident_id = :hostResidentId', {
+        hostResidentId: filters.hostResidentId,
+      });
     }
 
     if (filters.dateFrom) {
@@ -664,7 +721,9 @@ export class VisitorParkingService {
    * cuando se genera un cargo de parqueadero.
    * Solo se llama cuando parkingCost > 0.
    */
-  private async notifyResidentsOfCharge(vehicle: VisitorVehicle): Promise<void> {
+  private async notifyResidentsOfCharge(
+    vehicle: VisitorVehicle,
+  ): Promise<void> {
     const unitId = vehicle.hostResident?.unitId;
     if (!unitId) return;
 
@@ -677,7 +736,7 @@ export class VisitorParkingService {
       },
     });
 
-    const userIds = mainResidents.map(r => r.userId);
+    const userIds = mainResidents.map((r) => r.userId);
     if (userIds.length === 0) return;
 
     const cost = Number(vehicle.parkingCost ?? 0);

@@ -5,14 +5,15 @@ import { registerEnumType } from '@nestjs/graphql';
  * y por eso lo elige el residente y no la administración.
  */
 export enum PqrfType {
-  PETICION      = 'PETICION',
-  QUEJA         = 'QUEJA',
-  RECLAMO       = 'RECLAMO',
-  SUGERENCIA    = 'SUGERENCIA',
-  FELICITACION  = 'FELICITACION',
+  PETICION = 'PETICION',
+  QUEJA = 'QUEJA',
+  RECLAMO = 'RECLAMO',
+  SUGERENCIA = 'SUGERENCIA',
+  FELICITACION = 'FELICITACION',
 }
 
 registerEnumType(PqrfType, {
   name: 'PqrfType',
-  description: 'Tipo de radicado: petición, queja, reclamo, sugerencia o felicitación',
+  description:
+    'Tipo de radicado: petición, queja, reclamo, sugerencia o felicitación',
 });

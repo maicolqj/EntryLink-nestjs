@@ -47,17 +47,17 @@ describe('WhatsAppLoginService', () => {
     }),
     findOne: jest.fn(async ({ where }: any) => {
       return (
-        challenges.find(c =>
+        challenges.find((c) =>
           Object.entries(where).every(([k, v]) => (c as any)[k] === v),
         ) ?? null
       );
     }),
     update: jest.fn(async (criteria: any, patch: any) => {
       const match = typeof criteria === 'string' ? { id: criteria } : criteria;
-      const rows = challenges.filter(c =>
+      const rows = challenges.filter((c) =>
         Object.entries(match).every(([k, v]) => (c as any)[k] === v),
       );
-      rows.forEach(r => Object.assign(r, patch));
+      rows.forEach((r) => Object.assign(r, patch));
       return { affected: rows.length };
     }),
     delete: jest.fn(async () => ({ affected: 0 })),
@@ -81,7 +81,10 @@ describe('WhatsAppLoginService', () => {
 
   const tokenService = {
     generateTokenPair: jest.fn(async () => ({
-      accessToken: 'at', refreshToken: 'rt', expiresIn: 900, sessionId: 'sess-1',
+      accessToken: 'at',
+      refreshToken: 'rt',
+      expiresIn: 900,
+      sessionId: 'sess-1',
     })),
   };
 
@@ -113,7 +116,10 @@ describe('WhatsAppLoginService', () => {
     const module = await Test.createTestingModule({
       providers: [
         WhatsAppLoginService,
-        { provide: getRepositoryToken(WhatsAppLoginChallenge), useValue: challengeRepo },
+        {
+          provide: getRepositoryToken(WhatsAppLoginChallenge),
+          useValue: challengeRepo,
+        },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
         { provide: SessionService, useValue: sessionService },
@@ -139,7 +145,9 @@ describe('WhatsAppLoginService', () => {
 
     expect(res.nonce).toMatch(/^[A-Z2-9]{8}$/);
     expect(res.whatsappUrl).toContain('https://wa.me/573009998877');
-    expect(res.whatsappUrl).toContain(encodeURIComponent(`INGRESAR ${res.nonce}`));
+    expect(res.whatsappUrl).toContain(
+      encodeURIComponent(`INGRESAR ${res.nonce}`),
+    );
     expect(res.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
@@ -147,7 +155,10 @@ describe('WhatsAppLoginService', () => {
     const res = await request();
 
     // Meta manda el `from` con indicativo; en BD está sin él.
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
     const status = await service.getStatus(res.challengeId, device);
     expect(status.status).toBe(WhatsAppLoginStatus.CONFIRMED);
@@ -156,7 +167,10 @@ describe('WhatsAppLoginService', () => {
   it('NO confirma si el nonce llega desde otro teléfono', async () => {
     const res = await request();
 
-    await service.confirmFromInboundMessage('573009999999', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573009999999',
+      `INGRESAR ${res.nonce}`,
+    );
 
     const status = await service.getStatus(res.challengeId, device);
     expect(status.status).toBe(WhatsAppLoginStatus.PENDING);
@@ -165,7 +179,10 @@ describe('WhatsAppLoginService', () => {
   it('acepta el texto en minúscula y con espacios de más', async () => {
     const res = await request();
 
-    await service.confirmFromInboundMessage('573001234567', `  ingresar   ${res.nonce.toLowerCase()}  `);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `  ingresar   ${res.nonce.toLowerCase()}  `,
+    );
 
     const status = await service.getStatus(res.challengeId, device);
     expect(status.status).toBe(WhatsAppLoginStatus.CONFIRMED);
@@ -174,22 +191,29 @@ describe('WhatsAppLoginService', () => {
   it('canjear sin confirmar falla', async () => {
     const res = await request();
 
-    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject({
-      errorCode: 'WA_LOGIN_CHALLENGE_PENDING',
-    });
+    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject(
+      {
+        errorCode: 'WA_LOGIN_CHALLENGE_PENDING',
+      },
+    );
   });
 
   it('canje exitoso devuelve tokens y deja el challenge consumido', async () => {
     const res = await request();
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
     const auth = await service.redeem(res.challengeId, device);
     expect(auth.accessToken).toBe('at');
 
     // Un segundo canje del mismo challenge no puede abrir otra sesión.
-    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject({
-      errorCode: 'WA_LOGIN_CHALLENGE_CONSUMED',
-    });
+    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject(
+      {
+        errorCode: 'WA_LOGIN_CHALLENGE_CONSUMED',
+      },
+    );
   });
 
   it('pedir la clave no consume el challenge: el reintento con la clave entra', async () => {
@@ -199,15 +223,23 @@ describe('WhatsAppLoginService', () => {
     residentDeviceService.hasAccessCode.mockResolvedValue(true);
 
     const res = await request();
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
-    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject({
-      errorCode: 'ACCESS_CODE_REQUIRED',
-    });
+    await expect(service.redeem(res.challengeId, device)).rejects.toMatchObject(
+      {
+        errorCode: 'ACCESS_CODE_REQUIRED',
+      },
+    );
 
     const auth = await service.redeem(res.challengeId, device, 'K7M2Q4');
     expect(auth.accessToken).toBe('at');
-    expect(residentDeviceService.verifyAccessCode).toHaveBeenCalledWith('user-1', 'K7M2Q4');
+    expect(residentDeviceService.verifyAccessCode).toHaveBeenCalledWith(
+      'user-1',
+      'K7M2Q4',
+    );
 
     // clearAllMocks no borra las implementaciones: sin esto, el `true` se
     // filtraría a las pruebas siguientes según el orden de ejecución.
@@ -216,11 +248,16 @@ describe('WhatsAppLoginService', () => {
 
   it('otro dispositivo no puede canjear aunque el challenge esté confirmado', async () => {
     const res = await request();
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
     const attacker: DeviceInfo = { ...device, fingerprint: 'fp-atacante' };
 
-    await expect(service.redeem(res.challengeId, attacker)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, attacker),
+    ).rejects.toMatchObject({
       errorCode: 'WA_LOGIN_CHALLENGE_NOT_FOUND',
     });
   });
@@ -229,7 +266,10 @@ describe('WhatsAppLoginService', () => {
     const res = await request();
     challenges[0].expiresAt = new Date(Date.now() - 1_000);
 
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
     expect(challenges[0].status).toBe(WhatsAppLoginStatus.EXPIRED);
   });
@@ -240,7 +280,10 @@ describe('WhatsAppLoginService', () => {
     const res = await service.requestChallenge('0000000000', device);
     expect(res.nonce).toBeDefined(); // respuesta indistinguible (anti-enumeration)
 
-    await service.confirmFromInboundMessage('573001234567', `INGRESAR ${res.nonce}`);
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
 
     const status = await service.getStatus(res.challengeId, device);
     expect(status.status).toBe(WhatsAppLoginStatus.PENDING);
@@ -249,6 +292,8 @@ describe('WhatsAppLoginService', () => {
   it('rate limit por identidad', async () => {
     cacheService.get.mockResolvedValue({ count: 3 } as any);
 
-    await expect(request()).rejects.toMatchObject({ errorCode: 'WA_LOGIN_RATE_LIMIT' });
+    await expect(request()).rejects.toMatchObject({
+      errorCode: 'WA_LOGIN_RATE_LIMIT',
+    });
   });
 });

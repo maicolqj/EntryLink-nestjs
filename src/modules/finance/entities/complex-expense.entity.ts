@@ -1,11 +1,16 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  ManyToOne, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
-import { ExpenseCategory }    from '../enums/expense-category.enum';
+import { ExpenseCategory } from '../enums/expense-category.enum';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 
 @ObjectType()
@@ -13,7 +18,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Index(['complexId', 'period'])
 @Index(['complexId', 'expenseDate'])
 export class ComplexExpense {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

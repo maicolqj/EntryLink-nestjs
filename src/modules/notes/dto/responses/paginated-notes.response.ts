@@ -4,7 +4,6 @@ import { Note } from '../../entities/note.entity';
 
 @ObjectType()
 export class PaginatedNotesResponse {
-
   @Field(() => [Note])
   items: Note[];
 

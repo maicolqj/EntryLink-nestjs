@@ -11,14 +11,14 @@ import {
 import { Request } from 'express';
 
 import { AmenitiesService } from '../services/amenities.service';
-import { R2StorageService }          from '../../../core/infrastructure/r2/r2.service';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
 import { multipleImagesInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { Auth }             from '../../shared/decorators/auth.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
-import { CustomError }      from '../../shared/utils/errors.utils';
+import { CustomError } from '../../shared/utils/errors.utils';
 import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
 /** Tope de fotos que puede acumular una zona. Coincide con el ArrayMaxSize del input. */
@@ -66,8 +66,14 @@ export class AmenitiesController {
       });
     }
 
-    const amenity = await this.amenitiesService.findById(amenityId, currentUser);
-    const complex = await this.complexService.findById(amenity.complexId, currentUser);
+    const amenity = await this.amenitiesService.findById(
+      amenityId,
+      currentUser,
+    );
+    const complex = await this.complexService.findById(
+      amenity.complexId,
+      currentUser,
+    );
 
     const current = amenity.imageUrls ?? [];
     if (current.length + files.length > MAX_IMAGES_PER_AMENITY) {
@@ -87,7 +93,11 @@ export class AmenitiesController {
 
     try {
       for (const file of files) {
-        const result = await this.storageService.uploadBuffer(file.buffer, folder, file.originalname);
+        const result = await this.storageService.uploadBuffer(
+          file.buffer,
+          folder,
+          file.originalname,
+        );
         uploadedPublicIds.push(result.publicId);
         uploadedUrls.push(result.url);
       }
@@ -100,9 +110,13 @@ export class AmenitiesController {
       return { id: updated.id, imageUrls: updated.imageUrls };
     } catch (err) {
       await Promise.allSettled(
-        uploadedPublicIds.map(publicId => this.storageService.deleteByPublicId(publicId)),
+        uploadedPublicIds.map((publicId) =>
+          this.storageService.deleteByPublicId(publicId),
+        ),
       );
-      this.logger.error(`Error al subir imágenes de la zona ${amenityId}; rollback en R2 ejecutado`);
+      this.logger.error(
+        `Error al subir imágenes de la zona ${amenityId}; rollback en R2 ejecutado`,
+      );
       throw err;
     }
   }

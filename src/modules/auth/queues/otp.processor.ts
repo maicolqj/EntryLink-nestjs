@@ -1,7 +1,12 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { OTP_QUEUE_NAME, OTP_JOBS, SendOtpJobPayload, SendSystemCodeJobPayload } from './otp.queue.constants';
+import {
+  OTP_QUEUE_NAME,
+  OTP_JOBS,
+  SendOtpJobPayload,
+  SendSystemCodeJobPayload,
+} from './otp.queue.constants';
 import { WhatsAppService } from '../services/whatsapp.service';
 
 /**
@@ -41,18 +46,27 @@ export class OtpProcessor extends WorkerHost {
     if (!this.assertChannelAvailable('OTP', phoneNumber, code)) return;
 
     await this.whatsAppService.sendOtp(phoneNumber, code);
-    this.logger.log(`OTP enviado por WhatsApp (válido ${expiresInMinutes} min) — userId: ${userId}`);
+    this.logger.log(
+      `OTP enviado por WhatsApp (válido ${expiresInMinutes} min) — userId: ${userId}`,
+    );
   }
 
-  private async handleSendSystemCode(job: Job<SendSystemCodeJobPayload>): Promise<void> {
+  private async handleSendSystemCode(
+    job: Job<SendSystemCodeJobPayload>,
+  ): Promise<void> {
     const { phoneNumber, systemCode, userId } = job.data;
 
-    this.logger.log(`Procesando reenvío de código de sistema — userId: ${userId}`);
+    this.logger.log(
+      `Procesando reenvío de código de sistema — userId: ${userId}`,
+    );
 
-    if (!this.assertChannelAvailable('SystemCode', phoneNumber, systemCode)) return;
+    if (!this.assertChannelAvailable('SystemCode', phoneNumber, systemCode))
+      return;
 
     await this.whatsAppService.sendSystemCode(phoneNumber, systemCode);
-    this.logger.log(`Código de sistema enviado por WhatsApp — userId: ${userId}`);
+    this.logger.log(
+      `Código de sistema enviado por WhatsApp — userId: ${userId}`,
+    );
   }
 
   /**
@@ -60,14 +74,22 @@ export class OtpProcessor extends WorkerHost {
    * - en dev/test imprime el código en logs y da el job por completado;
    * - en producción lanza para que el fallo quede registrado y se reintente.
    */
-  private assertChannelAvailable(kind: string, phoneNumber: string, code: string): boolean {
+  private assertChannelAvailable(
+    kind: string,
+    phoneNumber: string,
+    code: string,
+  ): boolean {
     if (this.whatsAppService.isEnabled) return true;
 
     if (process.env.NODE_ENV !== 'production') {
-      this.logger.warn(`[DEV] WhatsApp ${kind} → +57${phoneNumber} | Código: ${code}`);
+      this.logger.warn(
+        `[DEV] WhatsApp ${kind} → +57${phoneNumber} | Código: ${code}`,
+      );
       return false;
     }
 
-    throw new Error(`WhatsApp Cloud API no configurado: imposible enviar ${kind} en producción`);
+    throw new Error(
+      `WhatsApp Cloud API no configurado: imposible enviar ${kind} en producción`,
+    );
   }
 }

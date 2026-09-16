@@ -1,11 +1,26 @@
 import { InputType, Field, Int, Float } from '@nestjs/graphql';
-import { IsUUID, IsOptional, IsString, IsInt, IsBoolean, IsNumber, Min, MaxLength, IsEnum } from 'class-validator';
+import {
+  IsUUID,
+  IsOptional,
+  IsString,
+  IsInt,
+  IsBoolean,
+  IsNumber,
+  Min,
+  MaxLength,
+  IsEnum,
+} from 'class-validator';
 import { ParkingRateType } from '../../enums/parking-rate-type.enum';
 
-@InputType({ description: 'Datos para crear/actualizar una tarifa de parqueadero visitante' })
+@InputType({
+  description:
+    'Datos para crear/actualizar una tarifa de parqueadero visitante',
+})
 export class VisitorParkingRateInput {
-
-  @Field(() => String, { nullable: true, description: 'ID de la tarifa a actualizar (omitir para crear nueva)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'ID de la tarifa a actualizar (omitir para crear nueva)',
+  })
   @IsOptional()
   @IsUUID()
   id?: string;
@@ -40,9 +55,11 @@ export class VisitorParkingRateInput {
   isActive: boolean;
 }
 
-@InputType({ description: 'Datos para crear/actualizar la configuración del parqueadero visitante' })
+@InputType({
+  description:
+    'Datos para crear/actualizar la configuración del parqueadero visitante',
+})
 export class UpdateVisitorParkingConfigInput {
-
   @Field(() => String, { description: 'ID del complejo residencial' })
   @IsUUID()
   complexId: string;
@@ -70,7 +87,10 @@ export class UpdateVisitorParkingConfigInput {
   @IsBoolean()
   showLogoOnReceipt?: boolean;
 
-  @Field(() => String, { nullable: true, description: 'UUID de la tarifa activa por defecto' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'UUID de la tarifa activa por defecto',
+  })
   @IsOptional()
   @IsUUID()
   activeRateId?: string;
@@ -81,7 +101,10 @@ export class UpdateVisitorParkingConfigInput {
   @MaxLength(10)
   currency?: string;
 
-  @Field(() => [VisitorParkingRateInput], { nullable: true, description: 'Tarifas a crear o actualizar' })
+  @Field(() => [VisitorParkingRateInput], {
+    nullable: true,
+    description: 'Tarifas a crear o actualizar',
+  })
   @IsOptional()
   rates?: VisitorParkingRateInput[];
 }

@@ -1,5 +1,9 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 import { AccountingDocumentType } from '../enums/accounting-document-type.enum';
@@ -14,7 +18,6 @@ import { AccountingDocumentType } from '../enums/accounting-document-type.enum';
 @Entity('document_sequences')
 @Index(['complexId', 'documentType'], { unique: true })
 export class DocumentSequence {
-
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

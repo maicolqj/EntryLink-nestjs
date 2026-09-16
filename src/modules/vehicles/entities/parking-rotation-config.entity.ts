@@ -26,16 +26,19 @@ import { User } from '../../users/entities/user.entity';
  * Ejemplo de grandCycleByType (ciclo global por tipo):
  *   { "CAR": 1, "MOTORCYCLE": 2 }
  */
-@ObjectType({ description: 'Configuración de rotación de parqueaderos del complejo' })
+@ObjectType({
+  description: 'Configuración de rotación de parqueaderos del complejo',
+})
 @Entity({ name: 'parking_rotation_configs' })
 @Index(['complexId'], { unique: true })
 export class ParkingRotationConfig {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Field(() => String, { description: 'ID del complejo al que pertenece la configuración' })
+  @Field(() => String, {
+    description: 'ID del complejo al que pertenece la configuración',
+  })
   @Column({ name: 'complex_id', type: 'uuid' })
   complexId: string;
 
@@ -77,7 +80,9 @@ export class ParkingRotationConfig {
 
   // ==================== ESTADO ====================
 
-  @Field(() => Boolean, { description: 'Si la rotación automática está habilitada' })
+  @Field(() => Boolean, {
+    description: 'Si la rotación automática está habilitada',
+  })
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 

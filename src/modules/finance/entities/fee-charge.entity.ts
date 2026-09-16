@@ -1,15 +1,21 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  ManyToOne, Index, OneToMany,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  Index,
+  OneToMany,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 
-import { ChargeStatus }       from '../enums/charge-status.enum';
-import { PrelacionConcept }   from '../enums/prelacion-concept.enum';
+import { ChargeStatus } from '../enums/charge-status.enum';
+import { PrelacionConcept } from '../enums/prelacion-concept.enum';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }               from '../../residential-complex/entities/unit.entity';
-import { FeeConfig }          from './fee-config.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { FeeConfig } from './fee-config.entity';
 
 /**
  * Cargo generado para una unidad en un período de facturación.
@@ -25,7 +31,6 @@ import { FeeConfig }          from './fee-config.entity';
 @Index(['unitId', 'status'])
 @Index(['complexId', 'unitId', 'feeConfigId', 'period'], { unique: true })
 export class FeeCharge {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -107,7 +112,11 @@ export class FeeCharge {
     ) {
       return this.status;
     }
-    if (this.dueDate && new Date(this.dueDate) < new Date() && this.balance > 0) {
+    if (
+      this.dueDate &&
+      new Date(this.dueDate) < new Date() &&
+      this.balance > 0
+    ) {
       return ChargeStatus.OVERDUE;
     }
     return this.status;
@@ -130,7 +139,11 @@ export class FeeCharge {
    * Determina el orden en que un abono/anticipo se imputa a los cargos.
    */
   @Field(() => PrelacionConcept)
-  @Column({ type: 'enum', enum: PrelacionConcept, default: PrelacionConcept.ORDINARY })
+  @Column({
+    type: 'enum',
+    enum: PrelacionConcept,
+    default: PrelacionConcept.ORDINARY,
+  })
   prelacionConcept: PrelacionConcept;
 
   @Field(() => String, { nullable: true })

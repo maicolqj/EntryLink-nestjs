@@ -11,25 +11,34 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int, Float } from '@nestjs/graphql';
 
-import { UnitType }   from '../enums/unit-type.enum';
+import { UnitType } from '../enums/unit-type.enum';
 import { UnitStatus } from '../enums/unit-status.enum';
-import { Building }   from './building.entity';
+import { Building } from './building.entity';
 import { ResidentialComplex } from './residential-complex.entity';
 
-@ObjectType({ description: 'Unidad habitable dentro de un edificio o complejo' })
+@ObjectType({
+  description: 'Unidad habitable dentro de un edificio o complejo',
+})
 @Entity({ name: 'units' })
 @Index(['complexId', 'status'])
-@Index(['buildingId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "buildingId" IS NOT NULL' })
-@Index(['complexId', 'number'], { unique: true, where: '"deleted_at" IS NULL AND "buildingId" IS NULL' })
+@Index(['buildingId', 'number'], {
+  unique: true,
+  where: '"deleted_at" IS NULL AND "buildingId" IS NOT NULL',
+})
+@Index(['complexId', 'number'], {
+  unique: true,
+  where: '"deleted_at" IS NULL AND "buildingId" IS NULL',
+})
 export class Unit {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   // ==================== IDENTIFICACIÓN ====================
 
-  @Field(() => String, { description: 'Número o identificador de la unidad. Ej: "101", "B-202"' })
+  @Field(() => String, {
+    description: 'Número o identificador de la unidad. Ej: "101", "B-202"',
+  })
   @Column({ type: 'varchar', length: 20 })
   number: string;
 
@@ -47,7 +56,10 @@ export class Unit {
 
   // ==================== CARACTERÍSTICAS ====================
 
-  @Field(() => Float, { description: 'Área en metros cuadrados', nullable: true })
+  @Field(() => Float, {
+    description: 'Área en metros cuadrados',
+    nullable: true,
+  })
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true })
   area?: number;
 
@@ -67,15 +79,24 @@ export class Unit {
   @Column({ type: 'smallint', default: 0 })
   storageRooms: number;
 
-  @Field(() => Boolean, { description: 'Si la unidad usa/paga ascensor', nullable: true })
+  @Field(() => Boolean, {
+    description: 'Si la unidad usa/paga ascensor',
+    nullable: true,
+  })
   @Column({ type: 'boolean', default: false })
   hasElevator?: boolean;
 
-  @Field(() => Int, { description: 'Número de pisos de la casa (solo HOUSE)', nullable: true })
+  @Field(() => Int, {
+    description: 'Número de pisos de la casa (solo HOUSE)',
+    nullable: true,
+  })
   @Column({ type: 'smallint', nullable: true })
   houseFloors?: number;
 
-  @Field(() => String, { description: 'Descripción u observaciones adicionales', nullable: true })
+  @Field(() => String, {
+    description: 'Descripción u observaciones adicionales',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   description?: string;
 
@@ -84,7 +105,10 @@ export class Unit {
    * la suma de los coeficientes de todas las unidades debe ser 1 (100%).
    * Ej: 0.012345 = 1.2345%. Se usa para prorratear cuotas/cobros recurrentes.
    */
-  @Field(() => Float, { description: 'Coeficiente de copropiedad (fracción, suma=1)', nullable: true })
+  @Field(() => Float, {
+    description: 'Coeficiente de copropiedad (fracción, suma=1)',
+    nullable: true,
+  })
   @Column({ type: 'numeric', precision: 9, scale: 6, nullable: true })
   coefficient?: number;
 
@@ -94,7 +118,10 @@ export class Unit {
   @Column({ type: 'uuid' })
   complexId: string;
 
-  @Field(() => String, { description: 'ID de la torre/edificio (null si complejo sin torres)', nullable: true })
+  @Field(() => String, {
+    description: 'ID de la torre/edificio (null si complejo sin torres)',
+    nullable: true,
+  })
   @Column({ type: 'uuid', nullable: true })
   buildingId?: string;
 
@@ -114,12 +141,21 @@ export class Unit {
 
   // ==================== RELACIONES ====================
 
-  @Field(() => ResidentialComplex, { description: 'Complejo al que pertenece', nullable: true })
+  @Field(() => ResidentialComplex, {
+    description: 'Complejo al que pertenece',
+    nullable: true,
+  })
   @ManyToOne(() => ResidentialComplex, { onDelete: 'CASCADE', nullable: false })
   complex?: ResidentialComplex;
 
-  @Field(() => Building, { description: 'Torre o edificio contenedor', nullable: true })
-  @ManyToOne(() => Building, (building) => building.units, { onDelete: 'SET NULL', nullable: true })
+  @Field(() => Building, {
+    description: 'Torre o edificio contenedor',
+    nullable: true,
+  })
+  @ManyToOne(() => Building, (building) => building.units, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   building?: Building;
 
   // ==================== HOOKS ====================

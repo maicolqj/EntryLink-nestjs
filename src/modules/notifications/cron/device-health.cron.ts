@@ -29,9 +29,12 @@ export class DeviceHealthCron {
     // Solo vigilancia y supervisión: push_subscriptions es compartida con
     // RemoteLink y barrer todos los Android le mandaría a cada residente un push
     // que su app no sabe interpretar.
-    const subscriptionIds = await this.deviceHealthService.findDevicesToMonitor();
+    const subscriptionIds =
+      await this.deviceHealthService.findDevicesToMonitor();
 
-    this.logger.log(`Health-check semanal — ${subscriptionIds.length} equipos de vigilancia`);
+    this.logger.log(
+      `Health-check semanal — ${subscriptionIds.length} equipos de vigilancia`,
+    );
 
     let failed = 0;
     for (const id of subscriptionIds) {
@@ -40,11 +43,15 @@ export class DeviceHealthCron {
       } catch (err) {
         // Un token muerto no puede cortar la ronda de los demás.
         failed += 1;
-        this.logger.warn(`Health-check falló para ${id}: ${(err as Error)?.message}`);
+        this.logger.warn(
+          `Health-check falló para ${id}: ${(err as Error)?.message}`,
+        );
       }
     }
 
-    this.logger.log(`Health-check semanal enviado (${subscriptionIds.length - failed} ok, ${failed} con error)`);
+    this.logger.log(
+      `Health-check semanal enviado (${subscriptionIds.length - failed} ok, ${failed} con error)`,
+    );
   }
 
   /**
@@ -55,6 +62,8 @@ export class DeviceHealthCron {
   @Cron('0 4 * * 1', { timeZone: 'America/Bogota' })
   async closeRound(): Promise<void> {
     const marked = await this.deviceHealthService.expireStaleChecks();
-    this.logger.log(`Ronda semanal cerrada — ${marked} dispositivos sin responder`);
+    this.logger.log(
+      `Ronda semanal cerrada — ${marked} dispositivos sin responder`,
+    );
   }
 }

@@ -1,9 +1,8 @@
-import { InputType, Field } from "@nestjs/graphql";
-import { Type } from "class-transformer";
-import { IsOptional, IsEnum, IsBoolean } from "class-validator";
-import { PermissionLevel } from "../../enums/level-permissions";
-import { DateRangeInput } from "../../../shared/dto/inputs";
-
+import { InputType, Field } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
+import { IsOptional, IsEnum, IsBoolean } from 'class-validator';
+import { PermissionLevel } from '../../enums/level-permissions';
+import { DateRangeInput } from '../../../shared/dto/inputs';
 
 @InputType()
 export class PermissionFiltersInput {

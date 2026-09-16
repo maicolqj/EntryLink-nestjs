@@ -23,10 +23,10 @@ import { unlink } from 'fs/promises';
 import { Auth } from '../shared/decorators/auth.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { UsersService } from './users.service';
-import { R2StorageService }        from '../../core/infrastructure/r2/r2.service';
-import { singleImageInterceptor }  from '../../core/infrastructure/r2/upload-interceptors';
-import { JwtRestGuard }            from '../shared/guards/jwt-rest.guard';
-import { JwtAccessPayload }        from '../shared/interfaces/jwt-payload.interface';
+import { R2StorageService } from '../../core/infrastructure/r2/r2.service';
+import { singleImageInterceptor } from '../../core/infrastructure/r2/upload-interceptors';
+import { JwtRestGuard } from '../shared/guards/jwt-rest.guard';
+import { JwtAccessPayload } from '../shared/interfaces/jwt-payload.interface';
 
 /**
  * Endpoint REST para importación masiva de residentes por Excel.
@@ -47,7 +47,7 @@ export class UsersController {
   private readonly logger = new Logger(UsersController.name);
 
   constructor(
-    private readonly usersService:  UsersService,
+    private readonly usersService: UsersService,
     private readonly storageService: R2StorageService,
   ) {}
 
@@ -78,7 +78,9 @@ export class UsersController {
         const ext = extname(file.originalname).toLowerCase();
         if (!allowed.includes(ext)) {
           return cb(
-            new BadRequestException('Solo se permiten archivos Excel (.xlsx, .xls)'),
+            new BadRequestException(
+              'Solo se permiten archivos Excel (.xlsx, .xls)',
+            ),
             false,
           );
         }
@@ -105,7 +107,9 @@ export class UsersController {
 
     if (!isSuperAdmin && callerComplexId !== complexId) {
       await unlink(file.path).catch(() => {});
-      throw new ForbiddenException('No tienes permisos para importar residentes en este complejo');
+      throw new ForbiddenException(
+        'No tienes permisos para importar residentes en este complejo',
+      );
     }
 
     const adminUserId: string = req.user?.sub;
@@ -150,13 +154,15 @@ export class UsersController {
   ) {
     const currentUser = req.user as JwtAccessPayload;
 
-    const isSelf       = currentUser.sub === userId;
-    const isPrivileged = currentUser.roles?.some(r =>
+    const isSelf = currentUser.sub === userId;
+    const isPrivileged = currentUser.roles?.some((r) =>
       [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL].includes(r),
     );
 
     if (!isSelf && !isPrivileged) {
-      throw new ForbiddenException('No tienes permisos para modificar la foto de este usuario');
+      throw new ForbiddenException(
+        'No tienes permisos para modificar la foto de este usuario',
+      );
     }
 
     if (!file) {
@@ -165,7 +171,11 @@ export class UsersController {
 
     // Usuarios sin complejo (SUPER_ADMIN, COMPLIANCE) caen en `_platform`
     const complexSlug = await this.usersService.getComplexSlugForUser(userId);
-    const folder = this.storageService.buildFolder(complexSlug, 'users', 'profile-pictures');
+    const folder = this.storageService.buildFolder(
+      complexSlug,
+      'users',
+      'profile-pictures',
+    );
 
     let publicId: string | undefined;
     try {
@@ -176,14 +186,18 @@ export class UsersController {
       );
       publicId = result.publicId;
 
-      const user = await this.usersService.updateProfilePicture(userId, result.url);
+      const user = await this.usersService.updateProfilePicture(
+        userId,
+        result.url,
+      );
       this.logger.log(`Foto de perfil actualizada para usuario ${userId}`);
       return { success: true, profilePicture: user.profilePicture };
-
     } catch (err: any) {
       if (publicId) {
         this.logger.warn(`Rollback R2: eliminando imagen huérfana ${publicId}`);
-        await this.storageService.deleteByPublicId(publicId).catch(() => undefined);
+        await this.storageService
+          .deleteByPublicId(publicId)
+          .catch(() => undefined);
       }
       throw err;
     }

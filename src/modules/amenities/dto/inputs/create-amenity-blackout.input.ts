@@ -1,9 +1,14 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsUUID, IsDateString, IsString, IsNotEmpty, MaxLength } from 'class-validator';
+import {
+  IsUUID,
+  IsDateString,
+  IsString,
+  IsNotEmpty,
+  MaxLength,
+} from 'class-validator';
 
 @InputType()
 export class CreateAmenityBlackoutInput {
-
   @Field()
   @IsUUID()
   amenityId: string;

@@ -28,10 +28,7 @@ export class UniversalRolePermissionGuard implements CanActivate {
 
     // 🔹 Obtener el usuario desde el contexto correcto
     const user =
-      request?.user ||
-      connection?.context?.user ||
-      gqlCtx.user ||
-      null;
+      request?.user || connection?.context?.user || gqlCtx.user || null;
 
     if (!user) {
       this.logger.error('User not found in request or connection context');
@@ -53,17 +50,16 @@ export class UniversalRolePermissionGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    const requiredPermissions =
-      this.reflector.getAllAndOverride<ValidPermissions[]>(
-        'permissions',
-        [context.getHandler(), context.getClass()],
-      );
+    const requiredPermissions = this.reflector.getAllAndOverride<
+      ValidPermissions[]
+    >('permissions', [context.getHandler(), context.getClass()]);
 
     // 🔹 NUEVO: Leer la estrategia de validación
-    const strategy = this.reflector.getAllAndOverride<string>(
-      AUTH_STRATEGY_KEY,
-      [context.getHandler(), context.getClass()],
-    ) ?? 'AND';
+    const strategy =
+      this.reflector.getAllAndOverride<string>(AUTH_STRATEGY_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? 'AND';
 
     // 🔹 Si no hay restricciones, acceso libre
     if (!requiredRoles?.length && !requiredPermissions?.length) {
@@ -84,11 +80,12 @@ export class UniversalRolePermissionGuard implements CanActivate {
 
     if (strategy === 'OR') {
       // OR: basta con cumplir UNA de las dos condiciones
-      granted = (hasValidRole === true) || (hasValidPermission === true);
+      granted = hasValidRole === true || hasValidPermission === true;
     } else {
       // AND (comportamiento original): debe cumplir TODAS las configuradas
       const roleCheck = hasValidRole === null || hasValidRole === true;
-      const permCheck = hasValidPermission === null || hasValidPermission === true;
+      const permCheck =
+        hasValidPermission === null || hasValidPermission === true;
       granted = roleCheck && permCheck;
     }
 
@@ -96,13 +93,13 @@ export class UniversalRolePermissionGuard implements CanActivate {
     if (!granted) {
       this.logger.warn(
         `Access denied (${strategy}): User ${user.email} | ` +
-        `Roles required: [${requiredRoles?.join(', ') ?? 'none'}], has: [${user.roles?.join(', ')}] → ${hasValidRole} | ` +
-        `Permissions required: [${requiredPermissions?.join(', ') ?? 'none'}], has: [${user.permissions?.join(', ')}] → ${hasValidPermission}`,
+          `Roles required: [${requiredRoles?.join(', ') ?? 'none'}], has: [${user.roles?.join(', ')}] → ${hasValidRole} | ` +
+          `Permissions required: [${requiredPermissions?.join(', ') ?? 'none'}], has: [${user.permissions?.join(', ')}] → ${hasValidPermission}`,
       );
     } else {
       this.logger.debug(
         `Access granted (${strategy}): User ${user.email} | ` +
-        `Role match: ${hasValidRole}, Permission match: ${hasValidPermission}`,
+          `Role match: ${hasValidRole}, Permission match: ${hasValidPermission}`,
       );
     }
 

@@ -18,7 +18,6 @@ import { VehicleType } from '../../vehicles/enums/vehicle-type.enum';
 @ObjectType({ description: 'Tarifa de parqueadero para vehículos visitantes' })
 @Entity({ name: 'visitor_parking_rates' })
 export class VisitorParkingRate {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -27,7 +26,10 @@ export class VisitorParkingRate {
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
-  @Field(() => String, { description: 'ID del complejo (para filtrado multi-tenant)', nullable: true })
+  @Field(() => String, {
+    description: 'ID del complejo (para filtrado multi-tenant)',
+    nullable: true,
+  })
   @Column({ name: 'complex_id', type: 'uuid', nullable: true })
   complexId?: string;
 
@@ -36,18 +38,35 @@ export class VisitorParkingRate {
   type: ParkingRateType;
 
   @Field(() => VehicleType, { description: 'Tipo de vehículo' })
-  @Column({ name: 'vehicle_type', type: 'enum', enum: VehicleType, default: VehicleType.CAR })
+  @Column({
+    name: 'vehicle_type',
+    type: 'enum',
+    enum: VehicleType,
+    default: VehicleType.CAR,
+  })
   vehicleType: VehicleType;
 
   @Field(() => Float, { description: 'Monto de la tarifa' })
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
-  @Field(() => Float, { description: 'Tope máximo de cobro por día', nullable: true })
-  @Column({ name: 'max_daily_amount', type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Field(() => Float, {
+    description: 'Tope máximo de cobro por día',
+    nullable: true,
+  })
+  @Column({
+    name: 'max_daily_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   maxDailyAmount?: number;
 
-  @Field(() => Int, { description: 'Minutos de gracia sin cobro', nullable: true })
+  @Field(() => Int, {
+    description: 'Minutos de gracia sin cobro',
+    nullable: true,
+  })
   @Column({ name: 'grace_period_minutes', type: 'int', nullable: true })
   gracePeriodMinutes?: number;
 
@@ -74,20 +93,18 @@ export class VisitorParkingRate {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
-  @ManyToOne(() => VisitorParkingConfig, (config) => config.rates, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => VisitorParkingConfig, (config) => config.rates, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'config_id' })
   config?: VisitorParkingConfig;
 
-
-
   @OneToMany(() => User, (user) => user.createVisitorParking)
   @Field(() => User)
-  createdByUser: User
+  createdByUser: User;
 
   @OneToMany(() => User, (user) => user.updateVisitorParking)
   @Field(() => User)
-  updatedByUser: User
-
-
-  
+  updatedByUser: User;
 }

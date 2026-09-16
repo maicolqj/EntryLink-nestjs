@@ -1,5 +1,5 @@
-import { ValidPermissions } from "../../../../modules/permissions/enums/valid-permissions";
-import { ValidRoles } from "../../../../modules/roles/enums/valid-roles";
+import { ValidPermissions } from '../../../../modules/permissions/enums/valid-permissions';
+import { ValidRoles } from '../../../../modules/roles/enums/valid-roles';
 
 export interface RoleSeedData {
   id: string;

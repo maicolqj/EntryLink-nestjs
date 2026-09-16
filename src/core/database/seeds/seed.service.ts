@@ -1,14 +1,12 @@
-
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { seedPermissions }     from './permissions.seed';
-import { seedRoles }           from './roles.seed';
-import { runUserSeed }         from './users.seed';
-import { seedSpecialNumbers }  from './special-numbers.seed';
+import { seedPermissions } from './permissions.seed';
+import { seedRoles } from './roles.seed';
+import { runUserSeed } from './users.seed';
+import { seedSpecialNumbers } from './special-numbers.seed';
 import { seedPucForAllComplexes, seedPucForComplex } from './puc.seed';
 // import { seedRoles } from './seed-roles';
 // import seedSystemCategories from './seed-categories';
-
 
 @Injectable()
 export class SeedService {
@@ -19,7 +17,7 @@ export class SeedService {
    */
   async runPermissionsSeed(): Promise<void> {
     console.log('\n🌱 Ejecutando seed de permisos...');
-    await seedPermissions(this.dataSource); 
+    await seedPermissions(this.dataSource);
     console.log('✅ Seed de permisos completado\n');
   }
 
@@ -46,13 +44,13 @@ export class SeedService {
    */
   async runAllSeeds(): Promise<void> {
     console.log('\n🌱 Iniciando seeds completos...\n');
-    
+
     try {
       await this.runPermissionsSeed();
       await this.runRolesSeed();
       await this.runUsersSeed();
-    //   await this.runCategoriesSeed();
-      
+      //   await this.runCategoriesSeed();
+
       console.log('🎉 Todos los seeds ejecutados exitosamente!\n');
     } catch (error) {
       console.error('❌ Error ejecutando seeds:', error);
@@ -92,9 +90,9 @@ export class SeedService {
    */
   async clearCategories(): Promise<void> {
     console.log('\n🗑️  Limpiando categorías...');
-    
+
     await this.dataSource.query('DELETE FROM system_categories');
-    
+
     console.log('✅ Categorías eliminadas\n');
   }
 

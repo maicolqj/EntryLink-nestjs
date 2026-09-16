@@ -1,9 +1,14 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsUUID, ArrayMinSize, ArrayNotEmpty, IsDateString, MaxLength } from 'class-validator';
+import {
+  IsUUID,
+  ArrayMinSize,
+  ArrayNotEmpty,
+  IsDateString,
+  MaxLength,
+} from 'class-validator';
 
 @InputType()
 export class BulkMoveOutResidentsInput {
-
   @Field(() => [String])
   @ArrayNotEmpty()
   @ArrayMinSize(1)
@@ -17,5 +22,4 @@ export class BulkMoveOutResidentsInput {
   @Field(() => String)
   @MaxLength(500)
   moveOutReason: string;
-
 }

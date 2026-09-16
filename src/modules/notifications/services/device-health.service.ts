@@ -1,16 +1,22 @@
-import { Injectable, Logger, HttpStatus, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpStatus,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 
-import { PushSubscription }     from '../entities/push-subscription.entity';
-import { UserRole }             from '../../users/entities/user_has_roles.entity';
-import { PushPlatform }         from '../enums/push-platform.enum';
-import { ValidRoles }           from '../../roles/enums/valid-roles';
-import { DevicePushHealth }     from '../entities/device-push-health.entity';
+import { PushSubscription } from '../entities/push-subscription.entity';
+import { UserRole } from '../../users/entities/user_has_roles.entity';
+import { PushPlatform } from '../enums/push-platform.enum';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { DevicePushHealth } from '../entities/device-push-health.entity';
 import { PanicAckTokenService } from './panic-ack-token.service';
 import { NotificationsService } from './notifications.service';
-import { CustomError }          from '../../shared/utils/errors.utils';
-import { GeneralErrorCode }     from '../../shared/constans/error-codes.constants';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
 /**
  * Prueba de humo de entrega push, por dispositivo.
@@ -53,14 +59,18 @@ export class DeviceHealthService {
    * consulta el estado — no hay forma de saberlo de forma síncrona, porque la
    * entrega ocurre fuera del proceso.
    */
-  async sendHealthCheck(pushSubscriptionId: string): Promise<{ sentAt: Date; token: string }> {
-    const subscription = await this.pushSubRepo.findOne({ where: { id: pushSubscriptionId } });
+  async sendHealthCheck(
+    pushSubscriptionId: string,
+  ): Promise<{ sentAt: Date; token: string }> {
+    const subscription = await this.pushSubRepo.findOne({
+      where: { id: pushSubscriptionId },
+    });
 
     if (!subscription || !subscription.deviceToken) {
       throw new CustomError({
-        message:    'Dispositivo no encontrado o sin token push',
+        message: 'Dispositivo no encontrado o sin token push',
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode:  GeneralErrorCode.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
 
@@ -71,12 +81,18 @@ export class DeviceHealthService {
     // corta, y el id que firma aquí es el de la fila de salud.
     const token = this.ackTokenService.sign(health.id);
 
-    await this.notificationsService.sendHealthCheckPush(subscription, health.id, token);
+    await this.notificationsService.sendHealthCheckPush(
+      subscription,
+      health.id,
+      token,
+    );
 
     health.lastTestSentAt = sentAt;
     await this.healthRepo.save(health);
 
-    this.logger.log(`Health-check enviado al dispositivo ${pushSubscriptionId}`);
+    this.logger.log(
+      `Health-check enviado al dispositivo ${pushSubscriptionId}`,
+    );
     return { sentAt, token };
   }
 
@@ -86,16 +102,18 @@ export class DeviceHealthService {
    */
   async confirmHealthCheck(healthId: string, token: string): Promise<void> {
     if (!this.ackTokenService.verify(healthId, token)) {
-      this.logger.warn(`Health-check rechazado — token inválido para ${healthId}`);
+      this.logger.warn(
+        `Health-check rechazado — token inválido para ${healthId}`,
+      );
       return;
     }
 
     await this.healthRepo.update(
       { id: healthId },
       {
-        lastTestAckAt:        new Date(),
-        consecutiveFailures:  0,
-        isHealthy:            true,
+        lastTestAckAt: new Date(),
+        consecutiveFailures: 0,
+        isHealthy: true,
       },
     );
     this.logger.log(`Health-check confirmado — ${healthId}`);
@@ -117,15 +135,19 @@ export class DeviceHealthService {
     let marked = 0;
     for (const health of stale) {
       // Contestó después del envío → no cuenta como fallo.
-      if (health.lastTestAckAt && health.lastTestAckAt >= health.lastTestSentAt!) continue;
+      if (health.lastTestAckAt && health.lastTestAckAt >= health.lastTestSentAt)
+        continue;
 
       health.consecutiveFailures += 1;
-      health.isHealthy = health.consecutiveFailures < DeviceHealthService.FAILURES_BEFORE_UNHEALTHY;
+      health.isHealthy =
+        health.consecutiveFailures <
+        DeviceHealthService.FAILURES_BEFORE_UNHEALTHY;
       await this.healthRepo.save(health);
       marked += 1;
     }
 
-    if (marked > 0) this.logger.warn(`${marked} dispositivos sin responder al health-check`);
+    if (marked > 0)
+      this.logger.warn(`${marked} dispositivos sin responder al health-check`);
     return marked;
   }
 
@@ -151,10 +173,12 @@ export class DeviceHealthService {
     const health = await this.ensureHealthRow(pushSubscriptionId);
 
     if (flags.hasBatteryOptimizationDisabled !== undefined) {
-      health.hasBatteryOptimizationDisabled = flags.hasBatteryOptimizationDisabled;
+      health.hasBatteryOptimizationDisabled =
+        flags.hasBatteryOptimizationDisabled;
     }
     if (flags.hasFullScreenIntentPermission !== undefined) {
-      health.hasFullScreenIntentPermission = flags.hasFullScreenIntentPermission;
+      health.hasFullScreenIntentPermission =
+        flags.hasFullScreenIntentPermission;
     }
     if (flags.hasNotificationPermission !== undefined) {
       health.hasNotificationPermission = flags.hasNotificationPermission;
@@ -199,7 +223,7 @@ export class DeviceHealthService {
       .distinct(true)
       .getRawMany<{ subscriptionId: string }>();
 
-    return rows.map(r => r.subscriptionId);
+    return rows.map((r) => r.subscriptionId);
   }
 
   /**
@@ -209,16 +233,20 @@ export class DeviceHealthService {
    * sumaría estado que puede desincronizarse. Se filtra por usuario para que
    * nadie pueda sondear el estado de un equipo ajeno.
    */
-  async findSubscriptionForUser(userId: string, deviceToken: string): Promise<PushSubscription> {
+  async findSubscriptionForUser(
+    userId: string,
+    deviceToken: string,
+  ): Promise<PushSubscription> {
     const subscription = await this.pushSubRepo.findOne({
       where: { userId, deviceToken },
     });
 
     if (!subscription) {
       throw new CustomError({
-        message:    'Este dispositivo no está registrado para recibir notificaciones',
+        message:
+          'Este dispositivo no está registrado para recibir notificaciones',
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode:  GeneralErrorCode.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
       });
     }
 
@@ -226,8 +254,12 @@ export class DeviceHealthService {
   }
 
   /** Devuelve la fila de salud del dispositivo, creándola si es su primera vez. */
-  private async ensureHealthRow(pushSubscriptionId: string): Promise<DevicePushHealth> {
-    const existing = await this.healthRepo.findOne({ where: { pushSubscriptionId } });
+  private async ensureHealthRow(
+    pushSubscriptionId: string,
+  ): Promise<DevicePushHealth> {
+    const existing = await this.healthRepo.findOne({
+      where: { pushSubscriptionId },
+    });
     if (existing) return existing;
 
     return this.healthRepo.save(this.healthRepo.create({ pushSubscriptionId }));

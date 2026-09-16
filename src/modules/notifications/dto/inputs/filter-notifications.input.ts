@@ -1,12 +1,11 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsOptional, IsEnum, IsBoolean } from 'class-validator';
 
-import { NotificationType }     from '../../enums/notification-type.enum';
+import { NotificationType } from '../../enums/notification-type.enum';
 import { NotificationPriority } from '../../enums/notification-priority.enum';
 
 @InputType()
 export class FilterNotificationsInput {
-
   @Field(() => NotificationType, { nullable: true })
   @IsOptional()
   @IsEnum(NotificationType)

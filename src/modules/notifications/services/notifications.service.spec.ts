@@ -18,11 +18,11 @@ let lastQb: any;
 
 const build = (rows: { userId: string }[]): NotificationsService => {
   const qb = {
-    innerJoin:  jest.fn().mockReturnThis(),
-    where:      jest.fn().mockReturnThis(),
-    andWhere:   jest.fn().mockReturnThis(),
-    select:     jest.fn().mockReturnThis(),
-    distinct:   jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    distinct: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue(rows),
   };
 
@@ -30,22 +30,33 @@ const build = (rows: { userId: string }[]): NotificationsService => {
   const userRoleRepo = { createQueryBuilder: jest.fn(() => qb) };
 
   return new NotificationsService(
-    null as never, null as never, null as never, null as never, null as never,
-    null as never, null as never, null as never,
-    null as never,              // userRepo
-    userRoleRepo as never,      // userRoleRepo
-    null as never, null as never, null as never, null as never, null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never, // userRepo
+    userRoleRepo as never, // userRoleRepo
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
   );
 };
 
 describe('NotificationsService — destinatarios por rol', () => {
-
   it('incluye la cuenta del complejo cuando se pide COMPLEX_ROL', async () => {
     // En una copropiedad recién montada no hay ningún `user` con COMPLEX_ROL:
     // la administración entra con la cuenta del complejo.
     const service = build([]);
 
-    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [ValidRoles.COMPLEX_ROL]);
+    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [
+      ValidRoles.COMPLEX_ROL,
+    ]);
 
     expect(ids).toEqual([COMPLEX_ID]);
   });
@@ -54,7 +65,8 @@ describe('NotificationsService — destinatarios por rol', () => {
     const service = build([{ userId: 'supervisor-1' }]);
 
     const ids = await service.findUserIdsByRoles(COMPLEX_ID, [
-      ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
     ]);
 
     expect(ids).toEqual(['supervisor-1', COMPLEX_ID]);
@@ -63,7 +75,9 @@ describe('NotificationsService — destinatarios por rol', () => {
   it('no la agrega cuando no se pide COMPLEX_ROL', async () => {
     const service = build([{ userId: 'guard-1' }]);
 
-    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [ValidRoles.SECURITY_ROL]);
+    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [
+      ValidRoles.SECURITY_ROL,
+    ]);
 
     expect(ids).toEqual(['guard-1']);
   });
@@ -83,7 +97,9 @@ describe('NotificationsService — destinatarios por rol', () => {
   it('no la duplica si la consulta ya la devolvió', async () => {
     const service = build([{ userId: COMPLEX_ID }]);
 
-    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [ValidRoles.COMPLEX_ROL]);
+    const ids = await service.findUserIdsByRoles(COMPLEX_ID, [
+      ValidRoles.COMPLEX_ROL,
+    ]);
 
     expect(ids).toEqual([COMPLEX_ID]);
   });

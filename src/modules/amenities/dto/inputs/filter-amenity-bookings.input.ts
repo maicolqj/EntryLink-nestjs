@@ -5,7 +5,6 @@ import { AmenityBookingStatus } from '../../enums/amenity-booking-status.enum';
 
 @InputType()
 export class FilterAmenityBookingsInput {
-
   @Field(() => AmenityBookingStatus, { nullable: true })
   @IsOptional()
   @IsEnum(AmenityBookingStatus)
@@ -21,12 +20,18 @@ export class FilterAmenityBookingsInput {
   @IsUUID()
   unitId?: string;
 
-  @Field(() => String, { nullable: true, description: 'Reservas que inician desde esta fecha (ISO 8601)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Reservas que inician desde esta fecha (ISO 8601)',
+  })
   @IsOptional()
   @IsDateString()
   startFrom?: string;
 
-  @Field(() => String, { nullable: true, description: 'Reservas que inician hasta esta fecha (ISO 8601)' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Reservas que inician hasta esta fecha (ISO 8601)',
+  })
   @IsOptional()
   @IsDateString()
   startUntil?: string;

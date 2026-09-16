@@ -9,21 +9,22 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 
-import { NotificationType }     from '../enums/notification-type.enum';
+import { NotificationType } from '../enums/notification-type.enum';
 import { NotificationPriority } from '../enums/notification-priority.enum';
-import { User }                  from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 
 /**
  * Registro histórico de cada envío masivo manual disparado desde
  * la mutación sendNotification. Las notificaciones automáticas del
  * sistema (paquetes, parqueo, etc.) NO generan fila aquí.
  */
-@ObjectType({ description: 'Envío masivo de notificación registrado por un administrador' })
+@ObjectType({
+  description: 'Envío masivo de notificación registrado por un administrador',
+})
 @Entity('notification_batches')
 @Index(['senderId', 'complexId', 'createdAt'])
 @Index(['complexId', 'createdAt'])
 export class NotificationBatch {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -34,11 +35,17 @@ export class NotificationBatch {
    * ID del usuario que disparó el envío.
    * Null cuando el envío lo realizó un COMPLEX_ROL (cuyo sub en JWT es el ID del complejo, no un User).
    */
-  @Field(() => String, { nullable: true, description: 'ID del usuario que disparó el envío' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'ID del usuario que disparó el envío',
+  })
   @Column({ name: 'sender_id', type: 'uuid', nullable: true })
   senderId: string | null;
 
-  @Field(() => User, { nullable: true, description: 'Usuario que disparó el envío' })
+  @Field(() => User, {
+    nullable: true,
+    description: 'Usuario que disparó el envío',
+  })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL', eager: false })
   @JoinColumn({ name: 'sender_id' })
   sender?: User;
@@ -56,7 +63,11 @@ export class NotificationBatch {
   type: NotificationType;
 
   @Field(() => NotificationPriority)
-  @Column({ type: 'enum', enum: NotificationPriority, default: NotificationPriority.NORMAL })
+  @Column({
+    type: 'enum',
+    enum: NotificationPriority,
+    default: NotificationPriority.NORMAL,
+  })
   priority: NotificationPriority;
 
   @Field()

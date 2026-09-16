@@ -8,7 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * que nombren después vote por defecto, que es el caso común.
  */
 export class VotingCouncilVoiceOnly1781004800000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "residential_complexes"

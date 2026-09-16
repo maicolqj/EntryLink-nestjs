@@ -31,7 +31,7 @@ abstract class UnavailablePanicChannel implements PanicChannel {
     const reason = this.unavailableReason();
     this.logger.warn(
       `Canal ${this.channel} no disponible en nivel ${ctx.escalationLevel} ` +
-      `(alerta ${ctx.alert.id}): ${reason}`,
+        `(alerta ${ctx.alert.id}): ${reason}`,
     );
     return { reached: 0, skippedReason: reason };
   }

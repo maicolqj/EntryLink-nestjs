@@ -1,18 +1,28 @@
 import { InputType, Field, Int, Float } from '@nestjs/graphql';
 import {
-  IsString, IsEnum, IsOptional, IsEmail, IsUUID,
-  MaxLength, MinLength, IsPhoneNumber, Matches,
-  ValidateNested, IsNumber, IsInt, Min, Max,
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsEmail,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  IsPhoneNumber,
+  Matches,
+  ValidateNested,
+  IsNumber,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
-import { ComplexType }   from '../../enums/complex-type.enum';
-import { ComplexPlan }   from '../../enums/complex-plan.enum';
+import { ComplexType } from '../../enums/complex-type.enum';
+import { ComplexPlan } from '../../enums/complex-plan.enum';
 import { CountryCode } from '../../../users/dto/inputs/create-admin-user.input';
 import { Type } from 'class-transformer';
 
 @InputType()
 export class CreateComplexInput {
-
   @Field(() => String)
   @IsString()
   @MinLength(3)
@@ -62,7 +72,6 @@ export class CreateComplexInput {
   @IsEnum(ComplexPlan)
   plan?: ComplexPlan;
 
-
   @Field(() => CountryCode, { nullable: true })
   @IsOptional()
   @ValidateNested()
@@ -75,18 +84,22 @@ export class CreateComplexInput {
   phoneNumber?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional() 
+  @IsOptional()
   @IsEmail()
   @MaxLength(100)
   email?: string;
-  
-  @Field(() => String, { nullable: true, description: 'Contraseña de acceso al portal del complejo' })
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Contraseña de acceso al portal del complejo',
+  })
   @IsOptional()
   @IsString()
   @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.*_\-])/, {
-    message: 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
+    message:
+      'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   })
   password?: string;
 
@@ -102,7 +115,10 @@ export class CreateComplexInput {
   @MaxLength(30)
   nit?: string;
 
-  @Field(() => String, { nullable: true, description: 'ID (UUID) del representante legal' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'ID (UUID) del representante legal',
+  })
   @IsOptional()
   @IsUUID()
   legalRepresentativeId?: string;
@@ -121,21 +137,33 @@ export class CreateComplexInput {
   @IsOptional()
   settings?: Record<string, any>;
 
-  @Field(() => Float, { nullable: true, description: 'Latitud GPS del complejo para validación de presencia de supervisores' })
+  @Field(() => Float, {
+    nullable: true,
+    description:
+      'Latitud GPS del complejo para validación de presencia de supervisores',
+  })
   @IsOptional()
   @IsNumber()
   @Min(-90)
   @Max(90)
   latitude?: number;
 
-  @Field(() => Float, { nullable: true, description: 'Longitud GPS del complejo para validación de presencia de supervisores' })
+  @Field(() => Float, {
+    nullable: true,
+    description:
+      'Longitud GPS del complejo para validación de presencia de supervisores',
+  })
   @IsOptional()
   @IsNumber()
   @Min(-180)
   @Max(180)
   longitude?: number;
 
-  @Field(() => Int, { nullable: true, description: 'Radio en metros para validar presencia GPS (por defecto 200 m)' })
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'Radio en metros para validar presencia GPS (por defecto 200 m)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(50)
@@ -149,21 +177,30 @@ export class CreateComplexInput {
   // favor de quien lo puso —silencio administrativo positivo—, así que estos
   // números no son cosméticos.
 
-  @Field(() => Int, { nullable: true, description: 'Días para resolver un PQRF (calendario)' })
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Días para resolver un PQRF (calendario)',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(365)
   pqrfResolutionDays?: number;
 
-  @Field(() => Int, { nullable: true, description: 'Días antes del vencimiento en que empiezan los recordatorios' })
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Días antes del vencimiento en que empiezan los recordatorios',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(90)
   pqrfReminderLeadDays?: number;
 
-  @Field(() => Int, { nullable: true, description: 'Horas entre recordatorios. 0 = sin recordatorios' })
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Horas entre recordatorios. 0 = sin recordatorios',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)

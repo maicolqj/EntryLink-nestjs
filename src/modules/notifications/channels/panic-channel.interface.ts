@@ -1,20 +1,20 @@
 import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
-import { PanicAlert }           from '../entities/panic-alert.entity';
+import { PanicAlert } from '../entities/panic-alert.entity';
 
 /** Datos que todo canal recibe para emitir una alerta. */
 export interface PanicChannelContext {
-  alert:            PanicAlert;
+  alert: PanicAlert;
   /** Destinatarios resueltos para este nivel. */
-  userIds:          string[];
+  userIds: string[];
   /** Nivel que originó el envío (0 = inmediato, 1..3 = escalamiento). */
-  escalationLevel:  number;
-  title:            string;
-  body:             string;
+  escalationLevel: number;
+  title: string;
+  body: string;
 }
 
 export interface PanicChannelResult {
   /** Cuántos destinos se alcanzaron. 0 con `skippedReason` = canal no disponible. */
-  reached:       number;
+  reached: number;
   skippedReason?: string;
 }
 

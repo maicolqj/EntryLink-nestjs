@@ -1,14 +1,20 @@
 import { InputType, Field, GraphQLISODateTime } from '@nestjs/graphql';
 import {
-  IsUUID, IsEnum, IsOptional, IsBoolean,
-  IsString, IsDateString, MaxLength, IsEmail, IsPhoneNumber,
+  IsUUID,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  IsString,
+  IsDateString,
+  MaxLength,
+  IsEmail,
+  IsPhoneNumber,
 } from 'class-validator';
 import { ResidentType } from '../../enums/resident-type.enum';
 import { UserIdentityType } from '../../../users/enums/user.enums';
 
 @InputType()
 export class CreateResidentInput {
-
   // ── Datos personales del nuevo residente ─────────────────────────────
 
   @Field(() => String, { description: 'Nombre del residente' })
@@ -30,7 +36,9 @@ export class CreateResidentInput {
   @MaxLength(13)
   phoneNumber: string;
 
-  @Field(() => String, { description: 'Número de documento de identidad del residente' })
+  @Field(() => String, {
+    description: 'Número de documento de identidad del residente',
+  })
   @IsString()
   @MaxLength(20)
   identityNumber: string;
@@ -64,7 +72,10 @@ export class CreateResidentInput {
   isMainResident?: boolean;
 
   /** Miembro del consejo de administración. Ver la nota en UpdateResidentInput. */
-  @Field(() => Boolean, { defaultValue: false, description: 'Miembro del consejo de administración' })
+  @Field(() => Boolean, {
+    defaultValue: false,
+    description: 'Miembro del consejo de administración',
+  })
   @IsOptional()
   @IsBoolean()
   isCouncilMember?: boolean;

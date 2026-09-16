@@ -26,13 +26,14 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 /** Roles con acceso de lectura financiera. */
 const READ_ROLES = [
-  ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL,
-  ValidRoles.ACCOUNTANT_ROL,  ValidRoles.COMPILANCE_OFFICER_ROL,
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPLEX_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
+  ValidRoles.COMPILANCE_OFFICER_ROL,
 ];
 
 @Resolver()
 export class AccountingResolver {
-
   constructor(
     private readonly accountingService: AccountingService,
     private readonly financeService: FinanceService,
@@ -47,14 +48,25 @@ export class AccountingResolver {
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_FEE_CONFIGS] })
   pucAccounts(
     @Args('complexId') complexId: string,
-    @Args('onlyPostable', { type: () => Boolean, nullable: true, defaultValue: false }) onlyPostable: boolean,
+    @Args('onlyPostable', {
+      type: () => Boolean,
+      nullable: true,
+      defaultValue: false,
+    })
+    onlyPostable: boolean,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PucAccount[]> {
-    return this.accountingService.findPucAccounts(complexId, onlyPostable, currentUser);
+    return this.accountingService.findPucAccounts(
+      complexId,
+      onlyPostable,
+      currentUser,
+    );
   }
 
   /** Documentos contables paginados, con filtros opcionales. */
-  @Query(() => PaginatedAccountingDocumentsResponse, { name: 'accountingDocuments' })
+  @Query(() => PaginatedAccountingDocumentsResponse, {
+    name: 'accountingDocuments',
+  })
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_FEE_CONFIGS] })
   accountingDocuments(
     @Args('filter') filter: FilterAccountingDocumentsInput,
@@ -62,7 +74,9 @@ export class AccountingResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedAccountingDocumentsResponse> {
     return this.accountingService.findAccountingDocuments(
-      filter, pagination ?? { page: 1, limit: 10 }, currentUser,
+      filter,
+      pagination ?? { page: 1, limit: 10 },
+      currentUser,
     );
   }
 
@@ -74,18 +88,29 @@ export class AccountingResolver {
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<AccountingHeader> {
-    return this.accountingService.findAccountingDocument(id, complexId, currentUser);
+    return this.accountingService.findAccountingDocument(
+      id,
+      complexId,
+      currentUser,
+    );
   }
 
   /** Saldo materializado de una unidad. */
-  @Query(() => PropertyAccountStatus, { name: 'unitAccountStatus', nullable: true })
+  @Query(() => PropertyAccountStatus, {
+    name: 'unitAccountStatus',
+    nullable: true,
+  })
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_FEE_CONFIGS] })
   unitAccountStatus(
     @Args('complexId') complexId: string,
     @Args('unitId') unitId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PropertyAccountStatus | null> {
-    return this.accountingService.findUnitAccountStatus(complexId, unitId, currentUser);
+    return this.accountingService.findUnitAccountStatus(
+      complexId,
+      unitId,
+      currentUser,
+    );
   }
 
   /** Cobros recurrentes de una copropiedad. */
@@ -93,10 +118,19 @@ export class AccountingResolver {
   @Auth({ roles: READ_ROLES, permissions: [ValidPermissions.VIEW_FEE_CONFIGS] })
   recurringCharges(
     @Args('complexId') complexId: string,
-    @Args('onlyActive', { type: () => Boolean, nullable: true, defaultValue: false }) onlyActive: boolean,
+    @Args('onlyActive', {
+      type: () => Boolean,
+      nullable: true,
+      defaultValue: false,
+    })
+    onlyActive: boolean,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<RecurringCharge[]> {
-    return this.accountingService.findRecurringCharges(complexId, onlyActive, currentUser);
+    return this.accountingService.findRecurringCharges(
+      complexId,
+      onlyActive,
+      currentUser,
+    );
   }
 
   // ================================================================
@@ -109,7 +143,11 @@ export class AccountingResolver {
   /** Siembra idempotente del PUC base para una copropiedad existente. */
   @Mutation(() => [PucAccount], { name: 'seedPucAccounts' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   seedPucAccounts(
@@ -122,7 +160,11 @@ export class AccountingResolver {
   /** Crea una cuenta del PUC. */
   @Mutation(() => PucAccount, { name: 'createPucAccount' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   createPucAccount(
@@ -135,7 +177,11 @@ export class AccountingResolver {
   /** Actualiza nombre/estado/naturaleza de una cuenta del PUC. */
   @Mutation(() => PucAccount, { name: 'updatePucAccount' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   updatePucAccount(
@@ -148,7 +194,11 @@ export class AccountingResolver {
   /** Activa/desactiva una cuenta del PUC. */
   @Mutation(() => PucAccount, { name: 'togglePucAccount' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   togglePucAccount(
@@ -162,7 +212,11 @@ export class AccountingResolver {
   /** Borra una cuenta del PUC sin movimientos/dependencias. */
   @Mutation(() => Boolean, { name: 'deletePucAccount' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   deletePucAccount(
@@ -176,7 +230,11 @@ export class AccountingResolver {
   /** Registra un comprobante de egreso contable (gasto / pago a proveedor). */
   @Mutation(() => AccountingHeader, { name: 'createExpenseVoucher' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   registerExpense(
@@ -189,7 +247,11 @@ export class AccountingResolver {
   /** Aplica los saldos a favor (anticipos) a la deuda recién causada. */
   @Mutation(() => PrepaidApplicationResult, { name: 'applyPrepaidBalances' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   applyPrepaidBalances(
@@ -202,7 +264,11 @@ export class AccountingResolver {
   /** Crea un cobro recurrente programado (cuota ordinaria/extraordinaria/único). */
   @Mutation(() => RecurringCharge, { name: 'createRecurringCharge' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   createRecurringCharge(
@@ -215,7 +281,11 @@ export class AccountingResolver {
   /** Edita un cobro recurrente. Afecta causaciones futuras; no toca cargos ya causados. */
   @Mutation(() => RecurringCharge, { name: 'updateRecurringCharge' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   updateRecurringCharge(
@@ -228,7 +298,11 @@ export class AccountingResolver {
   /** Elimina la definición de un cobro recurrente (no borra los cargos ya causados). */
   @Mutation(() => Boolean, { name: 'deleteRecurringCharge' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   deleteRecurringCharge(
@@ -236,13 +310,21 @@ export class AccountingResolver {
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<boolean> {
-    return this.accountingService.deleteRecurringCharge(id, complexId, currentUser);
+    return this.accountingService.deleteRecurringCharge(
+      id,
+      complexId,
+      currentUser,
+    );
   }
 
   /** Dispara manualmente la causación de los recurrentes activos para un período. */
   @Mutation(() => RecurringCausationResult, { name: 'causeRecurringCharges' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   causeRecurringCharges(
@@ -250,24 +332,42 @@ export class AccountingResolver {
     @Args('period') period: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<RecurringCausationResult> {
-    return this.accountingService.causeRecurringCharges(complexId, period, currentUser);
+    return this.accountingService.causeRecurringCharges(
+      complexId,
+      period,
+      currentUser,
+    );
   }
 
   /** Causa los recurrentes para un rango de períodos (backfill desde un mes anterior). */
-  @Mutation(() => RecurringCausationResult, { name: 'causeRecurringChargesRange' })
+  @Mutation(() => RecurringCausationResult, {
+    name: 'causeRecurringChargesRange',
+  })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+    ],
     permissions: [ValidPermissions.MANAGE_FEE_CONFIGS],
   })
   async causeRecurringChargesRange(
     @Args('complexId') complexId: string,
     @Args('fromPeriod') fromPeriod: string,
     @Args('toPeriod') toPeriod: string,
-    @Args('applyMora', { type: () => Boolean, nullable: true, defaultValue: false }) applyMora: boolean,
+    @Args('applyMora', {
+      type: () => Boolean,
+      nullable: true,
+      defaultValue: false,
+    })
+    applyMora: boolean,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<RecurringCausationResult> {
     const result = await this.accountingService.causeRecurringChargesRange(
-      complexId, fromPeriod, toPeriod, currentUser,
+      complexId,
+      fromPeriod,
+      toPeriod,
+      currentUser,
     );
     if (applyMora) {
       // Aplica mora sobre todos los períodos vencidos (con la tasa/gracia de la config).

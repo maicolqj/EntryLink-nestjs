@@ -11,15 +11,15 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 
-import { VehiclesService }            from '../services/vehicles.service';
-import { ResidentialComplexService }  from '../../residential-complex/services/residential-complex.service';
-import { R2StorageService }           from '../../../core/infrastructure/r2/r2.service';
-import { singleImageInterceptor }     from '../../../core/infrastructure/r2/upload-interceptors';
-import { JwtRestGuard }               from '../../shared/guards/jwt-rest.guard';
-import { JwtAccessPayload }           from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }                 from '../../roles/enums/valid-roles';
-import { CustomError }                from '../../shared/utils/errors.utils';
-import { GeneralErrorCode }           from '../../shared/constans/error-codes.constants';
+import { VehiclesService } from '../services/vehicles.service';
+import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { singleImageInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
+import { JwtRestGuard } from '../../shared/guards/jwt-rest.guard';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
 
 const ALLOWED_ROLES: ValidRoles[] = [
   ValidRoles.SUPER_ADMIN_ROL,
@@ -35,8 +35,8 @@ export class VehiclesController {
 
   constructor(
     private readonly vehiclesService: VehiclesService,
-    private readonly complexService:  ResidentialComplexService,
-    private readonly storageService:  R2StorageService,
+    private readonly complexService: ResidentialComplexService,
+    private readonly storageService: R2StorageService,
   ) {}
 
   /**
@@ -56,11 +56,11 @@ export class VehiclesController {
   ) {
     const currentUser = req.user as JwtAccessPayload;
 
-    if (!currentUser.roles?.some(r => ALLOWED_ROLES.includes(r))) {
+    if (!currentUser.roles?.some((r) => ALLOWED_ROLES.includes(r))) {
       throw new CustomError({
-        message:    'No tienes permisos para subir fotos de vehículos',
+        message: 'No tienes permisos para subir fotos de vehículos',
         statusCode: 403,
-        errorCode:  GeneralErrorCode.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
       });
     }
 
@@ -70,9 +70,18 @@ export class VehiclesController {
 
     // La foto se guarda bajo el complejo dueño del vehículo; findById además
     // valida el acceso del usuario antes de que subamos nada a R2.
-    const vehicleRecord = await this.vehiclesService.findById(vehicleId, currentUser);
-    const complexSlug   = await this.complexService.getSlugById(vehicleRecord.complexId);
-    const folder = this.storageService.buildFolder(complexSlug, 'vehicles', 'photos');
+    const vehicleRecord = await this.vehiclesService.findById(
+      vehicleId,
+      currentUser,
+    );
+    const complexSlug = await this.complexService.getSlugById(
+      vehicleRecord.complexId,
+    );
+    const folder = this.storageService.buildFolder(
+      complexSlug,
+      'vehicles',
+      'photos',
+    );
 
     let publicId: string | undefined;
     try {
@@ -83,14 +92,19 @@ export class VehiclesController {
       );
       publicId = result.publicId;
 
-      const vehicle = await this.vehiclesService.updatePhotoUrl(vehicleId, result.url, currentUser);
+      const vehicle = await this.vehiclesService.updatePhotoUrl(
+        vehicleId,
+        result.url,
+        currentUser,
+      );
       this.logger.log(`Foto subida para vehículo ${vehicleId}`);
       return { success: true, photoUrl: vehicle.photoUrl };
-
     } catch (err: any) {
       if (publicId) {
         this.logger.warn(`Rollback R2: eliminando imagen huérfana ${publicId}`);
-        await this.storageService.deleteByPublicId(publicId).catch(() => undefined);
+        await this.storageService
+          .deleteByPublicId(publicId)
+          .catch(() => undefined);
       }
       throw err;
     }

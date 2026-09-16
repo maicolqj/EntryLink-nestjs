@@ -20,12 +20,13 @@ import { Amenity } from './amenity.entity';
  * conviva con reservas vigentes sería una promesa que el complejo no puede
  * cumplir.
  */
-@ObjectType({ description: 'Bloqueo puntual de una zona común (mantenimiento, evento)' })
+@ObjectType({
+  description: 'Bloqueo puntual de una zona común (mantenimiento, evento)',
+})
 @Entity({ name: 'amenity_blackouts' })
 @Index(['amenityId', 'startAt'])
 @Index(['complexId', 'startAt'])
 export class AmenityBlackout {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

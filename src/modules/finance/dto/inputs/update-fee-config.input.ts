@@ -1,19 +1,28 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEnum,
-  IsNumber, Min, Max, IsPositive, MaxLength, IsBoolean, IsInt, ValidateNested,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  Min,
+  Max,
+  IsPositive,
+  MaxLength,
+  IsBoolean,
+  IsInt,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { FeeFrequency } from '../../enums/fee-frequency.enum';
-import { ChargeType }   from '../../enums/charge-type.enum';
+import { ChargeType } from '../../enums/charge-type.enum';
 import { FeeConfigBillingMode } from '../../enums/fee-config-billing-mode.enum';
 import { FeeConfigTriggerType } from '../../enums/fee-config-trigger-type.enum';
 import { FeeConfigTargetRulesInput } from './fee-config-target-rules.input';
 
 @InputType()
 export class UpdateFeeConfigInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

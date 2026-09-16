@@ -28,7 +28,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Entity({ name: 'voting_meetings' })
 @Index('IDX_voting_meetings_complex_kind', ['complexId', 'kind'])
 export class VotingMeeting {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -50,7 +49,7 @@ export class VotingMeeting {
   scheduledAt: Date;
 
   @Field(() => [VotingQuestion], { nullable: true })
-  @OneToMany(() => VotingQuestion, question => question.meeting)
+  @OneToMany(() => VotingQuestion, (question) => question.meeting)
   questions?: VotingQuestion[];
 
   @Column({ name: 'created_by_user_id', type: 'uuid', nullable: true })

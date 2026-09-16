@@ -1,20 +1,19 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 
-import { SentMessage }                   from '../entities/sent-message.entity';
-import { MessagesService }               from '../services/messages.service';
-import { SaveSentMessageInput }          from '../dto/inputs/save-sent-message.input';
+import { SentMessage } from '../entities/sent-message.entity';
+import { MessagesService } from '../services/messages.service';
+import { SaveSentMessageInput } from '../dto/inputs/save-sent-message.input';
 import { PaginatedSentMessagesResponse } from '../dto/responses/paginated-sent-messages.response';
-import { PaginationInput }               from '../../shared/dto/inputs/pagination.input';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
-import { Auth }             from '../../shared/decorators/auth.decorator';
-import { CurrentUser }      from '../../shared/decorators/current-user.decorator';
+import { Auth } from '../../shared/decorators/auth.decorator';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }       from '../../roles/enums/valid-roles';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 
 @Resolver(() => SentMessage)
 export class MessagesResolver {
-
   constructor(private readonly messagesService: MessagesService) {}
 
   // ================================================================
@@ -54,9 +53,14 @@ export class MessagesResolver {
   })
   sentMessages(
     @Args('complexId') complexId: string,
-    @Args('pagination', { nullable: true }) pagination: PaginationInput = { page: 1, limit: 20 },
+    @Args('pagination', { nullable: true })
+    pagination: PaginationInput = { page: 1, limit: 20 },
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedSentMessagesResponse> {
-    return this.messagesService.findSentMessages(complexId, pagination, currentUser);
+    return this.messagesService.findSentMessages(
+      complexId,
+      pagination,
+      currentUser,
+    );
   }
 }

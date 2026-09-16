@@ -6,7 +6,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 export class GqlThrottlerGuard extends ThrottlerGuard {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const gqlCtx = GqlExecutionContext.create(context);
-    const ctx    = gqlCtx.getContext<{ user?: any }>();
+    const ctx = gqlCtx.getContext<{ user?: any }>();
 
     // WS subscriptions: context has `user` (set by onConnect) but no proper HTTP res.
     // Connections are already gated by JWT — skip throttling entirely.
@@ -17,7 +17,7 @@ export class GqlThrottlerGuard extends ThrottlerGuard {
 
   protected getRequestResponse(context: ExecutionContext) {
     const gqlCtx = GqlExecutionContext.create(context);
-    const ctx    = gqlCtx.getContext<{ req?: any; res?: any }>();
+    const ctx = gqlCtx.getContext<{ req?: any; res?: any }>();
 
     if (ctx?.req) {
       const res = ctx.res ?? ctx.req?.res ?? { header: () => {} };

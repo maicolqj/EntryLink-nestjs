@@ -11,36 +11,48 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
-import { VehicleType }           from '../enums/vehicle-type.enum';
-import { ParkingPaymentMethod }  from '../../visitor-parking/enums/parking-payment-method.enum';
-import { ResidentialComplex }    from '../../residential-complex/entities/residential-complex.entity';
-import { Unit }                  from '../../residential-complex/entities/unit.entity';
+import { VehicleType } from '../enums/vehicle-type.enum';
+import { ParkingPaymentMethod } from '../../visitor-parking/enums/parking-payment-method.enum';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { Unit } from '../../residential-complex/entities/unit.entity';
 import { ParkingRecordStatus } from '../../visitor-parking/enums/parking-status.enum';
 
-@ObjectType({ description: 'Registro de entrada/salida de vehículo visitante en el parqueadero' })
+@ObjectType({
+  description:
+    'Registro de entrada/salida de vehículo visitante en el parqueadero',
+})
 @Entity('parking_records')
 @Index(['complexId', 'status'])
 @Index(['plate'])
 export class ParkingRecord {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   // ── Identificación ─────────────────────────────────────────────
 
-  @Field(() => String, { description: 'Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)' })
+  @Field(() => String, {
+    description:
+      'Número de factura generado por el sistema (PKG-YYYYMMDD-XXXX)',
+  })
   @Column({ name: 'invoice_number', type: 'varchar', length: 30, unique: true })
   invoiceNumber: string;
 
   // ── Datos del vehículo ─────────────────────────────────────────
 
-  @Field(() => String, { description: 'Placa del vehículo (normalizada: mayúsculas, sin espacios)' })
+  @Field(() => String, {
+    description: 'Placa del vehículo (normalizada: mayúsculas, sin espacios)',
+  })
   @Column({ type: 'varchar', length: 15 })
   plate: string;
 
   @Field(() => VehicleType, { description: 'Tipo de vehículo' })
-  @Column({ name: 'vehicle_type', type: 'enum', enum: VehicleType, default: VehicleType.CAR })
+  @Column({
+    name: 'vehicle_type',
+    type: 'enum',
+    enum: VehicleType,
+    default: VehicleType.CAR,
+  })
   vehicleType: VehicleType;
 
   @Field(() => String, { description: 'Marca del vehículo', nullable: true })
@@ -53,7 +65,9 @@ export class ParkingRecord {
 
   // ── Tiempos ────────────────────────────────────────────────────
 
-  @Field(() => Date, { description: 'Fecha/hora de entrada (asignada por el servidor)' })
+  @Field(() => Date, {
+    description: 'Fecha/hora de entrada (asignada por el servidor)',
+  })
   @CreateDateColumn({ name: 'entry_date', type: 'timestamptz' })
   entryDate: Date;
 
@@ -69,11 +83,17 @@ export class ParkingRecord {
 
   // ── Facturación ────────────────────────────────────────────────
 
-  @Field(() => Int, { description: 'Duración en minutos (calculada en la salida)', nullable: true })
+  @Field(() => Int, {
+    description: 'Duración en minutos (calculada en la salida)',
+    nullable: true,
+  })
   @Column({ type: 'int', nullable: true })
   duration?: number;
 
-  @Field(() => Float, { description: 'Tarifa unitaria aplicada', nullable: true })
+  @Field(() => Float, {
+    description: 'Tarifa unitaria aplicada',
+    nullable: true,
+  })
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   rate?: number;
 
@@ -81,19 +101,34 @@ export class ParkingRecord {
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   total?: number;
 
-  @Field(() => ParkingPaymentMethod, { description: 'Método de pago (disponible tras el cierre)', nullable: true })
-  @Column({ name: 'payment_method', type: 'enum', enum: ParkingPaymentMethod, nullable: true })
+  @Field(() => ParkingPaymentMethod, {
+    description: 'Método de pago (disponible tras el cierre)',
+    nullable: true,
+  })
+  @Column({
+    name: 'payment_method',
+    type: 'enum',
+    enum: ParkingPaymentMethod,
+    nullable: true,
+  })
   paymentMethod?: ParkingPaymentMethod;
 
   // ── Estado ─────────────────────────────────────────────────────
 
   @Field(() => ParkingRecordStatus, { description: 'Estado del registro' })
-  @Column({ type: 'enum', enum: ParkingRecordStatus, default: ParkingRecordStatus.OPEN })
+  @Column({
+    type: 'enum',
+    enum: ParkingRecordStatus,
+    default: ParkingRecordStatus.OPEN,
+  })
   status: ParkingRecordStatus;
 
   // ── Multi-tenant ───────────────────────────────────────────────
 
-  @Field(() => String, { description: 'ID de la unidad visitada', nullable: true })
+  @Field(() => String, {
+    description: 'ID de la unidad visitada',
+    nullable: true,
+  })
   @Column({ name: 'unit_id', type: 'uuid', nullable: true })
   unitId?: string;
 
@@ -123,7 +158,8 @@ export class ParkingRecord {
 
   @BeforeInsert()
   normalizeFields() {
-    if (this.plate) this.plate = this.plate.toUpperCase().replace(/[\s\-]/g, '');
+    if (this.plate)
+      this.plate = this.plate.toUpperCase().replace(/[\s\-]/g, '');
     if (this.brand) this.brand = this.brand.trim().toUpperCase();
     if (this.color) this.color = this.color.trim().toUpperCase();
   }

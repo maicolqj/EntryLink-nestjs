@@ -12,7 +12,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * complejos que no configuren nada siguen funcionando igual.
  */
 export class PqrfCouncilResolvers1781004600000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "residential_complexes"

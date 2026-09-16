@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron }               from '@nestjs/schedule';
-import { InjectRepository }   from '@nestjs/typeorm';
-import { Repository }         from 'typeorm';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity';
-import { FinanceService }       from '../services/finance.service';
-import { ComplexStatus }        from '../../residential-complex/enums/complex-status.enum';
+import { FinanceService } from '../services/finance.service';
+import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
 
 /**
  * Cron diario a las 00:10 AM (Bogotá) que aplica mora automáticamente
@@ -29,9 +29,9 @@ export class AutoApplyMoraCron {
 
   @Cron('10 0 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
-    const today  = new Date();
-    const month  = today.getMonth() + 1;
-    const year   = today.getFullYear();
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const year = today.getFullYear();
     const period = `${year}-${String(month).padStart(2, '0')}`;
 
     // Complejos activos con autoApplyMora=true
@@ -46,7 +46,7 @@ export class AutoApplyMoraCron {
 
     this.logger.log(
       `[AutoApplyMora] Ejecutando para período ${period} ` +
-      `— ${configs.length} complejo(s) candidatos`,
+        `— ${configs.length} complejo(s) candidatos`,
     );
 
     let processedComplexes = 0;
@@ -63,8 +63,8 @@ export class AutoApplyMoraCron {
         if (result.applied > 0 || result.skipped > 0) {
           this.logger.log(
             `[AutoApplyMora] Complejo ${cfg.complexId} | período ${period} ` +
-            `→ ${result.applied} mora(s) aplicada(s) ($${result.totalMoraAmount}), ` +
-            `${result.skipped} omitido(s)`,
+              `→ ${result.applied} mora(s) aplicada(s) ($${result.totalMoraAmount}), ` +
+              `${result.skipped} omitido(s)`,
           );
           processedComplexes++;
         }

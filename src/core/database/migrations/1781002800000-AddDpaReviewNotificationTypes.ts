@@ -6,15 +6,18 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * del SUPER_ADMIN sobre su DPA firmado. Idempotente (ADD VALUE IF NOT EXISTS).
  */
 export class AddDpaReviewNotificationTypes1781002800000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     const [{ exists }] = await queryRunner.query(
       `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notifications_type_enum') AS exists`,
     );
     if (!exists) return;
 
-    await queryRunner.query(`ALTER TYPE "notifications_type_enum" ADD VALUE IF NOT EXISTS 'DPA_APPROVED'`);
-    await queryRunner.query(`ALTER TYPE "notifications_type_enum" ADD VALUE IF NOT EXISTS 'DPA_REJECTED'`);
+    await queryRunner.query(
+      `ALTER TYPE "notifications_type_enum" ADD VALUE IF NOT EXISTS 'DPA_APPROVED'`,
+    );
+    await queryRunner.query(
+      `ALTER TYPE "notifications_type_enum" ADD VALUE IF NOT EXISTS 'DPA_REJECTED'`,
+    );
   }
 
   public async down(): Promise<void> {

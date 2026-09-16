@@ -2,11 +2,11 @@ import { registerEnumType } from '@nestjs/graphql';
 
 export enum AmenityStatus {
   /** Operativa: admite reservas nuevas */
-  ACTIVE      = 'ACTIVE',
+  ACTIVE = 'ACTIVE',
   /** En mantenimiento: no admite reservas nuevas, las aprobadas siguen vigentes */
   MAINTENANCE = 'MAINTENANCE',
   /** Deshabilitada por el administrador */
-  INACTIVE    = 'INACTIVE',
+  INACTIVE = 'INACTIVE',
 }
 
 registerEnumType(AmenityStatus, {

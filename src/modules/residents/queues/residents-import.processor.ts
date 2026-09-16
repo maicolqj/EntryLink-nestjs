@@ -32,8 +32,11 @@ export class ResidentsImportProcessor extends WorkerHost {
     }
   }
 
-  private async handleImport(job: Job<ResidentImportJobPayload>): Promise<void> {
-    const { filePath, complexId, adminUserId, approvedByUserId, jobId } = job.data;
+  private async handleImport(
+    job: Job<ResidentImportJobPayload>,
+  ): Promise<void> {
+    const { filePath, complexId, adminUserId, approvedByUserId, jobId } =
+      job.data;
 
     this.logger.log(`Iniciando importación de residentes — jobId: ${jobId}`);
 
@@ -51,30 +54,40 @@ export class ResidentsImportProcessor extends WorkerHost {
         approvedByUserId,
         (done, _total, successCount, errorCount) => {
           const percent = total > 0 ? Math.floor((done / total) * 100) : 100;
-          const bucket  = Math.floor(percent / 10);
+          const bucket = Math.floor(percent / 10);
           const shouldEmit = done % 5 === 0 || bucket > lastEmittedBucket;
 
           if (shouldEmit) {
             lastEmittedBucket = bucket;
-            this.socketService.emitToComplex(complexId, SocketEvent.RESIDENT_IMPORT_PROGRESS, {
-              jobId,
+            this.socketService.emitToComplex(
               complexId,
-              done,
-              total,
-              percent,
-              successCount,
-              errorCount,
-            });
+              SocketEvent.RESIDENT_IMPORT_PROGRESS,
+              {
+                jobId,
+                complexId,
+                done,
+                total,
+                percent,
+                successCount,
+                errorCount,
+              },
+            );
           }
         },
       );
 
-      this.emitDone(complexId, jobId, result.total, result.successCount, result.errorCount, result.errors);
+      this.emitDone(
+        complexId,
+        jobId,
+        result.total,
+        result.successCount,
+        result.errorCount,
+        result.errors,
+      );
 
       this.logger.log(
         `Importación completada — jobId: ${jobId} | ok: ${result.successCount} | errores: ${result.errorCount}`,
       );
-
     } finally {
       try {
         await unlink(filePath);
@@ -92,13 +105,17 @@ export class ResidentsImportProcessor extends WorkerHost {
     errorCount: number,
     errors: ResidentImportError[],
   ): void {
-    this.socketService.emitToComplex(complexId, SocketEvent.RESIDENT_IMPORT_DONE, {
-      jobId,
+    this.socketService.emitToComplex(
       complexId,
-      total,
-      successCount,
-      errorCount,
-      errors,
-    });
+      SocketEvent.RESIDENT_IMPORT_DONE,
+      {
+        jobId,
+        complexId,
+        total,
+        successCount,
+        errorCount,
+        errors,
+      },
+    );
   }
 }

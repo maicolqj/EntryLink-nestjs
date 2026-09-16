@@ -5,13 +5,19 @@ import { Request, Response, NextFunction } from 'express';
  * Credenciales definidas en BULL_BOARD_USER / BULL_BOARD_PASS.
  * Si las vars no están definidas en producción, bloquea el acceso completamente.
  */
-export function bullBoardAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function bullBoardAuthMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   const isProd = process.env.NODE_ENV === 'production';
-  const user   = process.env.BULL_BOARD_USER;
-  const pass   = process.env.BULL_BOARD_PASS;
+  const user = process.env.BULL_BOARD_USER;
+  const pass = process.env.BULL_BOARD_PASS;
 
   if (isProd && (!user || !pass)) {
-    res.status(503).json({ message: 'Bull Board disabled: credentials not configured.' });
+    res
+      .status(503)
+      .json({ message: 'Bull Board disabled: credentials not configured.' });
     return;
   }
 
@@ -53,7 +59,8 @@ export function bullBoardAuthMiddleware(req: Request, res: Response, next: NextF
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  const { timingSafeEqual: cryptoEqual } = require('crypto') as typeof import('crypto');
+  const { timingSafeEqual: cryptoEqual } =
+    require('crypto') as typeof import('crypto');
   const bufA = Buffer.alloc(Math.max(a.length, b.length), a);
   const bufB = Buffer.alloc(Math.max(a.length, b.length), b);
   return cryptoEqual(bufA, bufB);

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { randomInt } from 'crypto';
@@ -30,17 +26,20 @@ export class OtpService {
    * Genera un OTP nuevo para el residente, invalida los anteriores pendientes
    * y encola el job de envío por SMS.
    */
-  async generateAndSend(userId: string, phoneNumber: string, ip: string): Promise<void> {
+  async generateAndSend(
+    userId: string,
+    phoneNumber: string,
+    ip: string,
+  ): Promise<void> {
     await this.checkRateLimit(phoneNumber, ip);
 
     // Invalidar OTPs pendientes anteriores del mismo usuario
-    await this.otpRepo.update(
-      { userId, used: false },
-      { used: true },
-    );
+    await this.otpRepo.update({ userId, used: false }, { used: true });
 
     const code = this.generateCode();
-    const expiresAt = new Date(Date.now() + AUTH_CONSTANTS.OTP_EXPIRY_SECONDS * 1_000);
+    const expiresAt = new Date(
+      Date.now() + AUTH_CONSTANTS.OTP_EXPIRY_SECONDS * 1_000,
+    );
 
     await this.otpRepo.save(
       this.otpRepo.create({
@@ -107,9 +106,10 @@ export class OtpService {
       await this.otpRepo.increment({ id: otp.id }, 'attempts', 1);
       const remaining = AUTH_CONSTANTS.MAX_OTP_ATTEMPTS - otp.attempts - 1;
       throw new CustomError({
-        message: remaining > 0
-          ? `Código incorrecto. Te quedan ${remaining} intentos`
-          : 'Código incorrecto. Solicita un nuevo código',
+        message:
+          remaining > 0
+            ? `Código incorrecto. Te quedan ${remaining} intentos`
+            : 'Código incorrecto. Solicita un nuevo código',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: AuthErrorCode.OTP_INVALID,
       });
@@ -123,11 +123,21 @@ export class OtpService {
   // ── Rate limiting ───────────────────────────────────────────────────────
 
   private async checkRateLimit(phoneNumber: string, ip: string): Promise<void> {
-    const phoneKey = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.OTP_RATE_LIMIT, key: phoneNumber };
-    const ipKey    = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.IP_RATE_LIMIT,  key: ip };
+    const phoneKey = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.OTP_RATE_LIMIT,
+      key: phoneNumber,
+    };
+    const ipKey = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.IP_RATE_LIMIT,
+      key: ip,
+    };
 
-    const phoneData = await this.cacheService.get<{ count: number }>(  { key: phoneKey });
-    const ipData    = await this.cacheService.get<{ count: number }>({ key: ipKey });
+    const phoneData = await this.cacheService.get<{ count: number }>({
+      key: phoneKey,
+    });
+    const ipData = await this.cacheService.get<{ count: number }>({
+      key: ipKey,
+    });
 
     if ((phoneData?.count ?? 0) >= AUTH_CONSTANTS.OTP_RATE_LIMIT_MAX) {
       throw new CustomError({
@@ -147,7 +157,10 @@ export class OtpService {
   }
 
   private async incrementRateLimit(phoneNumber: string): Promise<void> {
-    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.OTP_RATE_LIMIT, key: phoneNumber };
+    const key = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.OTP_RATE_LIMIT,
+      key: phoneNumber,
+    };
     const current = await this.cacheService.get<{ count: number }>({ key });
     await this.cacheService.set({
       key,

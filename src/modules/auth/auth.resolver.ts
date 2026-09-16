@@ -8,7 +8,10 @@ import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
 import { LoginResidentInput } from './dto/inputs/login-resident.input';
 import { RequestOtpInput } from './dto/inputs/request-otp.input';
 import { VerifyOtpInput } from './dto/inputs/verify-otp.input';
-import { AuthResponse, OtpRequestResponse } from './dto/responses/auth-response';
+import {
+  AuthResponse,
+  OtpRequestResponse,
+} from './dto/responses/auth-response';
 import { RegisterSupervisorInput } from './dto/inputs/register-supervisor.input';
 import { RegisterSupervisorResponse } from './dto/responses/register-supervisor.response';
 import { SupervisorVerificationStatusResponse } from './dto/responses/supervisor-verification-status.response';
@@ -29,7 +32,7 @@ export class AuthResolver {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // ── Login por email (SUPER_ADMIN, COMPLIANCE_OFFICER, COMPLEX_ROL) ──────
 
@@ -47,7 +50,6 @@ export class AuthResolver {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.loginWithEmail(input, deviceInfo);
   }
-
 
   @Public()
   @Mutation(() => AuthResponse, {
@@ -86,7 +88,8 @@ export class AuthResolver {
   @Public()
   @Mutation(() => RegisterSupervisorResponse, {
     name: 'registerSupervisor',
-    description: 'Auto-registro público para supervisores. La cuenta queda en PENDING_VERIFICATION hasta verificar el correo.',
+    description:
+      'Auto-registro público para supervisores. La cuenta queda en PENDING_VERIFICATION hasta verificar el correo.',
   })
   async registerSupervisor(
     @Args('input') input: RegisterSupervisorInput,
@@ -123,7 +126,8 @@ export class AuthResolver {
   @Public()
   @Mutation(() => AuthResponse, {
     name: 'verifySupervisorEmail',
-    description: 'Verifica el correo del supervisor con el token enviado por email. Activa la cuenta y devuelve tokens JWT.',
+    description:
+      'Verifica el correo del supervisor con el token enviado por email. Activa la cuenta y devuelve tokens JWT.',
   })
   async verifySupervisorEmail(
     @Args('token', { type: () => String }) token: string,
@@ -138,18 +142,20 @@ export class AuthResolver {
   @Public()
   @Mutation(() => RequestPasswordResetResponse, {
     name: 'requestPasswordReset',
-    description: 'Solicita restablecimiento de contraseña por email. Respuesta genérica para no revelar si el email existe.',
+    description:
+      'Solicita restablecimiento de contraseña por email. Respuesta genérica para no revelar si el email existe.',
   })
   async requestPasswordReset(
     @Args('email', { type: () => String }) email: string,
   ): Promise<RequestPasswordResetResponse> {
     return this.authService.requestPasswordReset(email);
-  } 
+  }
 
   @Public()
   @Mutation(() => SetPasswordResponse, {
     name: 'resetPassword',
-    description: 'Establece nueva contraseña usando el token recibido por email. Token de un solo uso, válido 1 hora.',
+    description:
+      'Establece nueva contraseña usando el token recibido por email. Token de un solo uso, válido 1 hora.',
   })
   async resetPassword(
     @Args('input') input: ResetPasswordInput,
@@ -262,7 +268,8 @@ export class AuthResolver {
   @Public()
   @Mutation(() => AuthResponse, {
     name: 'refreshToken',
-    description: 'Renueva el access token usando el refresh token. Implementa rotación de tokens.',
+    description:
+      'Renueva el access token usando el refresh token. Implementa rotación de tokens.',
   })
   async refreshToken(
     @Args('refreshToken', { type: () => String }) refreshToken: string,
@@ -283,7 +290,8 @@ export class AuthResolver {
     @CurrentUser() payload: JwtAccessPayload,
     @Context() context: any,
   ): Promise<boolean> {
-    const accessToken = context.req?.headers?.authorization?.replace('Bearer ', '') ?? '';
+    const accessToken =
+      context.req?.headers?.authorization?.replace('Bearer ', '') ?? '';
     return this.authService.logout(payload.sub, payload.sessionId, accessToken);
   }
 
@@ -291,7 +299,10 @@ export class AuthResolver {
 
   private extractDeviceInfo(context: any): DeviceInfo {
     // VULN-11 fix: HMAC-SHA256 del fingerprint para que no sea falsificable por el cliente
-    return buildDeviceInfo(context, this.configService.getOrThrow<string>('FINGERPRINT_SECRET'));
+    return buildDeviceInfo(
+      context,
+      this.configService.getOrThrow<string>('FINGERPRINT_SECRET'),
+    );
   }
 
   private extractIp(context: any): string {

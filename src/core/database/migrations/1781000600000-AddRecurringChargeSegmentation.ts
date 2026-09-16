@@ -14,7 +14,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Idempotente.
  */
 export class AddRecurringChargeSegmentation1781000600000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$ BEGIN
@@ -47,9 +46,17 @@ export class AddRecurringChargeSegmentation1781000600000 implements MigrationInt
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "targetUnitIds"`);
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "targetRules"`);
-    await queryRunner.query(`ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "distribution"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "recurring_charges_distribution_enum"`);
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "targetUnitIds"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "targetRules"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "recurring_charges" DROP COLUMN IF EXISTS "distribution"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "recurring_charges_distribution_enum"`,
+    );
   }
 }

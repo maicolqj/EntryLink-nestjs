@@ -23,7 +23,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * que alimenta la medición de entrega por marca.
  */
 export class DeactivateCrossAccountPushSubscriptions1781003600000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Un solo UPDATE por columna de destino. `DISTINCT ON` ordenado por
     // updated_at deja arriba la fila viva de cada destino; todo lo demás cae.

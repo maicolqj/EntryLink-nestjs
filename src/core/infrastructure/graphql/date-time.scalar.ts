@@ -21,5 +21,7 @@ import { GraphQLISODateTime } from '@nestjs/graphql';
     const d = new Date(value);
     if (isFinite(d.getTime())) return d.toISOString();
   }
-  throw new TypeError(`DateTime cannot serialize value: ${JSON.stringify(value)}`);
+  throw new TypeError(
+    `DateTime cannot serialize value: ${JSON.stringify(value)}`,
+  );
 };

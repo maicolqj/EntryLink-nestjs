@@ -50,7 +50,10 @@ export class PqrfCron implements OnModuleInit {
         );
       }
     } catch (err: any) {
-      this.logger.error(`Error en el barrido de PQRF: ${err?.message}`, err?.stack);
+      this.logger.error(
+        `Error en el barrido de PQRF: ${err?.message}`,
+        err?.stack,
+      );
     }
   }
 }

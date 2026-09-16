@@ -75,7 +75,8 @@ export class SupervisorVisitResolver {
   @Auth({ roles: [ValidRoles.SUPERVISOR_ROL] })
   @Query(() => [SupervisorAccessRequest], {
     name: 'myAccessRequests',
-    description: 'Retorna el historial de solicitudes de acceso del supervisor (últimas 50).',
+    description:
+      'Retorna el historial de solicitudes de acceso del supervisor (últimas 50).',
   })
   findMyAccessRequests(
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -98,7 +99,10 @@ export class SupervisorVisitResolver {
     @Args('complexId', { type: () => String }) complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<SupervisorAccessRequest[]> {
-    return this.accessRequestService.findPendingForComplex(complexId, currentUser);
+    return this.accessRequestService.findPendingForComplex(
+      complexId,
+      currentUser,
+    );
   }
 
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
@@ -119,7 +123,8 @@ export class SupervisorVisitResolver {
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
   @Mutation(() => SupervisorAccessRequest, {
     name: 'rejectAccessRequest',
-    description: 'Rechaza la solicitud de acceso de un supervisor con un motivo opcional.',
+    description:
+      'Rechaza la solicitud de acceso de un supervisor con un motivo opcional.',
   })
   rejectAccessRequest(
     @Args('input') input: RejectAccessRequestInput,
@@ -139,7 +144,10 @@ export class SupervisorVisitResolver {
     @Args('complexId', { type: () => String }) complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<number> {
-    return this.accessRequestService.countPendingRequests(complexId, currentUser);
+    return this.accessRequestService.countPendingRequests(
+      complexId,
+      currentUser,
+    );
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -149,7 +157,8 @@ export class SupervisorVisitResolver {
   @Auth({ roles: [ValidRoles.SUPERVISOR_ROL] })
   @Query(() => [SupervisorVisit], {
     name: 'mySupervisorVisits',
-    description: 'Retorna las últimas 50 visitas del supervisor. Filtrable por estado.',
+    description:
+      'Retorna las últimas 50 visitas del supervisor. Filtrable por estado.',
   })
   findMyVisits(
     @CurrentUser() currentUser: JwtAccessPayload,
@@ -163,13 +172,17 @@ export class SupervisorVisitResolver {
   @Query(() => SupervisorVisit, {
     name: 'activeSupervisorVisit',
     nullable: true,
-    description: 'Retorna la visita activa del supervisor en el complejo indicado, o null.',
+    description:
+      'Retorna la visita activa del supervisor en el complejo indicado, o null.',
   })
   findActiveVisit(
     @Args('complexId', { type: () => String }) complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<SupervisorVisit | null> {
-    return this.supervisorVisitService.findActiveVisit(complexId, currentUser.sub);
+    return this.supervisorVisitService.findActiveVisit(
+      complexId,
+      currentUser.sub,
+    );
   }
 
   @Auth({ roles: [ValidRoles.SUPERVISOR_ROL] })

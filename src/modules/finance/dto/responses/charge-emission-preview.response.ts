@@ -3,7 +3,6 @@ import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 /** Desglose calculado de un cargo para una unidad (sin persistir). */
 @ObjectType()
 export class ChargeEmissionPreviewLine {
-
   @Field()
   unitId: string;
 
@@ -20,7 +19,6 @@ export class ChargeEmissionPreviewLine {
 /** Solapamiento: una unidad cubierta por más de una regla. */
 @ObjectType()
 export class ChargeRuleConflict {
-
   @Field()
   unitId: string;
 
@@ -34,7 +32,6 @@ export class ChargeRuleConflict {
 /** Resultado de previewChargeEmission: desglose por unidad sin persistir. */
 @ObjectType()
 export class ChargeEmissionPreviewResponse {
-
   @Field()
   emissionId: string;
 

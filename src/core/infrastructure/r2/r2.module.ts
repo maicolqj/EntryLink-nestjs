@@ -4,8 +4,8 @@ import { R2StorageService } from './r2.service';
 
 @Global()
 @Module({
-  imports:   [ConfigModule],
+  imports: [ConfigModule],
   providers: [R2StorageService],
-  exports:   [R2StorageService],
+  exports: [R2StorageService],
 })
 export class R2Module {}

@@ -12,10 +12,10 @@ export class SessionService {
   private readonly logger = new Logger(SessionService.name);
 
   constructor(
-    @InjectRepository(UserSession) private readonly sessionRepo: Repository<UserSession>,
+    @InjectRepository(UserSession)
+    private readonly sessionRepo: Repository<UserSession>,
     private readonly cacheService: CacheService,
-
-  ) { }
+  ) {}
 
   async createOrUpdateSession(
     userId: string,
@@ -46,13 +46,16 @@ export class SessionService {
       );
 
       await this.cacheService.delete({
-        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: existingSession.id },
+        key: {
+          prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION,
+          key: existingSession.id,
+        },
       });
     }
 
     // 3. SIEMPRE crear nueva sesión con el sessionId del token
     const newSession = this.sessionRepo.create({
-      id: sessionId,  // ← USAR EL sessionId QUE VIENE DEL TOKEN
+      id: sessionId, // ← USAR EL sessionId QUE VIENE DEL TOKEN
       userId,
       deviceFingerprint: deviceInfo.fingerprint,
       deviceInfo: {
@@ -83,7 +86,10 @@ export class SessionService {
 
     return savedSession;
   }
-  async enforceSessionLimit(userId: string, maxSessions: number): Promise<void> {
+  async enforceSessionLimit(
+    userId: string,
+    maxSessions: number,
+  ): Promise<void> {
     const sessions = await this.sessionRepo.find({
       where: { userId, status: SessionStatus.ACTIVE },
       order: { lastActivityAt: 'ASC' },
@@ -95,50 +101,74 @@ export class SessionService {
   }
 
   async terminateSession(sessionId: string): Promise<boolean> {
-    const result = await this.sessionRepo.update(sessionId, { status: SessionStatus.LOGGED_OUT });
-    await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: sessionId } });
+    const result = await this.sessionRepo.update(sessionId, {
+      status: SessionStatus.LOGGED_OUT,
+    });
+    await this.cacheService.delete({
+      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: sessionId },
+    });
     return (result.affected || 0) > 0;
   }
 
   async terminateAllUserSessions(userId: string): Promise<number> {
-    const sessions = await this.sessionRepo.find({ where: { userId, status: SessionStatus.ACTIVE }, select: ['id'] });
-    const result = await this.sessionRepo.update({ userId, status: SessionStatus.ACTIVE }, { status: SessionStatus.LOGGED_OUT });
-    for (const s of sessions) {
-      await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id } });
-    }
-    return result.affected || 0;
-  }
-
-  async terminateOtherSessions(userId: string, currentSessionId: string): Promise<number> {
     const sessions = await this.sessionRepo.find({
-      where: { userId, status: SessionStatus.ACTIVE, id: Not(currentSessionId) },
+      where: { userId, status: SessionStatus.ACTIVE },
       select: ['id'],
     });
-    if (!sessions.length) return 0;
-    const result = await this.sessionRepo.update({ id: In(sessions.map(s => s.id)) }, { status: SessionStatus.LOGGED_OUT });
+    const result = await this.sessionRepo.update(
+      { userId, status: SessionStatus.ACTIVE },
+      { status: SessionStatus.LOGGED_OUT },
+    );
     for (const s of sessions) {
-      await this.cacheService.delete({ key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id } });
+      await this.cacheService.delete({
+        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id },
+      });
     }
     return result.affected || 0;
   }
 
-
-
-  async getUserActiveSessions(userId: string, currentSessionId?: string): Promise<(UserSession & { isCurrent: boolean })[]> {
+  async terminateOtherSessions(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<number> {
     const sessions = await this.sessionRepo.find({
       where: {
         userId,
-        status: SessionStatus.ACTIVE
+        status: SessionStatus.ACTIVE,
+        id: Not(currentSessionId),
+      },
+      select: ['id'],
+    });
+    if (!sessions.length) return 0;
+    const result = await this.sessionRepo.update(
+      { id: In(sessions.map((s) => s.id)) },
+      { status: SessionStatus.LOGGED_OUT },
+    );
+    for (const s of sessions) {
+      await this.cacheService.delete({
+        key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id },
+      });
+    }
+    return result.affected || 0;
+  }
+
+  async getUserActiveSessions(
+    userId: string,
+    currentSessionId?: string,
+  ): Promise<(UserSession & { isCurrent: boolean })[]> {
+    const sessions = await this.sessionRepo.find({
+      where: {
+        userId,
+        status: SessionStatus.ACTIVE,
       },
       order: { lastActivityAt: 'DESC' },
     });
 
-    return sessions.map(session => ({
+    return sessions.map((session) => ({
       ...session,
       isCurrent: session.id === currentSessionId,
     }));
   }
-
 
   // modules/auth/services/session.service.ts
 
@@ -196,14 +226,22 @@ export class SessionService {
   }
 
   async getActiveSessionsCount(userId: string): Promise<number> {
-    return this.sessionRepo.count({ where: { userId, status: SessionStatus.ACTIVE } });
+    return this.sessionRepo.count({
+      where: { userId, status: SessionStatus.ACTIVE },
+    });
   }
 
   async updateSessionActivity(sessionId: string, ip: string): Promise<void> {
-    await this.sessionRepo.update(sessionId, { lastActivityAt: new Date(), lastIp: ip });
+    await this.sessionRepo.update(sessionId, {
+      lastActivityAt: new Date(),
+      lastIp: ip,
+    });
   }
 
-  async isSessionOwnedByUser(sessionId: string, userId: string): Promise<boolean> {
+  async isSessionOwnedByUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<boolean> {
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId, userId },
       select: ['id'],

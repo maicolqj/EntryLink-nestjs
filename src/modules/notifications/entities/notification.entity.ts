@@ -9,10 +9,10 @@ import {
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import GraphQLJSON from 'graphql-type-json';
 
-import { NotificationType }          from '../enums/notification-type.enum';
-import { NotificationPriority }      from '../enums/notification-priority.enum';
-import { NotificationActionType }    from '../enums/notification-action-type.enum';
-import { NotificationActionResult }  from '../enums/notification-action-result.enum';
+import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationPriority } from '../enums/notification-priority.enum';
+import { NotificationActionType } from '../enums/notification-action-type.enum';
+import { NotificationActionResult } from '../enums/notification-action-result.enum';
 
 /**
  * Notificación persistida en base de datos.
@@ -29,7 +29,6 @@ import { NotificationActionResult }  from '../enums/notification-action-result.e
 @Index(['complexId', 'createdAt'])
 @Index(['recipientUserId', 'complexId', 'createdAt'])
 export class Notification {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -41,7 +40,11 @@ export class Notification {
   type: NotificationType;
 
   @Field(() => NotificationPriority)
-  @Column({ type: 'enum', enum: NotificationPriority, default: NotificationPriority.NORMAL })
+  @Column({
+    type: 'enum',
+    enum: NotificationPriority,
+    default: NotificationPriority.NORMAL,
+  })
   priority: NotificationPriority;
 
   // ─── Contenido ────────────────────────────────────────────────
@@ -156,7 +159,7 @@ export class Notification {
   actionLabel?: string;
 
   /** Cuándo se ejecutó la acción. NULL = pendiente. */
-  @Field(() => Date, { nullable: true, })
+  @Field(() => Date, { nullable: true })
   @Column({ nullable: true })
   actionTakenAt?: Date;
 

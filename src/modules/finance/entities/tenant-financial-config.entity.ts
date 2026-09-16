@@ -1,6 +1,12 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
@@ -16,7 +22,6 @@ import { ResidentialComplex } from '../../residential-complex/entities/residenti
 @Entity('tenant_financial_configs')
 @Index(['complexId'], { unique: true })
 export class TenantFinancialConfig {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -33,7 +38,11 @@ export class TenantFinancialConfig {
   lateInterestRate: number;
 
   @Field(() => InterestType)
-  @Column({ type: 'enum', enum: InterestType, default: InterestType.NOMINAL_MONTHLY })
+  @Column({
+    type: 'enum',
+    enum: InterestType,
+    default: InterestType.NOMINAL_MONTHLY,
+  })
   lateInterestType: InterestType;
 
   /** Día de corte: desde él se causa mora sobre saldos vencidos. */

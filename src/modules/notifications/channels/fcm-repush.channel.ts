@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 
-import { PanicDeliveryChannel }   from '../enums/panic-delivery-channel.enum';
-import { NotificationType }       from '../enums/notification-type.enum';
-import { NotificationPriority }   from '../enums/notification-priority.enum';
-import { NotificationsService }   from '../services/notifications.service';
+import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
+import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationPriority } from '../enums/notification-priority.enum';
+import { NotificationsService } from '../services/notifications.service';
 import {
   PanicChannel,
   PanicChannelContext,
@@ -42,24 +42,27 @@ export class FcmRepushPanicChannel implements PanicChannel {
   }
 
   async send(ctx: PanicChannelContext): Promise<PanicChannelResult> {
-    if (ctx.userIds.length === 0) return { reached: 0, skippedReason: 'sin destinatarios' };
+    if (ctx.userIds.length === 0)
+      return { reached: 0, skippedReason: 'sin destinatarios' };
 
     try {
       await this.notificationsService.dispatchPushOnly(ctx.userIds, {
-        complexId:       ctx.alert.complexId,
-        userIds:         ctx.userIds,
-        type:            NotificationType.PANIC_ALERT,
-        priority:        NotificationPriority.URGENT,
-        title:           ctx.title,
-        body:            ctx.body,
+        complexId: ctx.alert.complexId,
+        userIds: ctx.userIds,
+        type: NotificationType.PANIC_ALERT,
+        priority: NotificationPriority.URGENT,
+        title: ctx.title,
+        body: ctx.body,
         createdByUserId: ctx.alert.triggeredByUserId,
-        panicAlertId:    ctx.alert.id,
-        metadata:        { triggeredByLabel: ctx.alert.triggeredByLabel ?? '' },
+        panicAlertId: ctx.alert.id,
+        metadata: { triggeredByLabel: ctx.alert.triggeredByLabel ?? '' },
       });
       return { reached: ctx.userIds.length };
     } catch (err) {
       const message = (err as Error)?.message ?? 'error desconocido';
-      this.logger.error(`Re-push falló para la alerta ${ctx.alert.id}: ${message}`);
+      this.logger.error(
+        `Re-push falló para la alerta ${ctx.alert.id}: ${message}`,
+      );
       return { reached: 0, skippedReason: message };
     }
   }

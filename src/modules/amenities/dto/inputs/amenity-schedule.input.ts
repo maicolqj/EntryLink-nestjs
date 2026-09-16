@@ -1,5 +1,14 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsInt, IsUUID, Min, Max, Matches, IsArray, ValidateNested, ArrayMaxSize } from 'class-validator';
+import {
+  IsInt,
+  IsUUID,
+  Min,
+  Max,
+  Matches,
+  IsArray,
+  ValidateNested,
+  ArrayMaxSize,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /** Formato HH:mm en 24 h (00:00 – 23:59). */
@@ -7,7 +16,6 @@ const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 @InputType()
 export class AmenityScheduleInput {
-
   @Field(() => Int, { description: '0=domingo, 1=lunes … 6=sábado' })
   @IsInt()
   @Min(0)
@@ -30,7 +38,6 @@ export class AmenityScheduleInput {
  */
 @InputType()
 export class SetAmenitySchedulesInput {
-
   @Field()
   @IsUUID()
   amenityId: string;

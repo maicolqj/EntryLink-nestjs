@@ -1,14 +1,20 @@
 import { InputType, Field } from '@nestjs/graphql';
 import {
-  IsUUID, IsEnum, IsOptional, IsBoolean,
-  IsString, IsDateString, MaxLength,
+  IsUUID,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  IsString,
+  IsDateString,
+  MaxLength,
 } from 'class-validator';
 import { ResidentType } from '../../enums/resident-type.enum';
 
 @InputType()
 export class UpdateResidentInput {
-
-  @Field(() => String, { description: 'ID del registro de residente a actualizar' })
+  @Field(() => String, {
+    description: 'ID del registro de residente a actualizar',
+  })
   @IsUUID()
   id: string;
 
@@ -27,7 +33,10 @@ export class UpdateResidentInput {
    * cada año y entra a la app como cualquier residente. Hoy solo lo miran las
    * zonas comunes que reconocen reservas gratuitas al consejo.
    */
-  @Field(() => Boolean, { nullable: true, description: 'Miembro del consejo de administración' })
+  @Field(() => Boolean, {
+    nullable: true,
+    description: 'Miembro del consejo de administración',
+  })
   @IsOptional()
   @IsBoolean()
   isCouncilMember?: boolean;
@@ -70,22 +79,30 @@ export class UpdateResidentInput {
   @IsUUID()
   unitId: string;
 
-  @Field(() => String, { nullable: true, description: 'Nombre del usuario residente' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Nombre del usuario residente',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   name?: string;
 
-  @Field(() => String, { nullable: true, description: 'Apellido del usuario residente' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Apellido del usuario residente',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   lastName?: string;
 
-  @Field(() => String, { nullable: true, description: 'Teléfono del usuario residente' })
+  @Field(() => String, {
+    nullable: true,
+    description: 'Teléfono del usuario residente',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(20)
   phoneNumber?: string;
-
 }

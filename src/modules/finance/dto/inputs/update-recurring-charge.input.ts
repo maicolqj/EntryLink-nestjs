@@ -1,7 +1,18 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import {
-  IsUUID, IsOptional, IsString, MaxLength, IsInt, Min, Max,
-  IsBoolean, IsPositive, IsEnum, IsArray, ArrayUnique, ValidateNested,
+  IsUUID,
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+  IsPositive,
+  IsEnum,
+  IsArray,
+  ArrayUnique,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -17,7 +28,6 @@ import { FeeConfigTargetRulesInput } from './fee-config-target-rules.input';
  */
 @InputType()
 export class UpdateRecurringChargeInput {
-
   @Field()
   @IsUUID()
   id: string;

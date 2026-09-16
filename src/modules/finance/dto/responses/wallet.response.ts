@@ -3,12 +3,11 @@ import { PaginationReponse } from '../../../shared/dto/responses/pagination-obje
 
 @ObjectType()
 export class WalletEntryObject {
-
   @Field()
   id: string;
 
   @Field()
-  type: string;  // 'CREDIT' | 'DEBIT' | 'ADJUSTMENT'
+  type: string; // 'CREDIT' | 'DEBIT' | 'ADJUSTMENT'
 
   @Field(() => Float)
   amount: number;
@@ -23,12 +22,11 @@ export class WalletEntryObject {
   chargeId?: string;
 
   @Field()
-  createdAt: string;  // ISO string
+  createdAt: string; // ISO string
 }
 
 @ObjectType()
 export class UnitWalletResponse {
-
   @Field()
   unitId: string;
 
@@ -53,7 +51,6 @@ export class UnitWalletResponse {
 
 @ObjectType()
 export class WalletSummaryItem {
-
   @Field()
   unitId: string;
 
@@ -75,7 +72,6 @@ export class WalletSummaryItem {
 
 @ObjectType()
 export class WalletSummaryPaginated {
-
   @Field(() => [WalletSummaryItem])
   items: WalletSummaryItem[];
 
@@ -85,7 +81,6 @@ export class WalletSummaryPaginated {
 
 @ObjectType()
 export class ApplyWalletResult {
-
   @Field()
   chargeId: string;
 

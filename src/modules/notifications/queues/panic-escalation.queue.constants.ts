@@ -6,9 +6,9 @@ export const PANIC_ESCALATION_JOBS = {
 
 export interface PanicEscalationJobPayload {
   panicAlertId: string;
-  complexId:    string;
+  complexId: string;
   /** Nivel que este job debe ejecutar: 1, 2 o 3. */
-  level:        number;
+  level: number;
 }
 
 /**
@@ -18,6 +18,9 @@ export interface PanicEscalationJobPayload {
  * escalamiento (BullMQ ignora un jobId ya existente), y que reconocer la alerta
  * pueda eliminar el job pendiente por nombre en vez de recorrer la cola.
  */
-export function panicEscalationJobId(panicAlertId: string, level: number): string {
+export function panicEscalationJobId(
+  panicAlertId: string,
+  level: number,
+): string {
   return `panic:${panicAlertId}:L${level}`;
 }

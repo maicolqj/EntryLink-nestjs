@@ -26,7 +26,6 @@ import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
 @Index(['panicAlertId'])
 @Index(['panicAlertId', 'channel'])
 export class PanicAlertDelivery {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;

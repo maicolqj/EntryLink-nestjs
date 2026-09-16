@@ -6,7 +6,6 @@ const YYYYMMDD = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 @InputType()
 export class AmenityAvailabilityInput {
-
   @Field()
   @IsUUID()
   amenityId: string;
@@ -15,7 +14,9 @@ export class AmenityAvailabilityInput {
   @Matches(YYYYMMDD, { message: 'from debe tener formato YYYY-MM-DD' })
   from: string;
 
-  @Field(() => String, { description: 'Último día a consultar, inclusive (YYYY-MM-DD)' })
+  @Field(() => String, {
+    description: 'Último día a consultar, inclusive (YYYY-MM-DD)',
+  })
   @Matches(YYYYMMDD, { message: 'to debe tener formato YYYY-MM-DD' })
   to: string;
 }

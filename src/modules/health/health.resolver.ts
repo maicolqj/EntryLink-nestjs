@@ -6,11 +6,11 @@ import { Public } from '../shared/decorators/public.decorator';
 @SkipThrottle()
 @Resolver()
 export class HealthResolver {
-
   @Public()
   @Query(() => String, {
     name: 'ping',
-    description: 'Verifica conectividad con el backend. Siempre retorna "pong".',
+    description:
+      'Verifica conectividad con el backend. Siempre retorna "pong".',
   })
   ping(): string {
     return 'pong';

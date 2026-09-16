@@ -1,12 +1,23 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsUUID, IsInt, IsEnum, IsOptional, IsBoolean, Min, ValidateNested, IsString } from 'class-validator';
+import {
+  IsUUID,
+  IsInt,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  Min,
+  ValidateNested,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import GraphQLJSON from 'graphql-type-json';
 
 import { RotationIntervalUnit } from '../../enums/rotation-interval-unit.enum';
 import { VehicleType } from '../../enums/vehicle-type.enum';
 
-@InputType({ description: 'Cupos de parqueadero disponibles para un tipo de vehículo' })
+@InputType({
+  description: 'Cupos de parqueadero disponibles para un tipo de vehículo',
+})
 export class ParkingSlotByTypeInput {
   @Field(() => String, {
     description: 'Tipo de vehículo (ej: "CAR", "MOTORCYCLE", "TRUCK", "VAN")',
@@ -14,20 +25,25 @@ export class ParkingSlotByTypeInput {
   @IsEnum(VehicleType)
   vehicleType: VehicleType;
 
-  @Field(() => Int, { description: 'Cantidad de cupos disponibles para ese tipo' })
+  @Field(() => Int, {
+    description: 'Cantidad de cupos disponibles para ese tipo',
+  })
   @IsInt()
   @Min(0)
   slots: number;
 }
 
-@InputType({ description: 'Datos para configurar la rotación de parqueaderos del complejo' })
+@InputType({
+  description: 'Datos para configurar la rotación de parqueaderos del complejo',
+})
 export class ConfigureRotationInput {
   @Field(() => String, { description: 'ID del complejo residencial' })
   @IsUUID()
   complexId: string;
 
   @Field(() => Int, {
-    description: 'Valor numérico del intervalo de rotación (ej: 3 para "cada 3 meses")',
+    description:
+      'Valor numérico del intervalo de rotación (ej: 3 para "cada 3 meses")',
   })
   @IsInt()
   @Min(1)

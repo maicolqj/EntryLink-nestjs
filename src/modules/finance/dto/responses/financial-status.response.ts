@@ -3,7 +3,6 @@ import { PaginationReponse } from '../../../shared/dto/responses/pagination-obje
 
 @ObjectType()
 export class UnitFinancialStatusItem {
-
   @Field()
   unitId: string;
 
@@ -32,7 +31,6 @@ export class UnitFinancialStatusItem {
 
 @ObjectType()
 export class UnitFinancialStatusPaginated {
-
   @Field(() => [UnitFinancialStatusItem])
   items: UnitFinancialStatusItem[];
 
@@ -42,7 +40,6 @@ export class UnitFinancialStatusPaginated {
 
 @ObjectType()
 export class MoraApplicationResult {
-
   @Field()
   period: string;
 

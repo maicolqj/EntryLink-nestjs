@@ -1,4 +1,10 @@
-import { Injectable, Logger, HttpStatus, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpStatus,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -17,7 +23,10 @@ import { AUTH_CONSTANTS } from '../constants/auth.constants';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AuthResponse } from '../dto/responses/auth-response';
 import { CustomError } from '../../shared/utils/errors.utils';
-import { AuthErrorCode, UserErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  UserErrorCode,
+} from '../../shared/constans/error-codes.constants';
 
 /**
  * Clave de acceso del residente y dispositivos vinculados.
@@ -95,7 +104,10 @@ export class ResidentDeviceService {
     this.assertCodeIsAcceptable(normalized);
 
     await this.userRepo.update(user.id, {
-      accessCodeHash: await bcrypt.hash(normalized, AUTH_CONSTANTS.ACCESS_CODE_BCRYPT_ROUNDS),
+      accessCodeHash: await bcrypt.hash(
+        normalized,
+        AUTH_CONSTANTS.ACCESS_CODE_BCRYPT_ROUNDS,
+      ),
       accessCodeFailedAttempts: 0,
       accessCodeLockedUntil: null,
     });
@@ -114,7 +126,10 @@ export class ResidentDeviceService {
    * desde otro equipo—. Ese segundo camino es el "olvidé mi clave": pedir la
    * anterior ahí dejaría al residente sin salida.
    */
-  private async assertMayChangeCode(userId: string, currentCode?: string): Promise<void> {
+  private async assertMayChangeCode(
+    userId: string,
+    currentCode?: string,
+  ): Promise<void> {
     const user = await this.userRepo
       .createQueryBuilder('user')
       .addSelect('user.accessCodeHash')
@@ -135,7 +150,10 @@ export class ResidentDeviceService {
 
     this.assertAccountNotLocked(user);
 
-    const isValid = await bcrypt.compare(this.normalizeCode(currentCode), user.accessCodeHash);
+    const isValid = await bcrypt.compare(
+      this.normalizeCode(currentCode),
+      user.accessCodeHash,
+    );
     if (!isValid) await this.registerFailedAttempt(user);
   }
 
@@ -145,7 +163,10 @@ export class ResidentDeviceService {
    */
   async grantResetPermission(userId: string): Promise<void> {
     await this.cacheService.set({
-      key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET, key: userId },
+      key: {
+        prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET,
+        key: userId,
+      },
       data: { granted: true },
       options: { ttl: AUTH_CONSTANTS.CACHE_TTL.ACCESS_CODE_RESET },
     });
@@ -153,8 +174,13 @@ export class ResidentDeviceService {
 
   /** Un solo uso: se borra al consumirlo para que no quede vivo 15 minutos. */
   private async consumeResetPermission(userId: string): Promise<boolean> {
-    const key = { prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET, key: userId };
-    const permission = await this.cacheService.get<{ granted: boolean }>({ key });
+    const key = {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.ACCESS_CODE_RESET,
+      key: userId,
+    };
+    const permission = await this.cacheService.get<{ granted: boolean }>({
+      key,
+    });
 
     if (!permission?.granted) return false;
 
@@ -169,7 +195,10 @@ export class ResidentDeviceService {
    * factor protege el alta de un equipo NUEVO. Pedirlo en uno ya vinculado
    * rompería la recuperación de quien justamente olvidó la clave.
    */
-  async isDeviceLinked(userId: string, deviceInfo: DeviceInfo): Promise<boolean> {
+  async isDeviceLinked(
+    userId: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<boolean> {
     const deviceId = deviceInfo.deviceId?.trim();
     if (!deviceId) return false;
 
@@ -204,7 +233,9 @@ export class ResidentDeviceService {
   ): Promise<ResidentDevice> {
     const deviceId = this.requireDeviceId(deviceInfo);
 
-    const existing = await this.deviceRepo.findOne({ where: { userId, deviceId } });
+    const existing = await this.deviceRepo.findOne({
+      where: { userId, deviceId },
+    });
 
     if (existing) {
       await this.deviceRepo.update(existing.id, {
@@ -229,7 +260,9 @@ export class ResidentDeviceService {
       }),
     );
 
-    this.logger.log(`Dispositivo vinculado — userId: ${userId} | deviceId: ${this.maskDeviceId(deviceId)}`);
+    this.logger.log(
+      `Dispositivo vinculado — userId: ${userId} | deviceId: ${this.maskDeviceId(deviceId)}`,
+    );
     return device;
   }
 
@@ -257,7 +290,10 @@ export class ResidentDeviceService {
 
     this.assertAccountNotLocked(user);
 
-    const isValid = await bcrypt.compare(this.normalizeCode(code), user.accessCodeHash);
+    const isValid = await bcrypt.compare(
+      this.normalizeCode(code),
+      user.accessCodeHash,
+    );
     if (!isValid) await this.registerFailedAttempt(user);
 
     await this.userRepo.update(user.id, {
@@ -290,7 +326,11 @@ export class ResidentDeviceService {
     const deviceId = this.requireDeviceId(deviceInfo);
     const identityKey = identity?.trim().toLowerCase() || undefined;
 
-    const device = await this.findLinkedDevice(deviceId, deviceInfo, identityKey);
+    const device = await this.findLinkedDevice(
+      deviceId,
+      deviceInfo,
+      identityKey,
+    );
 
     if (device) return this.loginFromLinkedDevice(code, deviceInfo, device);
 
@@ -323,13 +363,17 @@ export class ResidentDeviceService {
 
     if (!withHash?.accessCodeHash) {
       throw new CustomError({
-        message: 'Tu cuenta todavía no tiene clave. Ingresa con WhatsApp para crearla',
+        message:
+          'Tu cuenta todavía no tiene clave. Ingresa con WhatsApp para crearla',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.ACCESS_CODE_NOT_SET,
       });
     }
 
-    const isValid = await bcrypt.compare(this.normalizeCode(code), withHash.accessCodeHash);
+    const isValid = await bcrypt.compare(
+      this.normalizeCode(code),
+      withHash.accessCodeHash,
+    );
     if (!isValid) await this.registerFailedAttempt(withHash);
 
     return this.issueDeviceSession(user, device, deviceInfo);
@@ -353,7 +397,9 @@ export class ResidentDeviceService {
     await this.assertEnrollmentAllowed(identityKey, deviceInfo.ip);
 
     const candidate = await this.findResidentByIdentity(identityKey);
-    const withHash = candidate ? await this.loadAccessCodeHash(candidate.id) : null;
+    const withHash = candidate
+      ? await this.loadAccessCodeHash(candidate.id)
+      : null;
 
     const isValid =
       !!withHash?.accessCodeHash &&
@@ -372,7 +418,7 @@ export class ResidentDeviceService {
 
     // El estado de la cuenta se revisa DESPUÉS de la clave: antes, "cuenta
     // suspendida" delataría que el documento existe sin conocer nada más.
-    const user = await this.findResident(candidate!.id);
+    const user = await this.findResident(candidate.id);
     this.assertUserActive(user);
     this.assertAccountNotLocked(user);
 
@@ -382,7 +428,7 @@ export class ResidentDeviceService {
 
     this.logger.warn(
       `Equipo nuevo vinculado con documento + clave — userId: ${user.id} | ` +
-      `deviceId: ${this.maskDeviceId(device.deviceId)} | ip: ${deviceInfo.ip}`,
+        `deviceId: ${this.maskDeviceId(device.deviceId)} | ip: ${deviceInfo.ip}`,
     );
 
     // Best-effort y ANTES de emitir tokens no: si el aviso falla, el ingreso
@@ -409,7 +455,10 @@ export class ResidentDeviceService {
       await this.tokenService.revokeSession(device.sessionId, 'device_relogin');
     }
 
-    await this.sessionService.enforceSessionLimit(user.id, AUTH_CONSTANTS.MAX_SESSIONS_PER_USER);
+    await this.sessionService.enforceSessionLimit(
+      user.id,
+      AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
+    );
 
     const tokenPair = await this.tokenService.generateTokenPair(
       user,
@@ -419,7 +468,11 @@ export class ResidentDeviceService {
       AUTH_CONSTANTS.RESIDENT_DEVICE_REFRESH_EXPIRY,
     );
 
-    await this.sessionService.createOrUpdateSession(user.id, tokenPair.sessionId, deviceInfo);
+    await this.sessionService.createOrUpdateSession(
+      user.id,
+      tokenPair.sessionId,
+      deviceInfo,
+    );
 
     await this.userRepo.update(user.id, {
       accessCodeFailedAttempts: 0,
@@ -431,7 +484,9 @@ export class ResidentDeviceService {
       sessionId: tokenPair.sessionId,
     });
 
-    this.logger.log(`Login con clave de acceso — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`);
+    this.logger.log(
+      `Login con clave de acceso — userId: ${user.id} | sessionId: ${tokenPair.sessionId}`,
+    );
 
     return {
       accessToken: tokenPair.accessToken,
@@ -476,7 +531,9 @@ export class ResidentDeviceService {
     // deviceId. No es motivo para negar el ingreso —el camino con documento +
     // clave revalida y reescribe el vínculo—, pero sí para dejar rastro.
     if (device.deviceFingerprint !== deviceInfo.fingerprint) {
-      this.logger.warn(`Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`);
+      this.logger.warn(
+        `Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`,
+      );
       return null;
     }
 
@@ -499,7 +556,9 @@ export class ResidentDeviceService {
    * siguen funcionando.
    */
   async revokeDevice(userId: string, deviceRowId: string): Promise<boolean> {
-    const device = await this.deviceRepo.findOne({ where: { id: deviceRowId, userId } });
+    const device = await this.deviceRepo.findOne({
+      where: { id: deviceRowId, userId },
+    });
 
     if (!device) {
       throw new CustomError({
@@ -516,10 +575,14 @@ export class ResidentDeviceService {
 
     if (device.sessionId) {
       await this.tokenService.revokeSession(device.sessionId, 'device_revoked');
-      await this.sessionService.terminateSession(device.sessionId).catch(() => undefined);
+      await this.sessionService
+        .terminateSession(device.sessionId)
+        .catch(() => undefined);
     }
 
-    this.logger.log(`Dispositivo revocado por el usuario — userId: ${userId} | id: ${device.id}`);
+    this.logger.log(
+      `Dispositivo revocado por el usuario — userId: ${userId} | id: ${device.id}`,
+    );
     return true;
   }
 
@@ -531,11 +594,18 @@ export class ResidentDeviceService {
    * era. Equivale al "cerrar sesión en los demás dispositivos" de una cuenta de
    * correo.
    */
-  async revokeOtherDevices(userId: string, deviceInfo: DeviceInfo): Promise<number> {
+  async revokeOtherDevices(
+    userId: string,
+    deviceInfo: DeviceInfo,
+  ): Promise<number> {
     const currentDeviceId = this.requireDeviceId(deviceInfo);
 
-    const others = await this.deviceRepo.find({ where: { userId, isRevoked: false } });
-    const toRevoke = others.filter(device => device.deviceId !== currentDeviceId);
+    const others = await this.deviceRepo.find({
+      where: { userId, isRevoked: false },
+    });
+    const toRevoke = others.filter(
+      (device) => device.deviceId !== currentDeviceId,
+    );
 
     for (const device of toRevoke) {
       await this.deviceRepo.update(device.id, {
@@ -543,12 +613,19 @@ export class ResidentDeviceService {
         revokedReason: 'revoked_by_user',
       });
       if (device.sessionId) {
-        await this.tokenService.revokeSession(device.sessionId, 'device_revoked');
-        await this.sessionService.terminateSession(device.sessionId).catch(() => undefined);
+        await this.tokenService.revokeSession(
+          device.sessionId,
+          'device_revoked',
+        );
+        await this.sessionService
+          .terminateSession(device.sessionId)
+          .catch(() => undefined);
       }
     }
 
-    this.logger.log(`Otros dispositivos revocados — userId: ${userId} | cantidad: ${toRevoke.length}`);
+    this.logger.log(
+      `Otros dispositivos revocados — userId: ${userId} | cantidad: ${toRevoke.length}`,
+    );
     return toRevoke.length;
   }
 
@@ -585,7 +662,9 @@ export class ResidentDeviceService {
    * Busca al residente por documento. Devuelve null sin lanzar: el caller no
    * debe filtrar si el documento existe.
    */
-  private async findResidentByIdentity(identityKey: string): Promise<User | null> {
+  private async findResidentByIdentity(
+    identityKey: string,
+  ): Promise<User | null> {
     const user = await this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.userRoles', 'userRoles')
@@ -596,7 +675,9 @@ export class ResidentDeviceService {
 
     if (!user) return null;
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
 
     return isResident ? user : null;
   }
@@ -609,11 +690,17 @@ export class ResidentDeviceService {
   // lista de cédulas no puede dejar a nadie sin acceso.
 
   private enrollmentIpKey(ip: string) {
-    return { prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IP, key: ip || 'sin-ip' };
+    return {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IP,
+      key: ip || 'sin-ip',
+    };
   }
 
   private enrollmentIdentityKey(identityKey: string) {
-    return { prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IDENTITY, key: identityKey };
+    return {
+      prefix: AUTH_CONSTANTS.CACHE_PREFIX.UNLINKED_LOGIN_IDENTITY,
+      key: identityKey,
+    };
   }
 
   /**
@@ -622,14 +709,19 @@ export class ResidentDeviceService {
    * documento suma solo en los fallos, para no castigar al residente que entra
    * bien varias veces desde equipos distintos.
    */
-  private async assertEnrollmentAllowed(identityKey: string, ip: string): Promise<void> {
+  private async assertEnrollmentAllowed(
+    identityKey: string,
+    ip: string,
+  ): Promise<void> {
     const minutes = AUTH_CONSTANTS.UNLINKED_LOGIN_WINDOW / 60;
 
     const byIdentity = await this.cacheService.get<{ count: number }>({
       key: this.enrollmentIdentityKey(identityKey),
     });
 
-    if ((byIdentity?.count ?? 0) >= AUTH_CONSTANTS.UNLINKED_LOGIN_IDENTITY_MAX) {
+    if (
+      (byIdentity?.count ?? 0) >= AUTH_CONSTANTS.UNLINKED_LOGIN_IDENTITY_MAX
+    ) {
       throw new CustomError({
         message:
           `Demasiados intentos de vincular un equipo nuevo con este documento. Espera ${minutes} ` +
@@ -639,7 +731,9 @@ export class ResidentDeviceService {
       });
     }
 
-    const byIp = await this.cacheService.get<{ count: number }>({ key: this.enrollmentIpKey(ip) });
+    const byIp = await this.cacheService.get<{ count: number }>({
+      key: this.enrollmentIpKey(ip),
+    });
 
     if ((byIp?.count ?? 0) >= AUTH_CONSTANTS.UNLINKED_LOGIN_IP_MAX) {
       this.logger.warn(`[ENROLL] Límite por IP alcanzado — ip: ${ip}`);
@@ -669,7 +763,9 @@ export class ResidentDeviceService {
   }
 
   private async clearEnrollmentFailures(identityKey: string): Promise<void> {
-    await this.cacheService.delete({ key: this.enrollmentIdentityKey(identityKey) });
+    await this.cacheService.delete({
+      key: this.enrollmentIdentityKey(identityKey),
+    });
   }
 
   /**
@@ -730,10 +826,10 @@ export class ResidentDeviceService {
       !new RegExp(`^[A-Z0-9]{${length}}$`).test(code) ||
       !/[A-Z]/.test(code) ||
       !/[0-9]/.test(code) ||
-      new RegExp(`^(.)\\1{${length - 1}}$`).test(code) ||   // AAAAAA, 111111…
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.includes(code) ||        // ABCDEF, BCDEFG…
-      '0123456789'.includes(code) ||                        // 012345, 123456…
-      '9876543210'.includes(code);                          // 654321, 987654…
+      new RegExp(`^(.)\\1{${length - 1}}$`).test(code) || // AAAAAA, 111111…
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.includes(code) || // ABCDEF, BCDEFG…
+      '0123456789'.includes(code) || // 012345, 123456…
+      '9876543210'.includes(code); // 654321, 987654…
 
     if (weak) {
       throw new CustomError({
@@ -746,7 +842,9 @@ export class ResidentDeviceService {
 
   private assertAccountNotLocked(user: User): void {
     if (user.accessCodeLockedUntil && new Date() < user.accessCodeLockedUntil) {
-      const minutes = Math.ceil((user.accessCodeLockedUntil.getTime() - Date.now()) / 60_000);
+      const minutes = Math.ceil(
+        (user.accessCodeLockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new CustomError({
         message: `Cuenta bloqueada por intentos fallidos. Intenta en ${minutes} minuto(s)`,
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -767,7 +865,9 @@ export class ResidentDeviceService {
     const attempts = (user.accessCodeFailedAttempts ?? 0) + 1;
 
     if (attempts < AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS) {
-      await this.userRepo.update(user.id, { accessCodeFailedAttempts: attempts });
+      await this.userRepo.update(user.id, {
+        accessCodeFailedAttempts: attempts,
+      });
       const remaining = AUTH_CONSTANTS.MAX_ACCESS_CODE_ATTEMPTS - attempts;
       throw new CustomError({
         message: `Clave incorrecta. Te quedan ${remaining} intento(s)`,
@@ -778,10 +878,14 @@ export class ResidentDeviceService {
 
     await this.userRepo.update(user.id, {
       accessCodeFailedAttempts: 0,
-      accessCodeLockedUntil: new Date(Date.now() + AUTH_CONSTANTS.ACCESS_CODE_LOCK_DURATION * 1_000),
+      accessCodeLockedUntil: new Date(
+        Date.now() + AUTH_CONSTANTS.ACCESS_CODE_LOCK_DURATION * 1_000,
+      ),
     });
 
-    this.logger.warn(`Cuenta bloqueada por intentos de clave — userId: ${user.id}`);
+    this.logger.warn(
+      `Cuenta bloqueada por intentos de clave — userId: ${user.id}`,
+    );
 
     throw new CustomError({
       message: `Cuenta bloqueada por ${AUTH_CONSTANTS.ACCESS_CODE_LOCK_DURATION / 60} minutos por intentos fallidos`,
@@ -797,7 +901,8 @@ export class ResidentDeviceService {
       order: { lastUsedAt: 'ASC', createdAt: 'ASC' },
     });
 
-    const excess = active.length - (AUTH_CONSTANTS.MAX_DEVICES_PER_RESIDENT - 1);
+    const excess =
+      active.length - (AUTH_CONSTANTS.MAX_DEVICES_PER_RESIDENT - 1);
     if (excess <= 0) return;
 
     for (const device of active.slice(0, excess)) {
@@ -806,11 +911,16 @@ export class ResidentDeviceService {
         revokedReason: 'device_limit_reached',
       });
       if (device.sessionId) {
-        await this.tokenService.revokeSession(device.sessionId, 'device_limit_reached');
+        await this.tokenService.revokeSession(
+          device.sessionId,
+          'device_limit_reached',
+        );
       }
     }
 
-    this.logger.log(`Límite de dispositivos alcanzado — userId: ${userId} | revocados: ${excess}`);
+    this.logger.log(
+      `Límite de dispositivos alcanzado — userId: ${userId} | revocados: ${excess}`,
+    );
   }
 
   /**
@@ -836,7 +946,9 @@ export class ResidentDeviceService {
       });
     }
 
-    const isResident = (user.userRoles ?? []).some(ur => ur.role?.name === ValidRoles.RESIDENT_ROL);
+    const isResident = (user.userRoles ?? []).some(
+      (ur) => ur.role?.name === ValidRoles.RESIDENT_ROL,
+    );
     if (!isResident) {
       throw new CustomError({
         message: 'La clave de acceso es exclusiva para residentes',
@@ -854,7 +966,9 @@ export class ResidentDeviceService {
    */
   private assertUserActive(user: User): void {
     if (user.accountLockedUntil && new Date() < user.accountLockedUntil) {
-      const unlockIn = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / 60_000);
+      const unlockIn = Math.ceil(
+        (user.accountLockedUntil.getTime() - Date.now()) / 60_000,
+      );
       throw new CustomError({
         message: `Cuenta bloqueada temporalmente. Intenta en ${unlockIn} minuto(s)`,
         statusCode: HttpStatus.UNAUTHORIZED,
@@ -872,6 +986,8 @@ export class ResidentDeviceService {
   }
 
   private maskDeviceId(deviceId: string): string {
-    return deviceId.length <= 6 ? '***' : `${deviceId.slice(0, 4)}***${deviceId.slice(-2)}`;
+    return deviceId.length <= 6
+      ? '***'
+      : `${deviceId.slice(0, 4)}***${deviceId.slice(-2)}`;
   }
 }

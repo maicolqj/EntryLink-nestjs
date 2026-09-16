@@ -39,20 +39,28 @@ describe('DeviceApprovalService', () => {
   const approvalRepo = {
     create: jest.fn((data: any) => data),
     save: jest.fn(async (data: any) => {
-      const row = { id: `chall-${rows.length + 1}`, createdAt: new Date(), ...data };
+      const row = {
+        id: `chall-${rows.length + 1}`,
+        createdAt: new Date(),
+        ...data,
+      };
       rows.push(row);
       return row;
     }),
     find: jest.fn(async ({ where }: any) =>
-      rows.filter(r => Object.entries(where).every(([k, v]) => r[k] === v)),
+      rows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v)),
     ),
-    findOne: jest.fn(async ({ where }: any) =>
-      rows.find(r => Object.entries(where).every(([k, v]) => r[k] === v)) ?? null,
+    findOne: jest.fn(
+      async ({ where }: any) =>
+        rows.find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) ??
+        null,
     ),
     update: jest.fn(async (criteria: any, patch: any) => {
       const match = typeof criteria === 'string' ? { id: criteria } : criteria;
-      const found = rows.filter(r => Object.entries(match).every(([k, v]) => r[k] === v));
-      found.forEach(r => Object.assign(r, patch));
+      const found = rows.filter((r) =>
+        Object.entries(match).every(([k, v]) => r[k] === v),
+      );
+      found.forEach((r) => Object.assign(r, patch));
       return { affected: found.length };
     }),
     delete: jest.fn(async () => ({ affected: 0 })),
@@ -76,7 +84,10 @@ describe('DeviceApprovalService', () => {
 
   const tokenService = {
     generateTokenPair: jest.fn(async () => ({
-      accessToken: 'at', refreshToken: 'rt', expiresIn: 900, sessionId: 'sess-nueva',
+      accessToken: 'at',
+      refreshToken: 'rt',
+      expiresIn: 900,
+      sessionId: 'sess-nueva',
     })),
   };
 
@@ -92,7 +103,9 @@ describe('DeviceApprovalService', () => {
   };
 
   const notificationsService = {
-    dispatchPushOnly: jest.fn(async (_userIds: string[], _params: any) => undefined),
+    dispatchPushOnly: jest.fn(
+      async (_userIds: string[], _params: any) => undefined,
+    ),
   };
 
   // La cuenta de las pruebas todavía no tiene clave de acceso: ese es el primer
@@ -114,7 +127,10 @@ describe('DeviceApprovalService', () => {
     const module = await Test.createTestingModule({
       providers: [
         DeviceApprovalService,
-        { provide: getRepositoryToken(DeviceApprovalRequest), useValue: approvalRepo },
+        {
+          provide: getRepositoryToken(DeviceApprovalRequest),
+          useValue: approvalRepo,
+        },
         { provide: getRepositoryToken(ResidentDevice), useValue: deviceRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
@@ -138,14 +154,16 @@ describe('DeviceApprovalService', () => {
     expect(res.approvalCode).toMatch(/^[A-Z2-9]{4}$/);
     expect(notificationsService.dispatchPushOnly).toHaveBeenCalledWith(
       ['user-1'],
-      expect.objectContaining({ type: NotificationType.LOGIN_APPROVAL_REQUEST }),
+      expect.objectContaining({
+        type: NotificationType.LOGIN_APPROVAL_REQUEST,
+      }),
     );
   });
 
   it('el push lleva el approvalId, nunca el challengeId', async () => {
     const res = await request();
 
-    const params = notificationsService.dispatchPushOnly.mock.calls[0][1] as any;
+    const params = notificationsService.dispatchPushOnly.mock.calls[0][1];
 
     expect(params.metadata.approvalId).toBe(rows[0].approvalId);
     expect(JSON.stringify(params)).not.toContain(res.challengeId);
@@ -167,7 +185,9 @@ describe('DeviceApprovalService', () => {
   });
 
   it('si el push falla la solicitud sigue viva', async () => {
-    notificationsService.dispatchPushOnly.mockRejectedValueOnce(new Error('FCM caído') as never);
+    notificationsService.dispatchPushOnly.mockRejectedValueOnce(
+      new Error('FCM caído'),
+    );
 
     const res = await request();
 
@@ -231,7 +251,9 @@ describe('DeviceApprovalService', () => {
     const auth = await service.redeem(res.challengeId, requester);
     expect(auth.accessToken).toBe('at');
 
-    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, requester),
+    ).rejects.toMatchObject({
       errorCode: 'APPROVAL_CONSUMED',
     });
   });
@@ -244,7 +266,9 @@ describe('DeviceApprovalService', () => {
     const res = await request();
     await service.approve(rows[0].approvalId, 'user-1', 'sess-confiable');
 
-    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, requester),
+    ).rejects.toMatchObject({
       errorCode: 'ACCESS_CODE_REQUIRED',
     });
 
@@ -259,7 +283,9 @@ describe('DeviceApprovalService', () => {
   it('canjear sin aprobar falla', async () => {
     const res = await request();
 
-    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, requester),
+    ).rejects.toMatchObject({
       errorCode: 'APPROVAL_PENDING',
     });
   });
@@ -268,7 +294,9 @@ describe('DeviceApprovalService', () => {
     const res = await request();
     await service.deny(rows[0].approvalId, 'user-1', 'sess-confiable');
 
-    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, requester),
+    ).rejects.toMatchObject({
       errorCode: 'APPROVAL_DENIED',
     });
   });
@@ -279,7 +307,9 @@ describe('DeviceApprovalService', () => {
 
     const attacker: DeviceInfo = { ...requester, fingerprint: 'fp-atacante' };
 
-    await expect(service.redeem(res.challengeId, attacker)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, attacker),
+    ).rejects.toMatchObject({
       errorCode: 'APPROVAL_NOT_FOUND',
     });
   });
@@ -289,7 +319,9 @@ describe('DeviceApprovalService', () => {
     await service.approve(rows[0].approvalId, 'user-1', 'sess-confiable');
     userStatus = UserStatus.SUSPENDED;
 
-    await expect(service.redeem(res.challengeId, requester)).rejects.toMatchObject({
+    await expect(
+      service.redeem(res.challengeId, requester),
+    ).rejects.toMatchObject({
       errorCode: 'USER_SUSPENDED',
     });
   });
@@ -297,6 +329,8 @@ describe('DeviceApprovalService', () => {
   it('rate limit por identidad', async () => {
     cacheService.get.mockResolvedValue({ count: 3 } as any);
 
-    await expect(request()).rejects.toMatchObject({ errorCode: 'APPROVAL_RATE_LIMIT' });
+    await expect(request()).rejects.toMatchObject({
+      errorCode: 'APPROVAL_RATE_LIMIT',
+    });
   });
 });

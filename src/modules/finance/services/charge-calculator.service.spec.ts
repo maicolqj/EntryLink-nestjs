@@ -1,4 +1,7 @@
-import { ChargeCalculatorService, ResolvedChargeRule } from './charge-calculator.service';
+import {
+  ChargeCalculatorService,
+  ResolvedChargeRule,
+} from './charge-calculator.service';
 import { ChargeCalculationMethod } from '../enums/charge-calculation-method.enum';
 import { Unit } from '../../residential-complex/entities/unit.entity';
 
@@ -6,16 +9,17 @@ import { Unit } from '../../residential-complex/entities/unit.entity';
  * Specs del motor de cálculo PURO. Las unidades se construyen como objetos
  * planos (solo se usan los campos id/number/coefficient/area/atributos).
  */
-const u = (partial: Partial<Unit> & { id: string }): Unit => ({
-  number: partial.id,
-  coefficient: undefined,
-  area: undefined,
-  parkingSpots: 0,
-  storageRooms: 0,
-  bedrooms: undefined,
-  bathrooms: undefined,
-  ...partial,
-} as unknown as Unit);
+const u = (partial: Partial<Unit> & { id: string }): Unit =>
+  ({
+    number: partial.id,
+    coefficient: undefined,
+    area: undefined,
+    parkingSpots: 0,
+    storageRooms: 0,
+    bedrooms: undefined,
+    bathrooms: undefined,
+    ...partial,
+  }) as unknown as Unit;
 
 describe('ChargeCalculatorService', () => {
   let service: ChargeCalculatorService;
@@ -38,7 +42,7 @@ describe('ChargeCalculatorService', () => {
       const res = service.calculate([rule], units);
 
       expect(res.lines).toHaveLength(3);
-      expect(res.lines.every(l => l.amount === 150000)).toBe(true);
+      expect(res.lines.every((l) => l.amount === 150000)).toBe(true);
       expect(res.total).toBe(450000);
       expect(res.uncoveredUnitIds).toHaveLength(0);
     });
@@ -82,7 +86,9 @@ describe('ChargeCalculatorService', () => {
       };
 
       const res = service.calculate([rule], units);
-      const byId = Object.fromEntries(res.lines.map(l => [l.unitId, l.amount]));
+      const byId = Object.fromEntries(
+        res.lines.map((l) => [l.unitId, l.amount]),
+      );
 
       // A=10, B=20, C=70 → ya cuadra; el residuo (0) recae en C de todos modos.
       expect(byId.A).toBe(10);
@@ -105,7 +111,9 @@ describe('ChargeCalculatorService', () => {
       };
 
       const res = service.calculate([rule], units);
-      const byId = Object.fromEntries(res.lines.map(l => [l.unitId, l.amount]));
+      const byId = Object.fromEntries(
+        res.lines.map((l) => [l.unitId, l.amount]),
+      );
       const sum = byId.A + byId.B + byId.C;
 
       expect(Math.round(sum * 100) / 100).toBe(33.33);
@@ -130,7 +138,9 @@ describe('ChargeCalculatorService', () => {
 
       expect(res.lines).toHaveLength(2);
       expect(res.lines.reduce((s, l) => s + l.amount, 0)).toBe(500);
-      expect(res.warnings.some(w => w.includes('sin coeficiente'))).toBe(true);
+      expect(res.warnings.some((w) => w.includes('sin coeficiente'))).toBe(
+        true,
+      );
       expect(res.uncoveredUnitIds).toContain('C');
     });
   });
@@ -147,7 +157,9 @@ describe('ChargeCalculatorService', () => {
       };
 
       const res = service.calculate([rule], units);
-      const byId = Object.fromEntries(res.lines.map(l => [l.unitId, l.amount]));
+      const byId = Object.fromEntries(
+        res.lines.map((l) => [l.unitId, l.amount]),
+      );
 
       expect(byId.A).toBe(200000);
       expect(byId.B).toBe(301250);
@@ -166,7 +178,7 @@ describe('ChargeCalculatorService', () => {
 
       expect(res.lines).toHaveLength(1);
       expect(res.lines[0].unitId).toBe('A');
-      expect(res.warnings.some(w => w.includes('sin área'))).toBe(true);
+      expect(res.warnings.some((w) => w.includes('sin área'))).toBe(true);
     });
   });
 
@@ -187,7 +199,9 @@ describe('ChargeCalculatorService', () => {
       };
 
       const res = service.calculate([rule], units);
-      const byId = Object.fromEntries(res.lines.map(l => [l.unitId, l.amount]));
+      const byId = Object.fromEntries(
+        res.lines.map((l) => [l.unitId, l.amount]),
+      );
 
       expect(res.lines).toHaveLength(2);
       expect(byId.A).toBe(100000);
@@ -205,7 +219,9 @@ describe('ChargeCalculatorService', () => {
         amount: 1000,
       };
 
-      expect(() => service.calculate([rule], units)).toThrow(/attributeKey inválido/);
+      expect(() => service.calculate([rule], units)).toThrow(
+        /attributeKey inválido/,
+      );
     });
   });
 
@@ -243,10 +259,23 @@ describe('ChargeCalculatorService', () => {
       const B = u({ id: 'B' });
       const allUnits = [A, B];
 
-      const res = service.calculate([
-        { ruleIndex: 0, calculationMethod: ChargeCalculationMethod.FIXED, units: [A], amount: 100 },
-        { ruleIndex: 1, calculationMethod: ChargeCalculationMethod.FIXED, units: [B], amount: 200 },
-      ], allUnits);
+      const res = service.calculate(
+        [
+          {
+            ruleIndex: 0,
+            calculationMethod: ChargeCalculationMethod.FIXED,
+            units: [A],
+            amount: 100,
+          },
+          {
+            ruleIndex: 1,
+            calculationMethod: ChargeCalculationMethod.FIXED,
+            units: [B],
+            amount: 200,
+          },
+        ],
+        allUnits,
+      );
 
       expect(res.conflicts).toHaveLength(0);
     });
@@ -260,9 +289,17 @@ describe('ChargeCalculatorService', () => {
       const C = u({ id: 'C' });
       const allUnits = [A, B, C];
 
-      const res = service.calculate([
-        { ruleIndex: 0, calculationMethod: ChargeCalculationMethod.FIXED, units: [A], amount: 100 },
-      ], allUnits);
+      const res = service.calculate(
+        [
+          {
+            ruleIndex: 0,
+            calculationMethod: ChargeCalculationMethod.FIXED,
+            units: [A],
+            amount: 100,
+          },
+        ],
+        allUnits,
+      );
 
       expect(res.uncoveredUnitIds.sort()).toEqual(['B', 'C']);
     });

@@ -2,7 +2,6 @@ import { ObjectType, Field, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class RecurringCausationResult {
-
   /** Cargos (facturas) causados en esta corrida. */
   @Field(() => Int)
   caused: number;

@@ -3,7 +3,6 @@ import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 
 @InputType()
 export class ConfirmDeliveryInput {
-
   @Field()
   @IsString()
   @IsNotEmpty()

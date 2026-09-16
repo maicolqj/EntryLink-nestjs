@@ -9,10 +9,10 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 
-import { User }               from '../../users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { MessageChannel }     from '../enums/message-channel.enum';
-import { MessageType }        from '../enums/message-type.enum';
+import { MessageChannel } from '../enums/message-channel.enum';
+import { MessageType } from '../enums/message-type.enum';
 
 @ObjectType({ description: 'Mensaje enviado a residentes del complejo' })
 @Entity({ name: 'sent_messages' })
@@ -20,7 +20,6 @@ import { MessageType }        from '../enums/message-type.enum';
 @Index(['complexId', 'unitId'])
 @Index(['sentByUserId'])
 export class SentMessage {
-
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -63,7 +62,9 @@ export class SentMessage {
   @Column({ name: 'unit_id', type: 'uuid' })
   unitId: string;
 
-  @Field(() => String, { description: 'Número de unidad desnormalizado para queries rápidas' })
+  @Field(() => String, {
+    description: 'Número de unidad desnormalizado para queries rápidas',
+  })
   @Column({ name: 'unit_number', type: 'varchar', length: 50 })
   unitNumber: string;
 
@@ -84,7 +85,10 @@ export class SentMessage {
   @JoinColumn({ name: 'complex_id' })
   complex?: ResidentialComplex;
 
-  @Field(() => User, { nullable: true, description: 'Usuario que envió el mensaje' })
+  @Field(() => User, {
+    nullable: true,
+    description: 'Usuario que envió el mensaje',
+  })
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'sent_by_user_id' })
   sentBy?: User;

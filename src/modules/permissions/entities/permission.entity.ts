@@ -10,7 +10,7 @@ import {
   UpdateDateColumn,
   BeforeInsert,
   BeforeUpdate,
-  OneToMany
+  OneToMany,
 } from 'typeorm';
 import { ValidPermissions } from '../enums/valid-permissions';
 import { PermissionLevel } from '../enums/level-permissions';
@@ -26,7 +26,6 @@ registerEnumType(PermissionLevel, { name: 'PermissionLevel' });
 @Index(['name', 'status'])
 @Index(['group', 'status'])
 export class Permission {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,7 +34,7 @@ export class Permission {
   @Column({
     type: 'enum',
     enum: ValidPermissions,
-    unique: true // Un permiso no puede repetirse
+    unique: true, // Un permiso no puede repetirse
   })
   name: ValidPermissions;
 
@@ -55,7 +54,7 @@ export class Permission {
   @Column({
     type: 'enum',
     enum: PermissionLevel,
-    default: PermissionLevel.LOW
+    default: PermissionLevel.LOW,
   })
   level: PermissionLevel;
 
@@ -96,8 +95,7 @@ export class Permission {
   })
   dependsOn?: Permission[];
 
-
-  @ManyToMany(() => Role, role => role.permissions)
+  @ManyToMany(() => Role, (role) => role.permissions)
   roles: Role[];
 
   @OneToMany(() => User, (user) => user.createdPermissions)

@@ -9,7 +9,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * y la columna deben crearse explícitamente. Idempotente.
  */
 export class AddUserIdentityType1781001800000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$
@@ -30,7 +29,9 @@ export class AddUserIdentityType1781001800000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "identity_type"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "identity_type"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "users_identity_type_enum"`);
   }
 }

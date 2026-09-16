@@ -4,7 +4,6 @@ import { Building } from '../../entities/building.entity';
 
 @ObjectType()
 export class PaginatedBuildingsResponse {
-
   @Field(() => [Building])
   items: Building[];
 

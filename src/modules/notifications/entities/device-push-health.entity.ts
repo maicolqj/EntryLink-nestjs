@@ -22,7 +22,6 @@ import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 @ObjectType()
 @Entity('device_push_health')
 export class DevicePushHealth {
-
   @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -55,20 +54,36 @@ export class DevicePushHealth {
   // ─── Estado reportado por la app (no consultable desde el servidor) ────────
 
   @Field(() => Boolean, { nullable: true })
-  @Column({ name: 'has_battery_optimization_disabled', type: 'boolean', nullable: true })
+  @Column({
+    name: 'has_battery_optimization_disabled',
+    type: 'boolean',
+    nullable: true,
+  })
   hasBatteryOptimizationDisabled?: boolean;
 
   @Field(() => Boolean, { nullable: true })
-  @Column({ name: 'has_full_screen_intent_permission', type: 'boolean', nullable: true })
+  @Column({
+    name: 'has_full_screen_intent_permission',
+    type: 'boolean',
+    nullable: true,
+  })
   hasFullScreenIntentPermission?: boolean;
 
   @Field(() => Boolean, { nullable: true })
-  @Column({ name: 'has_notification_permission', type: 'boolean', nullable: true })
+  @Column({
+    name: 'has_notification_permission',
+    type: 'boolean',
+    nullable: true,
+  })
   hasNotificationPermission?: boolean;
 
   /** Cuándo el usuario superó el wizard con una prueba real exitosa. */
   @Field(() => Date, { nullable: true })
-  @Column({ name: 'onboarding_completed_at', type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'onboarding_completed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
   onboardingCompletedAt?: Date;
 
   @Field()

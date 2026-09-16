@@ -2,43 +2,59 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 
-import { Vehicle }               from '../entities/vehicle.entity';
-import { VehicleStatus }         from '../enums/vehicle-status.enum';
-import { VehicleType }           from '../enums/vehicle-type.enum';
-import { RotationIntervalUnit }  from '../enums/rotation-interval-unit.enum';
-import { RegisterVehicleInput }  from '../dto/inputs/register-vehicle.input';
-import { UpdateVehicleInput }    from '../dto/inputs/update-vehicle.input';
-import { FilterVehiclesInput }   from '../dto/inputs/filter-vehicles.input';
-import { ApproveVehicleInput }   from '../dto/inputs/approve-vehicle.input';
+import { Vehicle } from '../entities/vehicle.entity';
+import { VehicleStatus } from '../enums/vehicle-status.enum';
+import { VehicleType } from '../enums/vehicle-type.enum';
+import { RotationIntervalUnit } from '../enums/rotation-interval-unit.enum';
+import { RegisterVehicleInput } from '../dto/inputs/register-vehicle.input';
+import { UpdateVehicleInput } from '../dto/inputs/update-vehicle.input';
+import { FilterVehiclesInput } from '../dto/inputs/filter-vehicles.input';
+import { ApproveVehicleInput } from '../dto/inputs/approve-vehicle.input';
 import { ConfigureRotationInput } from '../dto/inputs/configure-rotation.input';
 import { PaginatedVehiclesResponse } from '../dto/responses/paginated-vehicles.response';
-import { RotationStatusResponse, RotationTypeStatus } from '../dto/responses/rotation-status.response';
+import {
+  RotationStatusResponse,
+  RotationTypeStatus,
+} from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
 
-import { PaginationInput }           from '../../shared/dto/inputs/pagination.input';
-import { CustomError }               from '../../shared/utils/errors.utils';
-import { GeneralErrorCode, LogisticsErrorCode } from '../../shared/constans/error-codes.constants';
-import { JwtAccessPayload }          from '../../shared/interfaces/jwt-payload.interface';
-import { ValidRoles }                from '../../roles/enums/valid-roles';
+import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../shared/utils/errors.utils';
+import {
+  GeneralErrorCode,
+  LogisticsErrorCode,
+} from '../../shared/constans/error-codes.constants';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AuditService }              from '../../audit/services/audit.service';
-import { AuditAction }               from '../../audit/enums/audit-action.enum';
-import { AuditEntityType }           from '../../audit/enums/audit-entity-type.enum';
-import { UnitService }               from '../../residential-complex/services/unit.service';
-import { ResidentsService }          from '../../residents/services/residents.service';
-import { FinanceService }            from '../../finance/services/finance.service';
-import { NotificationsService }      from '../../notifications/services/notifications.service';
-import { NotificationType }          from '../../notifications/enums/notification-type.enum';
-import { NotificationPriority }      from '../../notifications/enums/notification-priority.enum';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { UnitService } from '../../residential-complex/services/unit.service';
+import { ResidentsService } from '../../residents/services/residents.service';
+import { FinanceService } from '../../finance/services/finance.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
+import { NotificationType } from '../../notifications/enums/notification-type.enum';
+import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { PlateCheckResponse } from '../../visitor-parking/dto/responses/plate-check.response';
-import { CacheService }              from '../../../core/infrastructure/cache/cache.service';
-import { BK, filterKey }             from '../../../core/infrastructure/cache/business-cache.constants';
+import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import {
+  BK,
+  filterKey,
+} from '../../../core/infrastructure/cache/business-cache.constants';
 
 // Tipos de vehículo que NO ocupan cupo de parqueadero vehicular
-const NON_PARKING_TYPES = new Set([VehicleType.BICYCLE, VehicleType.ELECTRIC_SCOOTER]);
+const NON_PARKING_TYPES = new Set([
+  VehicleType.BICYCLE,
+  VehicleType.ELECTRIC_SCOOTER,
+]);
 
 // Estados que cuentan como "registro activo" (bloquean placa duplicada)
-const ACTIVE_STATES = [VehicleStatus.PENDING_APPROVAL, VehicleStatus.ACTIVE, VehicleStatus.SUSPENDED];
+const ACTIVE_STATES = [
+  VehicleStatus.PENDING_APPROVAL,
+  VehicleStatus.ACTIVE,
+  VehicleStatus.SUSPENDED,
+];
 
 @Injectable()
 export class VehiclesService {
@@ -49,13 +65,13 @@ export class VehiclesService {
     private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(ParkingRotationConfig)
     private readonly rotationConfigRepo: Repository<ParkingRotationConfig>,
-    private readonly complexService:   ResidentialComplexService,
-    private readonly unitService:      UnitService,
+    private readonly complexService: ResidentialComplexService,
+    private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
-    private readonly auditService:     AuditService,
-    private readonly financeService:   FinanceService,
+    private readonly auditService: AuditService,
+    private readonly financeService: FinanceService,
     private readonly notificationsService: NotificationsService,
-    private readonly cacheService:     CacheService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ================================================================
@@ -87,7 +103,7 @@ export class VehiclesService {
       where: {
         complexId: input.complexId,
         plate,
-        status:    In(ACTIVE_STATES),
+        status: In(ACTIVE_STATES),
         deletedAt: IsNull(),
       },
     });
@@ -101,7 +117,9 @@ export class VehiclesService {
     }
 
     // 4. Verificar cupos de parqueadero de la unidad (solo para vehículos que ocupan cupo)
-    const needsParkingSlot = !NON_PARKING_TYPES.has(input.type ?? VehicleType.CAR);
+    const needsParkingSlot = !NON_PARKING_TYPES.has(
+      input.type ?? VehicleType.CAR,
+    );
 
     if (needsParkingSlot) {
       await this.assertParkingAvailable(input.unitId, input.complexId);
@@ -119,7 +137,10 @@ export class VehiclesService {
       `Vehículo registrado: ${saved.id} — placa ${plate} — unidad ${input.unitId}`,
     );
 
-    await this.financeService.triggerVehicleCharges(saved.unitId, saved.complexId);
+    await this.financeService.triggerVehicleCharges(
+      saved.unitId,
+      saved.complexId,
+    );
     await this.cacheService.deleteByPrefix(BK.vehicle.prefix(input.complexId));
 
     this.notifyUnit(
@@ -128,18 +149,29 @@ export class VehiclesService {
       NotificationPriority.NORMAL,
       'Vehículo registrado',
       `Se ha registrado un vehículo ${this.describeVehicle(saved)} en tu unidad el día ${this.formatDate(saved.createdAt)}.`,
-    ).catch(err => this.logger.warn(`Error al notificar registro de vehículo ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar registro de vehículo ${saved.id}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        saved.id,
-      action:          AuditAction.CREATE,
-      newValue:        { id: saved.id, plate: saved.plate, type: saved.type, status: saved.status, unitId: input.unitId, complexId: input.complexId },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: saved.id,
+      action: AuditAction.CREATE,
+      newValue: {
+        id: saved.id,
+        plate: saved.plate,
+        type: saved.type,
+        status: saved.status,
+        unitId: input.unitId,
+        complexId: input.complexId,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       input.complexId,
-      description:     `Vehículo registrado: placa ${plate} — unidad ${input.unitId}`,
+      complexId: input.complexId,
+      description: `Vehículo registrado: placa ${plate} — unidad ${input.unitId}`,
     });
 
     return this.loadRelations(saved.id);
@@ -163,17 +195,24 @@ export class VehiclesService {
       });
     }
 
-    vehicle.status           = VehicleStatus.ACTIVE;
-    vehicle.approvedAt       = new Date();
+    vehicle.status = VehicleStatus.ACTIVE;
+    vehicle.approvedAt = new Date();
     vehicle.approvedByUserId = currentUser.sub;
     if (input.parkingSpot) vehicle.parkingSpot = input.parkingSpot;
-    if (input.notes)       vehicle.notes        = input.notes;
+    if (input.notes) vehicle.notes = input.notes;
 
     const saved = await this.vehicleRepo.save(vehicle);
-    this.logger.log(`Vehículo aprobado: ${vehicle.id} — placa ${vehicle.plate}`);
+    this.logger.log(
+      `Vehículo aprobado: ${vehicle.id} — placa ${vehicle.plate}`,
+    );
 
-    await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.financeService.triggerVehicleCharges(
+      vehicle.unitId,
+      vehicle.complexId,
+    );
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
 
     this.notifyUnit(
       saved,
@@ -181,19 +220,26 @@ export class VehiclesService {
       NotificationPriority.NORMAL,
       'Vehículo aprobado',
       `Tu vehículo ${this.describeVehicle(saved)} fue aprobado y está autorizado para ingresar.`,
-    ).catch(err => this.logger.warn(`Error al notificar aprobación de vehículo ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar aprobación de vehículo ${saved.id}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        vehicle.id,
-      action:          AuditAction.APPROVE,
-      previousValue:   { status: VehicleStatus.PENDING_APPROVAL },
-      newValue:        { status: VehicleStatus.ACTIVE, parkingSpot: input.parkingSpot },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicle.id,
+      action: AuditAction.APPROVE,
+      previousValue: { status: VehicleStatus.PENDING_APPROVAL },
+      newValue: {
+        status: VehicleStatus.ACTIVE,
+        parkingSpot: input.parkingSpot,
+      },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Vehículo aprobado: placa ${vehicle.plate}`,
+      complexId: vehicle.complexId,
+      description: `Vehículo aprobado: placa ${vehicle.plate}`,
     });
 
     return this.loadRelations(saved.id);
@@ -218,13 +264,15 @@ export class VehiclesService {
       });
     }
 
-    vehicle.status           = VehicleStatus.REJECTED;
-    vehicle.rejectionReason  = reason;
+    vehicle.status = VehicleStatus.REJECTED;
+    vehicle.rejectionReason = reason;
     vehicle.approvedByUserId = currentUser.sub;
 
     this.logger.warn(`Vehículo rechazado: ${vehicle.id} — razón: ${reason}`);
     const saved = await this.vehicleRepo.save(vehicle);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
 
     this.notifyUnit(
       saved,
@@ -232,19 +280,23 @@ export class VehiclesService {
       NotificationPriority.HIGH,
       'Vehículo rechazado',
       `Tu vehículo ${this.describeVehicle(saved)} fue rechazado. Motivo: ${reason}.`,
-    ).catch(err => this.logger.warn(`Error al notificar rechazo de vehículo ${saved.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar rechazo de vehículo ${saved.id}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        vehicle.id,
-      action:          AuditAction.REJECT,
-      previousValue:   { status: VehicleStatus.PENDING_APPROVAL },
-      newValue:        { status: VehicleStatus.REJECTED, reason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicle.id,
+      action: AuditAction.REJECT,
+      previousValue: { status: VehicleStatus.PENDING_APPROVAL },
+      newValue: { status: VehicleStatus.REJECTED, reason },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Vehículo rechazado: placa ${vehicle.plate} — razón: ${reason}`,
+      complexId: vehicle.complexId,
+      description: `Vehículo rechazado: placa ${vehicle.plate} — razón: ${reason}`,
     });
 
     return saved;
@@ -269,11 +321,13 @@ export class VehiclesService {
       });
     }
 
-    vehicle.status          = VehicleStatus.SUSPENDED;
+    vehicle.status = VehicleStatus.SUSPENDED;
     vehicle.rejectionReason = reason;
     this.logger.warn(`Vehículo suspendido: ${vehicle.id} — ${vehicle.plate}`);
     const savedSuspend = await this.vehicleRepo.save(vehicle);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
 
     this.notifyUnit(
       savedSuspend,
@@ -281,19 +335,23 @@ export class VehiclesService {
       NotificationPriority.HIGH,
       'Vehículo suspendido',
       `Tu vehículo ${this.describeVehicle(savedSuspend)} fue suspendido. Motivo: ${reason}.`,
-    ).catch(err => this.logger.warn(`Error al notificar suspensión de vehículo ${savedSuspend.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar suspensión de vehículo ${savedSuspend.id}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        vehicle.id,
-      action:          AuditAction.SUSPEND,
-      previousValue:   { status: VehicleStatus.ACTIVE },
-      newValue:        { status: VehicleStatus.SUSPENDED, reason },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicle.id,
+      action: AuditAction.SUSPEND,
+      previousValue: { status: VehicleStatus.ACTIVE },
+      newValue: { status: VehicleStatus.SUSPENDED, reason },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Vehículo suspendido: placa ${vehicle.plate} — razón: ${reason}`,
+      complexId: vehicle.complexId,
+      description: `Vehículo suspendido: placa ${vehicle.plate} — razón: ${reason}`,
     });
 
     return savedSuspend;
@@ -313,12 +371,17 @@ export class VehiclesService {
       });
     }
 
-    vehicle.status          = VehicleStatus.ACTIVE;
+    vehicle.status = VehicleStatus.ACTIVE;
     vehicle.rejectionReason = null;
     const savedReactivate = await this.vehicleRepo.save(vehicle);
 
-    await this.financeService.triggerVehicleCharges(vehicle.unitId, vehicle.complexId);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.financeService.triggerVehicleCharges(
+      vehicle.unitId,
+      vehicle.complexId,
+    );
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
 
     this.notifyUnit(
       savedReactivate,
@@ -326,19 +389,23 @@ export class VehiclesService {
       NotificationPriority.NORMAL,
       'Vehículo reactivado',
       `Tu vehículo ${this.describeVehicle(savedReactivate)} fue reactivado y está autorizado nuevamente.`,
-    ).catch(err => this.logger.warn(`Error al notificar reactivación de vehículo ${savedReactivate.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar reactivación de vehículo ${savedReactivate.id}: ${err?.message}`,
+      ),
+    );
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        vehicle.id,
-      action:          AuditAction.ACTIVATE,
-      previousValue:   { status: VehicleStatus.SUSPENDED },
-      newValue:        { status: VehicleStatus.ACTIVE },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicle.id,
+      action: AuditAction.ACTIVATE,
+      previousValue: { status: VehicleStatus.SUSPENDED },
+      newValue: { status: VehicleStatus.ACTIVE },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Vehículo reactivado: placa ${vehicle.plate}`,
+      complexId: vehicle.complexId,
+      description: `Vehículo reactivado: placa ${vehicle.plate}`,
     });
 
     return savedReactivate;
@@ -362,10 +429,12 @@ export class VehiclesService {
       });
     }
 
-    vehicle.status    = VehicleStatus.REMOVED;
+    vehicle.status = VehicleStatus.REMOVED;
     vehicle.deletedAt = new Date();
     await this.vehicleRepo.save(vehicle);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
 
     this.notifyUnit(
       vehicle,
@@ -373,21 +442,25 @@ export class VehiclesService {
       NotificationPriority.NORMAL,
       'Vehículo retirado',
       `Tu vehículo ${this.describeVehicle(vehicle)} fue retirado del complejo.`,
-    ).catch(err => this.logger.warn(`Error al notificar retiro de vehículo ${vehicle.id}: ${err?.message}`));
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar retiro de vehículo ${vehicle.id}: ${err?.message}`,
+      ),
+    );
 
     this.logger.log(`Vehículo retirado: ${vehicleId} — placa ${vehicle.plate}`);
 
     void this.auditService.log({
-      entityType:      AuditEntityType.Vehicle,
-      entityId:        vehicleId,
-      action:          AuditAction.DELETE,
-      previousValue:   { status: vehicle.status },
-      newValue:        { status: VehicleStatus.REMOVED, deletedAt: vehicle.deletedAt },
-      performedById:   currentUser.sub,
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicleId,
+      action: AuditAction.DELETE,
+      previousValue: { status: vehicle.status },
+      newValue: { status: VehicleStatus.REMOVED, deletedAt: vehicle.deletedAt },
+      performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
-      complexId:       vehicle.complexId,
-      description:     `Vehículo retirado del complejo: placa ${vehicle.plate}`,
+      complexId: vehicle.complexId,
+      description: `Vehículo retirado del complejo: placa ${vehicle.plate}`,
     });
 
     return {
@@ -417,7 +490,9 @@ export class VehiclesService {
 
     Object.assign(vehicle, input);
     const savedVehicle = await this.vehicleRepo.save(vehicle);
-    await this.cacheService.deleteByPrefix(BK.vehicle.prefix(vehicle.complexId));
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
     return savedVehicle;
   }
 
@@ -425,11 +500,16 @@ export class VehiclesService {
   // CONSULTA DE PLACA — para portería (SECURITY_ROL)
   // ================================================================
 
-  async checkPlate(plate: string, complexId: string): Promise<PlateCheckResponse> {
+  async checkPlate(
+    plate: string,
+    complexId: string,
+  ): Promise<PlateCheckResponse> {
     const normalizedPlate = plate.toUpperCase().replace(/[\s\-]/g, '');
 
     const cacheKey = BK.vehicle.plate(complexId, normalizedPlate);
-    const cached = await this.cacheService.get<PlateCheckResponse>({ key: cacheKey });
+    const cached = await this.cacheService.get<PlateCheckResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const vehicle = await this.vehicleRepo.findOne({
@@ -448,27 +528,35 @@ export class VehiclesService {
         isAuthorized: false,
         message: `La placa "${normalizedPlate}" NO está registrada en este complejo`,
       };
-      await this.cacheService.set({ key: cacheKey, data: notFound, options: { ttl: BK.vehicle.TTL_PLATE } });
+      await this.cacheService.set({
+        key: cacheKey,
+        data: notFound,
+        options: { ttl: BK.vehicle.TTL_PLATE },
+      });
       return notFound;
     }
 
     const isAuthorized = vehicle.status === VehicleStatus.ACTIVE;
 
     const messages: Record<VehicleStatus, string> = {
-      [VehicleStatus.ACTIVE]:           `✅ Vehículo autorizado. Residente: ${vehicle.resident?.user?.fullName ?? 'N/A'} — Unidad: ${vehicle.unit?.number ?? 'N/A'}`,
+      [VehicleStatus.ACTIVE]: `✅ Vehículo autorizado. Residente: ${vehicle.resident?.user?.fullName ?? 'N/A'} — Unidad: ${vehicle.unit?.number ?? 'N/A'}`,
       [VehicleStatus.PENDING_APPROVAL]: `⚠️ Vehículo en espera de aprobación. No autorizar ingreso aún.`,
-      [VehicleStatus.SUSPENDED]:        `🚫 Vehículo SUSPENDIDO. No permitir ingreso. Contactar administración.`,
-      [VehicleStatus.REJECTED]:         `❌ Vehículo RECHAZADO. No autorizado.`,
-      [VehicleStatus.REMOVED]:          `❌ Vehículo RETIRADO del complejo.`,
+      [VehicleStatus.SUSPENDED]: `🚫 Vehículo SUSPENDIDO. No permitir ingreso. Contactar administración.`,
+      [VehicleStatus.REJECTED]: `❌ Vehículo RECHAZADO. No autorizado.`,
+      [VehicleStatus.REMOVED]: `❌ Vehículo RETIRADO del complejo.`,
     };
 
     const result: PlateCheckResponse = {
       isRegistered: true,
       isAuthorized,
-      message:      messages[vehicle.status],
+      message: messages[vehicle.status],
       vehicle,
     };
-    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.vehicle.TTL_PLATE } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: result,
+      options: { ttl: BK.vehicle.TTL_PLATE },
+    });
     return result;
   }
 
@@ -485,8 +573,15 @@ export class VehiclesService {
     await this.complexService.findById(complexId, currentUser);
 
     const { page, limit } = pagination;
-    const cacheKey = BK.vehicle.list(complexId, page, limit, filterKey(filters ?? {}));
-    const cached = await this.cacheService.get<PaginatedVehiclesResponse>({ key: cacheKey });
+    const cacheKey = BK.vehicle.list(
+      complexId,
+      page,
+      limit,
+      filterKey(filters ?? {}),
+    );
+    const cached = await this.cacheService.get<PaginatedVehiclesResponse>({
+      key: cacheKey,
+    });
     if (cached) return cached;
 
     const skip = (page - 1) * limit;
@@ -500,10 +595,13 @@ export class VehiclesService {
       .where('v.complex_id = :complexId', { complexId })
       .andWhere('v.deleted_at IS NULL');
 
-    if (filters?.status)     qb.andWhere('v.status = :status',         { status: filters.status });
-    if (filters?.type)       qb.andWhere('v.type = :type',             { type: filters.type });
-    if (filters?.residentId) qb.andWhere('v.resident_id = :rid',       { rid: filters.residentId });
-    if (filters?.unitId)     qb.andWhere('v.unit_id = :uid',           { uid: filters.unitId });
+    if (filters?.status)
+      qb.andWhere('v.status = :status', { status: filters.status });
+    if (filters?.type) qb.andWhere('v.type = :type', { type: filters.type });
+    if (filters?.residentId)
+      qb.andWhere('v.resident_id = :rid', { rid: filters.residentId });
+    if (filters?.unitId)
+      qb.andWhere('v.unit_id = :uid', { uid: filters.unitId });
 
     if (filters?.search) {
       qb.andWhere(
@@ -520,15 +618,19 @@ export class VehiclesService {
     const result: PaginatedVehiclesResponse = {
       items,
       pagination: {
-        currentPage:    page,
-        itemsPerPage:   limit,
+        currentPage: page,
+        itemsPerPage: limit,
         totalItems,
         totalPages,
-        hasNextPage:     page < totalPages,
+        hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
     };
-    await this.cacheService.set({ key: cacheKey, data: result, options: { ttl: BK.vehicle.TTL_LIST } });
+    await this.cacheService.set({
+      key: cacheKey,
+      data: result,
+      options: { ttl: BK.vehicle.TTL_LIST },
+    });
     return result;
   }
 
@@ -543,9 +645,9 @@ export class VehiclesService {
     await this.residentsService.findById(residentId, currentUser);
 
     return this.vehicleRepo.find({
-      where:     { residentId, deletedAt: IsNull() },
+      where: { residentId, deletedAt: IsNull() },
       relations: ['unit', 'unit.building', 'approvedByUser'],
-      order:     { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -553,13 +655,20 @@ export class VehiclesService {
   // SOLICITUDES PENDIENTES DEL COMPLEJO
   // ================================================================
 
-  async findPending(complexId: string, currentUser: JwtAccessPayload): Promise<Vehicle[]> {
+  async findPending(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Vehicle[]> {
     await this.complexService.findById(complexId, currentUser);
 
     return this.vehicleRepo.find({
-      where:     { complexId, status: VehicleStatus.PENDING_APPROVAL, deletedAt: IsNull() },
+      where: {
+        complexId,
+        status: VehicleStatus.PENDING_APPROVAL,
+        deletedAt: IsNull(),
+      },
       relations: ['resident', 'resident.user', 'unit'],
-      order:     { createdAt: 'ASC' },
+      order: { createdAt: 'ASC' },
     });
   }
 
@@ -569,8 +678,14 @@ export class VehiclesService {
 
   async findById(id: string, currentUser: JwtAccessPayload): Promise<Vehicle> {
     const vehicle = await this.vehicleRepo.findOne({
-      where:     { id, deletedAt: IsNull() },
-      relations: ['resident', 'resident.user', 'unit', 'unit.building', 'approvedByUser'],
+      where: { id, deletedAt: IsNull() },
+      relations: [
+        'resident',
+        'resident.user',
+        'unit',
+        'unit.building',
+        'approvedByUser',
+      ],
     });
 
     if (!vehicle) {
@@ -593,7 +708,11 @@ export class VehiclesService {
     return vehicle;
   }
 
-  async updatePhotoUrl(vehicleId: string, url: string, currentUser: JwtAccessPayload): Promise<Vehicle> {
+  async updatePhotoUrl(
+    vehicleId: string,
+    url: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<Vehicle> {
     const vehicle = await this.findById(vehicleId, currentUser);
     await this.vehicleRepo.update(vehicleId, { photoUrl: url });
     vehicle.photoUrl = url;
@@ -620,22 +739,23 @@ export class VehiclesService {
       where: { complexId: input.complexId },
     });
 
-    const actorUserId = currentUser.entityType === 'user' ? currentUser.sub : null;
+    const actorUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
 
     if (!config) {
       config = this.rotationConfigRepo.create({
-        complexId:              input.complexId,
-        rotationIntervalValue:  input.rotationIntervalValue,
-        rotationIntervalUnit:   input.rotationIntervalUnit,
+        complexId: input.complexId,
+        rotationIntervalValue: input.rotationIntervalValue,
+        rotationIntervalUnit: input.rotationIntervalUnit,
         slotsByType,
-        isActive:               input.isActive ?? true,
-        grandCycleByType:       {},
-        createdByUserId:        actorUserId,
+        isActive: input.isActive ?? true,
+        grandCycleByType: {},
+        createdByUserId: actorUserId,
       });
     } else {
       config.rotationIntervalValue = input.rotationIntervalValue;
-      config.rotationIntervalUnit  = input.rotationIntervalUnit;
-      config.slotsByType           = slotsByType;
+      config.rotationIntervalUnit = input.rotationIntervalUnit;
+      config.slotsByType = slotsByType;
       if (input.isActive !== undefined) config.isActive = input.isActive;
       config.updatedByUserId = actorUserId;
     }
@@ -650,8 +770,8 @@ export class VehiclesService {
     const saved = await this.rotationConfigRepo.save(config);
     this.logger.log(
       `Rotación configurada para complejo ${input.complexId}: ` +
-      `cada ${input.rotationIntervalValue} ${input.rotationIntervalUnit} — ` +
-      `cupos: ${JSON.stringify(slotsByType)}`,
+        `cada ${input.rotationIntervalValue} ${input.rotationIntervalUnit} — ` +
+        `cupos: ${JSON.stringify(slotsByType)}`,
     );
     return this.rotationConfigRepo.findOne({
       where: { id: saved.id },
@@ -681,30 +801,34 @@ export class VehiclesService {
   ): Promise<RotationStatusResponse> {
     await this.complexService.findById(complexId, currentUser);
 
-    const config = await this.rotationConfigRepo.findOne({ where: { complexId } });
+    const config = await this.rotationConfigRepo.findOne({
+      where: { complexId },
+    });
 
     if (!config) {
       throw new CustomError({
-        message:    'No hay configuración de rotación para este complejo. Configure primero con configureParkingRotation.',
+        message:
+          'No hay configuración de rotación para este complejo. Configure primero con configureParkingRotation.',
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode:  LogisticsErrorCode.ROTATION_CONFIG_NOT_FOUND,
+        errorCode: LogisticsErrorCode.ROTATION_CONFIG_NOT_FOUND,
       });
     }
 
     if (!config.isActive) {
       throw new CustomError({
-        message:    'La rotación de parqueaderos está desactivada para este complejo',
+        message:
+          'La rotación de parqueaderos está desactivada para este complejo',
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode:  LogisticsErrorCode.ROTATION_INACTIVE,
+        errorCode: LogisticsErrorCode.ROTATION_INACTIVE,
       });
     }
 
     const configuredTypes = Object.keys(config.slotsByType);
     if (configuredTypes.length === 0) {
       throw new CustomError({
-        message:    'No hay tipos de vehículo configurados en slotsByType',
+        message: 'No hay tipos de vehículo configurados en slotsByType',
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode:  LogisticsErrorCode.ROTATION_NOT_NEEDED,
+        errorCode: LogisticsErrorCode.ROTATION_NOT_NEEDED,
       });
     }
 
@@ -730,7 +854,7 @@ export class VehiclesService {
         .getMany();
 
       const totalVehicles = pool.length;
-      const excessCount   = totalVehicles - availableSlots;
+      const excessCount = totalVehicles - availableSlots;
 
       if (excessCount <= 0) {
         this.logger.log(
@@ -740,18 +864,19 @@ export class VehiclesService {
       }
 
       // Paso 1: Reactivar los que están fuera por rotación
-      const currentlyRotated = pool.filter(v => v.suspendedByRotation);
+      const currentlyRotated = pool.filter((v) => v.suspendedByRotation);
       for (const v of currentlyRotated) {
-        v.status             = VehicleStatus.ACTIVE;
+        v.status = VehicleStatus.ACTIVE;
         v.suspendedByRotation = false;
-        v.rejectionReason    = null;
+        v.rejectionReason = null;
       }
 
       // Paso 2: Reinicio de gran ciclo si todos han rotado al menos una vez
-      const allHaveRotated = pool.every(v => v.rotationCycleCount > 0);
+      const allHaveRotated = pool.every((v) => v.rotationCycleCount > 0);
       if (allHaveRotated) {
-        pool.forEach(v => (v.rotationCycleCount = 0));
-        grandCycleByType[vehicleType] = (grandCycleByType[vehicleType] ?? 1) + 1;
+        pool.forEach((v) => (v.rotationCycleCount = 0));
+        grandCycleByType[vehicleType] =
+          (grandCycleByType[vehicleType] ?? 1) + 1;
         this.logger.log(
           `[${vehicleType}] Gran ciclo completado — iniciando ciclo ${grandCycleByType[vehicleType]}`,
         );
@@ -769,12 +894,12 @@ export class VehiclesService {
       });
 
       const toSuspend = sorted.slice(0, excessCount);
-      const cycleNum  = grandCycleByType[vehicleType] ?? 1;
+      const cycleNum = grandCycleByType[vehicleType] ?? 1;
 
       for (const v of toSuspend) {
-        v.status              = VehicleStatus.SUSPENDED;
+        v.status = VehicleStatus.SUSPENDED;
         v.suspendedByRotation = true;
-        v.rejectionReason     = `Fuera de parqueadero por rotación — Ciclo ${cycleNum}`;
+        v.rejectionReason = `Fuera de parqueadero por rotación — Ciclo ${cycleNum}`;
         v.rotationSuspendedAt = now;
         v.rotationCycleCount += 1;
       }
@@ -791,8 +916,12 @@ export class VehiclesService {
       await this.cacheService.deleteByPrefix(BK.vehicle.prefix(complexId));
     }
 
-    config.lastExecutedAt  = now;
-    config.nextExecutionAt = this.calcNextExecution(now, config.rotationIntervalValue, config.rotationIntervalUnit);
+    config.lastExecutedAt = now;
+    config.nextExecutionAt = this.calcNextExecution(
+      now,
+      config.rotationIntervalValue,
+      config.rotationIntervalUnit,
+    );
     config.grandCycleByType = grandCycleByType;
     await this.rotationConfigRepo.save(config);
 
@@ -820,31 +949,33 @@ export class VehiclesService {
 
     const byType: RotationTypeStatus[] = [];
 
-    for (const [vehicleType, availableSlots] of Object.entries(config.slotsByType)) {
+    for (const [vehicleType, availableSlots] of Object.entries(
+      config.slotsByType,
+    )) {
       const pool = await this.vehicleRepo.find({
         where: [
           {
             complexId,
-            type:      vehicleType as VehicleType,
-            status:    VehicleStatus.ACTIVE,
+            type: vehicleType as VehicleType,
+            status: VehicleStatus.ACTIVE,
             deletedAt: IsNull(),
           },
           {
             complexId,
-            type:              vehicleType as VehicleType,
-            status:            VehicleStatus.SUSPENDED,
+            type: vehicleType as VehicleType,
+            status: VehicleStatus.SUSPENDED,
             suspendedByRotation: true,
-            deletedAt:         IsNull(),
+            deletedAt: IsNull(),
           },
         ],
         relations: ['resident', 'resident.user', 'unit', 'unit.building'],
-        order:     { rotationCycleCount: 'ASC', rotationSuspendedAt: 'ASC' },
+        order: { rotationCycleCount: 'ASC', rotationSuspendedAt: 'ASC' },
       });
 
-      const active             = pool.filter(v => v.status === VehicleStatus.ACTIVE);
-      const suspendedByRotation = pool.filter(v => v.suspendedByRotation);
-      const excessVehicles     = Math.max(0, pool.length - availableSlots);
-      const grandCycleNumber   = config.grandCycleByType[vehicleType] ?? 1;
+      const active = pool.filter((v) => v.status === VehicleStatus.ACTIVE);
+      const suspendedByRotation = pool.filter((v) => v.suspendedByRotation);
+      const excessVehicles = Math.max(0, pool.length - availableSlots);
+      const grandCycleNumber = config.grandCycleByType[vehicleType] ?? 1;
 
       // Candidatos a salir en la próxima rotación (entre los activos, los de menor prioridad)
       const nextCandidates = [...active]
@@ -861,13 +992,13 @@ export class VehiclesService {
       byType.push({
         vehicleType,
         availableSlots,
-        totalVehicles:             pool.length,
-        activeVehicles:            active.length,
-        suspendedByRotationCount:  suspendedByRotation.length,
+        totalVehicles: pool.length,
+        activeVehicles: active.length,
+        suspendedByRotationCount: suspendedByRotation.length,
         excessVehicles,
         grandCycleNumber,
         vehiclesSuspendedByRotation: suspendedByRotation,
-        nextRotationCandidates:    nextCandidates,
+        nextRotationCandidates: nextCandidates,
       });
     }
 
@@ -878,7 +1009,10 @@ export class VehiclesService {
   // HELPER — verificar cupos de parqueadero de la unidad
   // ================================================================
 
-  private async assertParkingAvailable(unitId: string, complexId: string): Promise<void> {
+  private async assertParkingAvailable(
+    unitId: string,
+    complexId: string,
+  ): Promise<void> {
     // Obtener la unidad con sus parkingSpots
     const unitResult = await this.vehicleRepo.manager
       .createQueryBuilder()
@@ -896,8 +1030,8 @@ export class VehiclesService {
       where: {
         unitId,
         complexId,
-        status:    In([VehicleStatus.ACTIVE, VehicleStatus.PENDING_APPROVAL]),
-        type:      Not(In([VehicleType.BICYCLE, VehicleType.ELECTRIC_SCOOTER])),
+        status: In([VehicleStatus.ACTIVE, VehicleStatus.PENDING_APPROVAL]),
+        type: Not(In([VehicleType.BICYCLE, VehicleType.ELECTRIC_SCOOTER])),
         deletedAt: IsNull(),
       },
     });
@@ -917,8 +1051,14 @@ export class VehiclesService {
 
   private async loadRelations(id: string): Promise<Vehicle> {
     return this.vehicleRepo.findOne({
-      where:     { id },
-      relations: ['resident', 'resident.user', 'unit', 'unit.building', 'approvedByUser'],
+      where: { id },
+      relations: [
+        'resident',
+        'resident.user',
+        'unit',
+        'unit.building',
+        'approvedByUser',
+      ],
     });
   }
 
@@ -974,24 +1114,26 @@ export class VehiclesService {
     title: string,
     body: string,
   ): Promise<void> {
-    const residents = await this.residentsService.findActiveByUnitInternal(vehicle.unitId);
-    const userIds = residents.map(r => r.userId).filter(Boolean) as string[];
+    const residents = await this.residentsService.findActiveByUnitInternal(
+      vehicle.unitId,
+    );
+    const userIds = residents.map((r) => r.userId).filter(Boolean);
     if (userIds.length === 0) return;
 
     await this.notificationsService.notify({
-      complexId:  vehicle.complexId,
+      complexId: vehicle.complexId,
       userIds,
       type,
       priority,
       title,
       body,
-      entityId:   vehicle.id,
+      entityId: vehicle.id,
       entityType: 'vehicle',
-      metadata:   {
+      metadata: {
         vehicleId: vehicle.id,
-        plate:     vehicle.plate,
-        type:      vehicle.type,
-        unitId:    vehicle.unitId,
+        plate: vehicle.plate,
+        type: vehicle.type,
+        unitId: vehicle.unitId,
       },
     });
   }

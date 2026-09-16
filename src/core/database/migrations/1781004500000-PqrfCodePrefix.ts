@@ -9,7 +9,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * a explicar cuál es cuál.
  */
 export class PqrfCodePrefix1781004500000 implements MigrationInterface {
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       UPDATE "pqrf_requests"

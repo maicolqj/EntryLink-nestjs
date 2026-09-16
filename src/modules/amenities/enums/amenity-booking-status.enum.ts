@@ -11,14 +11,14 @@ import { registerEnumType } from '@nestjs/graphql';
  *            └─> EXPIRED   (el admin nunca respondió y llegó la hora)
  */
 export enum AmenityBookingStatus {
-  PENDING    = 'PENDING',
-  APPROVED   = 'APPROVED',
-  REJECTED   = 'REJECTED',
-  CANCELLED  = 'CANCELLED',
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
   CHECKED_IN = 'CHECKED_IN',
-  COMPLETED  = 'COMPLETED',
-  NO_SHOW    = 'NO_SHOW',
-  EXPIRED    = 'EXPIRED',
+  COMPLETED = 'COMPLETED',
+  NO_SHOW = 'NO_SHOW',
+  EXPIRED = 'EXPIRED',
 }
 
 registerEnumType(AmenityBookingStatus, {
