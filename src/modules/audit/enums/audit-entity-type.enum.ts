@@ -29,6 +29,8 @@ export enum AuditEntityType {
   AmenityBooking = 'AmenityBooking',
   VotingMeeting = 'VotingMeeting',
   VotingQuestion = 'VotingQuestion',
+  Pet = 'Pet',
+  PetIncident = 'PetIncident',
 }
 
 registerEnumType(AuditEntityType, {

@@ -140,6 +140,14 @@ enum ValidPermissions {
   CREATE_AMENITY_BOOKING
   APPROVE_AMENITY_BOOKING
   CHECK_IN_AMENITY_BOOKING
+  VIEW_PETS
+  REGISTER_PET
+  EDIT_PET
+  APPROVE_PET
+  REMOVE_PET
+  VIEW_PET_INCIDENTS
+  REPORT_PET_INCIDENT
+  MANAGE_PET_INCIDENTS
   SUPERADMIN
 }
 
@@ -330,6 +338,18 @@ type ResidentialComplex {
 
   """Consejeros con voz pero sin voto en las reuniones del consejo"""
   votingCouncilVoiceOnlyUserIds: [String!]!
+
+  """Máximo de mascotas por unidad. 0 = sin límite"""
+  petsMaxPerUnit: Int!
+
+  """Los residentes pueden reportar incumplimientos"""
+  petsResidentReportingEnabled: Boolean!
+
+  """Días de plazo para presentar descargos"""
+  petsStatementDays: Int!
+
+  """Días de anticipación del aviso de vencimiento"""
+  petsExpiryReminderDays: Int!
 
   """CountryCode"""
   countryCode: Country!
@@ -1579,6 +1599,8 @@ enum AuditEntityType {
   AmenityBooking
   VotingMeeting
   VotingQuestion
+  Pet
+  PetIncident
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -1707,6 +1729,19 @@ enum NotificationType {
   AMENITY_BOOKING_CANCELLED
   AMENITY_BOOKING_NO_SHOW
   AMENITY_DAMAGE_CHARGED
+  PET_REGISTERED
+  PET_APPROVED
+  PET_REJECTED
+  PET_SUSPENDED
+  PET_REACTIVATED
+  PET_INCIDENT_REPORTED
+  PET_INCIDENT_VALIDATED
+  PET_INCIDENT_DISMISSED
+  PET_WARNING_ISSUED
+  PET_FINE_CHARGED
+  PET_STATEMENT_RECEIVED
+  PET_DOCUMENT_EXPIRING
+  PET_REMOVED
   PROFILE_UPDATED
   NEW_DEVICE_LINKED
   LOGIN_APPROVAL_REQUEST
@@ -4434,6 +4469,306 @@ type AmenityCouncilQuotaResponse {
   year: Int!
 }
 
+"""Mascota registrada por un residente"""
+type Pet {
+  id: String!
+
+  """Nombre de la mascota"""
+  name: String!
+
+  """Especie"""
+  species: PetSpecies!
+
+  """Raza"""
+  breed: String
+
+  """Color predominante"""
+  color: String
+
+  """Señas particulares (manchas, collar, cicatrices)"""
+  distinguishingMarks: String
+
+  """Sexo"""
+  sex: PetSex
+
+  """Porte"""
+  size: PetSize
+
+  """Fecha de nacimiento (aproximada si no se conoce)"""
+  birthDate: String
+
+  """URL de la foto (R2)"""
+  photoUrl: String
+
+  """Tiene microchip implantado"""
+  hasMicrochip: Boolean!
+
+  """Número del microchip"""
+  microchipCode: String
+
+  """Pertenece a una raza de manejo especial"""
+  isSpecialBreed: Boolean!
+
+  """Aseguradora de la póliza de RC extracontractual"""
+  insuranceCompany: String
+
+  """Número de la póliza de RC extracontractual"""
+  insurancePolicyNumber: String
+
+  """Vencimiento de la póliza"""
+  insuranceExpiresAt: String
+
+  """URL del carné de vacunación (R2)"""
+  vaccinationCardUrl: String
+
+  """Fecha de la última vacuna antirrábica"""
+  rabiesVaccineAt: String
+
+  """Esterilizada"""
+  sterilized: Boolean
+
+  """Estado dentro del complejo"""
+  status: PetStatus!
+
+  """Fecha de aprobación"""
+  approvedAt: DateTime
+
+  """Razón del rechazo o la suspensión"""
+  rejectionReason: String
+
+  """Notas internas de la administración"""
+  notes: String
+
+  """Residente responsable de la mascota"""
+  residentId: String
+
+  """Unidad donde vive la mascota"""
+  unitId: String!
+
+  """Complejo (multi-tenant)"""
+  complexId: String!
+  createdByUserId: String
+
+  """Usuario que aprobó o rechazó la ficha"""
+  approvedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  resident: Resident
+  unit: Unit
+  complex: ResidentialComplex
+  approvedByUser: User
+}
+
+"""Especie de la mascota"""
+enum PetSpecies {
+  """Perro"""
+  DOG
+
+  """Gato"""
+  CAT
+
+  """Otra especie (ave, roedor, reptil…)"""
+  OTHER
+}
+
+"""Sexo de la mascota"""
+enum PetSex {
+  """Macho"""
+  MALE
+
+  """Hembra"""
+  FEMALE
+
+  """Sin determinar"""
+  UNKNOWN
+}
+
+"""Porte de la mascota"""
+enum PetSize {
+  """Pequeño (hasta ~10 kg)"""
+  SMALL
+
+  """Mediano (~10 a 25 kg)"""
+  MEDIUM
+
+  """Grande (más de ~25 kg)"""
+  LARGE
+}
+
+"""Estado de la mascota dentro del complejo"""
+enum PetStatus {
+  """Esperando validación de la ficha"""
+  PENDING_APPROVAL
+
+  """Censada y autorizada"""
+  ACTIVE
+
+  """Ficha rechazada"""
+  REJECTED
+
+  """Autorización suspendida"""
+  SUSPENDED
+
+  """Retirada del complejo"""
+  REMOVED
+
+  """Fallecida"""
+  DECEASED
+}
+
+"""Descargo de la unidad ante un reporte"""
+type PetIncidentStatement {
+  id: String!
+  incidentId: String!
+
+  """Texto del descargo"""
+  text: String!
+
+  """Soportes adjuntos (R2)"""
+  imageUrls: [String!]
+  authorUserId: String
+
+  """Rol de quien responde, congelado al momento del descargo"""
+  authorRole: String
+  authorName: String
+  complexId: String!
+  createdAt: DateTime!
+  incident: PetIncident
+  author: User
+}
+
+"""Reporte de convivencia asociado a una mascota"""
+type PetIncident {
+  id: String!
+
+  """Número del reporte, consecutivo"""
+  code: String!
+  consecutive: Int!
+  type: PetIncidentType!
+  severity: PetIncidentSeverity!
+
+  """Relato de lo ocurrido"""
+  description: String!
+
+  """Fotos de evidencia (R2)"""
+  photoUrls: [String!]
+
+  """SHA-256 de cada foto, en el orden de photoUrls"""
+  photoHashes: [String!]
+
+  """Momento del hecho, según quien reporta"""
+  occurredAt: DateTime!
+
+  """Lugar del hecho (pasillo, zona verde, ascensor…)"""
+  location: String
+  lat: Float
+  lng: Float
+
+  """Mascota señalada. Null mientras no se identifique"""
+  petId: String
+
+  """Unidad señalada. Null mientras no se identifique"""
+  unitId: String
+  reportedByUserId: String
+
+  """Rol de quien reportó, congelado al radicar"""
+  reportedByRole: String
+  reportedByName: String
+
+  """Unidad desde la que se reportó"""
+  reportedByUnitId: String
+  status: PetIncidentStatus!
+  reviewedByUserId: String
+  reviewedAt: DateTime
+
+  """Vencimiento del plazo de descargos"""
+  statementDueAt: DateTime
+
+  """Decisión de la administración"""
+  resolutionNotes: String
+  resolvedAt: DateTime
+
+  """Valor de la multa cargada a la unidad"""
+  fineAmount: Float
+  fineChargeId: String
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  pet: Pet
+  unit: Unit
+  complex: ResidentialComplex
+  statements: [PetIncidentStatement!]
+}
+
+"""Motivo del reporte de convivencia"""
+enum PetIncidentType {
+  """Deposiciones no recogidas"""
+  WASTE_NOT_PICKED_UP
+
+  """Uso de zonas no autorizadas"""
+  UNAUTHORIZED_AREA
+
+  """Sin correa o sin bozal"""
+  NO_LEASH_OR_MUZZLE
+
+  """Ruido o ladridos persistentes"""
+  NOISE
+
+  """Agresión o mordedura"""
+  AGGRESSION
+
+  """Mascota suelta o sin acompañante"""
+  UNATTENDED
+
+  """Maltrato o abandono del animal"""
+  ANIMAL_ABUSE
+
+  """Otro motivo"""
+  OTHER
+}
+
+"""Gravedad del incidente reportado"""
+enum PetIncidentSeverity {
+  """Falta leve"""
+  LOW
+
+  """Falta reiterada o con molestia a terceros"""
+  MEDIUM
+
+  """Riesgo para personas o animales"""
+  HIGH
+}
+
+"""Estado del reporte de convivencia"""
+enum PetIncidentStatus {
+  """Pendiente de revisión"""
+  REPORTED
+
+  """Notificado, en plazo de descargos"""
+  UNDER_DEFENSE
+
+  """Desestimado"""
+  DISMISSED
+
+  """Resuelto con llamado de atención"""
+  WARNED
+
+  """Resuelto con multa"""
+  FINED
+}
+
+type PaginatedPetsResponse {
+  items: [Pet!]!
+  pagination: PaginationReponse!
+}
+
+type PaginatedPetIncidentsResponse {
+  items: [PetIncident!]!
+  pagination: PaginationReponse!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -4633,6 +4968,13 @@ type Query {
 
   """El consejo y quién tiene voto"""
   votingCouncilMembers(complexId: String!): [VotingCouncilMember!]!
+  pets(complexId: String!, pagination: PaginationInput, filters: FilterPetsInput): PaginatedPetsResponse!
+  myPets(complexId: String!): [Pet!]!
+  petsByUnit(unitId: String!): [Pet!]!
+  pet(id: String!): Pet!
+  petIncidents(complexId: String!, pagination: PaginationInput, filters: FilterPetIncidentsInput): PaginatedPetIncidentsResponse!
+  petIncident(id: String!): PetIncident!
+  petIncidentsByPet(petId: String!): [PetIncident!]!
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
@@ -4958,6 +5300,33 @@ input FilterPqrfInput {
 
   """Busca en el número de radicado y en el asunto"""
   search: String
+}
+
+input FilterPetsInput {
+  """Busca por nombre, raza, color o microchip"""
+  search: String
+  status: PetStatus
+  species: PetSpecies
+
+  """Solo razas de manejo especial"""
+  isSpecialBreed: Boolean
+  unitId: String
+  residentId: String
+}
+
+input FilterPetIncidentsInput {
+  """Busca por número del reporte o por el relato"""
+  search: String
+  status: PetIncidentStatus
+  type: PetIncidentType
+  severity: PetIncidentSeverity
+  petId: String
+  unitId: String
+
+  """Solo los reportes sin mascota identificada"""
+  onlyUnidentified: String
+  dateFrom: String
+  dateTo: String
 }
 
 type Mutation {
@@ -5358,6 +5727,16 @@ type Mutation {
 
   """Un voto por unidad (asamblea) o por consejero"""
   castVote(questionId: String!, optionId: String!): VotingQuestion!
+  updatePet(input: UpdatePetInput!): Pet!
+  approvePet(input: ApprovePetInput!): Pet!
+  rejectPet(petId: String!, reason: String!): Pet!
+  suspendPet(petId: String!, reason: String!): Pet!
+  reactivatePet(petId: String!): Pet!
+  removePet(petId: String!, reason: String): Boolean!
+  validatePetIncident(input: ValidatePetIncidentInput!): PetIncident!
+  dismissPetIncident(incidentId: String!, reason: String!): PetIncident!
+  sanctionPetIncident(input: SanctionPetIncidentInput!): PetIncident!
+  addPetIncidentStatement(input: CreatePetIncidentStatementInput!): PetIncident!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -7045,4 +7424,77 @@ input UpdateVotingQuestionInput {
   weighting: VoteWeighting
   secrecy: VoteSecrecy
   options: [String!]
+}
+
+input UpdatePetInput {
+  petId: String!
+  name: String
+  species: PetSpecies
+  breed: String
+  color: String
+
+  """Señas particulares"""
+  distinguishingMarks: String
+  sex: PetSex
+  size: PetSize
+  birthDate: String
+  hasMicrochip: Boolean
+  microchipCode: String
+  isSpecialBreed: Boolean
+  insuranceCompany: String
+  insurancePolicyNumber: String
+  insuranceExpiresAt: String
+  rabiesVaccineAt: String
+  sterilized: Boolean
+  notes: String
+}
+
+input ApprovePetInput {
+  petId: String!
+
+  """Notas internas de la administración"""
+  notes: String
+}
+
+input ValidatePetIncidentInput {
+  incidentId: String!
+
+  """Mascota a la que se le atribuye el hecho"""
+  petId: String
+
+  """Unidad responsable. Se deduce de la mascota si se envía"""
+  unitId: String
+
+  """Permite corregir la gravedad que puso quien reportó"""
+  severity: PetIncidentSeverity
+  notes: String
+}
+
+input SanctionPetIncidentInput {
+  incidentId: String!
+
+  """Llamado de atención o multa"""
+  sanction: PetSanction!
+
+  """Valor de la multa. Requerido si sanction = FINE"""
+  fineAmount: Float
+
+  """Motivación de la decisión"""
+  resolutionNotes: String!
+}
+
+"""Sanción con la que se cierra un reporte validado"""
+enum PetSanction {
+  """Llamado de atención"""
+  WARNING
+
+  """Multa cargada a la unidad"""
+  FINE
+}
+
+input CreatePetIncidentStatementInput {
+  incidentId: String!
+
+  """Respuesta de la unidad"""
+  text: String!
 }
