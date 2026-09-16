@@ -23,3 +23,32 @@ jobs:
             echo "Deploy trigger failed (HTTP $HTTP_STATUS)"
             exit 1
           fi
+
+      - name: Verificar que el contenedor quedó sano
+        env:
+          HEALTH_URL: ${{ secrets.PRODUCTION_HEALTH_URL || 'https://api.alternaqj.com/health' }}
+        run: |
+          # Coolify levanta el contenedor nuevo y recién después retira el viejo.
+          # Se espera antes de la primera sonda para no leer al que ya se va.
+          echo "Dando 45s a Coolify para reemplazar el contenedor…"
+          sleep 45
+
+          echo "Sondeando $HEALTH_URL hasta que responda 200…"
+          for attempt in $(seq 1 40); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" || echo "000")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Producción responde 200 tras $attempt sondeo(s)."
+              exit 0
+            fi
+
+            echo "Sondeo $attempt/40: HTTP $STATUS — se reintenta en 15s."
+            sleep 15
+          done
+
+          echo "::error::Producción no respondió 200 en 10 minutos tras el despliegue."
+          echo "El contenedor no logró arrancar o no pasa su health check."
+          echo "Revisar los logs de la aplicación en Coolify: un fallo al importar"
+          echo "módulos o una migración caída dejan a Traefik sin instancia sana,"
+          echo "y entonces toda la API responde 503."
+          exit 1
