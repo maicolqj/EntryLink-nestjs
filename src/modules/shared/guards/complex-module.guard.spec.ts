@@ -40,11 +40,14 @@ const buildGuard = (
   modules: string[] | null,
   required: ComplexModule | null = ComplexModule.FINANZAS,
 ) => {
-  const query = jest.fn(() =>
+  // Devuelve la entidad tal como la entrega TypeORM: el guard ya no arma SQL
+  // ni conoce el nombre de la columna, así que el mock tampoco puede inventarlo.
+  const findOne = jest.fn((options: { where: { id: string } }) =>
     modules === null
       ? Promise.reject(new Error('base caída'))
-      : Promise.resolve([{ enabled_modules: modules.join(',') }]),
+      : Promise.resolve({ id: options.where.id, enabledModules: modules }),
   );
+  const getRepository = jest.fn(() => ({ findOne }));
 
   const cacheService = {
     get: jest.fn(() => Promise.resolve(null)),
@@ -53,11 +56,11 @@ const buildGuard = (
 
   const guard = new ComplexModuleGuard(
     { getAllAndOverride: jest.fn(() => required ?? undefined) } as never,
-    { query } as never,
+    { getRepository } as never,
     cacheService as never,
   );
 
-  return { guard, query, cacheService };
+  return { guard, query: findOne, cacheService };
 };
 
 const resident = { roles: [ValidRoles.RESIDENT_ROL], complexId: 'complex-1' };
@@ -140,7 +143,8 @@ describe('ComplexModuleGuard', () => {
       errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
     });
 
-    expect(query).toHaveBeenCalledWith(expect.any(String), ['complex-2']);
+    const [options] = query.mock.calls[0];
+    expect(options.where.id).toBe('complex-2');
   });
 
   it('cuando el complexId viaja dentro del input, también lo encuentra', async () => {
@@ -154,7 +158,8 @@ describe('ComplexModuleGuard', () => {
       errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
     });
 
-    expect(query).toHaveBeenCalledWith(expect.any(String), ['complex-3']);
+    const [options] = query.mock.calls[0];
+    expect(options.where.id).toBe('complex-3');
   });
 });
 

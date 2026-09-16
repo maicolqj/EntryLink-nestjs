@@ -7,10 +7,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../utils/errors.utils';
@@ -172,22 +173,21 @@ export class ComplexModuleGuard implements CanActivate {
     if (cached) return cached;
 
     try {
-      const rows = await this.dataSource.query<{ enabled_modules: unknown }[]>(
-        'SELECT enabled_modules FROM residential_complexes WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
-        [complexId],
-      );
+      // Se lee por el repositorio y no con SQL a mano: la columna de la entidad
+      // es `enabledModules` en camelCase —el `@Column` no lleva `name`, así que
+      // TypeORM la creó tal cual y en Postgres queda entrecomillada—. La
+      // consulta cruda preguntaba por `enabled_modules`, que no existe: la base
+      // respondía con un error, el catch de abajo lo tragaba y el guard dejaba
+      // pasar todo. Dejando que TypeORM resuelva el nombre, el desfase no puede
+      // repetirse.
+      const complex = await this.dataSource
+        .getRepository(ResidentialComplex)
+        .findOne({
+          where: { id: complexId, deletedAt: IsNull() },
+          select: { id: true, enabledModules: true },
+        });
 
-      const raw = rows?.[0]?.enabled_modules;
-      // `simple-array` se guarda como texto separado por comas, no como array.
-      const modules =
-        typeof raw === 'string'
-          ? raw
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          : Array.isArray(raw)
-            ? (raw as string[])
-            : [];
+      const modules = complex?.enabledModules ?? [];
 
       await this.cacheService.set({
         key: cacheKey,
