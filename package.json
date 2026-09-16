@@ -41,7 +41,8 @@
     "whatsapp:token-check": "node scripts/whatsapp-token-check.js",
     "whatsapp:subscribed-apps": "node scripts/whatsapp-subscribed-apps.js",
     "whatsapp:webhook-selftest": "node scripts/whatsapp-webhook-selftest.js",
-    "r2:migrate": "ts-node -r tsconfig-paths/register scripts/migrate-r2-layout.ts"
+    "r2:migrate": "ts-node -r tsconfig-paths/register scripts/migrate-r2-layout.ts",
+    "local:access": "ts-node -r tsconfig-paths/register scripts/local-admin-access.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
