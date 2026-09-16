@@ -823,7 +823,13 @@ export class VisitsService {
   async findById(id: string, currentUser: JwtAccessPayload): Promise<Visit> {
     const visit = await this.visitRepo.findOne({
       where: { id },
-      relations: ['visitor', 'unit', 'hostResident', 'registeredByUser'],
+      relations: [
+        'visitor',
+        'unit',
+        'unit.building',
+        'hostResident',
+        'registeredByUser',
+      ],
     });
 
     if (!visit) {

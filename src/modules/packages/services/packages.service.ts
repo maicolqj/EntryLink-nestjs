@@ -531,7 +531,9 @@ export class PackagesService {
         { unitId, complexId, status: PackageStatus.NOTIFIED },
         { unitId, complexId, status: PackageStatus.READY_FOR_PICKUP },
       ],
-      relations: ['unit', 'complex'],
+      // `unit.building` va incluido porque un "101" sin torre no identifica
+      // nada en un conjunto de seis edificios.
+      relations: ['unit', 'unit.building', 'complex'],
       order: { receivedAt: 'ASC' },
     });
 

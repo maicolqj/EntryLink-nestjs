@@ -15,6 +15,10 @@ import { TriggerPanicAlertResult } from '../dto/responses/trigger-panic-alert.re
 import { PanicAlert } from '../entities/panic-alert.entity';
 import { RequestSecurityCallResult } from '../dto/responses/request-security-call.response';
 import { NotificationDetailResponse } from '../dto/responses/notification-detail.response';
+import { BulkNotificationActionInput } from '../dto/inputs/bulk-notification-action.input';
+import { BulkNotificationActionResult } from '../dto/responses/bulk-notification-action.response';
+import { NotificationEntitySnapshot } from '../dto/responses/notification-snapshot.response';
+import { ExecuteNotificationActionInput } from '../dto/inputs/execute-notification-action.input';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -30,6 +34,70 @@ export class NotificationsResolver {
   // ================================================================
   // MUTATIONS
   // ================================================================
+
+  /**
+   * Ejecuta una acción del expediente sin salir del aviso: dar curso a un
+   * reporte de convivencia, aprobar una ficha, cargar la multa.
+   *
+   * Una sola mutation para todos los módulos —y no una por trámite— porque la
+   * web la llama sin saber de qué módulo viene el aviso: el expediente ya trae
+   * qué acciones hay y qué pide cada una. Sumar acciones a un módulo nuevo no
+   * vuelve a tocar el esquema ni obliga a resincronizar el manifiesto.
+   *
+   * `@Auth()` a secas: los permisos concretos los aplica el servicio del módulo
+   * al que el proveedor le pasa la acción, que es donde viven —aquí no se sabe
+   * si multar exige MANAGE_PET_INCIDENTS o algo más.
+   *
+   * Devuelve el expediente ya actualizado.
+   */
+  @Mutation(() => NotificationEntitySnapshot, {
+    name: 'executeNotificationAction',
+  })
+  @Auth()
+  executeNotificationAction(
+    @Args('input') input: ExecuteNotificationActionInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<NotificationEntitySnapshot> {
+    return this.notificationsService.executeEntityAction(input, currentUser);
+  }
+
+  /**
+   * Aplica una acción —leer, no leer, destacar, quitar estrella, eliminar— a
+   * varias notificaciones a la vez.
+   *
+   * Una mutation y no cinco: todas comparten alcance (las filas del propio
+   * usuario) y la bandeja las ofrece juntas en la misma barra de selección.
+   */
+  @Mutation(() => BulkNotificationActionResult, {
+    name: 'bulkNotificationAction',
+  })
+  @Auth()
+  bulkNotificationAction(
+    @Args('input') input: BulkNotificationActionInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<BulkNotificationActionResult> {
+    return this.notificationsService.bulkAction(input, currentUser);
+  }
+
+  /**
+   * Destaca o quita la estrella de una notificación propia.
+   *
+   * Separado de la prioridad a propósito: la prioridad la fija quien emite el
+   * aviso, esto lo decide quien lo recibe.
+   */
+  @Mutation(() => Notification, { name: 'setNotificationStarred' })
+  @Auth()
+  setStarred(
+    @Args('notificationId') notificationId: string,
+    @Args('starred', { type: () => Boolean }) starred: boolean,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Notification> {
+    return this.notificationsService.setStarred(
+      notificationId,
+      starred,
+      currentUser,
+    );
+  }
 
   /**
    * Marca una notificación como leída.
