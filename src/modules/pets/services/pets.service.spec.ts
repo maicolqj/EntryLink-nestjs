@@ -224,16 +224,24 @@ describe('PetsService — aviso de vencimientos', () => {
   const buildQueryHarness = () => {
     const conditions: string[] = [];
 
-    const qb = {
-      innerJoinAndSelect: jest.fn().mockReturnThis(),
-      where: jest.fn((condition: string) => {
-        conditions.push(condition);
-        return qb;
-      }),
-      andWhere: jest.fn((condition: string) => {
-        conditions.push(condition);
-        return qb;
-      }),
+    // El tipo es explícito porque el objeto se devuelve a sí mismo para
+    // encadenar: sin anotarlo, TypeScript lo infiere como `any`.
+    interface QueryBuilderStub {
+      innerJoinAndSelect: jest.Mock;
+      where: jest.Mock;
+      andWhere: jest.Mock;
+      getMany: jest.Mock;
+    }
+
+    const record = (condition: string): QueryBuilderStub => {
+      conditions.push(condition);
+      return qb;
+    };
+
+    const qb: QueryBuilderStub = {
+      innerJoinAndSelect: jest.fn(() => qb),
+      where: jest.fn(record),
+      andWhere: jest.fn(record),
       getMany: jest.fn(() => Promise.resolve([])),
     };
 
