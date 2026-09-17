@@ -1631,6 +1631,7 @@ enum AuditEntityType {
   MaintenanceTicket
   MaintenanceVendor
   MaintenanceLocationTag
+  MarketplaceListing
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -5182,6 +5183,328 @@ type MaintenanceReportOptionsResponse {
   gpsAccuracyMeters: Int!
 }
 
+"""Categoría de publicaciones del complejo"""
+type MarketplaceCategory {
+  id: ID!
+  kind: MarketplaceCategoryKind!
+
+  """Nombre visible"""
+  name: String!
+  slug: String!
+
+  """Ícono sugerido para la web y la app"""
+  icon: String
+
+  """Orden en la vitrina"""
+  sortOrder: Int!
+  isActive: Boolean!
+  complexId: String!
+  createdByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  complex: ResidentialComplex
+}
+
+"""Vitrina a la que pertenece la categoría"""
+enum MarketplaceCategoryKind {
+  """Clasificados y comercio interno"""
+  CLASSIFIED
+
+  """Directorio de servicios"""
+  SERVICE
+}
+
+"""Publicación de clasificados del complejo"""
+type MarketplaceListing {
+  id: ID!
+  type: MarketplaceListingType!
+  title: String!
+  description: String!
+
+  """Categoría de la vitrina"""
+  categoryId: String!
+
+  """Estado de conservación. Solo aplica a artículos"""
+  condition: MarketplaceItemCondition
+  imageUrls: [String!]!
+  priceAmount: Float
+  priceType: MarketplacePriceType!
+  currency: String!
+  contactPreference: MarketplaceContactPreference!
+  showPhone: Boolean!
+  status: MarketplaceListingStatus!
+
+  """Motivo del rechazo o del retiro"""
+  rejectionReason: String
+  moderatedByUserId: String
+  moderatedAt: DateTime
+  acceptedTermsAt: DateTime
+  publishedAt: DateTime
+  expiresAt: DateTime
+  renewedAt: DateTime
+  soldAt: DateTime
+  expiryNotifiedAt: DateTime
+  viewsCount: Int!
+  contactsCount: Int!
+  favoritesCount: Int!
+  pendingReportsCount: Int!
+
+  """Usuario que publicó"""
+  ownerUserId: String!
+  residentId: String
+
+  """Unidad del publicador"""
+  unitId: String!
+
+  """Complejo (multi-tenant)"""
+  complexId: String!
+  updatedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  category: MarketplaceCategory
+  owner: User
+  resident: Resident
+  unit: Unit
+  complex: ResidentialComplex
+
+  """Cómo contactar al publicador"""
+  contact: ListingContactResponse!
+
+  """Quien consulta la tiene guardada como favorita"""
+  viewerHasFavorited: Boolean!
+
+  """Quien consulta ya registró interés"""
+  viewerHasContacted: Boolean!
+
+  """La publicación es de quien consulta"""
+  viewerIsOwner: Boolean!
+}
+
+"""Naturaleza de la publicación del clasificado"""
+enum MarketplaceListingType {
+  """Venta de un artículo"""
+  PRODUCT
+
+  """Servicio ofrecido por un vecino"""
+  SERVICE
+
+  """Arriendo o préstamo temporal"""
+  RENTAL
+
+  """Se regala o se dona"""
+  GIVEAWAY
+
+  """Busco / necesito. El complejo puede apagarlo desde los ajustes"""
+  WANTED
+}
+
+"""Estado de conservación del artículo"""
+enum MarketplaceItemCondition {
+  """Nuevo, sin usar"""
+  NEW
+
+  """Como nuevo"""
+  LIKE_NEW
+
+  """Usado, en buen estado"""
+  USED
+
+  """Para repuestos o reparar"""
+  FOR_PARTS
+}
+
+"""Forma en que se expresa el precio"""
+enum MarketplacePriceType {
+  """Precio fijo"""
+  FIXED
+
+  """Precio negociable"""
+  NEGOTIABLE
+
+  """Gratis"""
+  FREE
+
+  """Permuta o intercambio"""
+  EXCHANGE
+
+  """A convenir: se pregunta al publicador"""
+  ON_REQUEST
+}
+
+"""Canal por el que el publicador quiere recibir interesados"""
+enum MarketplaceContactPreference {
+  """Aviso dentro de la app, sin exponer el teléfono"""
+  IN_APP
+
+  """Llamada al teléfono del publicador"""
+  PHONE
+
+  """WhatsApp al teléfono del publicador"""
+  WHATSAPP
+}
+
+"""Estado de la publicación"""
+enum MarketplaceListingStatus {
+  """Borrador: solo la ve quien la escribió"""
+  DRAFT
+
+  """Esperando aprobación de la administración"""
+  PENDING_REVIEW
+
+  """Visible para el conjunto"""
+  PUBLISHED
+
+  """La administración la rechazó, con motivo"""
+  REJECTED
+
+  """Oculta temporalmente (por el dueño o por reportes)"""
+  PAUSED
+
+  """Ya se vendió o se entregó"""
+  SOLD
+
+  """Venció la vigencia y nadie la renovó"""
+  EXPIRED
+
+  """Retirada definitivamente"""
+  REMOVED
+}
+
+"""Reporte de abuso sobre una publicación"""
+type MarketplaceListingReport {
+  id: ID!
+  listingId: String!
+  reason: MarketplaceReportReason!
+  comment: String
+  status: MarketplaceReportStatus!
+  reporterUserId: String
+  reporterUnitId: String
+  resolvedByUserId: String
+  resolvedAt: DateTime
+  resolutionNote: String
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  listing: MarketplaceListing
+  complex: ResidentialComplex
+}
+
+"""Motivo del reporte sobre una publicación"""
+enum MarketplaceReportReason {
+  """Artículo o actividad prohibida por el reglamento"""
+  PROHIBITED_ITEM
+
+  """Estafa o engaño"""
+  SCAM
+
+  """Contenido ofensivo o inapropiado"""
+  OFFENSIVE
+
+  """Categoría equivocada"""
+  WRONG_CATEGORY
+
+  """Publicación repetida"""
+  DUPLICATE
+
+  """Ya se vendió y sigue publicada"""
+  ALREADY_SOLD
+
+  """Otro motivo"""
+  OTHER
+}
+
+"""Estado de un reporte de publicación"""
+enum MarketplaceReportStatus {
+  """Sin revisar"""
+  PENDING
+
+  """Procede: la publicación se retira"""
+  ACCEPTED
+
+  """No procede: la publicación vuelve"""
+  DISMISSED
+}
+
+"""Ajustes del módulo de clasificados del complejo"""
+type MarketplaceSettings {
+  complexId: String!
+  moderationMode: MarketplaceModerationMode!
+
+  """Días que dura publicado un aviso"""
+  listingDurationDays: Int!
+
+  """Avisos activos que puede tener una unidad"""
+  maxActiveListingsPerUnit: Int!
+
+  """Fotos por publicación"""
+  maxImagesPerListing: Int!
+
+  """Reportes que pausan el aviso solo"""
+  autoPauseAfterReports: Int!
+  allowPhoneContact: Boolean!
+  allowWantedListings: Boolean!
+  termsText: String
+  updatedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  complex: ResidentialComplex
+}
+
+"""Política de moderación de publicaciones"""
+enum MarketplaceModerationMode {
+  """Se publica de inmediato; se modera si alguien reporta"""
+  AUTO
+
+  """La administración aprueba antes de publicar"""
+  PREVIA
+}
+
+type PaginatedListingsResponse {
+  items: [MarketplaceListing!]!
+  pagination: PaginationReponse!
+}
+
+"""Datos de contacto del publicador"""
+type ListingContactResponse {
+  """Nombre visible del publicador"""
+  displayName: String!
+
+  """Unidad del publicador"""
+  unitLabel: String
+  preference: MarketplaceContactPreference!
+
+  """Teléfono. Nulo si no se destapó o el conjunto no lo permite"""
+  phone: String
+
+  """El canal quedó reducido al aviso dentro de la app"""
+  inAppOnly: Boolean!
+}
+
+"""Resumen del módulo de clasificados"""
+type MarketplaceStatsResponse {
+  """Publicadas y vigentes"""
+  published: Int!
+
+  """Esperando aprobación"""
+  pendingReview: Int!
+
+  """Pausadas, por su dueño o por reportes"""
+  paused: Int!
+
+  """Reportes sin resolver"""
+  pendingReports: Int!
+
+  """Vencen en los próximos 7 días"""
+  expiringSoon: Int!
+}
+
+type PaginatedListingReportsResponse {
+  items: [MarketplaceListingReport!]!
+  pagination: PaginationReponse!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -5400,6 +5723,12 @@ type Query {
   maintenanceLocationTagByCode(complexId: String!, code: String!): MaintenanceLocationTag!
   maintenanceVendors(complexId: String!, onlyActive: Boolean = true): [MaintenanceVendor!]!
   maintenanceSlaConfigs(complexId: String!): [MaintenanceSlaConfig!]!
+  marketplaceListings(complexId: String!, pagination: PaginationInput, filters: FilterListingsInput): PaginatedListingsResponse!
+  marketplaceListing(listingId: String!): MarketplaceListing!
+  marketplaceStats(complexId: String!): MarketplaceStatsResponse!
+  marketplaceCategories(complexId: String!, kind: MarketplaceCategoryKind, includeInactive: Boolean): [MarketplaceCategory!]!
+  listingReports(complexId: String!, pagination: PaginationInput, status: MarketplaceReportStatus): PaginatedListingReportsResponse!
+  marketplaceSettings(complexId: String!): MarketplaceSettings!
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
@@ -5791,6 +6120,29 @@ input CheckMaintenanceDuplicateInput {
   lng: Float
   gpsAccuracyMeters: Int
   locationText: String
+}
+
+input FilterListingsInput {
+  """Busca en el título y en la descripción"""
+  search: String
+  status: MarketplaceListingStatus
+  type: MarketplaceListingType
+  priceType: MarketplacePriceType
+  categoryId: String
+
+  """Solo para la administración: avisos de una unidad"""
+  unitId: String
+  minPrice: Float
+  maxPrice: Float
+
+  """Solo mis publicaciones"""
+  onlyMine: Boolean
+
+  """Solo las que guardé como favoritas"""
+  onlyFavorites: Boolean
+
+  """Solo las que tienen reportes sin resolver"""
+  onlyReported: Boolean
 }
 
 type Mutation {
@@ -6219,6 +6571,24 @@ type Mutation {
   deactivateMaintenanceVendor(id: String!): MaintenanceVendor!
   upsertMaintenanceSla(input: UpsertMaintenanceSlaInput!): MaintenanceSlaConfig!
   removeMaintenanceSla(id: String!): Boolean!
+  updateListing(input: UpdateListingInput!): MarketplaceListing!
+  submitListing(listingId: String!): MarketplaceListing!
+  pauseListing(listingId: String!): MarketplaceListing!
+  resumeListing(listingId: String!): MarketplaceListing!
+  markListingAsSold(listingId: String!): MarketplaceListing!
+  renewListing(listingId: String!): MarketplaceListing!
+  removeListing(listingId: String!, reason: String): Boolean!
+  registerListingInterest(input: RegisterListingInterestInput!): MarketplaceListing!
+
+  """Devuelve true si quedó guardada como favorita"""
+  toggleListingFavorite(listingId: String!): Boolean!
+  approveListing(input: ModerateListingInput!): MarketplaceListing!
+  rejectListing(input: ModerateListingInput!): MarketplaceListing!
+  upsertMarketplaceCategory(input: UpsertMarketplaceCategoryInput!): MarketplaceCategory!
+  removeMarketplaceCategory(categoryId: String!): Boolean!
+  reportListing(input: ReportListingInput!): MarketplaceListingReport!
+  resolveListingReport(input: ResolveListingReportInput!): MarketplaceListingReport!
+  updateMarketplaceSettings(input: UpdateMarketplaceSettingsInput!): MarketplaceSettings!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -8090,4 +8460,64 @@ input UpsertMaintenanceSlaInput {
 
   """Horas para dejarlo reparado"""
   resolutionHours: Int!
+}
+
+input UpdateListingInput {
+  listingId: String!
+  title: String
+  description: String
+  categoryId: String
+  type: MarketplaceListingType
+  condition: MarketplaceItemCondition
+  priceAmount: Float
+  priceType: MarketplacePriceType
+  contactPreference: MarketplaceContactPreference
+  showPhone: Boolean
+  imageUrls: [String!]
+}
+
+input RegisterListingInterestInput {
+  listingId: String!
+
+  """Mensaje corto para el publicador"""
+  message: String
+}
+
+input ModerateListingInput {
+  listingId: String!
+  reason: String
+}
+
+input UpsertMarketplaceCategoryInput {
+  categoryId: String
+  complexId: String!
+  name: String
+  kind: MarketplaceCategoryKind
+  icon: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
+input ReportListingInput {
+  listingId: String!
+  reason: MarketplaceReportReason!
+  comment: String
+}
+
+input ResolveListingReportInput {
+  reportId: String!
+  accept: Boolean!
+  note: String
+}
+
+input UpdateMarketplaceSettingsInput {
+  complexId: String!
+  moderationMode: MarketplaceModerationMode
+  listingDurationDays: Int
+  maxActiveListingsPerUnit: Int
+  maxImagesPerListing: Int
+  autoPauseAfterReports: Int
+  allowPhoneContact: Boolean
+  allowWantedListings: Boolean
+  termsText: String
 }

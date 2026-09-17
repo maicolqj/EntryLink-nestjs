@@ -52,6 +52,15 @@ export enum SocketEvent {
   /** Cambió algo en un ticket de mantenimiento: el tablero y el mapa se repintan. */
   MAINTENANCE_TICKET_UPDATED = 'maintenance:ticket:updated',
 
+  /**
+   * Cambió el estado de una publicación de clasificados.
+   *
+   * Va a la sala del complejo: la misma vitrina la miran el residente en la app
+   * y quien modera en la web, y lo que se aprueba tiene que aparecer sin que
+   * nadie recargue.
+   */
+  MARKETPLACE_LISTING_UPDATED = 'marketplace:listing:updated',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
   RESIDENT_IMPORT_DONE = 'resident:import:done',

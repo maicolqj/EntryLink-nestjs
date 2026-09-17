@@ -55,6 +55,7 @@ import { VotingModule } from './modules/voting/voting.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { PetsModule } from './modules/pets/pets.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
  *  `code` pero no `statusCode`. Sin este mapeo caían al default 500 y se reportaban como
@@ -249,6 +250,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     VotingModule,
     PetsModule,
     MaintenanceModule,
+    MarketplaceModule,
     MailModule,
     BullBoardAppModule,
     HealthModule,

@@ -34,6 +34,7 @@ export enum AuditEntityType {
   MaintenanceTicket = 'MaintenanceTicket',
   MaintenanceVendor = 'MaintenanceVendor',
   MaintenanceLocationTag = 'MaintenanceLocationTag',
+  MarketplaceListing = 'MarketplaceListing',
 }
 
 registerEnumType(AuditEntityType, {
