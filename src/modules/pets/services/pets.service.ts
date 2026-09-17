@@ -755,13 +755,21 @@ export class PetsService {
       .where('p.status = :status', { status: PetStatus.ACTIVE })
       .andWhere('p.deletedAt IS NULL')
       // Misma regla que el resto de la plataforma: sin lista de módulos, todos
-      // están activos. `enabled_modules` es un simple-array (texto separado por
+      // están activos. `enabledModules` es un simple-array (texto separado por
       // comas) y ningún otro módulo contiene la palabra, así que el LIKE basta.
+      //
+      // Se escribe con el NOMBRE DE LA PROPIEDAD, que el QueryBuilder traduce a
+      // la columna real. La columna es `"enabledModules"` —el `@Column` de la
+      // entidad no lleva `name`, así que TypeORM la creó en camelCase y en
+      // Postgres queda entrecomillada—, y la consulta preguntaba por
+      // `enabled_modules`: esa columna no existe, la base respondía con un
+      // error y el cron moría entero sin enviar un solo aviso. Mismo desfase
+      // que tuvo al guard de módulos sin bloquear nada.
       .andWhere(
-        `(c.enabled_modules IS NULL OR c.enabled_modules = '' OR c.enabled_modules LIKE '%MASCOTAS%')`,
+        `(c.enabledModules IS NULL OR c.enabledModules = '' OR c.enabledModules LIKE '%MASCOTAS%')`,
       )
       .andWhere(
-        '(p.insurance_expires_at IS NOT NULL OR p.rabies_vaccine_at IS NOT NULL)',
+        '(p.insuranceExpiresAt IS NOT NULL OR p.rabiesVaccineAt IS NOT NULL)',
       )
       .getMany();
 

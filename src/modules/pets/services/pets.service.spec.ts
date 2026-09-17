@@ -207,3 +207,67 @@ describe('CustomError del bloqueo', () => {
     expect(error).toBeInstanceOf(CustomError);
   });
 });
+
+/**
+ * El cron de vencimientos filtra los complejos que tienen el módulo encendido.
+ *
+ * La consulta preguntaba por `c.enabled_modules`, una columna que no existe: la
+ * de verdad es `"enabledModules"` —el `@Column` de la entidad no lleva `name`,
+ * así que TypeORM la creó en camelCase y Postgres la deja entrecomillada—. La
+ * base respondía con un error, el cron moría antes de enviar nada y nadie se
+ * enteraba: ni el refuerzo antirrábico ni la póliza de RC avisaban.
+ *
+ * Se afirma sobre el TEXTO de la condición porque el fallo es exactamente ese:
+ * un nombre que el QueryBuilder no traduce y que se va crudo contra Postgres.
+ */
+describe('PetsService — aviso de vencimientos', () => {
+  const buildQueryHarness = () => {
+    const conditions: string[] = [];
+
+    const qb = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn((condition: string) => {
+        conditions.push(condition);
+        return qb;
+      }),
+      andWhere: jest.fn((condition: string) => {
+        conditions.push(condition);
+        return qb;
+      }),
+      getMany: jest.fn(() => Promise.resolve([])),
+    };
+
+    const petRepo = { createQueryBuilder: jest.fn(() => qb) };
+
+    const service = new PetsService(
+      petRepo as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { notify: jest.fn() } as never,
+      { log: jest.fn() } as never,
+    );
+
+    return { service, conditions };
+  };
+
+  it('filtra por el nombre de la propiedad, no por la columna en snake_case', async () => {
+    const { service, conditions } = buildQueryHarness();
+
+    await service.notifyExpiringDocuments();
+
+    const sql = conditions.join(' ');
+    expect(sql).toContain('c.enabledModules');
+    expect(sql).not.toContain('enabled_modules');
+  });
+
+  it('las fechas de vencimiento también van por su propiedad', async () => {
+    const { service, conditions } = buildQueryHarness();
+
+    await service.notifyExpiringDocuments();
+
+    const sql = conditions.join(' ');
+    expect(sql).toContain('p.insuranceExpiresAt');
+    expect(sql).toContain('p.rabiesVaccineAt');
+  });
+});
