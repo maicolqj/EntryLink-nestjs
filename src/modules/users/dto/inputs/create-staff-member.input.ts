@@ -18,13 +18,14 @@ import { UserIdentityType } from '../../enums/user.enums';
 export const STAFF_ROLES = [
   ValidRoles.SECURITY_ROL,
   ValidRoles.ACCOUNTANT_ROL,
+  ValidRoles.MAINTENANCE_ROL,
 ] as const;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 @InputType({
   description:
-    'Datos para crear un miembro del personal del complejo (guardia o contador)',
+    'Datos para crear un miembro del personal del complejo (guardia, contador o aseo y mantenimiento)',
 })
 export class CreateStaffMemberInput {
   @Field(() => String)
@@ -90,7 +91,8 @@ export class CreateStaffMemberInput {
   complexId: string;
 
   @Field(() => ValidRoles, {
-    description: 'Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL',
+    description:
+      'Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL | MAINTENANCE_ROL',
   })
   @IsEnum(ValidRoles)
   @IsNotEmpty()

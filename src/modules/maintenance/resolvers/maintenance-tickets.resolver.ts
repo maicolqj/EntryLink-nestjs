@@ -15,6 +15,7 @@ import { MaintenanceBoardResponse } from '../dto/responses/maintenance-board.res
 import { MaintenanceMapPinResponse } from '../dto/responses/maintenance-map-pin.response';
 import { MaintenanceHeatmapCell } from '../dto/responses/maintenance-heatmap.response';
 import { MaintenanceStatsResponse } from '../dto/responses/maintenance-stats.response';
+import { MaintenanceStaffMember } from '../dto/responses/maintenance-staff-member.response';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -64,6 +65,19 @@ export class MaintenanceTicketsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MaintenanceTicket> {
     return this.ticketsService.triage(input, currentUser);
+  }
+
+  /** Personal de aseo y mantenimiento que se le puede asignar a un ticket. */
+  @Query(() => [MaintenanceStaffMember], { name: 'maintenanceStaff' })
+  @Auth({
+    roles: MANAGER_ROLES,
+    permissions: [ValidPermissions.MANAGE_MAINTENANCE_TICKETS],
+  })
+  findMaintenanceStaff(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MaintenanceStaffMember[]> {
+    return this.ticketsService.findMaintenanceStaff(complexId, currentUser);
   }
 
   @Mutation(() => MaintenanceTicket, { name: 'assignMaintenanceTicket' })

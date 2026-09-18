@@ -117,7 +117,7 @@ export class UsersResolver {
   @Mutation(() => CreateStaffMemberResponse, {
     name: 'createStaffMember',
     description:
-      'Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). ' +
+      'Crea personal del complejo: guardia (SECURITY_ROL), contador (ACCOUNTANT_ROL) o aseo y mantenimiento (MAINTENANCE_ROL). ' +
       'El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.',
   })
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })

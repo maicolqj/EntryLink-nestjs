@@ -46,7 +46,7 @@ export class UserComplexAssignment {
   @Column({ name: 'complex_id', type: 'uuid' })
   complexId: string;
 
-  /** Nombre del rol: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL */
+  /** Nombre del rol: SECURITY_ROL | SUPERVISOR_ROL | ACCOUNTANT_ROL | MAINTENANCE_ROL */
   @Field(() => String)
   @Column({ name: 'role', type: 'varchar', length: 50 })
   role: string;
