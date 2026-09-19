@@ -339,6 +339,11 @@ type ResidentialComplex {
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int!
 
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int!
+
   """Consejeros que responden los PQRF. Vacío = todo el consejo"""
   pqrfCouncilResolverUserIds: [String!]!
 
@@ -6914,6 +6919,11 @@ input CreateComplexInput {
 
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int
+
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int
 }
 
 """Código de país para el número de teléfono"""
@@ -6968,6 +6978,11 @@ input UpdateComplexInput {
 
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int
+
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int
 
   """ID del complejo a actualizar"""
   id: String!

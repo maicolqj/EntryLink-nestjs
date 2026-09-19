@@ -1,25 +1,33 @@
 import { RevokeInactiveAssignmentsCron } from './revoke-inactive-assignments.cron';
 import { AssignmentStatus } from '../../users/entities/user-complex-assignment.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
-import { SUPERVISOR_INACTIVITY_DAYS } from '../supervisor-visits.constants';
 
 /**
  * El cron retira del complejo al supervisor que dejó de venir: lo movieron de
- * zona o ya no trabaja en la empresa de seguridad. La consulta vive en SQL;
- * aquí se prueba lo que la rodea: el corte que se le pasa, qué se actualiza y
- * a quién se le avisa.
+ * zona o ya no trabaja en la empresa de seguridad. El plazo es de cada
+ * complejo y el corte se calcula en SQL; aquí se prueba lo que la rodea: con
+ * qué plazo compara, qué se actualiza y qué se le avisa a cada supervisor.
  */
 describe('RevokeInactiveAssignmentsCron', () => {
-  const build = (
-    rows: { id: string; user_id: string; complex_id: string }[],
-  ) => {
-    const query = jest.fn(() => Promise.resolve(rows));
+  type Row = {
+    id: string;
+    user_id: string;
+    complex_id: string;
+    inactivity_days: number;
+  };
+
+  const build = (rows: Row[]) => {
+    const query = jest.fn<Promise<Row[]>, [string, unknown[]]>(() =>
+      Promise.resolve(rows),
+    );
     const assignmentRepo = {
       manager: { query },
       update: jest.fn(() => Promise.resolve({ affected: rows.length })),
     };
     const notificationsService = {
-      notify: jest.fn(() => Promise.resolve(undefined)),
+      notify: jest.fn<Promise<void>, [{ body: string }]>(() =>
+        Promise.resolve(),
+      ),
     };
     const cron = new RevokeInactiveAssignmentsCron(
       assignmentRepo as never,
@@ -28,25 +36,26 @@ describe('RevokeInactiveAssignmentsCron', () => {
     return { cron, query, assignmentRepo, notificationsService };
   };
 
-  it(`corta en ${SUPERVISOR_INACTIVITY_DAYS} días y solo mira supervisores activos`, async () => {
+  it('compara con el plazo de cada complejo y solo mira supervisores activos', async () => {
     const { cron, query } = build([]);
-    const before = Date.now();
 
     await cron.run();
 
-    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
-    const [role, status, cutoff] = params as [string, string, Date];
-    expect(role).toBe(ValidRoles.SUPERVISOR_ROL);
-    expect(status).toBe(AssignmentStatus.ACTIVE);
-    const expected = before - SUPERVISOR_INACTIVITY_DAYS * 24 * 60 * 60 * 1000;
-    // Un par de horas de margen por el cambio de día que hace setDate.
-    expect(Math.abs(cutoff.getTime() - expected)).toBeLessThan(2 * 3_600_000);
+    const [sql, params] = query.mock.calls[0];
+    expect(params).toEqual([
+      ValidRoles.SUPERVISOR_ROL,
+      AssignmentStatus.ACTIVE,
+    ]);
+    // Ningún plazo fijo: el corte sale de la columna del complejo.
+    expect(sql).toContain(
+      'make_interval(days => c.supervisor_inactivity_days)',
+    );
   });
 
-  it('retira las asignaciones vencidas y le avisa a cada supervisor', async () => {
+  it('retira las asignaciones vencidas y le avisa a cada supervisor con su plazo', async () => {
     const { cron, assignmentRepo, notificationsService } = build([
-      { id: 'a1', user_id: 'sup-1', complex_id: 'c1' },
-      { id: 'a2', user_id: 'sup-2', complex_id: 'c2' },
+      { id: 'a1', user_id: 'sup-1', complex_id: 'c1', inactivity_days: 15 },
+      { id: 'a2', user_id: 'sup-2', complex_id: 'c2', inactivity_days: 45 },
     ]);
 
     await cron.run();
@@ -56,9 +65,11 @@ describe('RevokeInactiveAssignmentsCron', () => {
       expect.objectContaining({ status: AssignmentStatus.REMOVED }),
     );
     expect(notificationsService.notify).toHaveBeenCalledTimes(2);
-    expect(notificationsService.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ userIds: ['sup-1'], complexId: 'c1' }),
-    );
+    const [first] = notificationsService.notify.mock.calls[0];
+    expect(first).toMatchObject({ userIds: ['sup-1'], complexId: 'c1' });
+    expect(first.body).toContain('15 días');
+    const [second] = notificationsService.notify.mock.calls[1];
+    expect(second.body).toContain('45 días');
   });
 
   it('sin vencidos no toca nada', async () => {

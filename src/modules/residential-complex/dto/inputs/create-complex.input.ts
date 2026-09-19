@@ -206,4 +206,15 @@ export class CreateComplexInput {
   @Min(0)
   @Max(168)
   pqrfReminderIntervalHours?: number;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'Días sin visita tras los cuales el sistema le retira el acceso a un supervisor',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  supervisorInactivityDays?: number;
 }

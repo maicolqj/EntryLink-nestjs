@@ -160,6 +160,18 @@ export class ResidentialComplex {
   pqrfReminderIntervalHours: number;
 
   /**
+   * Días sin check-in tras los cuales un supervisor pierde el acceso al
+   * complejo: lo movieron de zona o dejó la empresa de seguridad. Cada
+   * administración conoce la frecuencia con que la visitan.
+   */
+  @Field(() => Int, {
+    description:
+      'Días sin visita tras los cuales el sistema le retira el acceso a un supervisor',
+  })
+  @Column({ name: 'supervisor_inactivity_days', type: 'int', default: 30 })
+  supervisorInactivityDays: number;
+
+  /**
    * Consejeros que responden los PQRF dirigidos al consejo. Vacío = todo el
    * consejo. Se cruza con los miembros de HOY: quien deja el consejo deja de
    * contar aunque siga en la lista.

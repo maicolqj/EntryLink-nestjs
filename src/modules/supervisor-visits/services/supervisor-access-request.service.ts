@@ -26,7 +26,10 @@ import { NotificationPriority } from '../../notifications/enums/notification-pri
 import { NotificationActionType } from '../../notifications/enums/notification-action-type.enum';
 import { SupervisorVisit } from '../entities/supervisor-visit.entity';
 import { ComplexSupervisor } from '../dto/responses/complex-supervisor.response';
-import { supervisorAutoRemovalAt } from '../supervisor-visits.constants';
+import {
+  DEFAULT_SUPERVISOR_INACTIVITY_DAYS,
+  supervisorAutoRemovalAt,
+} from '../supervisor-visits.constants';
 
 /** Fila cruda de la consulta de supervisores del complejo. */
 interface ComplexSupervisorRow {
@@ -368,6 +371,13 @@ export class SupervisorAccessRequestService {
   ): Promise<ComplexSupervisor[]> {
     await this.assertComplexAccess(complexId, currentUser);
 
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+      select: ['id', 'supervisorInactivityDays'],
+    });
+    const inactivityDays =
+      complex?.supervisorInactivityDays ?? DEFAULT_SUPERVISOR_INACTIVITY_DAYS;
+
     const rows = await this.assignmentRepo
       .createQueryBuilder('a')
       .innerJoin('a.user', 'u')
@@ -408,7 +418,11 @@ export class SupervisorAccessRequestService {
         identity: row.identity,
         assignedAt,
         lastCheckInAt,
-        autoRemovalAt: supervisorAutoRemovalAt(assignedAt, lastCheckInAt),
+        autoRemovalAt: supervisorAutoRemovalAt(
+          assignedAt,
+          lastCheckInAt,
+          inactivityDays,
+        ),
       };
     });
   }

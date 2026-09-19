@@ -201,7 +201,10 @@ describe('SupervisorAccessRequestService.findComplexSupervisors', () => {
   const DAY = 24 * 60 * 60 * 1000;
 
   /** Doble del QueryBuilder: devuelve las filas crudas que se le den. */
-  const buildService = (rows: Record<string, unknown>[]) => {
+  const buildService = (
+    rows: Record<string, unknown>[],
+    supervisorInactivityDays = 30,
+  ) => {
     const qb: Record<string, jest.Mock> = {};
     for (const method of [
       'innerJoin',
@@ -219,7 +222,13 @@ describe('SupervisorAccessRequestService.findComplexSupervisors', () => {
     qb.getRawMany = jest.fn(() => Promise.resolve(rows));
 
     const complexRepo = {
-      findOne: jest.fn(() => Promise.resolve({ id: 'c1', ownerId: 'owner-1' })),
+      findOne: jest.fn(() =>
+        Promise.resolve({
+          id: 'c1',
+          ownerId: 'owner-1',
+          supervisorInactivityDays,
+        }),
+      ),
     };
     const assignmentRepo = { createQueryBuilder: jest.fn(() => qb) };
 
@@ -272,6 +281,24 @@ describe('SupervisorAccessRequestService.findComplexSupervisors', () => {
     );
   });
 
+  it('usa el plazo que configuró el complejo', async () => {
+    const lastCheckInAt = new Date('2026-09-10T15:00:00Z');
+    const { service } = buildService(
+      [
+        {
+          id: 'sup-1',
+          name: 'JUAN',
+          assignedAt: new Date('2026-08-01T12:00:00Z'),
+          lastCheckInAt,
+        },
+      ],
+      15,
+    );
+    const [supervisor] = await service.findComplexSupervisors('c1', admin);
+    expect(supervisor.autoRemovalAt.getTime()).toBe(
+      lastCheckInAt.getTime() + 15 * DAY,
+    );
+  });
   it('solo trae asignaciones activas de supervisor en ese complejo', async () => {
     const { service, qb } = buildService([]);
 

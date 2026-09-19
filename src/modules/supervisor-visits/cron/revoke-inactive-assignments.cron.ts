@@ -11,18 +11,19 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
-import { SUPERVISOR_INACTIVITY_DAYS } from '../supervisor-visits.constants';
 
 interface ExpiredRow {
   id: string;
   user_id: string;
   complex_id: string;
+  inactivity_days: number;
 }
 
 /**
  * Cron diario a las 02:00 AM (Bogotá) que revoca asignaciones de supervisores
- * que no han realizado check-in en un complejo durante SUPERVISOR_INACTIVITY_DAYS
- * días (30) consecutivos: lo movieron a otra zona o dejó la empresa de seguridad.
+ * que no han realizado check-in en un complejo durante el plazo que configuró
+ * ese complejo (`supervisor_inactivity_days`, 30 por defecto): lo movieron a
+ * otra zona o dejó la empresa de seguridad.
  *
  * Condición de revocación (cualquiera de las dos):
  *  1. La asignación supera ese plazo y nunca hubo un check-in.
@@ -44,17 +45,19 @@ export class RevokeInactiveAssignmentsCron {
 
   @Cron('0 2 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - SUPERVISOR_INACTIVITY_DAYS);
-
+    // El corte depende del complejo, así que se calcula en SQL con su plazo.
+    // La misma regla está en supervisorAutoRemovalAt(), que es la fecha que ve
+    // la administración.
     const expired: ExpiredRow[] = await this.assignmentRepo.manager.query(
-      `SELECT a.id, a.user_id, a.complex_id
+      `SELECT a.id, a.user_id, a.complex_id,
+              c.supervisor_inactivity_days AS inactivity_days
        FROM user_complex_assignments a
+       JOIN residential_complexes c ON c.id = a.complex_id
        WHERE a.role   = $1
          AND a.status = $2
          AND (
            (
-             a.assigned_at < $3
+             a.assigned_at < NOW() - make_interval(days => c.supervisor_inactivity_days)
              AND NOT EXISTS (
                SELECT 1 FROM supervisor_visits v
                WHERE v.supervisor_id = a.user_id
@@ -67,10 +70,10 @@ export class RevokeInactiveAssignmentsCron {
                FROM supervisor_visits v
                WHERE v.supervisor_id = a.user_id
                  AND v.complex_id    = a.complex_id
-             ) < $3
+             ) < NOW() - make_interval(days => c.supervisor_inactivity_days)
            )
          )`,
-      [ValidRoles.SUPERVISOR_ROL, AssignmentStatus.ACTIVE, cutoff],
+      [ValidRoles.SUPERVISOR_ROL, AssignmentStatus.ACTIVE],
     );
 
     if (expired.length === 0) return;
@@ -95,12 +98,13 @@ export class RevokeInactiveAssignmentsCron {
           type: NotificationType.ACCESS_REVOKED_INACTIVITY,
           priority: NotificationPriority.HIGH,
           title: 'Acceso revocado por inactividad',
-          body: `Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos ${SUPERVISOR_INACTIVITY_DAYS} días. Para recuperar el acceso debes solicitar autorización nuevamente.`,
+          body: `Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos ${row.inactivity_days} días. Para recuperar el acceso debes solicitar autorización nuevamente.`,
           entityType: 'ACCESS_REQUEST',
           metadata: {
             complexId: row.complex_id,
             revokedAt: now.toISOString(),
-            reason: `INACTIVITY_${SUPERVISOR_INACTIVITY_DAYS}_DAYS`,
+            reason: 'INACTIVITY',
+            inactivityDays: row.inactivity_days,
           },
         })
         .catch((err) =>
