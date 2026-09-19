@@ -533,6 +533,7 @@ enum ValidRoles {
   RESIDENT_ROL
   SECURITY_ROL
   COUNCIL_ROL
+  MAINTENANCE_ROL
 }
 
 """Configuración del parqueadero para vehículos visitantes"""
@@ -5172,6 +5173,14 @@ type MaintenanceStatsResponse {
   totalCost: Float
 }
 
+"""Miembro del personal de aseo y mantenimiento asignable a un ticket"""
+type MaintenanceStaffMember {
+  id: ID!
+  name: String!
+  lastName: String
+  phoneNumber: String
+}
+
 """Opciones de ubicación para radicar un ticket"""
 type MaintenanceReportOptionsResponse {
   buildings: [Building!]!
@@ -5711,6 +5720,7 @@ type Query {
   petIncidents(complexId: String!, pagination: PaginationInput, filters: FilterPetIncidentsInput): PaginatedPetIncidentsResponse!
   petIncident(id: String!): PetIncident!
   petIncidentsByPet(petId: String!): [PetIncident!]!
+  maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
   maintenanceBoard(complexId: String!, filters: FilterMaintenanceTicketsInput): MaintenanceBoardResponse!
@@ -6360,7 +6370,7 @@ type Mutation {
   registerResident(input: CreateResidentUserInput!): User!
 
   """
-  Crea personal del complejo: guardia (SECURITY_ROL), supervisor (SUPERVISOR_ROL) o contador (ACCOUNTANT_ROL). El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
+  Crea personal del complejo: guardia (SECURITY_ROL), contador (ACCOUNTANT_ROL) o aseo y mantenimiento (MAINTENANCE_ROL). El campo `role` determina el tipo. Requiere rol COMPLEX_ROL o SUPER_ADMIN_ROL.
   """
   createStaffMember(input: CreateStaffMemberInput!): CreateStaffMemberResponse!
 
@@ -7257,7 +7267,7 @@ input CreateResidentUserInput {
 }
 
 """
-Datos para crear un miembro del personal del complejo (guardia o contador)
+Datos para crear un miembro del personal del complejo (guardia, contador o aseo y mantenimiento)
 """
 input CreateStaffMemberInput {
   name: String!
@@ -7274,7 +7284,7 @@ input CreateStaffMemberInput {
   """ID del complejo al que se asigna el personal"""
   complexId: String!
 
-  """Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL"""
+  """Rol a asignar: SECURITY_ROL | ACCOUNTANT_ROL | MAINTENANCE_ROL"""
   role: ValidRoles!
 
   """Turno asignado (MAÑANA, TARDE, NOCHE)"""
