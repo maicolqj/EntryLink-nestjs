@@ -59,6 +59,12 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 import { calculateHaversineDistance } from '../../shared/utils/gps.utils';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { User } from '../../users/entities/user.entity';
+import {
+  AssignmentStatus,
+  UserComplexAssignment,
+} from '../../users/entities/user-complex-assignment.entity';
+import { UserStatus } from '../../users/enums/user.enums';
+import { MaintenanceStaffMember } from '../dto/responses/maintenance-staff-member.response';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { ResidentsService } from '../../residents/services/residents.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
@@ -561,6 +567,47 @@ export class MaintenanceTicketsService {
     return saved;
   }
 
+  /** Personal de aseo y mantenimiento activo del complejo, para asignar tickets. */
+  async findMaintenanceStaff(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MaintenanceStaffMember[]> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const users = await this.maintenanceStaffQuery(complexId)
+      .orderBy('u.name', 'ASC')
+      .addOrderBy('u.lastName', 'ASC')
+      .getMany();
+
+    return users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+    }));
+  }
+
+  /**
+   * Usuarios con asignación ACTIVA de MAINTENANCE_ROL en el complejo. La
+   * asignación manda, no `users.complex_id`: el personal puede estar en varios
+   * complejos y quitarlo de uno deja la asignación en REMOVED.
+   */
+  private maintenanceStaffQuery(complexId: string) {
+    return this.userRepo
+      .createQueryBuilder('u')
+      .innerJoin(
+        UserComplexAssignment,
+        'a',
+        'a.userId = u.id AND a.complexId = :complexId AND a.role = :role AND a.status = :assignmentStatus',
+        {
+          complexId,
+          role: ValidRoles.MAINTENANCE_ROL,
+          assignmentStatus: AssignmentStatus.ACTIVE,
+        },
+      )
+      .where('u.status = :userStatus', { userStatus: UserStatus.ACTIVE });
+  }
+
   /** Asigna responsable —interno o proveedor— y fecha estimada de visita. */
   async assign(
     input: AssignMaintenanceTicketInput,
@@ -604,13 +651,17 @@ export class MaintenanceTicketsService {
     let assigneeLabel: string;
 
     if (isInternal) {
-      const user = await this.userRepo.findOne({
-        where: { id: input.assignedUserId },
-      });
+      // Solo personal de aseo y mantenimiento activo en el complejo: es lo que
+      // el tablero ofrece, y cualquier otro id sería un ticket sin quien lo
+      // atienda.
+      const user = await this.maintenanceStaffQuery(ticket.complexId)
+        .andWhere('u.id = :userId', { userId: input.assignedUserId })
+        .getOne();
 
-      if (!user || user.complexId !== ticket.complexId) {
+      if (!user) {
         throw new CustomError({
-          message: 'El usuario asignado no pertenece a este complejo',
+          message:
+            'La persona asignada no es personal de aseo y mantenimiento activo en este complejo',
           statusCode: HttpStatus.BAD_REQUEST,
           errorCode: MaintenanceErrorCode.MAINTENANCE_ASSIGNEE_NOT_IN_COMPLEX,
         });

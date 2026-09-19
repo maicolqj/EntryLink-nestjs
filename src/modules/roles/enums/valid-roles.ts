@@ -15,6 +15,12 @@ export enum ValidRoles {
    * propio administrador, por ejemplo— sin que eso pase por la administración.
    */
   COUNCIL_ROL = 'COUNCIL_ROL',
+  /**
+   * Personal de aseo y mantenimiento del complejo. Lo da de alta la
+   * administración desde Personal y es a quien se le asigna un ticket de
+   * mantenimiento como "personal interno". Por ahora no inicia sesión.
+   */
+  MAINTENANCE_ROL = 'MAINTENANCE_ROL',
 }
 
 registerEnumType(ValidRoles, {

@@ -445,7 +445,10 @@ export class UsersService {
           name: input.name,
           lastName: input.lastName,
           email: normalizedEmail,
-          password: input.password,
+          // El personal de aseo y mantenimiento no inicia sesión y llega sin
+          // contraseña, pero la columna es NOT NULL: se guarda una aleatoria
+          // que nadie conoce, como con los residentes.
+          password: input.password ?? randomBytes(32).toString('hex'),
           phoneNumber: input.phoneNumber,
           identity: input.identityNumber,
           identityType: input.identityType,

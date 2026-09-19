@@ -10,6 +10,8 @@ import { MaintenanceAssigneeType } from '../enums/maintenance-assignee-type.enum
 import { MaintenanceErrorCode } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { User } from '../../users/entities/user.entity';
+import { AssignmentStatus } from '../../users/entities/user-complex-assignment.entity';
 
 /**
  * Las reglas del ticket que no se pueden dejar en la pantalla:
@@ -73,11 +75,45 @@ const ticketOf = (
   ...partial,
 });
 
+/** Doble del QueryBuilder con que el servicio busca al personal de mantenimiento. */
+interface StaffQueryDouble {
+  innerJoin: jest.Mock<StaffQueryDouble, unknown[]>;
+  where: jest.Mock<StaffQueryDouble, unknown[]>;
+  andWhere: jest.Mock<StaffQueryDouble, [string, { userId?: string }?]>;
+  orderBy: jest.Mock<StaffQueryDouble, unknown[]>;
+  addOrderBy: jest.Mock<StaffQueryDouble, unknown[]>;
+  getMany: jest.Mock<Promise<Partial<User>[]>, []>;
+  getOne: jest.Mock<Promise<Partial<User> | null>, []>;
+}
+
 const buildHarness = (
   ticket: MaintenanceTicket = ticketOf(),
   complexOverrides: Record<string, unknown> = {},
+  /** Lo que devuelve la consulta de personal de aseo y mantenimiento. */
+  maintenanceStaff: Partial<User>[] = [],
 ) => {
   const saved: MaintenanceTicket[] = [];
+
+  // La consulta real filtra por asignación activa de MAINTENANCE_ROL; aquí se
+  // simula el resultado y se guardan los filtros para revisarlos.
+  let requestedUserId: string | undefined;
+  const staffQuery: StaffQueryDouble = {
+    innerJoin: jest.fn(() => staffQuery),
+    where: jest.fn(() => staffQuery),
+    andWhere: jest.fn((_sql: string, params?: { userId?: string }) => {
+      requestedUserId = params?.userId;
+      return staffQuery;
+    }),
+    orderBy: jest.fn(() => staffQuery),
+    addOrderBy: jest.fn(() => staffQuery),
+    getMany: jest.fn(() => Promise.resolve(maintenanceStaff)),
+    getOne: jest.fn(() =>
+      Promise.resolve(
+        maintenanceStaff.find((user) => user.id === requestedUserId) ?? null,
+      ),
+    ),
+  };
+  const userRepo = { createQueryBuilder: jest.fn(() => staffQuery) };
 
   const ticketRepo = {
     findOne: jest.fn(() => Promise.resolve(ticket)),
@@ -145,7 +181,7 @@ const buildHarness = (
     ticketRepo as never,
     eventRepo as never,
     endorsementRepo as never,
-    { findOne: jest.fn(() => Promise.resolve(null)) } as never, // userRepo
+    userRepo as never,
     locationsService as never,
     { findByIdOrFail: jest.fn() } as never, // vendorsService
     slaService as never,
@@ -181,6 +217,7 @@ const buildHarness = (
     slaService,
     notificationsService,
     locationsService,
+    staffQuery,
     saved,
   };
 };
@@ -307,6 +344,15 @@ describe('MaintenanceTicketsService — reapertura', () => {
   });
 });
 
+const STAFF_ID = '33333333-3333-4333-8333-333333333333';
+const staffMember: Partial<User> = {
+  id: STAFF_ID,
+  name: 'Pedro',
+  lastName: 'Gómez',
+  phoneNumber: '3001234567',
+  email: 'pedro@test.com',
+};
+
 describe('MaintenanceTicketsService — asignación', () => {
   it('no admite personal interno y proveedor a la vez', async () => {
     const { service } = buildHarness(
@@ -344,6 +390,90 @@ describe('MaintenanceTicketsService — asignación', () => {
     ).rejects.toMatchObject({
       errorCode: MaintenanceErrorCode.MAINTENANCE_ASSIGNEE_REQUIRED,
     });
+  });
+
+  it('asigna a personal interno de aseo y mantenimiento', async () => {
+    const { service, saved } = buildHarness(
+      ticketOf({ status: MaintenanceTicketStatus.TRIAGED }),
+      {},
+      [staffMember],
+    );
+
+    await service.assign(
+      {
+        ticketId: 'ticket-1',
+        assigneeType: MaintenanceAssigneeType.INTERNAL,
+        assignedUserId: STAFF_ID,
+      },
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    expect(saved[0].assignedUserId).toBe(STAFF_ID);
+    expect(saved[0].vendorId).toBeNull();
+  });
+
+  it('rechaza a quien no es personal de mantenimiento del complejo', async () => {
+    // Un residente o un guardia del mismo complejo no sale en la consulta.
+    const { service } = buildHarness(
+      ticketOf({ status: MaintenanceTicketStatus.TRIAGED }),
+      {},
+      [staffMember],
+    );
+
+    await expect(
+      service.assign(
+        {
+          ticketId: 'ticket-1',
+          assigneeType: MaintenanceAssigneeType.INTERNAL,
+          assignedUserId: '44444444-4444-4444-8444-444444444444',
+        },
+        userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: MaintenanceErrorCode.MAINTENANCE_ASSIGNEE_NOT_IN_COMPLEX,
+    });
+  });
+});
+
+describe('MaintenanceTicketsService — personal de aseo y mantenimiento', () => {
+  it('filtra por asignación activa de MAINTENANCE_ROL en el complejo', async () => {
+    const { service, staffQuery } = buildHarness();
+
+    await service.findMaintenanceStaff(
+      'complex-1',
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    expect(staffQuery.innerJoin).toHaveBeenCalledWith(
+      expect.anything(),
+      'a',
+      expect.any(String),
+      {
+        complexId: 'complex-1',
+        role: ValidRoles.MAINTENANCE_ROL,
+        assignmentStatus: AssignmentStatus.ACTIVE,
+      },
+    );
+  });
+
+  it('devuelve solo lo necesario para elegir por nombre', async () => {
+    const { service } = buildHarness(ticketOf(), {}, [
+      { ...staffMember, password: 'hash' },
+    ]);
+
+    const staff = await service.findMaintenanceStaff(
+      'complex-1',
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    expect(staff).toEqual([
+      {
+        id: STAFF_ID,
+        name: 'Pedro',
+        lastName: 'Gómez',
+        phoneNumber: '3001234567',
+      },
+    ]);
   });
 });
 

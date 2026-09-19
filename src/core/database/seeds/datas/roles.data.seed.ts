@@ -170,6 +170,19 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
     hierarchyLevel: 2,
   },
   {
+    id: 'ee40cee9-6505-4608-9032-ae429bdc7d0d',
+    name: ValidRoles.MAINTENANCE_ROL,
+    description: 'Personal de aseo y mantenimiento del complejo',
+    // Igual que la migración MaintenanceStaffRole: ver sus tickets y el aviso.
+    permissions: [
+      ValidPermissions.VIEW_MAINTENANCE_TICKETS,
+      ValidPermissions.VIEW_NOTIFICATIONS,
+    ],
+    frontName: 'Aseo y mantenimiento',
+    icon: 'wrench',
+    hierarchyLevel: 3,
+  },
+  {
     id: 'c9b8a7f6-e5d4-4321-8901-234567890def',
     name: ValidRoles.COMPLEX_ROL,
     description: 'Administrador de complejo específico',
