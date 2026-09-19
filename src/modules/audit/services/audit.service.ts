@@ -193,6 +193,15 @@ export class AuditService {
       });
     }
 
+    // Una descarga no cambió datos: no hay nada que deshacer.
+    if (auditLog.action === AuditAction.EXPORT) {
+      throw new CustomError({
+        message: 'Una descarga de datos no se puede revertir.',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: GeneralErrorCode.CONFLICT,
+      });
+    }
+
     // 2. Encontrar la metadata de la entidad por nombre de clase
     const metadata = this.dataSource.entityMetadatas.find(
       (m) => m.name === auditLog.entityType,
