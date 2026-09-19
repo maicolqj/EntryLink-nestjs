@@ -14,6 +14,7 @@ import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { Auth } from '../../shared/decorators/auth.decorator';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
+import { ComplexSupervisor } from '../dto/responses/complex-supervisor.response';
 
 @Resolver()
 export class SupervisorVisitResolver {
@@ -131,6 +132,23 @@ export class SupervisorVisitResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<SupervisorAccessRequest> {
     return this.accessRequestService.rejectRequest(input, currentUser);
+  }
+
+  @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
+  @Query(() => [ComplexSupervisor], {
+    name: 'complexSupervisors',
+    description:
+      'Supervisores con acceso aprobado y vigente al complejo, con su última ' +
+      'visita y la fecha en que el sistema les retira el acceso por inactividad.',
+  })
+  findComplexSupervisors(
+    @Args('complexId', { type: () => String }) complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ComplexSupervisor[]> {
+    return this.accessRequestService.findComplexSupervisors(
+      complexId,
+      currentUser,
+    );
   }
 
   @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })

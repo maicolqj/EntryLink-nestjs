@@ -13,6 +13,7 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { AccessRequestStatus } from '../enums/access-request-status.enum';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../../shared/utils/errors.utils';
+import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 
 const mockRepo = () => ({
   findOne: jest.fn(),
@@ -193,5 +194,106 @@ describe('SupervisorAccessRequestService.requestAccess', () => {
         title: 'Nueva solicitud de acceso',
       }),
     );
+  });
+});
+
+describe('SupervisorAccessRequestService.findComplexSupervisors', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  /** Doble del QueryBuilder: devuelve las filas crudas que se le den. */
+  const buildService = (rows: Record<string, unknown>[]) => {
+    const qb: Record<string, jest.Mock> = {};
+    for (const method of [
+      'innerJoin',
+      'leftJoin',
+      'select',
+      'addSelect',
+      'where',
+      'andWhere',
+      'groupBy',
+      'addGroupBy',
+      'orderBy',
+    ]) {
+      qb[method] = jest.fn(() => qb);
+    }
+    qb.getRawMany = jest.fn(() => Promise.resolve(rows));
+
+    const complexRepo = {
+      findOne: jest.fn(() => Promise.resolve({ id: 'c1', ownerId: 'owner-1' })),
+    };
+    const assignmentRepo = { createQueryBuilder: jest.fn(() => qb) };
+
+    const service = new SupervisorAccessRequestService(
+      {} as never, // requestRepo
+      complexRepo as never,
+      assignmentRepo as never,
+      {} as never, // userRepo
+      {} as never, // notificationsService
+    );
+    return { service, qb };
+  };
+
+  const admin = {
+    sub: 'c1',
+    email: 'admin@test.com',
+    roles: [ValidRoles.COMPLEX_ROL],
+  } as JwtAccessPayload;
+
+  it('cuenta el retiro automático desde la última visita', async () => {
+    const lastCheckInAt = new Date('2026-09-10T15:00:00Z');
+    const { service } = buildService([
+      {
+        id: 'sup-1',
+        name: 'JUAN',
+        lastName: 'PEREZ',
+        assignedAt: new Date('2026-08-01T12:00:00Z'),
+        lastCheckInAt,
+      },
+    ]);
+
+    const [supervisor] = await service.findComplexSupervisors('c1', admin);
+
+    expect(supervisor.autoRemovalAt.getTime()).toBe(
+      lastCheckInAt.getTime() + 30 * DAY,
+    );
+  });
+
+  it('si nunca vino, lo cuenta desde la aprobación', async () => {
+    const assignedAt = new Date('2026-09-01T12:00:00Z');
+    const { service } = buildService([
+      { id: 'sup-1', name: 'JUAN', assignedAt, lastCheckInAt: null },
+    ]);
+
+    const [supervisor] = await service.findComplexSupervisors('c1', admin);
+
+    expect(supervisor.lastCheckInAt).toBeNull();
+    expect(supervisor.autoRemovalAt.getTime()).toBe(
+      assignedAt.getTime() + 30 * DAY,
+    );
+  });
+
+  it('solo trae asignaciones activas de supervisor en ese complejo', async () => {
+    const { service, qb } = buildService([]);
+
+    await service.findComplexSupervisors('c1', admin);
+
+    expect(qb.where).toHaveBeenCalledWith('a.complexId = :complexId', {
+      complexId: 'c1',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('a.role = :role', {
+      role: ValidRoles.SUPERVISOR_ROL,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('a.status = :status', {
+      status: AssignmentStatus.ACTIVE,
+    });
+  });
+
+  it('la administración de otro complejo no los ve', async () => {
+    const { service } = buildService([]);
+    const otherAdmin = { ...admin, sub: 'otro-complejo' };
+
+    await expect(
+      service.findComplexSupervisors('c1', otherAdmin),
+    ).rejects.toBeInstanceOf(CustomError);
   });
 });

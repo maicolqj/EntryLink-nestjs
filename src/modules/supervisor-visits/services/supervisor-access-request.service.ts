@@ -24,6 +24,22 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { NotificationActionType } from '../../notifications/enums/notification-action-type.enum';
+import { SupervisorVisit } from '../entities/supervisor-visit.entity';
+import { ComplexSupervisor } from '../dto/responses/complex-supervisor.response';
+import { supervisorAutoRemovalAt } from '../supervisor-visits.constants';
+
+/** Fila cruda de la consulta de supervisores del complejo. */
+interface ComplexSupervisorRow {
+  id: string;
+  name: string;
+  lastName: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  identityType: string | null;
+  identity: string | null;
+  assignedAt: Date | string;
+  lastCheckInAt: Date | string | null;
+}
 
 @Injectable()
 export class SupervisorAccessRequestService {
@@ -334,6 +350,66 @@ export class SupervisorAccessRequestService {
     await this.assertComplexAccess(complexId, currentUser);
     return this.requestRepo.count({
       where: { complexId, status: AccessRequestStatus.PENDING },
+    });
+  }
+
+  // ================================================================
+  // COMPLEX_ROL / SUPER_ADMIN: supervisores con acceso activo
+  // ================================================================
+
+  /**
+   * Supervisores con acceso aprobado y vigente al complejo. Sale de
+   * `user_complex_assignments` y no de `users.complex_id`: un supervisor
+   * trabaja en varios complejos, así que esa columna no dice dónde está.
+   */
+  async findComplexSupervisors(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<ComplexSupervisor[]> {
+    await this.assertComplexAccess(complexId, currentUser);
+
+    const rows = await this.assignmentRepo
+      .createQueryBuilder('a')
+      .innerJoin('a.user', 'u')
+      .leftJoin(
+        SupervisorVisit,
+        'v',
+        'v.supervisorId = a.userId AND v.complexId = a.complexId',
+      )
+      .select('u.id', 'id')
+      .addSelect('u.name', 'name')
+      .addSelect('u.lastName', 'lastName')
+      .addSelect('u.email', 'email')
+      .addSelect('u.phoneNumber', 'phoneNumber')
+      .addSelect('u.identityType', 'identityType')
+      .addSelect('u.identity', 'identity')
+      .addSelect('a.assignedAt', 'assignedAt')
+      .addSelect('MAX(v.checkInAt)', 'lastCheckInAt')
+      .where('a.complexId = :complexId', { complexId })
+      .andWhere('a.role = :role', { role: ValidRoles.SUPERVISOR_ROL })
+      .andWhere('a.status = :status', { status: AssignmentStatus.ACTIVE })
+      .groupBy('a.id')
+      .addGroupBy('u.id')
+      .orderBy('u.name', 'ASC')
+      .getRawMany<ComplexSupervisorRow>();
+
+    return rows.map((row) => {
+      const assignedAt = new Date(row.assignedAt);
+      const lastCheckInAt = row.lastCheckInAt
+        ? new Date(row.lastCheckInAt)
+        : null;
+      return {
+        id: row.id,
+        name: row.name,
+        lastName: row.lastName,
+        email: row.email,
+        phoneNumber: row.phoneNumber,
+        identityType: row.identityType,
+        identity: row.identity,
+        assignedAt,
+        lastCheckInAt,
+        autoRemovalAt: supervisorAutoRemovalAt(assignedAt, lastCheckInAt),
+      };
     });
   }
 

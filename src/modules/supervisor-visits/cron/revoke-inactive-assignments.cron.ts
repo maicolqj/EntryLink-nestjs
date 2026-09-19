@@ -11,6 +11,7 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { SUPERVISOR_INACTIVITY_DAYS } from '../supervisor-visits.constants';
 
 interface ExpiredRow {
   id: string;
@@ -20,11 +21,12 @@ interface ExpiredRow {
 
 /**
  * Cron diario a las 02:00 AM (Bogotá) que revoca asignaciones de supervisores
- * que no han realizado check-in en un complejo durante 30 días consecutivos.
+ * que no han realizado check-in en un complejo durante SUPERVISOR_INACTIVITY_DAYS
+ * días (30) consecutivos: lo movieron a otra zona o dejó la empresa de seguridad.
  *
  * Condición de revocación (cualquiera de las dos):
- *  1. La asignación tiene más de 30 días y nunca hubo un check-in.
- *  2. El último check-in registrado para ese supervisor+complejo fue hace más de 30 días.
+ *  1. La asignación supera ese plazo y nunca hubo un check-in.
+ *  2. El último check-in de ese supervisor en el complejo supera ese plazo.
  *
  * Tras la revocación el supervisor debe solicitar acceso nuevamente mediante
  * la mutación requestComplexAccess.
@@ -43,7 +45,7 @@ export class RevokeInactiveAssignmentsCron {
   @Cron('0 2 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setDate(cutoff.getDate() - SUPERVISOR_INACTIVITY_DAYS);
 
     const expired: ExpiredRow[] = await this.assignmentRepo.manager.query(
       `SELECT a.id, a.user_id, a.complex_id
@@ -93,12 +95,12 @@ export class RevokeInactiveAssignmentsCron {
           type: NotificationType.ACCESS_REVOKED_INACTIVITY,
           priority: NotificationPriority.HIGH,
           title: 'Acceso revocado por inactividad',
-          body: 'Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos 30 días. Para recuperar el acceso debes solicitar autorización nuevamente.',
+          body: `Tu asignación a este complejo fue revocada por no haber realizado check-in en los últimos ${SUPERVISOR_INACTIVITY_DAYS} días. Para recuperar el acceso debes solicitar autorización nuevamente.`,
           entityType: 'ACCESS_REQUEST',
           metadata: {
             complexId: row.complex_id,
             revokedAt: now.toISOString(),
-            reason: 'INACTIVITY_30_DAYS',
+            reason: `INACTIVITY_${SUPERVISOR_INACTIVITY_DAYS}_DAYS`,
           },
         })
         .catch((err) =>
