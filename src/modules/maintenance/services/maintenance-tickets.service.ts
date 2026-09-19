@@ -1436,15 +1436,14 @@ export class MaintenanceTicketsService {
     await this.complexService.assertComplexAccess(complexId, currentUser);
     this.assertStaff(currentUser);
 
+    // Cada estado tiene su columna, también los finales: un ticket cerrado que
+    // desaparece del tablero parece un reporte perdido.
     const statuses = filters?.statuses?.length
       ? filters.statuses
       : [
-          MaintenanceTicketStatus.NEW,
-          MaintenanceTicketStatus.TRIAGED,
-          MaintenanceTicketStatus.ASSIGNED,
-          MaintenanceTicketStatus.IN_PROGRESS,
-          MaintenanceTicketStatus.ON_HOLD,
+          ...OPEN_TICKET_STATUSES,
           MaintenanceTicketStatus.RESOLVED,
+          ...FINAL_TICKET_STATUSES,
         ];
 
     const columns: MaintenanceBoardColumn[] = [];
@@ -1467,24 +1466,29 @@ export class MaintenanceTicketsService {
         .getCount();
 
       const qb = this.buildBaseQuery(complexId, columnFilters, currentUser);
+      qb.andWhere('t.status = :status', { status });
 
-      qb.andWhere('t.status = :status', { status })
+      if (FINAL_TICKET_STATUSES.includes(status)) {
+        // Lo terminado ya no tiene urgencia: arriba lo más reciente. Estas
+        // columnas crecen sin fin, así que la tapa deja ver lo último.
+        qb.orderBy('t.updatedAt', 'DESC');
+      } else {
         // Lo urgente arriba, y a igual urgencia lo más antiguo: quien lleva
         // más esperando no puede quedar debajo de lo que entró hoy.
-        .orderBy(
+        qb.orderBy(
           `CASE t.priority
              WHEN '${MaintenancePriority.CRITICAL}' THEN 0
              WHEN '${MaintenancePriority.HIGH}' THEN 1
              WHEN '${MaintenancePriority.MEDIUM}' THEN 2
              ELSE 3 END`,
           'ASC',
-        )
-        .addOrderBy('t.createdAt', 'ASC')
-        // `limit` y no `take`: `take` pagina con una subconsulta de ids
-        // distintos y ahí el CASE tampoco sobrevive. Todos los joins de esta
-        // consulta son ManyToOne —un ticket, una fila—, así que limitar filas
-        // crudas es exacto.
-        .limit(BOARD_COLUMN_LIMIT);
+        ).addOrderBy('t.createdAt', 'ASC');
+      }
+
+      // `limit` y no `take`: `take` pagina con una subconsulta de ids distintos
+      // y ahí el CASE tampoco sobrevive. Todos los joins de esta consulta son
+      // ManyToOne —un ticket, una fila—, así que limitar filas crudas es exacto.
+      qb.limit(BOARD_COLUMN_LIMIT);
 
       const tickets = await qb.getMany();
 
