@@ -339,6 +339,11 @@ type ResidentialComplex {
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int!
 
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int!
+
   """Consejeros que responden los PQRF. Vacío = todo el consejo"""
   pqrfCouncilResolverUserIds: [String!]!
 
@@ -5659,6 +5664,11 @@ type Query {
   pendingAccessRequests(complexId: String!): [SupervisorAccessRequest!]!
 
   """
+  Supervisores con acceso aprobado y vigente al complejo, con su última visita y la fecha en que el sistema les retira el acceso por inactividad.
+  """
+  complexSupervisors(complexId: String!): [ComplexSupervisor!]!
+
+  """
   Retorna el número de solicitudes de acceso PENDIENTES para un complejo. Úsalo para mostrar el badge numérico en la sección Supervisores del panel.
   """
   pendingAccessRequestsCount(complexId: String!): Int!
@@ -6909,6 +6919,11 @@ input CreateComplexInput {
 
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int
+
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int
 }
 
 """Código de país para el número de teléfono"""
@@ -6963,6 +6978,11 @@ input UpdateComplexInput {
 
   """Horas entre recordatorios. 0 = sin recordatorios"""
   pqrfReminderIntervalHours: Int
+
+  """
+  Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
+  """
+  supervisorInactivityDays: Int
 
   """ID del complejo a actualizar"""
   id: String!
@@ -8530,4 +8550,26 @@ input UpdateMarketplaceSettingsInput {
   allowPhoneContact: Boolean
   allowWantedListings: Boolean
   termsText: String
+}
+
+"""Supervisor con acceso activo a un complejo"""
+type ComplexSupervisor {
+  id: ID!
+  name: String!
+  lastName: String
+  email: String
+  phoneNumber: String
+  identityType: String
+  identity: String
+
+  """Cuándo se aprobó su acceso"""
+  assignedAt: DateTime!
+
+  """Último check-in en el complejo; nulo si nunca ha venido"""
+  lastCheckInAt: DateTime
+
+  """
+  Desde cuándo el sistema le retira el acceso si no vuelve a hacer check-in
+  """
+  autoRemovalAt: DateTime!
 }
