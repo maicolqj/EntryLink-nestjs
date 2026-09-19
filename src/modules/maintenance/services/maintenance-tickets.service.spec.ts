@@ -115,7 +115,37 @@ const buildHarness = (
   };
   const userRepo = { createQueryBuilder: jest.fn(() => staffQuery) };
 
+  // Cada consulta del tablero registra su estado y su orden para revisarlos.
+  const boardQueries: { status?: string; orderBy: [string, string?][] }[] = [];
+  const recordingQuery = () => {
+    const record: { status?: string; orderBy: [string, string?][] } = {
+      orderBy: [],
+    };
+    boardQueries.push(record);
+    const qb: Record<string, jest.Mock> = {};
+    for (const method of [
+      'where',
+      'leftJoinAndSelect',
+      'addOrderBy',
+      'limit',
+    ]) {
+      qb[method] = jest.fn(() => qb);
+    }
+    qb.andWhere = jest.fn((sql: string, params?: { status?: string }) => {
+      if (sql === 't.status = :status') record.status = params?.status;
+      return qb;
+    });
+    qb.orderBy = jest.fn((sort: string, order?: string) => {
+      record.orderBy.push([sort, order]);
+      return qb;
+    });
+    qb.getCount = jest.fn(() => Promise.resolve(0));
+    qb.getMany = jest.fn(() => Promise.resolve([]));
+    return qb;
+  };
+
   const ticketRepo = {
+    createQueryBuilder: jest.fn(recordingQuery),
     findOne: jest.fn(() => Promise.resolve(ticket)),
     save: jest.fn((entity: MaintenanceTicket) => {
       saved.push(entity);
@@ -212,6 +242,7 @@ const buildHarness = (
   return {
     service,
     ticketRepo,
+    boardQueries,
     eventRepo,
     endorsementRepo,
     slaService,
@@ -432,6 +463,52 @@ describe('MaintenanceTicketsService — asignación', () => {
     ).rejects.toMatchObject({
       errorCode: MaintenanceErrorCode.MAINTENANCE_ASSIGNEE_NOT_IN_COMPLEX,
     });
+  });
+});
+
+describe('MaintenanceTicketsService — tablero', () => {
+  it('cada estado tiene su columna, también los cerrados', async () => {
+    const { service } = buildHarness();
+
+    const board = await service.board(
+      'complex-1',
+      {},
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    expect(board.columns.map((column) => column.status)).toEqual([
+      MaintenanceTicketStatus.NEW,
+      MaintenanceTicketStatus.TRIAGED,
+      MaintenanceTicketStatus.ASSIGNED,
+      MaintenanceTicketStatus.IN_PROGRESS,
+      MaintenanceTicketStatus.ON_HOLD,
+      MaintenanceTicketStatus.RESOLVED,
+      MaintenanceTicketStatus.CLOSED,
+      MaintenanceTicketStatus.REJECTED,
+      MaintenanceTicketStatus.DUPLICATE,
+    ]);
+  });
+
+  it('en los cerrados va arriba lo más reciente; en los abiertos, lo urgente', async () => {
+    const { service, boardQueries } = buildHarness();
+
+    await service.board(
+      'complex-1',
+      {},
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    const ordered = (status: MaintenanceTicketStatus) =>
+      boardQueries.find(
+        (q) => q.status === (status as string) && q.orderBy.length > 0,
+      )?.orderBy[0];
+    expect(ordered(MaintenanceTicketStatus.CLOSED)).toEqual([
+      't.updatedAt',
+      'DESC',
+    ]);
+    expect(ordered(MaintenanceTicketStatus.NEW)?.[0]).toContain(
+      'CASE t.priority',
+    );
   });
 });
 
