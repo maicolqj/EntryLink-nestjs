@@ -1638,6 +1638,7 @@ enum AuditEntityType {
   MaintenanceVendor
   MaintenanceLocationTag
   MarketplaceListing
+  DataExport
 }
 
 """Tipo de acción registrada en el historial de auditoría"""
@@ -1686,6 +1687,9 @@ enum AuditAction {
 
   """Llamada rechazada"""
   CALL_REJECTED
+
+  """Descarga de datos o reportes del complejo"""
+  EXPORT
 }
 
 type Notification {
@@ -3867,6 +3871,28 @@ enum AccessRequestStatus {
   REJECTED
 }
 
+"""Supervisor con acceso activo a un complejo"""
+type ComplexSupervisor {
+  id: ID!
+  name: String!
+  lastName: String
+  email: String
+  phoneNumber: String
+  identityType: String
+  identity: String
+
+  """Cuándo se aprobó su acceso"""
+  assignedAt: DateTime!
+
+  """Último check-in en el complejo; nulo si nunca ha venido"""
+  lastCheckInAt: DateTime
+
+  """
+  Desde cuándo el sistema le retira el acceso si no vuelve a hacer check-in
+  """
+  autoRemovalAt: DateTime!
+}
+
 """Mensaje enviado a residentes del complejo"""
 type SentMessage {
   id: String!
@@ -5519,6 +5545,52 @@ type PaginatedListingReportsResponse {
   pagination: PaginationReponse!
 }
 
+"""Módulo cuyos datos se pueden descargar"""
+type DataExportModuleInfo {
+  module: ComplexModule!
+  label: String!
+
+  """Si el módulo está habilitado en el complejo"""
+  enabled: Boolean!
+}
+
+"""Módulos funcionales disponibles para un complejo residencial"""
+enum ComplexModule {
+  EDIFICIOS
+  UNIDADES
+  RESIDENTES
+  VISITAS
+  VEHICULOS
+  PAQUETES
+  FINANZAS
+  NOTAS
+  PERSONAL
+  MENSAJES
+  MOVIMIENTOS
+  NOTIFICACIONES
+  PARKING_ROTATION
+  PARKING_BILLING
+  ZONAS_COMUNES
+  PQRF
+  VOTACIONES
+  MASCOTAS
+  MANTENIMIENTO
+  CLASIFICADOS
+}
+
+"""Descarga de datos realizada en el complejo"""
+type DataExportHistoryEntry {
+  id: ID!
+  createdAt: DateTime!
+  performedByName: String
+
+  """module | backup"""
+  kind: String!
+  modules: [String!]!
+  from: String
+  to: String
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -5750,6 +5822,12 @@ type Query {
   listingReports(complexId: String!, pagination: PaginationInput, status: MarketplaceReportStatus): PaginatedListingReportsResponse!
   marketplaceSettings(complexId: String!): MarketplaceSettings!
 
+  """Módulos cuyos datos se pueden descargar en el complejo"""
+  dataExportModules(complexId: String!): [DataExportModuleInfo!]!
+
+  """Últimas 20 descargas de datos del complejo"""
+  dataExportHistory(complexId: String!): [DataExportHistoryEntry!]!
+
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
 }
@@ -5787,30 +5865,6 @@ input FilterResidentsInput {
 
   """Nombre de torre/edificio (ej: "5", "TORRE A"). Búsqueda exacta."""
   buildingName: String
-}
-
-"""Módulos funcionales disponibles para un complejo residencial"""
-enum ComplexModule {
-  EDIFICIOS
-  UNIDADES
-  RESIDENTES
-  VISITAS
-  VEHICULOS
-  PAQUETES
-  FINANZAS
-  NOTAS
-  PERSONAL
-  MENSAJES
-  MOVIMIENTOS
-  NOTIFICACIONES
-  PARKING_ROTATION
-  PARKING_BILLING
-  ZONAS_COMUNES
-  PQRF
-  VOTACIONES
-  MASCOTAS
-  MANTENIMIENTO
-  CLASIFICADOS
 }
 
 input FilterComplexInput {
@@ -8550,26 +8604,4 @@ input UpdateMarketplaceSettingsInput {
   allowPhoneContact: Boolean
   allowWantedListings: Boolean
   termsText: String
-}
-
-"""Supervisor con acceso activo a un complejo"""
-type ComplexSupervisor {
-  id: ID!
-  name: String!
-  lastName: String
-  email: String
-  phoneNumber: String
-  identityType: String
-  identity: String
-
-  """Cuándo se aprobó su acceso"""
-  assignedAt: DateTime!
-
-  """Último check-in en el complejo; nulo si nunca ha venido"""
-  lastCheckInAt: DateTime
-
-  """
-  Desde cuándo el sistema le retira el acceso si no vuelve a hacer check-in
-  """
-  autoRemovalAt: DateTime!
 }

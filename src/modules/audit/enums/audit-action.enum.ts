@@ -16,6 +16,7 @@ export enum AuditAction {
   CALL_OUTGOING = 'CALL_OUTGOING',
   CALL_MISSED = 'CALL_MISSED',
   CALL_REJECTED = 'CALL_REJECTED',
+  EXPORT = 'EXPORT',
 }
 
 registerEnumType(AuditAction, {
@@ -37,5 +38,6 @@ registerEnumType(AuditAction, {
     CALL_OUTGOING: { description: 'Llamada saliente contestada' },
     CALL_MISSED: { description: 'Llamada entrante no contestada' },
     CALL_REJECTED: { description: 'Llamada rechazada' },
+    EXPORT: { description: 'Descarga de datos o reportes del complejo' },
   },
 });
