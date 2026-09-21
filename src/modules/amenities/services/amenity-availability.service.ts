@@ -252,9 +252,10 @@ export class AmenityAvailabilityService {
         statuses: ACTIVE_BOOKING_STATUSES,
       })
       // Solapamiento de intervalos semiabiertos: se cruzan si cada uno empieza
-      // antes de que el otro termine.
-      .andWhere('b.startAt < :endAt', { endAt })
-      .andWhere('b.endAt   > :startAt', { startAt });
+      // antes de que el otro termine. La reserva ajena ocupa hasta el fin de su
+      // aseo, no hasta que el residente sale.
+      .andWhere('b.startAt        < :endAt', { endAt })
+      .andWhere('b.blockedUntilAt > :startAt', { startAt });
 
     if (excludeBookingId) {
       qb.andWhere('b.id != :excludeBookingId', { excludeBookingId });
@@ -323,10 +324,19 @@ export class AmenityAvailabilityService {
         deletedAt: IsNull(),
         status: In(ACTIVE_BOOKING_STATUSES),
         startAt: LessThan(to),
-        endAt: MoreThan(from),
+        blockedUntilAt: MoreThan(from),
       },
       order: { startAt: 'ASC' },
     });
+  }
+
+  /**
+   * Hasta cuándo ocupa una reserva. `blockedUntilAt` incluye el aseo; se cae a
+   * `endAt` para las reservas que se cargaron sin esa columna —una proyección
+   * parcial, o una fila anterior a la franja de aseo—.
+   */
+  private occupiedUntil(booking: AmenityBooking): Date {
+    return booking.blockedUntilAt ?? booking.endAt;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -347,7 +357,7 @@ export class AmenityAvailabilityService {
     const dayEnd = this.addDays(dayStart, 1);
 
     const dayBookings = bookings.filter(
-      (b) => b.startAt < dayEnd && b.endAt > dayStart,
+      (b) => b.startAt < dayEnd && this.occupiedUntil(b) > dayStart,
     );
     const busy = this.buildBusyRanges(dayBookings);
 
@@ -363,15 +373,33 @@ export class AmenityAvailabilityService {
     if (amenity.status !== AmenityStatus.ACTIVE)
       return closed(ClosedReason.ZONA_INACTIVA);
 
-    // Un día completamente fuera de la ventana de anticipación no se reporta
-    // como cerrado por horario: el residente debe distinguir "cerrado hoy" de
-    // "todavía no se puede reservar tan lejos".
-    if (dayEnd <= earliest || dayStart > latestStart)
-      return closed(ClosedReason.FUERA_DE_VENTANA);
-
     // La excepción de la fecha manda sobre la regla semanal: si dice cerrado,
     // no importa que el día de la semana tenga horario.
     const exception = exceptions.find((e) => e.date === date) ?? null;
+
+    // Un día completamente fuera de la ventana de anticipación no se reporta
+    // como cerrado por horario: el residente debe distinguir "cerrado hoy" de
+    // "todavía no se puede reservar tan lejos".
+    //
+    // Sus VENTANAS, en cambio, sí se reportan. `openWindows` dice a qué horas
+    // abre la zona, no a qué horas se puede empezar una reserva: una que
+    // arranca dentro del plazo puede CONTINUAR hasta el día siguiente, y ese
+    // día siguiente casi siempre cae fuera del plazo —siempre, en el último
+    // día reservable—. Sin sus horas el periodo continuo se corta en la
+    // medianoche y la duración máxima de la zona se vuelve inalcanzable: una
+    // zona abierta 24 h no dejaba pasar de las 12 de la noche.
+    if (dayEnd <= earliest || dayStart > latestStart) {
+      return {
+        ...closed(ClosedReason.FUERA_DE_VENTANA),
+        openWindows: this.openWindowsForDay(
+          dayStart,
+          schedules,
+          blackouts,
+          exception,
+        ),
+      };
+    }
+
     if (exception?.isClosed) return closed(ClosedReason.CERRADO_ESE_DIA);
 
     const hasHours = exception
@@ -490,7 +518,7 @@ export class AmenityAvailabilityService {
         const endAt = new Date(start + stepMs);
 
         const capacityUsed = dayBookings.filter(
-          (b) => b.startAt < endAt && b.endAt > startAt,
+          (b) => b.startAt < endAt && this.occupiedUntil(b) > startAt,
         ).length;
 
         const withinWindow = startAt >= earliest && startAt <= latestStart;
@@ -523,7 +551,7 @@ export class AmenityAvailabilityService {
     latestStart: Date,
   ): AmenitySlot[] {
     const capacityUsed = dayBookings.filter(
-      (b) => b.startAt < dayEnd && b.endAt > dayStart,
+      (b) => b.startAt < dayEnd && this.occupiedUntil(b) > dayStart,
     ).length;
     const withinWindow = dayEnd > earliest && dayStart <= latestStart;
 
@@ -539,19 +567,29 @@ export class AmenityAvailabilityService {
     ];
   }
 
-  /** Reservas activas del día como intervalos, sin datos del titular. */
+  /**
+   * Reservas activas del día como intervalos, sin datos del titular.
+   *
+   * El intervalo llega hasta el fin del aseo, que es hasta cuándo la zona
+   * está de verdad ocupada, y `cleaningFromAt` marca dónde deja de ser uso.
+   */
   private buildBusyRanges(dayBookings: AmenityBooking[]): AmenityBusyRange[] {
     const byRange = new Map<string, AmenityBusyRange>();
 
     for (const b of dayBookings) {
-      const key = `${b.startAt.getTime()}-${b.endAt.getTime()}`;
+      const blockedUntil = this.occupiedUntil(b);
+      const cleaningFromAt =
+        blockedUntil.getTime() > b.endAt.getTime() ? b.endAt : null;
+
+      const key = `${b.startAt.getTime()}-${blockedUntil.getTime()}-${cleaningFromAt?.getTime() ?? ''}`;
       const existing = byRange.get(key);
       if (existing) {
         existing.bookingsCount += 1;
       } else {
         byRange.set(key, {
           startAt: b.startAt,
-          endAt: b.endAt,
+          endAt: blockedUntil,
+          cleaningFromAt,
           bookingsCount: 1,
         });
       }

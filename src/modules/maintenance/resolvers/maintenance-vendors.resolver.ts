@@ -21,7 +21,7 @@ import { ComplexModule } from '../../residential-complex/enums/complex-module.en
 const MANAGER_ROLES = [
   ValidRoles.SUPER_ADMIN_ROL,
   ValidRoles.COMPLEX_ROL,
-  ValidRoles.SUPERVISOR_ROL,
+  // ValidRoles.SUPERVISOR_ROL,
 ];
 
 /** Proveedores y política de plazos: la configuración del módulo. */

@@ -1410,6 +1410,81 @@ export class AccountingService {
    * Los memos los pone quien llama: es lo único que cambia entre un daño en el
    * salón social y una multa por mascotas.
    */
+  /**
+   * Devolución en efectivo de una reserva de zona común ya pagada.
+   *
+   * Se contabiliza como comprobante de EGRESO —es como la administración lo
+   * piensa y dónde lo busca— pero el débito no va a una cuenta de gasto sino a
+   * la MISMA de ingreso (4295): devolver un alquiler no es un gasto nuevo, es
+   * el ingreso que se deshace. Llevarlo a una 5xxx inflaría a la vez ingresos y
+   * egresos del período y dejaría el estado de resultados contando dos hechos
+   * donde solo hubo uno.
+   *
+   *   Débito 4295 (otros ingresos)  =  Crédito 1105 (caja)
+   *
+   * Best-effort, igual que la causación del alquiler: si el complejo todavía no
+   * tiene PUC configurado devuelve null y quien llama registra la devolución de
+   * todos modos. Que no haya plan de cuentas no puede impedir que la plata se
+   * devuelva ni que quede escrito que se devolvió.
+   */
+  async emitAmenityRefundVoucher(
+    params: {
+      complexId: string;
+      amount: number;
+      period: string;
+      documentDate: Date;
+      memo: string;
+      unitId?: string | null;
+      thirdPartyName?: string | null;
+    },
+    user: JwtAccessPayload,
+  ): Promise<AccountingHeader | null> {
+    const amount = round2(params.amount);
+    if (amount <= 0) return null;
+
+    const [incomeAcc, cashAcc] = await Promise.all([
+      this.findPostableAccount(params.complexId, PUC.COMMON_AREA_INCOME),
+      this.findPostableAccount(params.complexId, PUC.CASH),
+    ]);
+
+    if (!incomeAcc || !cashAcc) {
+      this.logger.warn(
+        `[amenityRefund] PUC no configurado para complejo ${params.complexId}; comprobante de egreso omitido`,
+      );
+      return null;
+    }
+
+    return this.registerExpense(
+      {
+        complexId: params.complexId,
+        documentDate: params.documentDate,
+        period: params.period,
+        memo: params.memo,
+        paymentAccountId: cashAcc.id,
+        thirdPartyName: params.thirdPartyName ?? undefined,
+        lines: [
+          {
+            pucAccountId: incomeAcc.id,
+            amount,
+            memo: params.memo,
+            unitId: params.unitId ?? undefined,
+          },
+        ],
+      },
+      user,
+    );
+  }
+
+  /** Cuenta PUC posteable por código, o null si el complejo no la tiene. */
+  private async findPostableAccount(
+    complexId: string,
+    code: string,
+  ): Promise<PucAccount | null> {
+    return this.pucRepo.findOne({
+      where: { complexId, code, isPostable: true, isActive: true },
+    });
+  }
+
   private async emitOtherIncomeUnitCharge(
     em: EntityManager,
     params: {

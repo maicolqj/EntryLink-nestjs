@@ -24,6 +24,7 @@ import { AmenityBookingMode } from '../../enums/amenity-booking-mode.enum';
 import { AmenityFeeType } from '../../enums/amenity-fee-type.enum';
 import { AmenityDurationUnit } from '../../enums/amenity-duration-unit.enum';
 import { AmenityScheduleInput } from './amenity-schedule.input';
+import { MAX_CLEANING_MINUTES } from './update-amenity-booking-cleaning.input';
 
 /**
  * Cota amplia: el rango real depende de la unidad de la zona (1–24 h para las
@@ -219,6 +220,40 @@ export class CreateAmenityInput {
   @Field(() => Boolean, { defaultValue: true })
   @IsBoolean()
   blockBookingsOnDebt: boolean = true;
+
+  // ─── Aseo ─────────────────────────────────────────────────────────────────
+
+  @Field(() => Boolean, {
+    defaultValue: false,
+    description: 'La administración ofrece el servicio de aseo en esta zona',
+  })
+  @IsBoolean()
+  cleaningServiceAvailable: boolean = false;
+
+  @Field(() => Int, {
+    defaultValue: 0,
+    description:
+      'Franja de aseo sugerida en minutos. La definitiva la fija el administrador en cada reserva',
+  })
+  @IsInt()
+  @Min(0)
+  @Max(MAX_CLEANING_MINUTES)
+  defaultCleaningMinutes: number = 0;
+
+  @Field(() => Float, {
+    defaultValue: 0,
+    description: 'Costo del aseo por parte del conjunto. 0 = sin costo',
+  })
+  @IsNumber()
+  @Min(0)
+  cleaningFeeAmount: number = 0;
+
+  @Field(() => Boolean, {
+    defaultValue: false,
+    description: 'El cupo del consejo cubre también el costo del aseo',
+  })
+  @IsBoolean()
+  councilQuotaCoversCleaning: boolean = false;
 
   // ─── Cobro ────────────────────────────────────────────────────────────────
 

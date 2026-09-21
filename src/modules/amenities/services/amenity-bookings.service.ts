@@ -37,6 +37,10 @@ import { CreateAmenityBookingInput } from '../dto/inputs/create-amenity-booking.
 import { CancelAmenityBookingInput } from '../dto/inputs/cancel-amenity-booking.input';
 import { RejectAmenityBookingInput } from '../dto/inputs/reject-amenity-booking.input';
 import { ChargeAmenityDamageInput } from '../dto/inputs/charge-amenity-damage.input';
+import { UpdateAmenityBookingCleaningInput } from '../dto/inputs/update-amenity-booking-cleaning.input';
+import { RegisterAmenityBookingPaymentInput } from '../dto/inputs/register-amenity-booking-payment.input';
+import { RegisterAmenityBookingRefundInput } from '../dto/inputs/register-amenity-booking-refund.input';
+import { IncomeCategory } from '../../finance/enums/income-category.enum';
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
@@ -82,9 +86,9 @@ const REMINDER_LEAD_HOURS = 24;
 const STAFF_ROLES: ValidRoles[] = [
   ValidRoles.SUPER_ADMIN_ROL,
   ValidRoles.COMPLEX_ROL,
-  ValidRoles.SUPERVISOR_ROL,
+  // ValidRoles.SUPERVISOR_ROL,
   ValidRoles.SECURITY_ROL,
-  ValidRoles.ACCOUNTANT_ROL,
+  // ValidRoles.ACCOUNTANT_ROL,
 ];
 
 @Injectable()
@@ -148,7 +152,24 @@ export class AmenityBookingsService {
       input.endAt,
     );
 
-    await this.assertBookable(amenity, unitId, startAt, endAt, input.attendees);
+    // El aseo nace con la franja sugerida por la zona. La definitiva la fija el
+    // administrador: una reunión de dos horas y una fiesta de veinticuatro no
+    // dejan la zona igual, y eso no se puede adivinar desde la configuración.
+    const cleaningMinutes = Math.max(0, amenity.defaultCleaningMinutes ?? 0);
+    const cleaningByComplex = this.resolveCleaningByComplex(
+      amenity,
+      input.cleaningByComplex,
+    );
+    const blockedUntilAt = this.addMinutes(endAt, cleaningMinutes);
+
+    await this.assertBookable(
+      amenity,
+      unitId,
+      startAt,
+      endAt,
+      blockedUntilAt,
+      input.attendees,
+    );
 
     // El cupo se decide aquí y queda congelado en la reserva: apagar el
     // beneficio en la zona después no puede cobrarle al residente algo que ya
@@ -190,6 +211,16 @@ export class AmenityBookingsService {
           : AmenityBookingStatus.PENDING,
         feeAmount,
         isCouncilFreeBooking: usesCouncilQuota,
+        cleaningMinutes,
+        blockedUntilAt,
+        cleaningByComplex,
+        // El precio del aseo se congela igual que la tarifa: subirlo después no
+        // puede recobrarle a quien ya reservó.
+        cleaningFeeAmount: this.cleaningPriceFor(
+          amenity,
+          cleaningByComplex,
+          usesCouncilQuota,
+        ),
       }),
     );
 
@@ -220,9 +251,7 @@ export class AmenityBookingsService {
         NotificationType.AMENITY_BOOKING_APPROVED,
         '✅ Reserva confirmada',
         `Tu reserva de ${amenity.name} para el ${this.formatWhen(booking.startAt, booking.endAt)} quedó confirmada.` +
-          (booking.accessCode
-            ? ` Código de ingreso: ${booking.accessCode}.`
-            : ''),
+          this.accessCodeNote(booking),
       ).catch((err) =>
         this.logger.warn(
           `Error al notificar reserva ${booking.id}: ${err?.message}`,
@@ -339,9 +368,7 @@ export class AmenityBookingsService {
       NotificationType.AMENITY_BOOKING_APPROVED,
       '✅ Reserva aprobada',
       `Tu reserva de ${amenity.name} para el ${this.formatWhen(activated.startAt, activated.endAt)} fue aprobada.` +
-        (activated.accessCode
-          ? ` Código de ingreso: ${activated.accessCode}.`
-          : ''),
+        this.accessCodeNote(activated),
     ).catch((err) =>
       this.logger.warn(
         `Error al notificar aprobación ${bookingId}: ${err?.message}`,
@@ -475,6 +502,15 @@ export class AmenityBookingsService {
     const performedBy =
       currentUser.entityType === 'user' ? currentUser.sub : undefined;
 
+    // Cuánto dinero recibió ya esta reserva: lo pagado en la administración, o
+    // lo abonado en la cartera sobre sus cargos. De ahí sale la devolución.
+    const collected = booking.directIncomeId
+      ? Number(booking.directPaymentAmount)
+      : await this.financeService.collectedOnCharges([
+          booking.feeChargeId ?? '',
+          booking.cleaningChargeId ?? '',
+        ]);
+
     // Solo la TARIFA responde al plazo de cancelación. El cobro por daños no:
     // responde a un hecho al recibir la zona, y cancelar tarde no puede
     // convertirlo en un castigo.
@@ -484,7 +520,18 @@ export class AmenityBookingsService {
       retained,
       this.resolveActingUserId(currentUser, complex.ownerId),
       performedBy,
+      collected > 0,
     );
+
+    // El aseo se cobra por prestarlo. Una reserva cancelada no se asea, así que
+    // su cargo se anula entero sin importar el plazo: la penalización castiga
+    // haber bloqueado la agenda, no un servicio que nadie alcanzó a prestar.
+    await this.voidCleaningCharge(booking, amenity, performedBy);
+
+    // La plata que ya entró queda POR devolver, menos lo retenido por cancelar
+    // tarde. El egreso se emite cuando el residente la reclame, no ahora: el
+    // dinero sigue en la caja del complejo hasta que alguien venga por él.
+    const refunded = this.recordRefundObligation(booking, collected, retained);
 
     const saved = await this.bookingRepo.save(booking);
     await this.amenitiesService.invalidate(booking.complexId);
@@ -492,9 +539,12 @@ export class AmenityBookingsService {
     this.emitUpdated(saved, amenity);
 
     const chargeNote =
-      retained > 0
+      (retained > 0
         ? ` Se retiene ${this.formatMoney(retained)} por cancelar fuera del plazo de ${this.formatDeadline(deadlineHours)}.`
-        : '';
+        : '') +
+      (refunded > 0
+        ? ` Se te devuelven ${this.formatMoney(refunded)}; acércate a la administración a reclamarlos.`
+        : '');
 
     this.notifyCancellation(saved, amenity, currentUser, chargeNote).catch(
       (err) =>
@@ -543,7 +593,9 @@ export class AmenityBookingsService {
         deletedAt: IsNull(),
         status: In(ACTIVE_BOOKING_STATUSES),
         startAt: LessThan(endAt),
-        endAt: MoreThan(startAt),
+        // La franja de aseo tambien cae dentro del bloqueo: si la zona se cierra
+        // el martes, la reserva del lunes que se asea el martes tampoco va.
+        blockedUntilAt: MoreThan(startAt),
       },
     });
 
@@ -567,6 +619,10 @@ export class AmenityBookingsService {
         );
         if (cancelledCharge) booking.feeChargeId = null;
       }
+
+      // El aseo tampoco se presta: nadie usa la zona.
+      await this.voidCleaningCharge(booking, amenity, performedBy);
+
       await this.bookingRepo.save(booking);
 
       this.notifyResidents(
@@ -905,6 +961,11 @@ export class AmenityBookingsService {
       .take(limit)
       .getMany();
 
+    // El pago por cartera se registra en finanzas, que no le avisa a este
+    // módulo. Sin esto, la reserva ya pagada aparecería en la lista sin código
+    // hasta que alguien la abriera una por una.
+    await this.ensureAccessCodes(items);
+
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
@@ -934,7 +995,7 @@ export class AmenityBookingsService {
       });
     }
 
-    return booking;
+    return this.ensureAccessCode(booking);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1060,6 +1121,460 @@ export class AmenityBookingsService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PAGO DEL ALQUILER
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Registra que el residente pagó el alquiler en la administración.
+   *
+   * Por defecto el alquiler se cobra a la CARTERA de la unidad: al aprobar se
+   * emite el cargo y el ingreso queda causado. Cuando en cambio el residente
+   * se acerca y paga, ese mismo dinero tiene que entrar a caja del complejo
+   * —es la sección de ingresos directos, categoría "alquiler de zona social"—.
+   *
+   * Los dos caminos NO son acumulables. El resumen financiero calcula
+   * `totalCollected + directIncome`, así que dejar el cargo colgando de la
+   * unidad y además registrar el ingreso contaría el mismo alquiler dos veces
+   * y le dejaría una deuda falsa a la unidad. Por eso registrar el pago ANULA
+   * los cargos de la reserva —tarifa y aseo— y los reemplaza por el ingreso.
+   *
+   * Si el cargo ya tiene abonos, no se convierte: esa plata ya entró por
+   * cartera y moverla de sitio descuadraría lo que la unidad ya pagó.
+   *
+   * El cobro por daños no pasa por aquí. Se constata al recibir la zona, cuando
+   * el residente ya no está en la ventanilla, y siempre se carga a la unidad.
+   */
+  async registerDirectPayment(
+    input: RegisterAmenityBookingPaymentInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    const booking = await this.findByIdOrFail(input.bookingId);
+    await this.complexService.findById(booking.complexId, currentUser);
+
+    const performedBy =
+      currentUser.entityType === 'user' ? currentUser.sub : undefined;
+
+    if (booking.directIncomeId) {
+      throw new CustomError({
+        message: 'Esta reserva ya tiene registrado el pago en la administración',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: AmenityErrorCode.BOOKING_ALREADY_COLLECTED,
+      });
+    }
+
+    // Solo desde que la reserva está en firme. Una PENDING todavía puede
+    // rechazarse, y cobrar antes dejaría un ingreso en caja por una reserva
+    // que nunca existió —con la plata ya contada en el mes—.
+    this.assertStatus(booking, [
+      AmenityBookingStatus.APPROVED,
+      AmenityBookingStatus.CHECKED_IN,
+      AmenityBookingStatus.COMPLETED,
+      // No asistió, pero bloqueó la zona y el alquiler se le cobra igual.
+      AmenityBookingStatus.NO_SHOW,
+    ]);
+
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
+
+    // Lo que la reserva vale: la tarifa más el aseo que asumió el conjunto.
+    const owed =
+      Number(booking.feeAmount) +
+      (booking.cleaningByComplex ? Number(booking.cleaningFeeAmount) : 0);
+
+    const amount = input.amount ?? owed;
+    if (amount <= 0) {
+      throw new CustomError({
+        message: 'Esta reserva no tiene ningún valor que cobrar',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AmenityErrorCode.BOOKING_NOTHING_TO_COLLECT,
+      });
+    }
+
+    // ── Se liberan los cargos de la cartera ────────────────────────────────
+    const reason = `Pagado en la administración — ${amenity.name}`;
+
+    for (const key of ['feeChargeId', 'cleaningChargeId'] as const) {
+      const chargeId = booking[key];
+      if (!chargeId) continue;
+
+      const cancelled = await this.financeService.cancelInternalCharge(
+        chargeId,
+        reason,
+        performedBy,
+      );
+
+      // `cancelInternalCharge` devuelve null cuando el cargo ya tiene abonos.
+      // Ese dinero entró por cartera y no se puede mudar a caja sin descuadrar
+      // lo que la unidad ya pagó: se para aquí antes de tocar nada más.
+      if (!cancelled) {
+        throw new CustomError({
+          message:
+            'El cargo de esta reserva ya tiene pagos aplicados en la cartera de la unidad. Reversa ese pago antes de registrarlo como ingreso del complejo.',
+          statusCode: HttpStatus.CONFLICT,
+          errorCode: AmenityErrorCode.BOOKING_CHARGE_ALREADY_PAID,
+        });
+      }
+
+      booking[key] = null;
+    }
+
+    // ── Entra a caja del complejo ──────────────────────────────────────────
+    const incomeDate = input.incomeDate ? new Date(input.incomeDate) : new Date();
+    const unitLabel = booking.unit?.number ? ` — Unidad ${booking.unit.number}` : '';
+
+    const income = await this.financeService.registerDirectIncome(
+      {
+        complexId: booking.complexId,
+        amount,
+        description: `Alquiler ${amenity.name} — ${this.formatWhen(booking.startAt, booking.endAt)}${unitLabel}`,
+        category: IncomeCategory.HALL_RENTAL,
+        // El ingreso directo es de caja: pertenece al período en que se recibió
+        // el dinero, no al de la reserva.
+        period: this.periodOf(incomeDate),
+        incomeDate,
+        receiptUrl: input.receiptUrl,
+        notes: input.notes,
+      },
+      currentUser,
+    );
+
+    booking.directIncomeId = income.id;
+    booking.directPaymentAmount = amount;
+    booking.directPaymentAt = new Date();
+    booking.directPaymentByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+
+    // Pagó: ya puede entrar. Este es el momento en que nace el código para las
+    // reservas que se cobran.
+    if (!booking.accessCode) booking.accessCode = this.generateAccessCode();
+
+    const saved = await this.bookingRepo.save(booking);
+    await this.amenitiesService.invalidate(booking.complexId);
+
+    this.emitUpdated(saved, amenity);
+
+    this.notifyResidents(
+      saved,
+      amenity,
+      NotificationType.AMENITY_PAYMENT_RECEIVED,
+      '💵 Recibimos el pago de tu reserva',
+      `La administración registró el pago de ${this.formatMoney(amount)} por ${amenity.name} (${this.formatWhen(saved.startAt, saved.endAt)}).` +
+        (saved.accessCode
+          ? ` Tu código de ingreso es ${saved.accessCode}.`
+          : ''),
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar el pago de la reserva ${saved.id}: ${err?.message}`,
+      ),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.AmenityBooking,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        directIncomeId: saved.directIncomeId,
+        directPaymentAmount: saved.directPaymentAmount,
+        feeChargeId: saved.feeChargeId,
+        cleaningChargeId: saved.cleaningChargeId,
+      },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: saved.complexId,
+      description: `Pago del alquiler recibido en la administración: ${amenity.name} — ${this.formatMoney(amount)}`,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Entrega la devolución que quedó pendiente al cancelar una reserva pagada.
+   *
+   * Es el momento en que el dinero SALE de la caja, y por eso es acá —y no al
+   * cancelar— donde se emite el comprobante de egreso. Cancelar solo crea la
+   * obligación: entre una cosa y la otra pueden pasar días, o el residente
+   * puede no volver nunca, y contabilizar la salida antes dejaría los libros
+   * diciendo que la plata ya no está mientras sigue en el cajón.
+   *
+   * El comprobante lleva el CÓDIGO de la reserva: es lo único que ata una
+   * salida de caja a un hecho concreto cuando alguien audite el egreso meses
+   * después.
+   */
+  async registerRefund(
+    input: RegisterAmenityBookingRefundInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    const booking = await this.findByIdOrFail(input.bookingId);
+    await this.complexService.findById(booking.complexId, currentUser);
+
+    if (booking.refundAmount <= 0) {
+      throw new CustomError({
+        message: 'Esta reserva no tiene ninguna devolución pendiente',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AmenityErrorCode.REFUND_NOTHING_TO_PAY,
+      });
+    }
+
+    if (booking.refundedAt) {
+      throw new CustomError({
+        message: 'La devolución de esta reserva ya se entregó',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: AmenityErrorCode.REFUND_ALREADY_PAID,
+      });
+    }
+
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
+
+    const amount = input.amount ?? Number(booking.refundAmount);
+    const paidAt = input.paidAt ? new Date(input.paidAt) : new Date();
+
+    const reference = booking.accessCode
+      ? `código ${booking.accessCode}`
+      : `${amenity.name} — ${this.formatWhen(booking.startAt, booking.endAt)}`;
+
+    const memo = `Devolución por cancelación de reserva de zonas comunes — ${reference}`;
+
+    let voucherId: string | null = null;
+    try {
+      const voucher = await this.accountingService.emitAmenityRefundVoucher(
+        {
+          complexId: booking.complexId,
+          amount,
+          period: this.periodOf(paidAt),
+          documentDate: paidAt,
+          memo: input.notes ? `${memo} · ${input.notes}` : memo,
+          unitId: booking.unitId,
+          thirdPartyName: booking.unit?.number
+            ? `Unidad ${booking.unit.number}`
+            : undefined,
+        },
+        currentUser,
+      );
+      voucherId = voucher?.id ?? null;
+    } catch (err: any) {
+      // Un fallo de contabilidad no puede impedir dejar constancia de que la
+      // plata se entregó: el residente ya se fue con ella.
+      this.logger.error(
+        `No se pudo emitir el egreso de devolución de la reserva ${booking.id}: ${err?.message}`,
+      );
+    }
+
+    booking.refundAmount = amount;
+    booking.refundVoucherId = voucherId;
+    booking.refundedAt = paidAt;
+
+    const saved = await this.bookingRepo.save(booking);
+
+    // El residente tiene que poder confrontar lo que recibió contra lo que el
+    // complejo dice que entregó. Sin el monto, el aviso no sirve de recibo.
+    this.notifyResidents(
+      saved,
+      amenity,
+      NotificationType.AMENITY_REFUND_PAID,
+      '💵 Devolución entregada',
+      `La administración te entregó ${this.formatMoney(amount)} por la cancelación de tu reserva de ${amenity.name} (${this.formatWhen(saved.startAt, saved.endAt)}).`,
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar la devolución de la reserva ${saved.id}: ${err?.message}`,
+      ),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.AmenityBooking,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        refundAmount: saved.refundAmount,
+        refundVoucherId: saved.refundVoucherId,
+        refundedAt: saved.refundedAt,
+      },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: saved.complexId,
+      description: `Devolución entregada: ${amenity.name} — ${this.formatMoney(amount)}`,
+    });
+
+    return saved;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ASEO DE LA ZONA
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * La administración ajusta el aseo de una reserva: cuánto tiempo bloquea la
+   * zona después y quién lo hace.
+   *
+   * La franja es decisión suya y no de la zona porque depende de lo que se hizo
+   * adentro, y eso solo se sabe reserva por reserva. Quién asea lo propone el
+   * residente al reservar, pero la administración manda: si la zona se entrega
+   * sucia, el servicio se factura aunque el residente hubiera dicho que él se
+   * encargaba. En los dos casos el residente se entera —le llega el aviso—,
+   * porque son plata y tiempo suyos.
+   */
+  async updateCleaning(
+    input: UpdateAmenityBookingCleaningInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    const booking = await this.findByIdOrFail(input.bookingId);
+    const complex = await this.complexService.findById(
+      booking.complexId,
+      currentUser,
+    );
+    const actingUserId = this.resolveActingUserId(currentUser, complex.ownerId);
+    const performedBy =
+      currentUser.entityType === 'user' ? currentUser.sub : undefined;
+
+    // Una reserva rechazada, cancelada o ya cerrada no tiene agenda que
+    // bloquear ni servicio que prestar. Para lo que se descubre después de
+    // cerrarla está el cobro por daños.
+    const editable: AmenityBookingStatus[] = [
+      AmenityBookingStatus.PENDING,
+      AmenityBookingStatus.APPROVED,
+      AmenityBookingStatus.CHECKED_IN,
+    ];
+    if (!editable.includes(booking.status)) {
+      throw new CustomError({
+        message: 'El aseo solo se ajusta mientras la reserva sigue vigente',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: AmenityErrorCode.CLEANING_NOT_EDITABLE,
+      });
+    }
+
+    const amenity = await this.amenitiesService.findByIdOrFail(
+      booking.amenityId,
+    );
+
+    const before = {
+      cleaningMinutes: booking.cleaningMinutes,
+      cleaningByComplex: booking.cleaningByComplex,
+    };
+
+    const cleaningMinutes = Math.max(
+      0,
+      input.cleaningMinutes ?? booking.cleaningMinutes,
+    );
+    const cleaningByComplex =
+      input.cleaningByComplex === undefined
+        ? booking.cleaningByComplex
+        : this.resolveCleaningByComplex(amenity, input.cleaningByComplex);
+
+    if (
+      cleaningMinutes === before.cleaningMinutes &&
+      cleaningByComplex === before.cleaningByComplex
+    ) {
+      return booking;
+    }
+
+    const blockedUntilAt = this.addMinutes(booking.endAt, cleaningMinutes);
+
+    // Alargar la franja puede pisarle la hora a la reserva siguiente, que ya
+    // está prometida. Ahí manda quien llegó primero: la franja no se impone.
+    if (blockedUntilAt > (booking.blockedUntilAt ?? booking.endAt)) {
+      const overlapping =
+        await this.availabilityService.countOverlappingBookings(
+          amenity.id,
+          booking.startAt,
+          blockedUntilAt,
+          booking.id,
+        );
+
+      if (overlapping >= amenity.maxSimultaneousBookings) {
+        throw new CustomError({
+          message:
+            'Esa franja de aseo se cruza con la siguiente reserva de la zona',
+          statusCode: HttpStatus.CONFLICT,
+          errorCode: AmenityErrorCode.CLEANING_WINDOW_COLLIDES,
+        });
+      }
+    }
+
+    booking.cleaningMinutes = cleaningMinutes;
+    booking.blockedUntilAt = blockedUntilAt;
+    booking.cleaningByComplex = cleaningByComplex;
+    booking.cleaningUpdatedAt = new Date();
+    booking.cleaningUpdatedByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+
+    if (!cleaningByComplex) {
+      // Deja de prestarse el servicio: el cargo se anula entero. Los asientos
+      // del ledger son inmutables, así que rebajarlo no es una opción.
+      await this.voidCleaningCharge(booking, amenity, performedBy);
+      booking.cleaningFeeAmount = 0;
+    } else {
+      if (booking.cleaningFeeAmount <= 0) {
+        booking.cleaningFeeAmount = this.cleaningPriceFor(
+          amenity,
+          true,
+          booking.isCouncilFreeBooking,
+        );
+      }
+
+      // Una reserva sin aprobar todavía no tiene cargos: los emite `activate`
+      // cuando se aprueba, y este valor entra ahí.
+      if (
+        booking.status !== AmenityBookingStatus.PENDING &&
+        booking.cleaningFeeAmount > 0 &&
+        !booking.cleaningChargeId
+      ) {
+        booking.cleaningChargeId = await this.tryCreateCharge(
+          booking,
+          {
+            description: `Aseo de ${amenity.name} — ${this.formatWhen(booking.startAt, booking.endAt)}`,
+            amount: booking.cleaningFeeAmount,
+            dueDate: this.availabilityService.endOfDay(booking.startAt),
+            period: this.periodOf(booking.startAt),
+          },
+          actingUserId,
+        );
+      }
+    }
+
+    const saved = await this.bookingRepo.save(booking);
+    await this.amenitiesService.invalidate(booking.complexId);
+
+    this.emitUpdated(saved, amenity);
+
+    this.notifyResidents(
+      saved,
+      amenity,
+      NotificationType.AMENITY_CLEANING_UPDATED,
+      '🧹 Cambió el aseo de tu reserva',
+      this.describeCleaningChange(saved, amenity, before),
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar el aseo de la reserva ${saved.id}: ${err?.message}`,
+      ),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.AmenityBooking,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      previousValue: before,
+      newValue: {
+        cleaningMinutes: saved.cleaningMinutes,
+        cleaningByComplex: saved.cleaningByComplex,
+        cleaningFeeAmount: saved.cleaningFeeAmount,
+        cleaningChargeId: saved.cleaningChargeId,
+        blockedUntilAt: saved.blockedUntilAt,
+      },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: saved.complexId,
+      description: `Aseo de la reserva: ${amenity.name} — ${this.formatWhen(saved.startAt, saved.endAt)}`,
+    });
+
+    return saved;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // VALIDACIÓN DE RESERVAS
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1072,6 +1587,8 @@ export class AmenityBookingsService {
     unitId: string,
     startAt: Date,
     endAt: Date,
+    /** Fin de la ocupación: `endAt` más la franja de aseo. */
+    blockedUntilAt: Date,
     attendees: number,
   ): Promise<void> {
     const now = new Date();
@@ -1226,10 +1743,12 @@ export class AmenityBookingsService {
 
     // ── Cupo de la franja ───────────────────────────────────────────────────
 
+    // Contra la ocupación, no contra el uso: la franja de aseo de esta reserva
+    // tampoco puede pisarle la hora a la siguiente.
     const overlapping = await this.availabilityService.countOverlappingBookings(
       amenity.id,
       startAt,
-      endAt,
+      blockedUntilAt,
     );
     if (overlapping >= amenity.maxSimultaneousBookings) {
       throw new CustomError({
@@ -1406,7 +1925,7 @@ export class AmenityBookingsService {
     const overlapping = await this.availabilityService.countOverlappingBookings(
       amenity.id,
       booking.startAt,
-      booking.endAt,
+      booking.blockedUntilAt ?? booking.endAt,
       booking.id,
     );
 
@@ -1434,7 +1953,13 @@ export class AmenityBookingsService {
     amenity: Amenity,
     performedByUserId: string,
   ): Promise<AmenityBooking> {
-    booking.accessCode = this.generateAccessCode();
+    // El código es la llave de la zona, así que no puede salir antes que el
+    // pago: quien no ha pagado no entra. Una reserva sin nada que cobrar —zona
+    // gratuita, o cupo del consejo— lo recibe de una vez, y las demás cuando la
+    // administración registre el pago o la unidad abone el cargo.
+    if (!booking.accessCode && (await this.isSettled(booking))) {
+      booking.accessCode = this.generateAccessCode();
+    }
 
     const when = this.formatWhen(booking.startAt, booking.endAt);
     // Ambos cargos vencen el día de la reserva: cobrar después de usar la zona
@@ -1458,6 +1983,26 @@ export class AmenityBookingsService {
       booking.feeChargeId = chargeId;
     }
 
+    // El aseo va en un cargo propio y no sumado a la tarifa: así la
+    // administración puede exonerar uno sin tocar el otro, y el estado de
+    // cuenta dice qué se cobró por qué.
+    if (
+      booking.cleaningByComplex &&
+      booking.cleaningFeeAmount > 0 &&
+      !booking.cleaningChargeId
+    ) {
+      booking.cleaningChargeId = await this.tryCreateCharge(
+        booking,
+        {
+          description: `Aseo de ${amenity.name} — ${when}`,
+          amount: booking.cleaningFeeAmount,
+          dueDate,
+          period: this.periodOf(booking.startAt),
+        },
+        performedByUserId,
+      );
+    }
+
     return this.bookingRepo.save(booking);
   }
 
@@ -1477,6 +2022,8 @@ export class AmenityBookingsService {
     retained: number,
     actingUserId: string,
     performedByUserId: string | undefined,
+    /** La reserva ya recibió plata: la retención sale de ahí, no de un cargo nuevo. */
+    alreadyCollected: boolean,
   ): Promise<void> {
     booking.lateCancellationAmount = retained;
 
@@ -1496,6 +2043,11 @@ export class AmenityBookingsService {
     }
 
     if (retained <= 0) return;
+
+    // La retención ya está en caja o en la cartera: emitir un cargo por ella
+    // sería cobrarla dos veces —el residente pagó el total y encima quedaría
+    // debiendo la penalización—. Lo que corresponde es devolver menos.
+    if (alreadyCollected) return;
 
     booking.lateCancellationChargeId = await this.tryCreateCharge(
       booking,
@@ -1563,6 +2115,260 @@ export class AmenityBookingsService {
       );
       return null;
     }
+  }
+
+  /**
+   * Si el aseo lo asume el conjunto. Pedirlo en una zona que no ofrece el
+   * servicio se rechaza en vez de ignorarse: el residente quedaría creyendo que
+   * alguien va a recoger, y la zona se entregaría sucia.
+   */
+  private resolveCleaningByComplex(
+    amenity: Amenity,
+    requested: boolean | undefined,
+  ): boolean {
+    if (requested !== true) return false;
+
+    if (!amenity.cleaningServiceAvailable) {
+      throw new CustomError({
+        message: `${amenity.name} no ofrece servicio de aseo por parte de la administración`,
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: AmenityErrorCode.CLEANING_SERVICE_NOT_AVAILABLE,
+      });
+    }
+
+    return true;
+  }
+
+  /**
+   * Devuelve la plata de una reserva cancelada que ya estaba pagada.
+   *
+   * No se deja como saldo a favor: sale de caja con su comprobante de egreso,
+   * que es el papel que la administración le muestra al residente cuando va a
+   * reclamar. Lo retenido por cancelar fuera de plazo se descuenta antes: si la
+   * retención se come todo lo recibido, no hay nada que devolver.
+   *
+   * El comprobante lleva el CÓDIGO de la reserva porque es lo único que ata la
+   * salida de caja a un hecho concreto cuando alguien audite el egreso meses
+   * después. Una reserva cancelada antes de aprobarse no alcanzó a tener
+   * código; ahí se nombra la zona y la fecha.
+   *
+   * Si el complejo no tiene PUC configurado el comprobante no se puede emitir,
+   * pero la devolución queda escrita en la reserva igual: que falte el plan de
+   * cuentas no puede borrar el hecho de que hay que devolverle plata a alguien.
+   */
+  private recordRefundObligation(
+    booking: AmenityBooking,
+    collected: number,
+    retained: number,
+  ): number {
+    const refund = Math.round(Math.max(0, collected - retained) * 100) / 100;
+    if (refund <= 0) return 0;
+
+    booking.refundAmount = refund;
+    return refund;
+  }
+
+  /**
+   * Lo que se le dice al residente sobre su código de ingreso.
+   *
+   * Sin código no hay entrada, así que callar es peor que cobrar: quien no sabe
+   * que le falta pagar llega a portería y se devuelve. El valor va en el mismo
+   * mensaje para que no tenga que buscarlo.
+   */
+  private accessCodeNote(booking: AmenityBooking): string {
+    if (booking.accessCode) return ` Código de ingreso: ${booking.accessCode}.`;
+
+    const owed = this.amountOwed(booking);
+    if (booking.isCouncilFreeBooking || owed <= 0) return '';
+
+    return (
+      ` Para recibir tu código de ingreso debes pagar ${this.formatMoney(owed)}:` +
+      ' acércate a la administración o cancela el cargo de tu unidad.'
+    );
+  }
+
+  /**
+   * Lo que se le cobra a la reserva por el aseo del conjunto.
+   *
+   * El cupo del consejo cubre el alquiler siempre, y el aseo solo si la zona lo
+   * dice: es un servicio que alguien va a prestar, y quién lo paga lo decide
+   * cada administración. Se congela en la reserva, así que apagar el beneficio
+   * después no le cobra a quien ya reservó.
+   */
+  private cleaningPriceFor(
+    amenity: Amenity,
+    cleaningByComplex: boolean,
+    usesCouncilQuota: boolean,
+  ): number {
+    if (!cleaningByComplex) return 0;
+    if (usesCouncilQuota && amenity.councilQuotaCoversCleaning) return 0;
+    return Number(amenity.cleaningFeeAmount ?? 0);
+  }
+
+  /** Lo que vale la reserva: tarifa más el aseo que asumió el conjunto. */
+  private amountOwed(booking: AmenityBooking): number {
+    return (
+      Number(booking.feeAmount) +
+      (booking.cleaningByComplex ? Number(booking.cleaningFeeAmount) : 0)
+    );
+  }
+
+  /**
+   * Si la reserva ya no debe nada.
+   *
+   * Tres caminos llevan al mismo sitio: que no hubiera nada que cobrar, que el
+   * residente pagara en la administración, o que abonara el cargo en su
+   * cartera. El último no lo sabe este módulo —el pago se registra en
+   * finanzas— así que se consulta lo abonado sobre los cargos de la reserva.
+   */
+  private async isSettled(booking: AmenityBooking): Promise<boolean> {
+    // Una reserva que nació gratis no tiene de qué escapar: el cupo del consejo
+    // ya la pagó. Se pregunta por el hecho y no solo por el monto, para que la
+    // llave de la zona no dependa de que un campo de dinero llegue en cero.
+    if (booking.isCouncilFreeBooking) return true;
+
+    const owed = this.amountOwed(booking);
+    if (owed <= 0) return true;
+    if (booking.directIncomeId) return true;
+
+    const collected = await this.financeService.collectedOnCharges([
+      booking.feeChargeId ?? '',
+      booking.cleaningChargeId ?? '',
+    ]);
+
+    return collected + 0.01 >= owed;
+  }
+
+  /**
+   * Versión por lotes de `ensureAccessCode`, para los listados.
+   *
+   * El residente busca su código en la lista tanto como en el detalle, así que
+   * la resolución no puede vivir solo al abrir la reserva. Se consulta lo
+   * abonado de todos los cargos candidatos de una vez: una consulta por fila
+   * convertiría una lista de veinte reservas en veintiuna consultas.
+   */
+  private async ensureAccessCodes(
+    bookings: AmenityBooking[],
+  ): Promise<AmenityBooking[]> {
+    const candidates = bookings.filter(
+      (b) =>
+        !b.accessCode &&
+        (b.status === AmenityBookingStatus.APPROVED ||
+          b.status === AmenityBookingStatus.CHECKED_IN),
+    );
+    if (candidates.length === 0) return bookings;
+
+    // Solo las que dependen de la cartera necesitan ir a la base: las que no
+    // deben nada, o ya se pagaron en la administración, se resuelven acá.
+    const chargeIds = candidates
+      .filter(
+        (b) =>
+          !b.isCouncilFreeBooking &&
+          this.amountOwed(b) > 0 &&
+          !b.directIncomeId,
+      )
+      .flatMap((b) => [b.feeChargeId, b.cleaningChargeId])
+      .filter((id): id is string => !!id);
+
+    const paid =
+      chargeIds.length > 0
+        ? await this.financeService.collectedByCharge(chargeIds)
+        : {};
+
+    const issued: AmenityBooking[] = [];
+    for (const booking of candidates) {
+      const owed = this.amountOwed(booking);
+      const collected =
+        (paid[booking.feeChargeId ?? ''] ?? 0) +
+        (paid[booking.cleaningChargeId ?? ''] ?? 0);
+
+      const settled =
+        booking.isCouncilFreeBooking ||
+        owed <= 0 ||
+        !!booking.directIncomeId ||
+        collected + 0.01 >= owed;
+      if (!settled) continue;
+
+      booking.accessCode = this.generateAccessCode();
+      issued.push(booking);
+    }
+
+    if (issued.length > 0) await this.bookingRepo.save(issued);
+
+    return bookings;
+  }
+
+  /**
+   * Emite el código si la reserva ya está pagada y todavía no lo tiene.
+   *
+   * Hace falta porque el pago por CARTERA se registra en finanzas, que no le
+   * avisa a este módulo: sin esta comprobación, el residente que paga su cuota
+   * se quedaría esperando un código que nadie va a generar. Se resuelve al
+   * abrir la reserva, que es justo cuando va a buscarlo.
+   */
+  private async ensureAccessCode(
+    booking: AmenityBooking,
+  ): Promise<AmenityBooking> {
+    const eligible =
+      booking.status === AmenityBookingStatus.APPROVED ||
+      booking.status === AmenityBookingStatus.CHECKED_IN;
+
+    if (booking.accessCode || !eligible) return booking;
+    if (!(await this.isSettled(booking))) return booking;
+
+    booking.accessCode = this.generateAccessCode();
+    return this.bookingRepo.save(booking);
+  }
+
+  /** Anula el cargo del aseo cuando el servicio deja de prestarse. */
+  private async voidCleaningCharge(
+    booking: AmenityBooking,
+    amenity: Amenity,
+    performedByUserId: string | undefined,
+  ): Promise<void> {
+    if (!booking.cleaningChargeId) return;
+
+    const cancelled = await this.financeService.cancelInternalCharge(
+      booking.cleaningChargeId,
+      `Aseo no prestado — ${amenity.name}`,
+      performedByUserId,
+    );
+    if (cancelled) booking.cleaningChargeId = null;
+  }
+
+  /** El cambio de aseo en una frase, tal como le llega al residente. */
+  private describeCleaningChange(
+    booking: AmenityBooking,
+    amenity: Amenity,
+    before: { cleaningMinutes: number; cleaningByComplex: boolean },
+  ): string {
+    const parts: string[] = [];
+
+    if (booking.cleaningByComplex !== before.cleaningByComplex) {
+      parts.push(
+        booking.cleaningByComplex
+          ? 'el aseo lo hará la administración' +
+              (booking.cleaningFeeAmount > 0
+                ? ` y se cargará ${this.formatMoney(booking.cleaningFeeAmount)} a tu unidad`
+                : ' sin costo')
+          : 'el aseo queda a cargo de tu unidad',
+      );
+    }
+
+    if (booking.cleaningMinutes !== before.cleaningMinutes) {
+      parts.push(
+        booking.cleaningMinutes > 0
+          ? `la zona queda ocupada ${this.asHours(booking.cleaningMinutes)} más después de tu reserva para el aseo`
+          : 'ya no se aparta tiempo extra para el aseo',
+      );
+    }
+
+    return `En tu reserva de ${amenity.name} para el ${this.formatWhen(booking.startAt, booking.endAt)}: ${parts.join(' y ')}.`;
+  }
+
+  /** Suma minutos a una fecha sin tocar la original. */
+  private addMinutes(date: Date, minutes: number): Date {
+    return new Date(date.getTime() + minutes * MINUTE_MS);
   }
 
   /**
