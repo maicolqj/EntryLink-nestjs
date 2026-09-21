@@ -37,8 +37,9 @@ import { moneyColumn } from '../../finance/utils/numeric.transformer';
 @Index(['complexId', 'startAt'])
 @Index(['unitId', 'status'])
 // La consulta caliente del motor de disponibilidad: reservas de una zona que
-// se cruzan con una ventana. Sin este índice es un scan por zona.
-@Index(['amenityId', 'startAt', 'endAt'])
+// se cruzan con una ventana. Sin este índice es un scan por zona. La ocupación
+// se mide contra `blockedUntilAt` —el fin del aseo—, no contra `endAt`.
+@Index(['amenityId', 'startAt', 'blockedUntilAt'])
 @Index(['accessCode'])
 export class AmenityBooking {
   @Field(() => ID)
@@ -227,6 +228,153 @@ export class AmenityBooking {
   @Field(() => String, { nullable: true })
   @Column({ name: 'late_cancellation_charge_id', type: 'uuid', nullable: true })
   lateCancellationChargeId?: string | null;
+
+  // ─── Pago recibido en la administración ───────────────────────────────────
+  //
+  // El alquiler puede cobrarse por la cartera de la unidad —lo que pasa por
+  // defecto— o recibirse en efectivo en la administración. No son acumulables:
+  // el resumen financiero suma `totalCollected + directIncome`, así que dejar
+  // el cargo colgando de la unidad Y registrar el ingreso contaría el mismo
+  // dinero dos veces. Registrar el pago anula el cargo y mueve la plata a caja.
+
+  /** Ingreso directo a caja generado al recibir el pago. Null = va por cartera. */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'direct_income_id', type: 'uuid', nullable: true })
+  directIncomeId?: string | null;
+
+  /** Lo que efectivamente se recibió en la administración. */
+  @Field(() => Float)
+  @Column({
+    name: 'direct_payment_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
+  directPaymentAmount: number;
+
+  @Field(() => Date, { nullable: true })
+  @Column({ name: 'direct_payment_at', type: 'timestamptz', nullable: true })
+  directPaymentAt?: Date | null;
+
+  @Field(() => String, { nullable: true })
+  @Column({
+    name: 'direct_payment_by_user_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  directPaymentByUserId?: string | null;
+
+  /**
+   * Plata que hay que devolverle a la unidad por cancelar una reserva pagada.
+   *
+   * Se anota al CANCELAR, pero el dinero no sale de la caja en ese momento:
+   * sale cuando el residente se acerca a reclamarlo, que pueden ser días
+   * después o nunca. Por eso este campo es una obligación pendiente y el
+   * comprobante de egreso se emite aparte —si no, los libros dirían que la
+   * plata ya salió mientras sigue en el cajón, y el arqueo no cuadraría—.
+   *
+   * No hay saldo a favor: se devuelve en efectivo. Si la cancelación llegó
+   * fuera de plazo, lo retenido se descuenta antes.
+   */
+  @Field(() => Float)
+  @Column({
+    name: 'refund_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
+  refundAmount: number;
+
+  /**
+   * Comprobante de egreso, emitido al ENTREGAR la plata. Null mientras la
+   * devolución siga pendiente, o si el complejo no tiene PUC configurado.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'refund_voucher_id', type: 'uuid', nullable: true })
+  refundVoucherId?: string | null;
+
+  /** Cuándo se entregó el dinero. Null = todavía está por reclamar. */
+  @Field(() => Date, { nullable: true })
+  @Column({ name: 'refunded_at', type: 'timestamptz', nullable: true })
+  refundedAt?: Date | null;
+
+  // ─── Aseo de la zona ──────────────────────────────────────────────────────
+  //
+  // La zona no queda libre en el instante en que el residente sale: hay que
+  // recogerla. Esa franja la decide la administración reserva por reserva
+  // —dos horas de reunión no ensucian como una fiesta de veinticuatro— y
+  // bloquea la agenda haga el aseo quien lo haga, porque la zona no está
+  // disponible igual.
+
+  /**
+   * Minutos que la zona queda bloqueada DESPUÉS de `endAt` para el aseo.
+   * No se le cobran al residente como tiempo de uso: la tarifa se calcula
+   * sobre [startAt, endAt).
+   */
+  @Field(() => Int, { description: 'Franja de aseo tras la reserva, en minutos' })
+  @Column({ name: 'cleaning_minutes', type: 'int', default: 0 })
+  cleaningMinutes: number;
+
+  /**
+   * Hasta cuándo la zona está OCUPADA: `endAt` más la franja de aseo.
+   *
+   * Es el instante contra el que mide el motor de disponibilidad, mientras
+   * `endAt` sigue siendo lo que el residente reservó. Se guarda ya calculado en
+   * vez de sumarse en cada consulta para que los índices y los solapamientos en
+   * SQL sigan siendo comparaciones directas.
+   */
+  @Field(() => Date, {
+    description: 'Fin de la ocupación real: endAt más la franja de aseo',
+  })
+  @Column({ name: 'blocked_until_at', type: 'timestamptz' })
+  blockedUntilAt: Date;
+
+  /**
+   * true = el aseo lo hace el conjunto y se cobra; false = lo hace la unidad.
+   * Lo elige el residente al reservar y la administración puede corregirlo,
+   * avisándole.
+   */
+  @Field(() => Boolean, {
+    description: 'El aseo lo hace el conjunto (se cobra) en vez de la unidad',
+  })
+  @Column({ name: 'cleaning_by_complex', type: 'boolean', default: false })
+  cleaningByComplex: boolean;
+
+  /** Tarifa del aseo congelada al momento de elegirlo. 0 si asea la unidad. */
+  @Field(() => Float)
+  @Column({
+    name: 'cleaning_fee_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
+  cleaningFeeAmount: number;
+
+  /**
+   * Cargo del aseo en finanzas. Va aparte del de la tarifa: así se puede
+   * exonerar solo el aseo, y el estado de cuenta dice qué se cobró por qué.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'cleaning_charge_id', type: 'uuid', nullable: true })
+  cleaningChargeId?: string | null;
+
+  @Field(() => Date, { nullable: true })
+  @Column({ name: 'cleaning_updated_at', type: 'timestamptz', nullable: true })
+  cleaningUpdatedAt?: Date | null;
+
+  @Field(() => String, { nullable: true })
+  @Column({
+    name: 'cleaning_updated_by_user_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  cleaningUpdatedByUserId?: string | null;
 
   // ─── Cobro por daños ──────────────────────────────────────────────────────
   //

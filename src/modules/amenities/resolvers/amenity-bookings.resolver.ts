@@ -7,6 +7,9 @@ import { CreateAmenityBookingInput } from '../dto/inputs/create-amenity-booking.
 import { CancelAmenityBookingInput } from '../dto/inputs/cancel-amenity-booking.input';
 import { RejectAmenityBookingInput } from '../dto/inputs/reject-amenity-booking.input';
 import { ChargeAmenityDamageInput } from '../dto/inputs/charge-amenity-damage.input';
+import { UpdateAmenityBookingCleaningInput } from '../dto/inputs/update-amenity-booking-cleaning.input';
+import { RegisterAmenityBookingPaymentInput } from '../dto/inputs/register-amenity-booking-payment.input';
+import { RegisterAmenityBookingRefundInput } from '../dto/inputs/register-amenity-booking-refund.input';
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
@@ -24,7 +27,7 @@ import { ComplexModule } from '../../residential-complex/enums/complex-module.en
 const STAFF_ROLES = [
   ValidRoles.SUPER_ADMIN_ROL,
   ValidRoles.COMPLEX_ROL,
-  ValidRoles.SUPERVISOR_ROL,
+  // ValidRoles.SUPERVISOR_ROL,
 ];
 
 @RequireModule(ComplexModule.ZONAS_COMUNES)
@@ -117,6 +120,63 @@ export class AmenityBookingsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
     return this.bookingsService.checkOut(bookingId, currentUser);
+  }
+
+  // ================================================================
+  // MUTATIONS — Pago del alquiler
+  // ================================================================
+
+  /**
+   * Registra que el residente pago el alquiler en la administracion. El dinero
+   * entra como ingreso del complejo y el cargo deja de colgar de la unidad.
+   */
+  @Mutation(() => AmenityBooking, { name: 'registerAmenityBookingPayment' })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
+  registerPayment(
+    @Args('input') input: RegisterAmenityBookingPaymentInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    return this.bookingsService.registerDirectPayment(input, currentUser);
+  }
+
+  /**
+   * Entrega la devolucion pendiente de una reserva cancelada. Emite el
+   * comprobante de egreso: es el momento en que la plata sale de la caja.
+   */
+  @Mutation(() => AmenityBooking, { name: 'registerAmenityBookingRefund' })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
+  registerRefund(
+    @Args('input') input: RegisterAmenityBookingRefundInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    return this.bookingsService.registerRefund(input, currentUser);
+  }
+
+  // ================================================================
+  // MUTATIONS — Aseo de la zona
+  // ================================================================
+
+  /**
+   * Ajusta la franja de aseo de una reserva y quien se encarga de hacerlo.
+   * Solo la administracion: la franja bloquea la agenda de todo el complejo y
+   * el servicio le cuesta plata a una unidad.
+   */
+  @Mutation(() => AmenityBooking, { name: 'updateAmenityBookingCleaning' })
+  @Auth({
+    roles: STAFF_ROLES,
+    permissions: [ValidPermissions.APPROVE_AMENITY_BOOKING],
+  })
+  updateCleaning(
+    @Args('input') input: UpdateAmenityBookingCleaningInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    return this.bookingsService.updateCleaning(input, currentUser);
   }
 
   // ================================================================

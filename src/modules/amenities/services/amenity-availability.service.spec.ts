@@ -37,8 +37,20 @@ const blackout = (
   reason = 'Mantenimiento',
 ): AmenityBlackout => ({ startAt, endAt, reason }) as AmenityBlackout;
 
-const booking = (startAt: Date, endAt: Date): AmenityBooking =>
-  ({ startAt, endAt, status: AmenityBookingStatus.APPROVED }) as AmenityBooking;
+const booking = (
+  startAt: Date,
+  endAt: Date,
+  cleaningMinutes = 0,
+): AmenityBooking =>
+  ({
+    startAt,
+    endAt,
+    cleaningMinutes,
+    // La ocupación real llega hasta el fin del aseo. El servicio la lee de
+    // `blockedUntilAt`, igual que la columna de la tabla.
+    blockedUntilAt: new Date(endAt.getTime() + cleaningMinutes * 60_000),
+    status: AmenityBookingStatus.APPROVED,
+  }) as AmenityBooking;
 
 const amenityOf = (partial: Partial<Amenity> = {}): Amenity =>
   ({
@@ -281,6 +293,53 @@ describe('AmenityAvailabilityService', () => {
 
       expect(days[0].isOpen).toBe(false);
       expect(days[0].closedReason).toBe(ClosedReason.FUERA_DE_VENTANA);
+    });
+
+    it('un día fuera de plazo conserva sus ventanas: son la continuación de la última noche reservable', async () => {
+      const monday = nextMonday();
+      const tuesday = new Date(monday);
+      tuesday.setDate(tuesday.getDate() + 1);
+      const wednesday = new Date(monday);
+      wednesday.setDate(wednesday.getDate() + 2);
+
+      // Anticipación justa hasta el lunes: el martes ya no se puede ELEGIR como
+      // inicio, pero la reserva del lunes por la tarde termina dentro de él.
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const untilMonday = Math.round(
+        (monday.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+      );
+
+      // Zona abierta las 24 horas toda la semana.
+      const allWeek = [0, 1, 2, 3, 4, 5, 6].map((d) =>
+        schedule(d, '00:00', '00:00'),
+      );
+      const service = build(allWeek);
+
+      const { days } = await service.getAvailability(
+        amenityOf({
+          advanceBookingDays: untilMonday,
+          bookingMode: AmenityBookingMode.RANGE,
+          maxDurationMinutes: 24 * 60,
+        }),
+        iso(monday),
+        iso(tuesday),
+      );
+
+      // El martes sigue sin ser reservable…
+      expect(days[1].isOpen).toBe(false);
+      expect(days[1].closedReason).toBe(ClosedReason.FUERA_DE_VENTANA);
+      expect(days[1].slots).toHaveLength(0);
+
+      // …pero entrega su horario, y empalma exactamente con el del lunes: sin
+      // esto el periodo continuo se corta en la medianoche y una zona de 24 h
+      // nunca deja reservar más allá de las 12 de la noche.
+      expect(days[1].openWindows).toHaveLength(1);
+      expect(days[1].openWindows[0].startAt).toEqual(at(tuesday, 0));
+      expect(days[1].openWindows[0].endAt).toEqual(at(wednesday, 0));
+      expect(days[0].openWindows[0].endAt).toEqual(
+        days[1].openWindows[0].startAt,
+      );
     });
   });
 
@@ -611,7 +670,12 @@ describe('AmenityAvailabilityService', () => {
       expect(days[0].slots).toHaveLength(0);
       expect(days[0].openWindows).toHaveLength(1);
       expect(days[0].busy).toEqual([
-        { startAt: at(monday, 10), endAt: at(monday, 13), bookingsCount: 1 },
+        {
+          startAt: at(monday, 10),
+          endAt: at(monday, 13),
+          cleaningFromAt: null,
+          bookingsCount: 1,
+        },
       ]);
     });
 
@@ -637,6 +701,77 @@ describe('AmenityAvailabilityService', () => {
 
       expect(days[0].busy).toHaveLength(1);
       expect(days[0].busy[0].bookingsCount).toBe(2);
+    });
+  });
+
+  // ── Franja de aseo ───────────────────────────────────────────────
+  describe('franja de aseo', () => {
+    it('la ocupación llega hasta el fin del aseo, no hasta la salida', async () => {
+      const monday = nextMonday();
+      // Reserva 10–12 con una hora de aseo: la zona queda tomada hasta las 13.
+      const service = build(
+        [schedule(1, '08:00', '18:00')],
+        [],
+        [booking(at(monday, 10), at(monday, 12), 60)],
+      );
+
+      const { days } = await service.getAvailability(
+        amenityOf({ bookingMode: AmenityBookingMode.RANGE }),
+        iso(monday),
+        iso(monday),
+      );
+
+      expect(days[0].busy).toEqual([
+        {
+          startAt: at(monday, 10),
+          endAt: at(monday, 13),
+          // El vecino ve que está tomado, y que la última hora es aseo.
+          cleaningFromAt: at(monday, 12),
+          bookingsCount: 1,
+        },
+      ]);
+    });
+
+    it('la franja de aseo tumba la franja siguiente en modo SLOT', async () => {
+      const monday = nextMonday();
+      // Franjas de 2 h desde las 08. La reserva 08–10 con 30 min de aseo
+      // muerde la franja 10–12, que deja de tener cupo.
+      const service = build(
+        [schedule(1, '08:00', '14:00')],
+        [],
+        [booking(at(monday, 8), at(monday, 10), 30)],
+      );
+
+      const { days } = await service.getAvailability(
+        amenityOf(),
+        iso(monday),
+        iso(monday),
+      );
+
+      expect(days[0].slots).toHaveLength(3);
+      expect(days[0].slots[0].isAvailable).toBe(false);
+      expect(days[0].slots[1].startAt).toEqual(at(monday, 10));
+      expect(days[0].slots[1].isAvailable).toBe(false);
+      // La de las 12 ya está fuera del alcance del aseo.
+      expect(days[0].slots[2].isAvailable).toBe(true);
+    });
+
+    it('sin franja de aseo la franja contigua sigue libre', async () => {
+      const monday = nextMonday();
+      const service = build(
+        [schedule(1, '08:00', '14:00')],
+        [],
+        [booking(at(monday, 8), at(monday, 10))],
+      );
+
+      const { days } = await service.getAvailability(
+        amenityOf(),
+        iso(monday),
+        iso(monday),
+      );
+
+      expect(days[0].slots[0].isAvailable).toBe(false);
+      expect(days[0].slots[1].isAvailable).toBe(true);
     });
   });
 

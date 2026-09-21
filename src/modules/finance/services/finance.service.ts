@@ -1164,6 +1164,46 @@ export class FinanceService {
    * una operación suya, y un pago de por medio es justamente el caso en que no
    * debe deshacerse solo.
    */
+  /**
+   * Suma lo ABONADO sobre un conjunto de cargos. Sirve para saber si una
+   * reserva ya recibió plata antes de anular sus cargos: un cargo con abonos es
+   * intocable y el dinero hay que devolverlo, no borrarlo.
+   */
+  async collectedOnCharges(chargeIds: string[]): Promise<number> {
+    const ids = chargeIds.filter(Boolean);
+    if (ids.length === 0) return 0;
+
+    const row = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('COALESCE(SUM(c.paidAmount), 0)', 'total')
+      .where('c.id IN (:...ids)', { ids })
+      .getRawOne<{ total: string }>();
+
+    return Math.round(Number(row?.total ?? 0) * 100) / 100;
+  }
+
+  /**
+   * Lo abonado sobre CADA cargo, en una sola consulta.
+   *
+   * Es la versión por lotes de `collectedOnCharges`: listar reservas no puede
+   * disparar una consulta por fila.
+   */
+  async collectedByCharge(chargeIds: string[]): Promise<Record<string, number>> {
+    const ids = chargeIds.filter(Boolean);
+    if (ids.length === 0) return {};
+
+    const rows = await this.chargeRepo
+      .createQueryBuilder('c')
+      .select('c.id', 'id')
+      .addSelect('COALESCE(c.paidAmount, 0)', 'paid')
+      .where('c.id IN (:...ids)', { ids })
+      .getRawMany<{ id: string; paid: string }>();
+
+    return Object.fromEntries(
+      rows.map((r) => [r.id, Math.round(Number(r.paid) * 100) / 100]),
+    );
+  }
+
   async cancelInternalCharge(
     chargeId: string,
     reason: string,

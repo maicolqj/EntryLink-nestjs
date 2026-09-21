@@ -44,8 +44,21 @@ export class AmenityBusyRange {
   @Field()
   startAt: Date;
 
+  /**
+   * Fin de la OCUPACIÓN, con la franja de aseo incluida. Es hasta cuándo la
+   * zona no se puede volver a reservar.
+   */
   @Field()
   endAt: Date;
+
+  /**
+   * Desde qué instante el tramo es aseo y no uso, o null si la reserva no
+   * arrastra franja. El cliente lo pinta distinto: al vecino le sirve saber
+   * que la zona está tomada, pero "reservada hasta las 10" y "la están
+   * aseando hasta las 10" no son lo mismo.
+   */
+  @Field(() => Date, { nullable: true })
+  cleaningFromAt?: Date | null;
 
   /** Cuántas reservas activas coinciden exactamente en este intervalo. */
   @Field(() => Int)
@@ -69,6 +82,12 @@ export class AmenityAvailabilityDay {
   @Field(() => String, { nullable: true })
   closedReason?: string | null;
 
+  /**
+   * A qué horas ABRE la zona ese día, no a qué horas se puede empezar una
+   * reserva. Un día con `isOpen: false` por FUERA_DE_VENTANA igual reporta sus
+   * ventanas: una reserva que empieza dentro del plazo puede continuar hasta el
+   * día siguiente, y el cliente necesita esas horas para unir el periodo.
+   */
   @Field(() => [AmenityTimeWindow])
   openWindows: AmenityTimeWindow[];
 

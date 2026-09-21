@@ -62,6 +62,19 @@ export class CreateAmenityBookingInput {
   useCouncilFreeQuota?: boolean = true;
 
   /**
+   * Pedir que el aseo lo haga el conjunto, en las zonas que ofrecen el
+   * servicio. Nace apagado: el residente decide gastar de más, no se le asume.
+   * La administración puede corregirlo después, avisándole.
+   */
+  @Field(() => Boolean, {
+    defaultValue: false,
+    description: 'El aseo lo hace el conjunto (con cobro) en vez de la unidad',
+  })
+  @IsOptional()
+  @IsBoolean()
+  cleaningByComplex?: boolean = false;
+
+  /**
    * Solo para staff que reserva a nombre de una unidad. Cuando reserva un
    * residente se ignora: la unidad sale de su ficha, no del cliente.
    */

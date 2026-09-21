@@ -72,6 +72,9 @@ export enum NotificationType {
   AMENITY_BOOKING_CANCELLED = 'AMENITY_BOOKING_CANCELLED', // Reserva cancelada (contraparte)
   AMENITY_BOOKING_NO_SHOW = 'AMENITY_BOOKING_NO_SHOW', // La reserva venció sin que nadie ingresara
   AMENITY_DAMAGE_CHARGED = 'AMENITY_DAMAGE_CHARGED', // Se cargó a la unidad un valor por daños en la zona
+  AMENITY_CLEANING_UPDATED = 'AMENITY_CLEANING_UPDATED', // La administración cambió el aseo de la reserva
+  AMENITY_PAYMENT_RECEIVED = 'AMENITY_PAYMENT_RECEIVED', // La administración recibió el pago del alquiler
+  AMENITY_REFUND_PAID = 'AMENITY_REFUND_PAID', // Se le entregó la devolución por una reserva cancelada
 
   // ── Mascotas y convivencia ─────────────────────────────────────
   PET_REGISTERED = 'PET_REGISTERED', // Ficha nueva pendiente de validar (admin)

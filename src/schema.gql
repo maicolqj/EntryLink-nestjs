@@ -1770,6 +1770,9 @@ enum NotificationType {
   AMENITY_BOOKING_CANCELLED
   AMENITY_BOOKING_NO_SHOW
   AMENITY_DAMAGE_CHARGED
+  AMENITY_CLEANING_UPDATED
+  AMENITY_PAYMENT_RECEIVED
+  AMENITY_REFUND_PAID
   PET_REGISTERED
   PET_APPROVED
   PET_REJECTED
@@ -3186,7 +3189,7 @@ enum IncomeCategory {
   """Parqueadero de visitantes"""
   PARKING
 
-  """Alquiler de salón / zonas comunes"""
+  """Alquiler de zona social"""
   HALL_RENTAL
 
   """Multas y sanciones"""
@@ -4332,6 +4335,18 @@ type Amenity {
 
   """Si es true, una unidad con saldo vencido no puede reservar"""
   blockBookingsOnDebt: Boolean!
+
+  """La administración ofrece el servicio de aseo en esta zona"""
+  cleaningServiceAvailable: Boolean!
+
+  """Franja de aseo sugerida, en minutos. 0 = ninguna"""
+  defaultCleaningMinutes: Int!
+
+  """El cupo del consejo cubre también el costo del aseo"""
+  councilQuotaCoversCleaning: Boolean!
+
+  """Costo del aseo por parte del conjunto. 0 = sin costo"""
+  cleaningFeeAmount: Float!
   feeType: AmenityFeeType!
   feeAmount: Float!
   complexId: String!
@@ -4457,6 +4472,26 @@ type AmenityBooking {
   isCouncilFreeBooking: Boolean!
   lateCancellationAmount: Float!
   lateCancellationChargeId: String
+  directIncomeId: String
+  directPaymentAmount: Float!
+  directPaymentAt: DateTime
+  directPaymentByUserId: String
+  refundAmount: Float!
+  refundVoucherId: String
+  refundedAt: DateTime
+
+  """Franja de aseo tras la reserva, en minutos"""
+  cleaningMinutes: Int!
+
+  """Fin de la ocupación real: endAt más la franja de aseo"""
+  blockedUntilAt: DateTime!
+
+  """El aseo lo hace el conjunto (se cobra) en vez de la unidad"""
+  cleaningByComplex: Boolean!
+  cleaningFeeAmount: Float!
+  cleaningChargeId: String
+  cleaningUpdatedAt: DateTime
+  cleaningUpdatedByUserId: String
   damageAmount: Float!
   damageDescription: String
   damageChargeId: String
@@ -4506,6 +4541,7 @@ type AmenitySlot {
 type AmenityBusyRange {
   startAt: DateTime!
   endAt: DateTime!
+  cleaningFromAt: DateTime
   bookingsCount: Int!
 }
 
@@ -6594,6 +6630,9 @@ type Mutation {
   cancelAmenityBooking(input: CancelAmenityBookingInput!): AmenityBooking!
   checkInAmenityBooking(complexId: String!, accessCode: String!): AmenityBooking!
   checkOutAmenityBooking(bookingId: String!): AmenityBooking!
+  registerAmenityBookingPayment(input: RegisterAmenityBookingPaymentInput!): AmenityBooking!
+  registerAmenityBookingRefund(input: RegisterAmenityBookingRefundInput!): AmenityBooking!
+  updateAmenityBookingCleaning(input: UpdateAmenityBookingCleaningInput!): AmenityBooking!
   chargeAmenityDamage(input: ChargeAmenityDamageInput!): AmenityBooking!
 
   """Radica un PQRF"""
@@ -8144,6 +8183,20 @@ input CreateAmenityInput {
   maxBookingsPerUnitPerMonth: Int! = 0
   requiresApproval: Boolean! = true
   blockBookingsOnDebt: Boolean! = true
+
+  """La administración ofrece el servicio de aseo en esta zona"""
+  cleaningServiceAvailable: Boolean! = false
+
+  """
+  Franja de aseo sugerida en minutos. La definitiva la fija el administrador en cada reserva
+  """
+  defaultCleaningMinutes: Int! = 0
+
+  """Costo del aseo por parte del conjunto. 0 = sin costo"""
+  cleaningFeeAmount: Float! = 0
+
+  """El cupo del consejo cubre también el costo del aseo"""
+  councilQuotaCoversCleaning: Boolean! = false
   feeType: AmenityFeeType! = FREE
   feeAmount: Float! = 0
   schedules: [AmenityScheduleInput!]
@@ -8219,6 +8272,20 @@ input UpdateAmenityInput {
   maxBookingsPerUnitPerMonth: Int = 0
   requiresApproval: Boolean = true
   blockBookingsOnDebt: Boolean = true
+
+  """La administración ofrece el servicio de aseo en esta zona"""
+  cleaningServiceAvailable: Boolean = false
+
+  """
+  Franja de aseo sugerida en minutos. La definitiva la fija el administrador en cada reserva
+  """
+  defaultCleaningMinutes: Int = 0
+
+  """Costo del aseo por parte del conjunto. 0 = sin costo"""
+  cleaningFeeAmount: Float = 0
+
+  """El cupo del consejo cubre también el costo del aseo"""
+  councilQuotaCoversCleaning: Boolean = false
   feeType: AmenityFeeType = FREE
   feeAmount: Float = 0
 
@@ -8284,6 +8351,9 @@ input CreateAmenityBookingInput {
   """Usar el cupo anual del consejo si aplica"""
   useCouncilFreeQuota: Boolean! = true
 
+  """El aseo lo hace el conjunto (con cobro) en vez de la unidad"""
+  cleaningByComplex: Boolean! = false
+
   """Unidad a nombre de la cual se reserva (solo staff)"""
   unitId: String
 }
@@ -8298,6 +8368,31 @@ input RejectAmenityBookingInput {
 input CancelAmenityBookingInput {
   bookingId: String!
   reason: String
+}
+
+input RegisterAmenityBookingPaymentInput {
+  bookingId: String!
+  amount: Float
+  incomeDate: String
+  notes: String
+  receiptUrl: String
+}
+
+input RegisterAmenityBookingRefundInput {
+  bookingId: String!
+  amount: Float
+  paidAt: String
+  notes: String
+}
+
+input UpdateAmenityBookingCleaningInput {
+  bookingId: String!
+
+  """Minutos que la zona queda bloqueada tras la reserva. 0 = sin franja"""
+  cleaningMinutes: Int
+
+  """true = asea el conjunto y se cobra; false = asea la unidad"""
+  cleaningByComplex: Boolean
 }
 
 input ChargeAmenityDamageInput {

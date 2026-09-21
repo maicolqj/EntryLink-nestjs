@@ -237,6 +237,69 @@ export class Amenity {
   @Column({ name: 'block_bookings_on_debt', type: 'boolean', default: true })
   blockBookingsOnDebt: boolean;
 
+  // ─── Aseo de la zona ──────────────────────────────────────────────────────
+
+  /**
+   * Si la administración ofrece encargarse del aseo. Apagado, la reserva ni
+   * siquiera lo pregunta: una cancha al aire libre no se asea, y un interruptor
+   * que no aplica solo confunde a quien reserva.
+   */
+  @Field(() => Boolean, {
+    description: 'La administración ofrece el servicio de aseo en esta zona',
+  })
+  @Column({
+    name: 'cleaning_service_available',
+    type: 'boolean',
+    default: false,
+  })
+  cleaningServiceAvailable: boolean;
+
+  /**
+   * Minutos de aseo que se le SUGIEREN al administrador. No es el valor
+   * definitivo: la franja real la decide él en cada reserva, porque una reunión
+   * de dos horas y una fiesta de veinticuatro no dejan la zona igual. 0 = la
+   * zona no arrastra franja por defecto.
+   */
+  @Field(() => Int, {
+    description: 'Franja de aseo sugerida, en minutos. 0 = ninguna',
+  })
+  @Column({ name: 'default_cleaning_minutes', type: 'int', default: 0 })
+  defaultCleaningMinutes: number;
+
+  /**
+   * Si el cupo anual del consejo cubre también el aseo, no solo el alquiler.
+   *
+   * Nace apagado porque el beneficio se pensó sobre el uso de la zona, y el
+   * aseo es un servicio que alguien tiene que ir a prestar: quien lo paga es
+   * una decisión de cada administración, no una consecuencia del cupo.
+   */
+  @Field(() => Boolean, {
+    description: 'El cupo del consejo cubre también el costo del aseo',
+  })
+  @Column({
+    name: 'council_quota_covers_cleaning',
+    type: 'boolean',
+    default: false,
+  })
+  councilQuotaCoversCleaning: boolean;
+
+  /**
+   * Lo que cuesta el aseo hecho por el conjunto. Se congela en la reserva al
+   * elegirlo: subir la tarifa después no puede recobrarle a quien ya reservó.
+   */
+  @Field(() => Float, {
+    description: 'Costo del aseo por parte del conjunto. 0 = sin costo',
+  })
+  @Column({
+    name: 'cleaning_fee_amount',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: moneyColumn,
+  })
+  cleaningFeeAmount: number;
+
   // ─── Cobro ────────────────────────────────────────────────────────────────
 
   @Field(() => AmenityFeeType)
