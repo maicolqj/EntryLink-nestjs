@@ -1736,6 +1736,7 @@ enum NotificationType {
   RESIDENT_APPROVED
   RESIDENT_REJECTED
   RESIDENT_PENDING
+  ACCESS_CODE_RESET
   PARKING_ASSIGNED
   VEHICLE_REGISTERED
   VEHICLE_APPROVED
@@ -6333,6 +6334,11 @@ type Mutation {
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
+
+  """
+  Borra la clave de acceso de un residente que la olvidó. Solo elimina el factor: no abre sesión, no vincula dispositivos y no saltea el ingreso por WhatsApp. El residente recibe aviso.
+  """
+  resetResidentAccessCode(userId: ID!): Boolean!
 
   """
   Fija o cambia la clave de acceso del residente autenticado y vincula el dispositivo actual (header x-device-id). La clave es una sola por cuenta y sirve en todos sus equipos vinculados. Cambiarla exige enviar `currentCode`, salvo que el ingreso reciente haya sido por WhatsApp entrante o por aprobación desde otro equipo, que es el camino del olvido.
