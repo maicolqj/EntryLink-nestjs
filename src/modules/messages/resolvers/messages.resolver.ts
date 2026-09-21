@@ -26,7 +26,7 @@ export class MessagesResolver {
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
       ValidRoles.SECURITY_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
     ],
     permissions: [ValidPermissions.SEND_MESSAGE],
   })
@@ -46,7 +46,7 @@ export class MessagesResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.SECURITY_ROL,
     ],
     permissions: [ValidPermissions.VIEW_SENT_MESSAGES],

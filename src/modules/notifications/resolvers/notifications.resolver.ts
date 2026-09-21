@@ -133,7 +133,7 @@ export class NotificationsResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
     ],
   })
   sendNotification(
@@ -166,7 +166,7 @@ export class NotificationsResolver {
       ValidRoles.SECURITY_ROL,
       ValidRoles.COMPLEX_ROL,
       ValidRoles.ACCOUNTANT_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
   })
@@ -329,7 +329,7 @@ export class NotificationsResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
   })
@@ -390,7 +390,7 @@ export class NotificationsResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
     ],
   })
   sentNotifications(
@@ -426,7 +426,7 @@ export class NotificationsResolver {
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
       ValidRoles.COMPLEX_ROL,
-      ValidRoles.SUPERVISOR_ROL,
+      // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
     ],

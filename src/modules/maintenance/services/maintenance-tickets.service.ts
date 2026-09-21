@@ -93,7 +93,7 @@ export type ResolveTicketData = ResolveMaintenanceTicketDto & {
 const MANAGER_ROLES = [
   ValidRoles.SUPER_ADMIN_ROL,
   ValidRoles.COMPLEX_ROL,
-  ValidRoles.SUPERVISOR_ROL,
+  // ValidRoles.SUPERVISOR_ROL,
 ];
 
 /** Quien además lee todo el tablero: la portería reporta y hace seguimiento. */
@@ -1754,7 +1754,7 @@ export class MaintenanceTicketsService {
         message: `El plazo venció el ${this.formatDateTime(ticket.slaDueAt)}`,
       });
 
-      const roles = [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL];
+      const roles = [ValidRoles.COMPLEX_ROL, /* ValidRoles.SUPERVISOR_ROL */];
 
       // El consejo se entera solo de lo crítico. Enviarle todo lo vencido lo
       // convierte en un buzón que nadie abre.
@@ -2217,7 +2217,7 @@ export class MaintenanceTicketsService {
   ): Promise<void> {
     return this.notifyRoles(
       ticket,
-      [ValidRoles.COMPLEX_ROL, ValidRoles.SUPERVISOR_ROL],
+      [ValidRoles.COMPLEX_ROL, /* ValidRoles.SUPERVISOR_ROL */],
       type,
       priority,
       title,
