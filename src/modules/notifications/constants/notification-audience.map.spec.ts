@@ -1,7 +1,9 @@
 import {
   NOTIFICATION_AUDIENCE,
   RESIDENT_VISIBLE_AUDIENCES,
+  RESIDENT_VISIBLE_TYPES,
   audienceOf,
+  isResidentOnlySession,
 } from './notification-audience.map';
 import { NotificationAudience } from '../enums/notification-audience.enum';
 import { NotificationType } from '../enums/notification-type.enum';
@@ -103,5 +105,48 @@ describe('NOTIFICATION_AUDIENCE', () => {
     // No es un número mágico: es un tope que obliga a justificar cada tipo
     // nuevo que se marque ANY en vez de decidir su sombrero.
     expect(any.length).toBeLessThanOrEqual(15);
+  });
+});
+
+describe('isResidentOnlySession', () => {
+  it('reconoce la sesión abierta por un canal de residente', () => {
+    expect(isResidentOnlySession(['RESIDENT_ROL'])).toBe(true);
+    expect(isResidentOnlySession(['RESIDENT_ROL', 'COUNCIL_ROL'])).toBe(true);
+  });
+
+  it('no recorta a quien trae un cargo en el token', () => {
+    // Entrar con correo y contraseña emite el token completo: ahí sí
+    // corresponde ver la operación del conjunto.
+    expect(isResidentOnlySession(['SUPER_ADMIN_ROL', 'RESIDENT_ROL'])).toBe(
+      false,
+    );
+    expect(isResidentOnlySession(['COMPLEX_ROL'])).toBe(false);
+    expect(isResidentOnlySession(['SECURITY_ROL', 'RESIDENT_ROL'])).toBe(false);
+  });
+
+  it('un token sin roles no se trata como residente', () => {
+    // Recortar por un token vacío escondería avisos sin que nadie lo decidiera.
+    expect(isResidentOnlySession([])).toBe(false);
+    expect(isResidentOnlySession(undefined)).toBe(false);
+  });
+});
+
+describe('RESIDENT_VISIBLE_TYPES', () => {
+  it('trae exactamente los tipos de audiencia RESIDENT y ANY', () => {
+    const esperados = Object.values(NotificationType).filter((t) =>
+      RESIDENT_VISIBLE_AUDIENCES.includes(audienceOf(t)),
+    );
+
+    expect([...RESIDENT_VISIBLE_TYPES].sort()).toEqual(esperados.sort());
+  });
+
+  it('deja fuera todo lo de audiencia STAFF', () => {
+    const staff = Object.values(NotificationType).filter(
+      (t) => NOTIFICATION_AUDIENCE[t] === NotificationAudience.STAFF,
+    );
+
+    for (const type of staff) {
+      expect(RESIDENT_VISIBLE_TYPES).not.toContain(type);
+    }
   });
 });

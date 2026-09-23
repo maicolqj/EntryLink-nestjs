@@ -1,5 +1,6 @@
 import { NotificationAudience } from '../enums/notification-audience.enum';
 import { NotificationType } from '../enums/notification-type.enum';
+import { RESIDENT_SESSION_ROLES } from '../../auth/constants/resident-session.constants';
 
 /**
  * Con qué sombrero se lee cada tipo de notificación.
@@ -191,3 +192,32 @@ export const RESIDENT_VISIBLE_AUDIENCES: readonly NotificationAudience[] = [
   NotificationAudience.RESIDENT,
   NotificationAudience.ANY,
 ];
+
+/**
+ * Los tipos concretos que ve una sesión de residente, para el `IN (...)` de la
+ * consulta.
+ *
+ * Es una lista de permitidos y no de prohibidos a propósito: un tipo nuevo que
+ * nadie clasificó queda fuera, que es el lado seguro del error. Con la lista
+ * invertida entraría solo a la app sin que nadie lo decidiera.
+ */
+export const RESIDENT_VISIBLE_TYPES: readonly NotificationType[] =
+  Object.values(NotificationType).filter((type) =>
+    RESIDENT_VISIBLE_AUDIENCES.includes(audienceOf(type)),
+  );
+
+/**
+ * ¿La sesión mira solo con el sombrero de residente?
+ *
+ * Se decide por los roles del token, no por un indicador aparte: los canales de
+ * residente ya emiten sesiones acotadas a RESIDENT_SESSION_ROLES. Un residente
+ * común también cae acá, y no cambia nada para él —nunca fue destinatario de
+ * una notificación de operación—.
+ */
+export function isResidentOnlySession(roles?: readonly string[]): boolean {
+  if (!roles?.length) return false;
+
+  return roles.every((role) =>
+    (RESIDENT_SESSION_ROLES as readonly string[]).includes(role),
+  );
+}
