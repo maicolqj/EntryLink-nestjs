@@ -12,6 +12,7 @@ import { Public } from '../shared/decorators/public.decorator';
 import { Auth } from '../shared/decorators/auth.decorator';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
+import { ValidPermissions } from '../permissions/enums/valid-permissions';
 
 /**
  * Clave de acceso del residente y gestión de sus dispositivos.
@@ -28,6 +29,29 @@ export class ResidentDeviceResolver {
     private readonly residentDeviceService: ResidentDeviceService,
     private readonly configService: ConfigService,
   ) {}
+
+  // ── Restablecimiento por la administración ───────────────────────────────
+
+  /**
+   * Borra la clave olvidada de un residente. No abre sesión ni vincula equipos:
+   * el residente sigue entrando por WhatsApp, y ahí elige una clave nueva.
+   */
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EDIT_RESIDENTS],
+  })
+  @Mutation(() => Boolean, {
+    name: 'resetResidentAccessCode',
+    description:
+      'Borra la clave de acceso de un residente que la olvidó. Solo elimina el factor: no abre ' +
+      'sesión, no vincula dispositivos y no saltea el ingreso por WhatsApp. El residente recibe aviso.',
+  })
+  async resetResidentAccessCode(
+    @Args('userId', { type: () => ID }) userId: string,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<boolean> {
+    return this.residentDeviceService.clearAccessCode(userId, payload);
+  }
 
   // ── Clave de acceso (requiere sesión activa) ─────────────────────────────
 

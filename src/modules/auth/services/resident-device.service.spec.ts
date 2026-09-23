@@ -12,6 +12,7 @@ import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { AuditService } from '../../audit/services/audit.service';
 
 /**
  * Garantías de la clave de acceso: es una por cuenta, nunca basta sola (exige
@@ -127,6 +128,8 @@ describe('ResidentDeviceService', () => {
     dispatchPushOnly: jest.fn(async () => undefined),
   };
 
+  const auditService = { log: jest.fn(async () => undefined) };
+
   const sessionService = {
     enforceSessionLimit: jest.fn(async () => undefined),
     createOrUpdateSession: jest.fn(async () => undefined),
@@ -152,6 +155,7 @@ describe('ResidentDeviceService', () => {
     const module = await Test.createTestingModule({
       providers: [
         ResidentDeviceService,
+        { provide: AuditService, useValue: auditService },
         { provide: getRepositoryToken(ResidentDevice), useValue: deviceRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
@@ -577,4 +581,51 @@ describe('ResidentDeviceService', () => {
       'device_revoked',
     );
   });
+  // ── Restablecimiento por la administración ──────────────────────────────
+  describe('clearAccessCode', () => {
+    const staff = {
+      sub: 'admin-1',
+      email: 'admin@alternaqj.com',
+      roles: ['COMPLEX_ROL'],
+    } as any;
+
+    it('borra la clave y deja la cuenta lista para elegir una nueva', async () => {
+      // Sin esto, la cuenta con clave y sin equipos vinculados queda en un
+      // círculo: el canje por WhatsApp pide el segundo factor y el camino del
+      // olvido pide la clave vigente.
+      user.accessCodeHash = 'hash-vieja';
+      user.accessCodeFailedAttempts = 5;
+      user.accessCodeLockedUntil = new Date(Date.now() + 900_000);
+
+      await expect(service.clearAccessCode('user-1', staff)).resolves.toBe(true);
+
+      expect(userRepo.update).toHaveBeenCalledWith('user-1', {
+        accessCodeHash: null,
+        accessCodeFailedAttempts: 0,
+        accessCodeLockedUntil: null,
+      });
+    });
+
+    it('deja rastro de quién lo hizo', async () => {
+      // Es una operación sobre el acceso de otra persona.
+      user.accessCodeHash = 'hash-vieja';
+
+      await service.clearAccessCode('user-1', staff);
+
+      expect(auditService.log).toHaveBeenCalledTimes(1);
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ performedById: 'admin-1' }),
+      );
+    });
+
+    it('le avisa al residente', async () => {
+      // Si no fue él quien lo pidió, este aviso es lo único que se lo dice.
+      user.accessCodeHash = 'hash-vieja';
+
+      await service.clearAccessCode('user-1', staff);
+
+      expect(notificationsService.notify).toHaveBeenCalled();
+    });
+  });
+
 });

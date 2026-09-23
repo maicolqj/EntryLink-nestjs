@@ -25,6 +25,7 @@ export enum NotificationType {
   RESIDENT_APPROVED = 'RESIDENT_APPROVED', // Solicitud de residencia aprobada
   RESIDENT_REJECTED = 'RESIDENT_REJECTED', // Solicitud de residencia rechazada
   RESIDENT_PENDING = 'RESIDENT_PENDING', // Nueva solicitud de residencia (admin)
+  ACCESS_CODE_RESET = 'ACCESS_CODE_RESET', // La administración borró la clave de acceso del residente
 
   // ── Parqueadero visitante ──────────────────────────────────────
   PARKING_ASSIGNED = 'PARKING_ASSIGNED', // Cargo de parqueadero visitante generado a la unidad

@@ -281,6 +281,27 @@ export const HEADER_LABELS: Record<string, string> = {
   fineChargeId: 'Cargo de la multa (id)',
   damageChargeId: 'Cargo del daño (id)',
   lateCancellationChargeId: 'Cargo por cancelación (id)',
+
+  // Aseo de la zona común
+  cleaningServiceAvailable: 'Ofrece servicio de aseo',
+  defaultCleaningMinutes: 'Franja de aseo sugerida (min)',
+  councilQuotaCoversCleaning: 'El cupo del consejo cubre el aseo',
+  cleaningMinutes: 'Franja de aseo (min)',
+  blockedUntilAt: 'Zona ocupada hasta',
+  cleaningByComplex: 'Asea la administración',
+  cleaningFeeAmount: 'Valor del aseo',
+  cleaningChargeId: 'Cargo del aseo (id)',
+  cleaningUpdatedAt: 'Aseo ajustado el',
+  cleaningUpdatedByUserId: 'Aseo ajustado por (id)',
+
+  // Pago del alquiler y devolución
+  directIncomeId: 'Ingreso directo (id)',
+  directPaymentAmount: 'Pagado en administración',
+  directPaymentAt: 'Pagado en administración el',
+  directPaymentByUserId: 'Pago recibido por (id)',
+  refundAmount: 'Valor a devolver',
+  refundVoucherId: 'Comprobante de devolución (id)',
+  refundedAt: 'Devolución entregada el',
   categoryId: 'Categoría (id)',
   defaultCategory: 'Categoría por defecto',
   headerId: 'Comprobante (id)',

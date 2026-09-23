@@ -32,6 +32,12 @@ export interface JwtRefreshPayload {
 
 export interface DeviceInfo {
   fingerprint: string;
+  /**
+   * Huella con la fórmula anterior, que incluía el user-agent. Solo para
+   * reconocer vínculos guardados antes del cambio; al reconocerlos se
+   * reescriben con la nueva y este campo deja de usarse.
+   */
+  legacyFingerprint?: string;
   userAgent: string;
   ip: string;
   platform: 'ios' | 'android' | 'web';

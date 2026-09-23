@@ -43,6 +43,7 @@ import { UserRole } from '../users/entities/user_has_roles.entity';
 
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   controllers: [SupervisorsController, WhatsAppWebhookController],
@@ -68,6 +69,9 @@ import { CacheModule } from '../../core/infrastructure/cache/cache.module';
     BullModule.registerQueue({ name: OTP_QUEUE_NAME }),
     HttpModule,
     CacheModule,
+    // El restablecimiento de la clave por la administración deja rastro: es
+    // una operación sobre el acceso de otra persona.
+    AuditModule,
   ],
   providers: [
     // Resolvers
