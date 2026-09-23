@@ -20,6 +20,7 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { RESIDENT_SESSION_ROLES } from '../constants/resident-session.constants';
 import {
   DeviceInfo,
   JwtAccessPayload,
@@ -576,12 +577,14 @@ export class ResidentDeviceService {
       AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
     );
 
+    // Acotada a residente: ver RESIDENT_SESSION_ROLES.
     const tokenPair = await this.tokenService.generateTokenPair(
       user,
       deviceInfo,
       true,
       'user',
       AUTH_CONSTANTS.RESIDENT_DEVICE_REFRESH_EXPIRY,
+      RESIDENT_SESSION_ROLES,
     );
 
     await this.sessionService.createOrUpdateSession(

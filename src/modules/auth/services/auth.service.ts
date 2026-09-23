@@ -15,6 +15,7 @@ import { OtpService } from './otp.service';
 import { OtpProducer } from '../queues/otp.producer';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { RESIDENT_SESSION_ROLES } from '../constants/resident-session.constants';
 import {
   LoginEmailInput,
   EMAIL_PASSWORD_USER_ROLES,
@@ -261,7 +262,12 @@ export class AuthService {
     this.logger.log(
       `Login exitoso (resident identity+systemCode): userId=${user.id}`,
     );
-    return this.createUserSession(user, deviceInfo, false);
+    return this.createUserSession(
+      user,
+      deviceInfo,
+      false,
+      RESIDENT_SESSION_ROLES,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -419,7 +425,12 @@ export class AuthService {
     this.assertUserAccountActive(user);
     await this.otpService.validate(phoneNumber, code);
 
-    return this.createUserSession(user, deviceInfo, false);
+    return this.createUserSession(
+      user,
+      deviceInfo,
+      false,
+      RESIDENT_SESSION_ROLES,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1273,10 +1284,15 @@ export class AuthService {
    * Crea sesión para un User (SUPER_ADMIN, COMPLIANCE, ACCOUNTANT, SUPERVISOR, SECURITY, RESIDENT).
    * sub JWT = user.id | email JWT = user.email | tokenVersion = user.tokenVersion
    */
+  /**
+   * `roleScope` lo pasan los canales de residente para que la sesión salga
+   * acotada aunque la cuenta además administre. Ver RESIDENT_SESSION_ROLES.
+   */
   private async createUserSession(
     user: User,
     deviceInfo: DeviceInfo,
     rememberMe: boolean,
+    roleScope?: readonly ValidRoles[],
   ): Promise<AuthResponse> {
     await this.sessionService.enforceSessionLimit(
       user.id,
@@ -1288,6 +1304,8 @@ export class AuthService {
       deviceInfo,
       rememberMe,
       'user',
+      undefined,
+      roleScope,
     );
 
     await this.sessionService.createOrUpdateSession(

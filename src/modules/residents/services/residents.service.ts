@@ -46,6 +46,7 @@ import {
 } from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
@@ -199,26 +200,46 @@ export class ResidentsService {
     try {
       let resolvedUserId: string;
 
+      // El rol se necesita en las dos ramas: tanto el usuario nuevo como el que
+      // ya existía tienen que quedar con RESIDENT_ROL.
+      const residentRole = await queryRunner.manager.findOne(Role, {
+        where: { name: ValidRoles.RESIDENT_ROL },
+      });
+
+      if (!residentRole) {
+        throw new CustomError({
+          message: `El rol '${ValidRoles.RESIDENT_ROL}' no está configurado en el sistema`,
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
+        });
+      }
+
       if (existingUser) {
         // Usar el usuario existente
         resolvedUserId = existingUser.id;
+
+        // Antes esta rama solo enlazaba la unidad y nunca asignaba el rol, así
+        // que toda cuenta preexistente —la del administrador que además vive en
+        // el conjunto, o cualquiera creada por otro flujo— quedaba con fila en
+        // `residents` pero sin RESIDENT_ROL. Eso la dejaba fuera de los logins
+        // de residente y de todo resolver con @Auth({ roles: [RESIDENT_ROL] }).
+        const added = await ensureResidentRole(
+          queryRunner.manager,
+          resolvedUserId,
+          residentRole.id,
+        );
+
+        if (added) {
+          this.logger.log(
+            `RESIDENT_ROL asignado a usuario existente: ${resolvedUserId}`,
+          );
+        }
+
         this.logger.log(
           `Residente vinculado a usuario existente: ${resolvedUserId}`,
         );
       } else {
         // Crear nuevo usuario con contraseña aleatoria y rol RESIDENTE
-        const residentRole = await this.roleRepo.findOne({
-          where: { name: ValidRoles.RESIDENT_ROL },
-        });
-
-        if (!residentRole) {
-          throw new CustomError({
-            message: `El rol '${ValidRoles.RESIDENT_ROL}' no está configurado en el sistema`,
-            statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            errorCode: GeneralErrorCode.INTERNAL_SERVER_ERROR,
-          });
-        }
-
         const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);
         const systemCode = generateSystemCode();
         const email = input.email.trim().toLowerCase();

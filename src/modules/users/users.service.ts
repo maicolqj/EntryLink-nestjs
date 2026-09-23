@@ -46,6 +46,10 @@ import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
 import { Role } from '../roles/entities/role.entity';
 import { ValidRoles } from '../roles/enums/valid-roles';
+import {
+  ensureResidentRole,
+  roleNeedsResidentBase,
+} from '../roles/utils/resident-base-role.util';
 import { Unit } from '../residential-complex/entities/unit.entity';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
 import { Resident } from '../residents/entities/resident.entity';
@@ -270,6 +274,12 @@ export class UsersService {
         }),
       );
 
+      // RESIDENT_ROL es el rol base y se suma al del cargo: quien administra o
+      // supervisa también puede vivir en un complejo. Ver ROLES_WITH_RESIDENT_BASE.
+      if (roleNeedsResidentBase(role.name)) {
+        await ensureResidentRole(manager, saved.id);
+      }
+
       return saved;
     });
 
@@ -470,6 +480,11 @@ export class UsersService {
           }),
         );
 
+        // Rol base: ver ROLES_WITH_RESIDENT_BASE.
+        if (roleNeedsResidentBase(role.name)) {
+          await ensureResidentRole(manager, saved.id);
+        }
+
         await manager.save(
           manager.create(UserComplexAssignment, {
             userId: saved.id,
@@ -570,6 +585,11 @@ export class UsersService {
           );
         }
 
+        // Rol base: ver ROLES_WITH_RESIDENT_BASE.
+        if (roleNeedsResidentBase(role.name)) {
+          await ensureResidentRole(manager, existingUser.id);
+        }
+
         await manager.save(
           manager.create(UserComplexAssignment, {
             userId: existingUser.id,
@@ -641,6 +661,11 @@ export class UsersService {
             isPrimary: false,
           }),
         );
+      }
+
+      // Rol base: ver ROLES_WITH_RESIDENT_BASE.
+      if (roleNeedsResidentBase(role.name)) {
+        await ensureResidentRole(manager, existingUser.id);
       }
 
       await manager.save(
