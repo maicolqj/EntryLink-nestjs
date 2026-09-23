@@ -10,6 +10,7 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
 import { TokenService } from './token.service';
+import { ResidentTenancyService } from './resident-tenancy.service';
 import { SessionService } from './session.service';
 import { OtpService } from './otp.service';
 import { OtpProducer } from '../queues/otp.producer';
@@ -65,6 +66,7 @@ export class AuthService {
     @InjectRepository(UserRole)
     private readonly userRoleRepo: Repository<UserRole>,
     private readonly tokenService: TokenService,
+    private readonly residentTenancyService: ResidentTenancyService,
     private readonly sessionService: SessionService,
     private readonly otpService: OtpService,
     private readonly otpProducer: OtpProducer,
@@ -1299,6 +1301,13 @@ export class AuthService {
       AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
     );
 
+    // Solo los canales de residente llevan complejo de residencia. Un ingreso
+    // con correo y contraseña conserva el de la cuenta: el panel ya tiene su
+    // propio selector de conjunto activo.
+    const complexId = roleScope
+      ? await this.residentTenancyService.resolveComplexId(user.id)
+      : undefined;
+
     const tokenPair = await this.tokenService.generateTokenPair(
       user,
       deviceInfo,
@@ -1306,6 +1315,7 @@ export class AuthService {
       'user',
       undefined,
       roleScope,
+      complexId,
     );
 
     await this.sessionService.createOrUpdateSession(

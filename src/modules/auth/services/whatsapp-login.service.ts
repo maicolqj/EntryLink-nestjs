@@ -10,6 +10,7 @@ import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { TokenService } from './token.service';
+import { ResidentTenancyService } from './resident-tenancy.service';
 import { SessionService } from './session.service';
 import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
@@ -62,6 +63,7 @@ export class WhatsAppLoginService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly tokenService: TokenService,
+    private readonly residentTenancyService: ResidentTenancyService,
     private readonly sessionService: SessionService,
     private readonly residentDeviceService: ResidentDeviceService,
     private readonly cacheService: CacheService,
@@ -353,6 +355,7 @@ export class WhatsAppLoginService {
       'user',
       undefined,
       RESIDENT_SESSION_ROLES,
+      await this.residentTenancyService.resolveComplexId(user.id),
     );
 
     await this.sessionService.createOrUpdateSession(

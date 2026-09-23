@@ -46,6 +46,11 @@ export class TokenService {
    * @param refreshExpiryOverride vigencia explícita del refresh token (ej. '180d').
    *   Se persiste en la fila para que la rotación la conserve. Sin este parámetro
    *   la vigencia sale de `rememberMe`.
+   * @param complexIdOverride complejo de la sesión cuando no es el de la cuenta.
+   *   Lo usan los canales de residente: `users.complex_id` dice a qué conjunto
+   *   pertenece la cuenta de trabajo, no dónde vive la persona, y para quien
+   *   administra viene vacío. Viaja también en el refresh token para que la
+   *   rotación lo conserve, igual que se hace con las sesiones de complejo.
    */
   async generateTokenPair(
     user: User,
@@ -54,6 +59,7 @@ export class TokenService {
     entityType: 'user' | 'complex' = 'user',
     refreshExpiryOverride?: RefreshExpiry,
     roleScope?: readonly ValidRoles[],
+    complexIdOverride?: string,
   ): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
@@ -62,6 +68,7 @@ export class TokenService {
       sessionId,
       entityType,
       roleScope,
+      complexIdOverride,
     );
     const refreshToken = await this.generateRefreshToken(
       user.id,
@@ -70,7 +77,7 @@ export class TokenService {
       deviceInfo,
       rememberMe,
       entityType,
-      undefined,
+      complexIdOverride,
       refreshExpiryOverride,
       roleScope,
     );
@@ -203,6 +210,7 @@ export class TokenService {
     sessionId: string,
     entityType: 'user' | 'complex' = 'user',
     roleScope?: readonly ValidRoles[],
+    complexIdOverride?: string,
   ): Promise<string> {
     const payload: JwtAccessPayload = {
       sub: user.id,
@@ -213,7 +221,9 @@ export class TokenService {
       sessionId,
       roles: this.extractRoles(user, roleScope),
       permissions: this.extractPermissions(user, roleScope),
-      complexId: user.complexId ?? undefined,
+      // El del canal manda sobre el de la cuenta: quien entra como residente lo
+      // hace al conjunto donde vive, que no es el de `users.complex_id`.
+      complexId: complexIdOverride ?? user.complexId ?? undefined,
     };
 
     const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
@@ -417,12 +427,17 @@ export class TokenService {
         storedToken.sessionId,
         'user',
         storedToken.roleScope ?? undefined,
+        payload.complexId,
       );
       newRefreshToken = await this.jwtService.signAsync(
         {
           sub: storedToken.user.id,
           type: 'refresh',
           entityType: 'user',
+          // El complejo de la sesión viaja con la familia de tokens: sin esto,
+          // la sesión de residente de quien administra perdería su conjunto en
+          // el primer refresh y se quedaría sin unidad ni notificaciones.
+          complexId: payload.complexId,
           sessionId: storedToken.sessionId,
           tokenFamily: payload.tokenFamily,
           deviceFingerprint: deviceInfo.fingerprint,

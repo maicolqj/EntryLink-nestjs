@@ -63,7 +63,9 @@ describe('TokenService — alcance de roles de la sesión', () => {
       signed.push(payload);
       return `jwt-${signed.length}`;
     }),
-    verifyAsync: jest.fn(async () => ({
+    // `Promise<any>`: cada prueba devuelve el payload que necesita, y algunas
+    // agregan el complejo de la sesión.
+    verifyAsync: jest.fn(async (): Promise<any> => ({
       sub: 'user-1',
       type: 'refresh',
       entityType: 'user',
@@ -191,6 +193,62 @@ describe('TokenService — alcance de roles de la sesión', () => {
 
     // Y el alcance viaja a la fila nueva, para la rotación siguiente.
     expect(rows[0].roleScope).toEqual([...RESIDENT_SESSION_ROLES]);
+  });
+
+  // ── Complejo de la sesión ─────────────────────────────────────────────────
+
+  it('el complejo del canal manda sobre el de la cuenta', async () => {
+    // `users.complex_id` viene vacío para quien administra; el conjunto donde
+    // vive sale de su ficha de residente.
+    await service.generateTokenPair(
+      { ...user, complexId: undefined } as unknown as User,
+      device,
+      false,
+      'user',
+      undefined,
+      RESIDENT_SESSION_ROLES,
+      'complejo-de-su-casa',
+    );
+
+    expect(accessPayload().complexId).toBe('complejo-de-su-casa');
+  });
+
+  it('sin complejo del canal se conserva el de la cuenta', async () => {
+    await service.generateTokenPair(user, device);
+
+    expect(accessPayload().complexId).toBe('complex-1');
+  });
+
+  it('la rotación conserva el complejo de la sesión', async () => {
+    // Regresión: la rotación reconstruye el access token desde la base, donde
+    // `users.complex_id` sigue vacío. Sin leerlo del refresh token, la sesión
+    // perdía el conjunto en el primer refresh y el residente se quedaba sin
+    // unidad y con la bandeja vacía, sin ningún error.
+    jwtService.verifyAsync.mockResolvedValueOnce({
+      sub: 'user-1',
+      type: 'refresh',
+      entityType: 'user',
+      complexId: 'complejo-de-su-casa',
+      sessionId: 'sess-1',
+      tokenFamily: 'fam-1',
+      deviceFingerprint: 'fp-1',
+    });
+
+    refreshTokenRepo.findOne.mockResolvedValueOnce({
+      id: 'rt-1',
+      user: { ...user, complexId: undefined },
+      sessionId: 'sess-1',
+      deviceFingerprint: 'fp-1',
+      rememberMe: true,
+      refreshExpiry: '180d',
+      roleScope: [...RESIDENT_SESSION_ROLES],
+    } as any);
+
+    await service.rotateRefreshToken('rt-viejo', device);
+
+    expect(accessPayload().complexId).toBe('complejo-de-su-casa');
+    // Y viaja al refresh nuevo, para la rotación siguiente.
+    expect(signed[1].complexId).toBe('complejo-de-su-casa');
   });
 
   it('la rotación de una sesión sin alcance sigue entregando todos los roles', async () => {

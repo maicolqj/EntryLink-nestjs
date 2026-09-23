@@ -21,7 +21,12 @@ export interface JwtRefreshPayload {
   sub: string;
   type: 'refresh';
   entityType: 'user' | 'complex';
-  /** Presente cuando entityType === 'complex'. Permite reconstruir el token en rotación. */
+  /**
+   * Complejo de la sesión. Presente cuando entityType === 'complex', y también
+   * en las sesiones abiertas por un canal de residente, donde el complejo sale
+   * de la ficha de residente y no de `users.complex_id`. Permite reconstruir el
+   * access token en la rotación sin volver a resolverlo.
+   */
   complexId?: string;
   sessionId: string;
   tokenFamily: string;
