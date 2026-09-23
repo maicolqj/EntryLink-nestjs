@@ -32,6 +32,14 @@ export class UpdateMarketplaceSettingsInput {
   @Max(365)
   listingDurationDays?: number;
 
+  /** Igual que la de clasificados: entre una semana y un año. */
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(7)
+  @Max(365)
+  serviceListingDurationDays?: number;
+
   @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()

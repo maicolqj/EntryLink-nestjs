@@ -5512,6 +5512,9 @@ type MarketplaceSettings {
   """Días que dura publicado un aviso"""
   listingDurationDays: Int!
 
+  """Días que dura publicado un servicio del directorio"""
+  serviceListingDurationDays: Int!
+
   """Avisos activos que puede tener una unidad"""
   maxActiveListingsPerUnit: Int!
 
@@ -5613,6 +5616,7 @@ enum ComplexModule {
   MASCOTAS
   MANTENIMIENTO
   CLASIFICADOS
+  SERVICIOS
 }
 
 """Descarga de datos realizada en el complejo"""
@@ -5854,9 +5858,25 @@ type Query {
   maintenanceSlaConfigs(complexId: String!): [MaintenanceSlaConfig!]!
   marketplaceListings(complexId: String!, pagination: PaginationInput, filters: FilterListingsInput): PaginatedListingsResponse!
   marketplaceListing(listingId: String!): MarketplaceListing!
-  marketplaceStats(complexId: String!): MarketplaceStatsResponse!
+  marketplaceStats(
+    complexId: String!
+
+    """
+    Solo estos tipos de publicación. Separa el directorio de servicios de clasificados
+    """
+    types: [MarketplaceListingType!]
+  ): MarketplaceStatsResponse!
   marketplaceCategories(complexId: String!, kind: MarketplaceCategoryKind, includeInactive: Boolean): [MarketplaceCategory!]!
-  listingReports(complexId: String!, pagination: PaginationInput, status: MarketplaceReportStatus): PaginatedListingReportsResponse!
+  listingReports(
+    complexId: String!
+    pagination: PaginationInput
+    status: MarketplaceReportStatus
+
+    """
+    Solo estos tipos de publicación. Separa el directorio de servicios de clasificados
+    """
+    types: [MarketplaceListingType!]
+  ): PaginatedListingReportsResponse!
   marketplaceSettings(complexId: String!): MarketplaceSettings!
 
   """Módulos cuyos datos se pueden descargar en el complejo"""
@@ -6238,6 +6258,9 @@ input FilterListingsInput {
   search: String
   status: MarketplaceListingStatus
   type: MarketplaceListingType
+
+  """Tipos de publicación que se excluyen del listado"""
+  excludeTypes: [MarketplaceListingType!]
   priceType: MarketplacePriceType
   categoryId: String
 
@@ -8699,6 +8722,7 @@ input UpdateMarketplaceSettingsInput {
   complexId: String!
   moderationMode: MarketplaceModerationMode
   listingDurationDays: Int
+  serviceListingDurationDays: Int
   maxActiveListingsPerUnit: Int
   maxImagesPerListing: Int
   autoPauseAfterReports: Int

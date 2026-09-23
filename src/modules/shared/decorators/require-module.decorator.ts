@@ -16,7 +16,12 @@ import {
  * No reemplaza a `@Auth`: rol y permiso siguen decidiendo QUIÉN entra, esto
  * decide si el conjunto contrató la función.
  */
-export function RequireModule(module: ComplexModule) {
+/**
+ * Con varios módulos basta con que el conjunto tenga encendido UNO: es para las
+ * APIs que atienden a dos interruptores, como clasificados y el directorio de
+ * servicios.
+ */
+export function RequireModule(module: ComplexModule | ComplexModule[]) {
   return applyDecorators(
     SetMetadata(REQUIRED_MODULE_KEY, module),
     UseGuards(ComplexModuleGuard),

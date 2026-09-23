@@ -47,6 +47,17 @@ export class MarketplaceSettings {
   @Column({ name: 'listing_duration_days', type: 'int', default: 30 })
   listingDurationDays: number;
 
+  /**
+   * Vigencia de los avisos del directorio de servicios. Nace en 180 días: un
+   * oficio no se vende y se va como un artículo usado, y renovar cada mes es la
+   * razón por la que un directorio se queda vacío.
+   */
+  @Field(() => Int, {
+    description: 'Días que dura publicado un servicio del directorio',
+  })
+  @Column({ name: 'service_listing_duration_days', type: 'int', default: 180 })
+  serviceListingDurationDays: number;
+
   @Field(() => Int, {
     description: 'Avisos activos que puede tener una unidad',
   })

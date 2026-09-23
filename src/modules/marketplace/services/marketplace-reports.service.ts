@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { MarketplaceListingReport } from '../entities/marketplace-listing-report.entity';
 import { MarketplaceReportStatus } from '../enums/marketplace-report-status.enum';
+import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplaceListingStatus } from '../enums/marketplace-listing-status.enum';
 import { ReportListingInput } from '../dto/inputs/report-listing.input';
 import { ResolveListingReportInput } from '../dto/inputs/resolve-listing-report.input';
@@ -236,6 +237,7 @@ export class MarketplaceReportsService {
     pagination: PaginationInput,
     status: MarketplaceReportStatus | undefined,
     currentUser: JwtAccessPayload,
+    types?: MarketplaceListingType[],
   ): Promise<PaginatedListingReportsResponse> {
     await this.complexService.assertComplexAccess(complexId, currentUser);
 
@@ -249,6 +251,10 @@ export class MarketplaceReportsService {
 
     if (status) {
       qb.andWhere('r.status = :status', { status });
+    }
+
+    if (types?.length) {
+      qb.andWhere('listing.type IN (:...types)', { types });
     }
 
     qb.orderBy('r.createdAt', 'DESC').skip(skip).take(limit);

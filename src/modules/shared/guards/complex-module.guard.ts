@@ -40,6 +40,7 @@ const MODULE_LABELS: Partial<Record<ComplexModule, string>> = {
   [ComplexModule.MANTENIMIENTO]: 'Mantenimiento',
   [ComplexModule.NOTAS]: 'Notas',
   [ComplexModule.CLASIFICADOS]: 'Clasificados',
+  [ComplexModule.SERVICIOS]: 'Directorio de servicios',
 };
 
 /**
@@ -66,12 +67,16 @@ export class ComplexModuleGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<ComplexModule>(
-      REQUIRED_MODULE_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const required = this.reflector.getAllAndOverride<
+      ComplexModule | ComplexModule[]
+    >(REQUIRED_MODULE_KEY, [context.getHandler(), context.getClass()]);
 
-    if (!required) return true;
+    // Un arreglo significa "cualquiera de estos": clasificados y el directorio
+    // de servicios comparten API, y basta con que el conjunto tenga uno de los
+    // dos. Qué tipo de aviso entra con cuál lo decide el servicio del módulo.
+    const anyOf = Array.isArray(required) ? required : [required];
+
+    if (!required || anyOf.length === 0) return true;
 
     const { user, complexId } = this.resolveContext(context);
 
@@ -96,10 +101,15 @@ export class ComplexModuleGuard implements CanActivate {
     // puede quedarse sin plataforma.
     if (!modules || modules.length === 0) return true;
 
-    if (modules.includes(required)) return true;
+    if (anyOf.some((module) => modules.includes(module))) return true;
+
+    const labels = anyOf.map((module) => MODULE_LABELS[module] ?? module);
 
     throw new CustomError({
-      message: `El módulo de ${MODULE_LABELS[required] ?? required} no está habilitado en este complejo`,
+      message:
+        labels.length === 1
+          ? `El módulo de ${labels[0]} no está habilitado en este complejo`
+          : `Ninguno de estos módulos está habilitado en este complejo: ${labels.join(', ')}`,
       statusCode: HttpStatus.FORBIDDEN,
       errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
     });

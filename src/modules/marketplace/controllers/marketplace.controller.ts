@@ -38,7 +38,7 @@ const PUBLISHER_ROLES = [
  * multipart. El resto del módulo —consultas, moderación, reportes— va por
  * GraphQL.
  */
-@RequireModule(ComplexModule.CLASIFICADOS)
+@RequireModule([ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS])
 @Controller('marketplace')
 export class MarketplaceController {
   private readonly logger = new Logger(MarketplaceController.name);
