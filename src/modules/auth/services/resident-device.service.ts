@@ -20,13 +20,19 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
-import { DeviceInfo } from '../interfaces/jwt-payload.interface';
+import {
+  DeviceInfo,
+  JwtAccessPayload,
+} from '../interfaces/jwt-payload.interface';
 import { AuthResponse } from '../dto/responses/auth-response';
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   AuthErrorCode,
   UserErrorCode,
 } from '../../shared/constans/error-codes.constants';
+import { AuditService } from '../../audit/services/audit.service';
+import { AuditAction } from '../../audit/enums/audit-action.enum';
+import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 
 /**
  * Clave de acceso del residente y dispositivos vinculados.
@@ -72,6 +78,7 @@ export class ResidentDeviceService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   // ── Clave de acceso ───────────────────────────────────────────────────────
@@ -205,8 +212,117 @@ export class ResidentDeviceService {
     const device = await this.deviceRepo.findOne({
       where: { userId, deviceId, isRevoked: false },
     });
+    if (!device) return false;
 
-    return !!device && device.deviceFingerprint === deviceInfo.fingerprint;
+    return this.matchesFingerprint(device, deviceInfo);
+  }
+
+  /**
+   * La huella guardada corresponde a este equipo.
+   *
+   * Acepta también la fórmula anterior —la que incluía el user-agent— y
+   * reescribe la guardada al reconocerla. Sin esa transición, el cambio de
+   * fórmula habría desvinculado de golpe a todos los residentes y los habría
+   * mandado a todos al canje por WhatsApp.
+   */
+  private matchesFingerprint(
+    device: ResidentDevice,
+    deviceInfo: DeviceInfo,
+  ): boolean {
+    if (device.deviceFingerprint === deviceInfo.fingerprint) return true;
+
+    if (
+      deviceInfo.legacyFingerprint &&
+      device.deviceFingerprint === deviceInfo.legacyFingerprint
+    ) {
+      void this.deviceRepo
+        .update(device.id, { deviceFingerprint: deviceInfo.fingerprint })
+        .catch(() => undefined);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * La administración borra la clave olvidada de un residente.
+   *
+   * Es la salida del único callejón sin salida del modelo: con la cuenta ya
+   * provista de clave y sin ningún equipo vinculado, el canje por WhatsApp
+   * exige el segundo factor y el camino del olvido exige la clave vigente.
+   * Cada uno pide lo que solo el otro puede dar, y el residente queda afuera.
+   *
+   * Se borra SOLO el factor olvidado. No abre sesión, no vincula equipos y no
+   * saltea WhatsApp: el residente sigue teniendo que probar posesión de su
+   * línea para entrar, y ahí elige una clave nueva. Por eso esto no es
+   * "asignarle una clave": así la administración no puede suplantarlo.
+   *
+   * También limpia el bloqueo por intentos —dejar bloqueada una cuenta cuya
+   * credencial ya no existe no protege de nada— pero NO desvincula equipos:
+   * quien tenga otro teléfono suyo activo lo sigue teniendo.
+   */
+  async clearAccessCode(
+    userId: string,
+    actor: JwtAccessPayload,
+  ): Promise<boolean> {
+    const user = await this.findResident(userId);
+
+    await this.userRepo.update(user.id, {
+      accessCodeHash: null,
+      accessCodeFailedAttempts: 0,
+      accessCodeLockedUntil: null,
+    });
+
+    this.logger.log(
+      `Clave de acceso restablecida por la administración — userId: ${user.id}`,
+    );
+
+    // El residente se entera por su cuenta: si no fue él quien lo pidió, este
+    // aviso es lo único que le dice que alguien tocó su acceso.
+    this.notifyAccessCodeCleared(user).catch((err: any) =>
+      this.logger.warn(
+        `No se pudo avisar del restablecimiento al residente ${user.id}: ${err?.message}`,
+      ),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.User,
+      entityId: user.id,
+      action: AuditAction.UPDATE,
+      newValue: { accessCodeHash: null },
+      performedById: actor.sub,
+      performedByName: actor.email,
+      performedByRole: actor.roles?.[0] ?? '',
+      complexId: user.complexId ?? undefined,
+      description: `Clave de acceso restablecida por la administración — residente ${user.email ?? user.id}`,
+    });
+
+    return true;
+  }
+
+  /**
+   * Avisa al residente que su clave fue borrada.
+   *
+   * No lanza: un fallo de FCM no puede impedir el restablecimiento, que es
+   * justamente lo que desbloquea a alguien que no puede entrar.
+   */
+  private async notifyAccessCodeCleared(user: User): Promise<void> {
+    const params = {
+      complexId: user.complexId ?? '',
+      userIds: [user.id],
+      type: NotificationType.ACCESS_CODE_RESET,
+      priority: NotificationPriority.URGENT,
+      title: 'Tu clave de acceso fue restablecida',
+      body:
+        'La administración borró tu clave de acceso. Entra con el mensaje de WhatsApp y crea una nueva. ' +
+        'Si no lo pediste, avísale a la administración de inmediato.',
+      entityId: user.id,
+      entityType: 'User',
+      metadata: { userId: user.id },
+    };
+
+    if (user.complexId) await this.notificationsService.notify(params);
+    else await this.notificationsService.dispatchPushOnly([user.id], params);
   }
 
   /** ¿La cuenta ya tiene clave? El cliente lo usa para exigir su creación. */
@@ -527,10 +643,10 @@ export class ResidentDeviceService {
 
     if (!device) return null;
 
-    // Fingerprint distinto: el equipo cambió de user-agent o alguien reusa el
-    // deviceId. No es motivo para negar el ingreso —el camino con documento +
-    // clave revalida y reescribe el vínculo—, pero sí para dejar rastro.
-    if (device.deviceFingerprint !== deviceInfo.fingerprint) {
+    // Fingerprint distinto: alguien reusa el deviceId. No es motivo para negar
+    // el ingreso —el camino con documento + clave revalida y reescribe el
+    // vínculo—, pero sí para dejar rastro.
+    if (!this.matchesFingerprint(device, deviceInfo)) {
       this.logger.warn(
         `Fingerprint no coincide — deviceId: ${this.maskDeviceId(deviceId)}`,
       );

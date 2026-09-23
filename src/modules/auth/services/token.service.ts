@@ -306,7 +306,14 @@ export class TokenService {
       });
     }
 
-    if (storedToken.deviceFingerprint !== deviceInfo.fingerprint) {
+    // La huella anterior también vale: la sesión se abrió con la fórmula que
+    // incluía el user-agent, y actualizar la app no puede cerrarla.
+    const fingerprintMatches =
+      storedToken.deviceFingerprint === deviceInfo.fingerprint ||
+      (!!deviceInfo.legacyFingerprint &&
+        storedToken.deviceFingerprint === deviceInfo.legacyFingerprint);
+
+    if (!fingerprintMatches) {
       await this.revokeTokenFamily(payload.tokenFamily, 'fingerprint_mismatch');
       throw new CustomError({
         message: 'Sesión invalidada',
