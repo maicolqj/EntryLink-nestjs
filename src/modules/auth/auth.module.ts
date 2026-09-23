@@ -20,6 +20,7 @@ import { ResidentDeviceService } from './services/resident-device.service';
 import { WhatsAppService } from './services/whatsapp.service';
 import { WhatsAppWebhookService } from './services/whatsapp-webhook.service';
 import { WhatsAppLoginService } from './services/whatsapp-login.service';
+import { ResidentTenancyService } from './services/resident-tenancy.service';
 import { DeviceApprovalService } from './services/device-approval.service';
 
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
@@ -33,6 +34,7 @@ import { OtpCode } from './entities/otp-code.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { ResidentDevice } from './entities/resident-device.entity';
 import { WhatsAppLoginChallenge } from './entities/whatsapp-login-challenge.entity';
+import { Resident } from '../residents/entities/resident.entity';
 import { DeviceApprovalRequest } from './entities/device-approval-request.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UserSession } from './entities/user-session.entity';
@@ -62,6 +64,8 @@ import { AuditModule } from '../audit/audit.module';
       UserSession,
       Role,
       UserRole,
+      // Solo para resolver en qué conjunto vive quien entra como residente.
+      Resident,
     ]),
     // forwardRef: NotificationsModule alcanza AuthModule por la cadena
     // Residents → ResidentialComplex → Users → Auth.
@@ -89,6 +93,7 @@ import { AuditModule } from '../audit/audit.module';
     WhatsAppService,
     WhatsAppWebhookService,
     WhatsAppLoginService,
+    ResidentTenancyService,
     DeviceApprovalService,
 
     // Strategies (Passport)

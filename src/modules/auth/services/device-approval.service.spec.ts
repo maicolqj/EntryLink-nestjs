@@ -8,6 +8,7 @@ import { ResidentDevice } from '../entities/resident-device.entity';
 import { User } from '../../users/entities/user.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { TokenService } from './token.service';
+import { ResidentTenancyService } from './resident-tenancy.service';
 import { SessionService } from './session.service';
 import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
@@ -91,6 +92,12 @@ describe('DeviceApprovalService', () => {
     })),
   };
 
+  // Resuelve el conjunto donde vive quien entra: la cuenta puede administrar y
+  // residir a la vez, y `users.complex_id` no describe dónde vive.
+  const residentTenancyService = {
+    resolveComplexId: jest.fn(async () => 'complex-residencia'),
+  };
+
   const sessionService = {
     enforceSessionLimit: jest.fn(async () => undefined),
     createOrUpdateSession: jest.fn(async () => undefined),
@@ -134,6 +141,10 @@ describe('DeviceApprovalService', () => {
         { provide: getRepositoryToken(ResidentDevice), useValue: deviceRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: TokenService, useValue: tokenService },
+        {
+          provide: ResidentTenancyService,
+          useValue: residentTenancyService,
+        },
         { provide: SessionService, useValue: sessionService },
         { provide: ResidentDeviceService, useValue: residentDeviceService },
         { provide: CacheService, useValue: cacheService },
