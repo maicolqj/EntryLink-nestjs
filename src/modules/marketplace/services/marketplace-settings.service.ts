@@ -68,6 +68,8 @@ export class MarketplaceSettingsService {
       moderationMode: input.moderationMode ?? settings.moderationMode,
       listingDurationDays:
         input.listingDurationDays ?? settings.listingDurationDays,
+      serviceListingDurationDays:
+        input.serviceListingDurationDays ?? settings.serviceListingDurationDays,
       maxActiveListingsPerUnit:
         input.maxActiveListingsPerUnit ?? settings.maxActiveListingsPerUnit,
       maxImagesPerListing:

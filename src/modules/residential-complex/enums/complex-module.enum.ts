@@ -21,6 +21,7 @@ export enum ComplexModule {
   MASCOTAS = 'MASCOTAS',
   MANTENIMIENTO = 'MANTENIMIENTO',
   CLASIFICADOS = 'CLASIFICADOS',
+  SERVICIOS = 'SERVICIOS',
 }
 
 registerEnumType(ComplexModule, {

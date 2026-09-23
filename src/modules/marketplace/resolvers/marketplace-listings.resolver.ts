@@ -42,7 +42,7 @@ const MODERATOR_ROLES = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
  * (POST /api/v1/marketplace/listings) porque las fotos llegan como archivo y
  * GraphQL en este proyecto no recibe multipart.
  */
-@RequireModule(ComplexModule.CLASIFICADOS)
+@RequireModule([ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS])
 @Resolver(() => MarketplaceListing)
 export class MarketplaceListingsResolver {
   constructor(private readonly listingsService: MarketplaceListingsService) {}

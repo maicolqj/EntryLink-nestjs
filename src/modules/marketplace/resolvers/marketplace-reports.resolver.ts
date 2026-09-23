@@ -16,7 +16,7 @@ import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { RequireModule } from '../../shared/decorators/require-module.decorator';
 import { ComplexModule } from '../../residential-complex/enums/complex-module.enum';
 
-@RequireModule(ComplexModule.CLASIFICADOS)
+@RequireModule([ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS])
 @Resolver(() => MarketplaceListingReport)
 export class MarketplaceReportsResolver {
   constructor(private readonly reportsService: MarketplaceReportsService) {}

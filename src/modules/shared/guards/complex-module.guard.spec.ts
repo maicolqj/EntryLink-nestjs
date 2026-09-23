@@ -38,7 +38,7 @@ const contextOf = (
  */
 const buildGuard = (
   modules: string[] | null,
-  required: ComplexModule | null = ComplexModule.FINANZAS,
+  required: ComplexModule | ComplexModule[] | null = ComplexModule.FINANZAS,
 ) => {
   // Devuelve la entidad tal como la entrega TypeORM: el guard ya no arma SQL
   // ni conoce el nombre de la columna, así que el mock tampoco puede inventarlo.
@@ -82,6 +82,30 @@ describe('ComplexModuleGuard', () => {
     await expect(
       guard.canActivate(contextOf({ complexId: 'complex-1' }, resident)),
     ).resolves.toBe(true);
+  });
+
+  it('con varios módulos exigidos, basta con que uno esté encendido', async () => {
+    const { guard } = buildGuard(
+      ['PAQUETES', 'SERVICIOS'],
+      [ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS],
+    );
+
+    await expect(
+      guard.canActivate(contextOf({ complexId: 'complex-1' }, resident)),
+    ).resolves.toBe(true);
+  });
+
+  it('con varios módulos exigidos y ninguno encendido, bloquea', async () => {
+    const { guard } = buildGuard(
+      ['PAQUETES'],
+      [ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS],
+    );
+
+    await expect(
+      guard.canActivate(contextOf({ complexId: 'complex-1' }, resident)),
+    ).rejects.toMatchObject({
+      errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
+    });
   });
 
   it('lista vacía = todos habilitados', async () => {

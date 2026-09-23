@@ -5512,6 +5512,9 @@ type MarketplaceSettings {
   """Días que dura publicado un aviso"""
   listingDurationDays: Int!
 
+  """Días que dura publicado un servicio del directorio"""
+  serviceListingDurationDays: Int!
+
   """Avisos activos que puede tener una unidad"""
   maxActiveListingsPerUnit: Int!
 
@@ -5613,6 +5616,7 @@ enum ComplexModule {
   MASCOTAS
   MANTENIMIENTO
   CLASIFICADOS
+  SERVICIOS
 }
 
 """Descarga de datos realizada en el complejo"""
@@ -8699,6 +8703,7 @@ input UpdateMarketplaceSettingsInput {
   complexId: String!
   moderationMode: MarketplaceModerationMode
   listingDurationDays: Int
+  serviceListingDurationDays: Int
   maxActiveListingsPerUnit: Int
   maxImagesPerListing: Int
   autoPauseAfterReports: Int

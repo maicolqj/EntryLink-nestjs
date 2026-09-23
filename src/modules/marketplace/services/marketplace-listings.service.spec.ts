@@ -45,6 +45,7 @@ const settingsOf = (
     complexId: 'complex-1',
     moderationMode: MarketplaceModerationMode.PREVIA,
     listingDurationDays: 30,
+    serviceListingDurationDays: 180,
     maxActiveListingsPerUnit: 5,
     maxImagesPerListing: 5,
     autoPauseAfterReports: 3,
@@ -96,6 +97,7 @@ const listingOf = (
 const buildHarness = (
   listing: MarketplaceListing = listingOf(),
   settings: MarketplaceSettings = settingsOf(),
+  enabledModules: string[] = ['CLASIFICADOS'],
 ) => {
   const saved: MarketplaceListing[] = [];
 
@@ -158,7 +160,7 @@ const buildHarness = (
         Promise.resolve({
           id: 'complex-1',
           slug: 'complejo',
-          enabledModules: ['CLASIFICADOS'],
+          enabledModules,
         }),
       ),
       assertComplexAccess: jest.fn(() => Promise.resolve(undefined)),
@@ -587,5 +589,103 @@ describe('MarketplaceListingsService — interés', () => {
     expect(listingRepo.increment).not.toHaveBeenCalled();
     // Pero el aviso sí se reenvía: el publicador puede no haberlo visto.
     expect(notify).toHaveBeenCalled();
+  });
+});
+
+describe('MarketplaceListingsService — directorio de servicios', () => {
+  const serviceInput = {
+    complexId: 'complex-1',
+    type: MarketplaceListingType.SERVICE,
+    categoryId: 'cat-1',
+    title: 'Plomería y destapes',
+    description: 'Arreglo fugas, sanitarios y lavaplatos',
+    imageUrls: [] as string[],
+    acceptTerms: true,
+  };
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it('un servicio se publica sin foto y nace "a convenir"', async () => {
+    const { service, saved } = buildHarness(listingOf(), settingsOf(), [
+      'SERVICIOS',
+    ]);
+
+    await service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL]));
+
+    expect(saved[0].type).toBe(MarketplaceListingType.SERVICE);
+    expect(saved[0].priceType).toBe(MarketplacePriceType.ON_REQUEST);
+  });
+
+  it('dura lo que diga su propia vigencia, no la de clasificados', async () => {
+    const { service, saved } = buildHarness(
+      listingOf(),
+      settingsOf({ moderationMode: MarketplaceModerationMode.AUTO }),
+      ['SERVICIOS'],
+    );
+
+    await service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL]));
+
+    const days = Math.round(
+      (saved[0].expiresAt.getTime() - Date.now()) / DAY_MS,
+    );
+    expect(days).toBe(180);
+  });
+
+  it('renovar un servicio le da su vigencia larga', async () => {
+    const listing = listingOf({ type: MarketplaceListingType.SERVICE });
+    const { service, saved } = buildHarness(listing, settingsOf(), [
+      'SERVICIOS',
+    ]);
+
+    await service.renew(listing.id, userOf([ValidRoles.RESIDENT_ROL]));
+
+    const days = Math.round(
+      (saved[0].expiresAt.getTime() - Date.now()) / DAY_MS,
+    );
+    expect(days).toBe(180);
+  });
+
+  it('con solo clasificados encendido, no deja publicar servicios', async () => {
+    const { service } = buildHarness(listingOf(), settingsOf(), [
+      'CLASIFICADOS',
+    ]);
+
+    await expect(
+      service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL])),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
+  });
+
+  it('con solo el directorio encendido, no deja vender', async () => {
+    const { service } = buildHarness(listingOf(), settingsOf(), ['SERVICIOS']);
+
+    await expect(
+      service.create(
+        {
+          ...serviceInput,
+          type: MarketplaceListingType.PRODUCT,
+          priceType: MarketplacePriceType.FREE,
+          imageUrls: ['https://files.alternaqj.com/nevera.jpg'],
+        },
+        userOf([ValidRoles.RESIDENT_ROL]),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
+  });
+
+  it('cambiar el tipo no lleva el aviso a un tablero apagado', async () => {
+    const { service } = buildHarness(listingOf(), settingsOf(), [
+      'CLASIFICADOS',
+    ]);
+
+    await expect(
+      service.update(
+        { listingId: 'listing-1', type: MarketplaceListingType.SERVICE },
+        userOf([ValidRoles.RESIDENT_ROL]),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
   });
 });

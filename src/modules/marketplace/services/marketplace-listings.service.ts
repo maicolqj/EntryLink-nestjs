@@ -25,7 +25,10 @@ import { MarketplaceStatsResponse } from '../dto/responses/marketplace-stats.res
 import { MarketplaceSettingsService } from './marketplace-settings.service';
 import { MarketplaceCategoriesService } from './marketplace-categories.service';
 import {
+  enabledListingTypes,
+  isListingTypeEnabled,
   isMarketplaceModuleEnabled,
+  listingDurationFor,
   readBoolean,
 } from '../utils/marketplace-module.util';
 
@@ -92,6 +95,12 @@ const VISIBLE_STATUSES = [
 /** Días antes del vencimiento en que se avisa para dar tiempo a renovar. */
 const EXPIRY_WARNING_DAYS = 3;
 
+/** Tipos que se pueden publicar sin foto. Ver `assertImages`. */
+const PHOTO_OPTIONAL_TYPES: MarketplaceListingType[] = [
+  MarketplaceListingType.WANTED,
+  MarketplaceListingType.SERVICE,
+];
+
 const LISTING_RELATIONS = [
   'category',
   'owner',
@@ -141,6 +150,7 @@ export class MarketplaceListingsService {
       currentUser,
     );
     this.assertModuleEnabled(complex, currentUser);
+    this.assertListingTypeEnabled(complex, data.type, currentUser);
 
     const settings = await this.settingsService.getOrCreate(data.complexId);
     await this.categoriesService.ensureDefaults(data.complexId);
@@ -186,7 +196,7 @@ export class MarketplaceListingsService {
         ? MarketplaceListingStatus.PUBLISHED
         : MarketplaceListingStatus.PENDING_REVIEW;
 
-    const priceType = data.priceType ?? MarketplacePriceType.FIXED;
+    const priceType = data.priceType ?? this.defaultPriceType(data.type);
     this.assertPrice(priceType, data.priceAmount);
 
     const listing = this.listingRepo.create({
@@ -205,7 +215,7 @@ export class MarketplaceListingsService {
       acceptedTermsAt,
       publishedAt: publishesNow ? now : null,
       expiresAt: publishesNow
-        ? this.addDays(now, settings.listingDurationDays)
+        ? this.addDays(now, listingDurationFor(data.type, settings))
         : null,
       ownerUserId: currentUser.sub,
       residentId,
@@ -288,6 +298,16 @@ export class MarketplaceListingsService {
         statusCode: HttpStatus.CONFLICT,
         errorCode: MarketplaceErrorCode.LISTING_WANTED_DISABLED,
       });
+    }
+
+    // Cambiar el tipo no puede ser la puerta para llevar un aviso a un tablero
+    // que el conjunto tiene apagado.
+    if (input.type && input.type !== listing.type) {
+      const complex = await this.complexService.findById(
+        listing.complexId,
+        currentUser,
+      );
+      this.assertListingTypeEnabled(complex, input.type, currentUser);
     }
 
     if (input.imageUrls) {
@@ -620,7 +640,10 @@ export class MarketplaceListingsService {
 
     listing.status = MarketplaceListingStatus.PUBLISHED;
     listing.publishedAt = listing.publishedAt ?? now;
-    listing.expiresAt = this.addDays(now, settings.listingDurationDays);
+    listing.expiresAt = this.addDays(
+      now,
+      listingDurationFor(listing.type, settings),
+    );
     listing.renewedAt = now;
     // Se limpia para que el aviso de "por vencer" pueda volver a salir en el
     // siguiente ciclo; si no, se renueva una vez y nunca más se le avisa.
@@ -946,6 +969,16 @@ export class MarketplaceListingsService {
       });
     }
 
+    // El residente solo ve los tableros que su conjunto tiene encendidos: con
+    // el directorio apagado, un servicio que quedó publicado no se cuela en la
+    // vitrina de clasificados, ni al revés. La administración ve todo para
+    // poder terminar de resolver lo que quedó abierto.
+    if (!isModerator) {
+      qb.andWhere('l.type IN (:...enabledTypes)', {
+        enabledTypes: enabledListingTypes(complex),
+      });
+    }
+
     if (filters?.type) {
       qb.andWhere('l.type = :type', { type: filters.type });
     }
@@ -1157,8 +1190,11 @@ export class MarketplaceListingsService {
       // entrecomillada. Escribir `c.enabled_modules` a mano pasa el texto tal
       // cual y Postgres responde "column does not exist" —el mismo desfase que
       // dejó el guard de módulos sin bloquear nada—.
+      // Cada tipo responde a su interruptor: el servicio avisa si el directorio
+      // está encendido, el resto si lo están los clasificados.
       .andWhere(
-        `(c.enabledModules IS NULL OR c.enabledModules = '' OR c.enabledModules LIKE '%CLASIFICADOS%')`,
+        `(c.enabledModules IS NULL OR c.enabledModules = '' OR (l.type = :serviceType AND c.enabledModules LIKE '%SERVICIOS%') OR (l.type != :serviceType AND c.enabledModules LIKE '%CLASIFICADOS%'))`,
+        { serviceType: MarketplaceListingType.SERVICE },
       )
       .getMany();
 
@@ -1284,7 +1320,8 @@ export class MarketplaceListingsService {
     listing.status = MarketplaceListingStatus.PUBLISHED;
     listing.publishedAt = listing.publishedAt ?? now;
     listing.expiresAt =
-      listing.expiresAt ?? this.addDays(now, settings.listingDurationDays);
+      listing.expiresAt ??
+      this.addDays(now, listingDurationFor(listing.type, settings));
 
     await this.listingRepo.save(listing);
     this.emitUpdated(listing);
@@ -1339,6 +1376,39 @@ export class MarketplaceListingsService {
     });
   }
 
+  /**
+   * Cada tipo de aviso responde a su interruptor: el servicio al directorio,
+   * lo demás a clasificados. Tener encendido uno no abre la puerta del otro.
+   */
+  private assertListingTypeEnabled(
+    complex: { enabledModules?: string[] | null },
+    type: MarketplaceListingType,
+    currentUser: JwtAccessPayload,
+  ): void {
+    if (isListingTypeEnabled(complex, type) || this.isModerator(currentUser)) {
+      return;
+    }
+
+    throw new CustomError({
+      message:
+        type === MarketplaceListingType.SERVICE
+          ? 'El directorio de servicios no está habilitado en este complejo'
+          : 'El módulo de clasificados no está habilitado en este complejo',
+      statusCode: HttpStatus.FORBIDDEN,
+      errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
+  }
+
+  /**
+   * Un servicio casi nunca tiene tarifa única —depende del trabajo—, así que
+   * nace "a convenir". Lo demás sigue naciendo con precio fijo.
+   */
+  private defaultPriceType(type: MarketplaceListingType): MarketplacePriceType {
+    return type === MarketplaceListingType.SERVICE
+      ? MarketplacePriceType.ON_REQUEST
+      : MarketplacePriceType.FIXED;
+  }
+
   private assertOwnerOrModerator(
     listing: MarketplaceListing,
     currentUser: JwtAccessPayload,
@@ -1354,15 +1424,17 @@ export class MarketplaceListingsService {
   }
 
   /**
-   * Un aviso sin foto casi nadie lo abre. La excepción es "busco": quien
-   * necesita algo todavía no lo tiene para fotografiarlo.
+   * Un aviso sin foto casi nadie lo abre. Las excepciones son "busco" —quien
+   * necesita algo todavía no lo tiene para fotografiarlo— y el servicio: un
+   * plomero o una niñera no tienen qué fotografiar, y exigirles foto era la
+   * razón por la que nadie terminaba de inscribirse en el directorio.
    */
   private assertImages(
     imageUrls: string[],
     type: MarketplaceListingType,
     settings: MarketplaceSettings,
   ): void {
-    if (imageUrls.length === 0 && type !== MarketplaceListingType.WANTED) {
+    if (imageUrls.length === 0 && !PHOTO_OPTIONAL_TYPES.includes(type)) {
       throw new CustomError({
         message: 'La publicación necesita al menos una foto',
         statusCode: HttpStatus.BAD_REQUEST,
@@ -1562,7 +1634,7 @@ export class MarketplaceListingsService {
 
     listing.expiresAt = expiryStillValid
       ? listing.expiresAt
-      : this.addDays(now, settings.listingDurationDays);
+      : this.addDays(now, listingDurationFor(listing.type, settings));
 
     if (!expiryStillValid) listing.expiryNotifiedAt = null;
 
