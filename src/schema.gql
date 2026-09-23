@@ -6242,6 +6242,9 @@ input FilterListingsInput {
   search: String
   status: MarketplaceListingStatus
   type: MarketplaceListingType
+
+  """Tipos de publicación que se excluyen del listado"""
+  excludeTypes: [MarketplaceListingType!]
   priceType: MarketplacePriceType
   categoryId: String
 

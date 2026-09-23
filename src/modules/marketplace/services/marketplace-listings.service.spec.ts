@@ -6,6 +6,7 @@ import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplacePriceType } from '../enums/marketplace-price-type.enum';
 import { MarketplaceModerationMode } from '../enums/marketplace-moderation-mode.enum';
 import { MarketplaceContactPreference } from '../enums/marketplace-contact-preference.enum';
+import { MarketplaceCategoryKind } from '../enums/marketplace-category-kind.enum';
 
 import { CustomError } from '../../shared/utils/errors.utils';
 import { MarketplaceErrorCode } from '../../shared/constans/error-codes.constants';
@@ -98,6 +99,7 @@ const buildHarness = (
   listing: MarketplaceListing = listingOf(),
   settings: MarketplaceSettings = settingsOf(),
   enabledModules: string[] = ['CLASIFICADOS'],
+  categoryKind: MarketplaceCategoryKind = MarketplaceCategoryKind.CLASSIFIED,
 ) => {
   const saved: MarketplaceListing[] = [];
 
@@ -153,7 +155,9 @@ const buildHarness = (
     { getOrCreate: jest.fn(() => Promise.resolve(settings)) } as never,
     {
       ensureDefaults: jest.fn(() => Promise.resolve(undefined)),
-      findPublishable: jest.fn(() => Promise.resolve({ id: 'cat-1' })),
+      findPublishable: jest.fn(() =>
+        Promise.resolve({ id: 'cat-1', kind: categoryKind }),
+      ),
     } as never,
     {
       findById: jest.fn(() =>
@@ -605,9 +609,12 @@ describe('MarketplaceListingsService — directorio de servicios', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
   it('un servicio se publica sin foto y nace "a convenir"', async () => {
-    const { service, saved } = buildHarness(listingOf(), settingsOf(), [
-      'SERVICIOS',
-    ]);
+    const { service, saved } = buildHarness(
+      listingOf(),
+      settingsOf(),
+      ['SERVICIOS'],
+      MarketplaceCategoryKind.SERVICE,
+    );
 
     await service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL]));
 
@@ -620,6 +627,7 @@ describe('MarketplaceListingsService — directorio de servicios', () => {
       listingOf(),
       settingsOf({ moderationMode: MarketplaceModerationMode.AUTO }),
       ['SERVICIOS'],
+      MarketplaceCategoryKind.SERVICE,
     );
 
     await service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL]));
@@ -686,6 +694,21 @@ describe('MarketplaceListingsService — directorio de servicios', () => {
       ),
     ).rejects.toMatchObject({
       errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
+  });
+
+  it('un servicio no entra en una categoría de clasificados', async () => {
+    const { service } = buildHarness(
+      listingOf(),
+      settingsOf(),
+      ['SERVICIOS'],
+      MarketplaceCategoryKind.CLASSIFIED,
+    );
+
+    await expect(
+      service.create(serviceInput, userOf([ValidRoles.RESIDENT_ROL])),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.MARKETPLACE_CATEGORY_KIND_MISMATCH,
     });
   });
 });

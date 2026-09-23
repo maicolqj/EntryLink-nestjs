@@ -12,6 +12,7 @@ import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplacePriceType } from '../enums/marketplace-price-type.enum';
 import { MarketplaceModerationMode } from '../enums/marketplace-moderation-mode.enum';
 import { MarketplaceContactPreference } from '../enums/marketplace-contact-preference.enum';
+import { MarketplaceCategoryKind } from '../enums/marketplace-category-kind.enum';
 
 import { CreateListingDto } from '../dto/inputs/create-listing.input';
 import { UpdateListingInput } from '../dto/inputs/update-listing.input';
@@ -167,10 +168,11 @@ export class MarketplaceListingsService {
       });
     }
 
-    await this.categoriesService.findPublishable(
+    const category = await this.categoriesService.findPublishable(
       data.categoryId,
       data.complexId,
     );
+    this.assertCategoryMatchesType(category.kind, data.type);
 
     const { unitId, residentId } = await this.resolveOwnerContext(
       data.complexId,
@@ -282,10 +284,11 @@ export class MarketplaceListingsService {
     const settings = await this.settingsService.getOrCreate(listing.complexId);
 
     if (input.categoryId && input.categoryId !== listing.categoryId) {
-      await this.categoriesService.findPublishable(
+      const category = await this.categoriesService.findPublishable(
         input.categoryId,
         listing.complexId,
       );
+      this.assertCategoryMatchesType(category.kind, input.type ?? listing.type);
     }
 
     if (
@@ -982,6 +985,11 @@ export class MarketplaceListingsService {
     if (filters?.type) {
       qb.andWhere('l.type = :type', { type: filters.type });
     }
+    if (filters?.excludeTypes?.length) {
+      qb.andWhere('l.type NOT IN (:...excludeTypes)', {
+        excludeTypes: filters.excludeTypes,
+      });
+    }
     if (filters?.priceType) {
       qb.andWhere('l.priceType = :priceType', { priceType: filters.priceType });
     }
@@ -1396,6 +1404,32 @@ export class MarketplaceListingsService {
           : 'El módulo de clasificados no está habilitado en este complejo',
       statusCode: HttpStatus.FORBIDDEN,
       errorCode: MarketplaceErrorCode.MARKETPLACE_MODULE_DISABLED,
+    });
+  }
+
+  /**
+   * Un servicio va en una categoría del directorio y lo demás en una de
+   * clasificados. Mezclarlas es lo que llevaba "Plomería" a la vitrina de
+   * artículos usados.
+   */
+  private assertCategoryMatchesType(
+    kind: MarketplaceCategoryKind,
+    type: MarketplaceListingType,
+  ): void {
+    const expected =
+      type === MarketplaceListingType.SERVICE
+        ? MarketplaceCategoryKind.SERVICE
+        : MarketplaceCategoryKind.CLASSIFIED;
+
+    if (kind === expected) return;
+
+    throw new CustomError({
+      message:
+        type === MarketplaceListingType.SERVICE
+          ? 'Elige una categoría del directorio de servicios'
+          : 'Esa categoría es del directorio de servicios, no de clasificados',
+      statusCode: HttpStatus.BAD_REQUEST,
+      errorCode: MarketplaceErrorCode.MARKETPLACE_CATEGORY_KIND_MISMATCH,
     });
   }
 

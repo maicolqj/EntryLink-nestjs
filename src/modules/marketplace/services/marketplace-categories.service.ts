@@ -7,7 +7,10 @@ import { MarketplaceListing } from '../entities/marketplace-listing.entity';
 import { MarketplaceCategoryKind } from '../enums/marketplace-category-kind.enum';
 import { MarketplaceListingStatus } from '../enums/marketplace-listing-status.enum';
 import { UpsertMarketplaceCategoryInput } from '../dto/inputs/upsert-marketplace-category.input';
-import { DEFAULT_MARKETPLACE_CATEGORIES } from '../constants/default-categories.constant';
+import {
+  DEFAULT_MARKETPLACE_CATEGORIES,
+  DEFAULT_SERVICE_CATEGORIES,
+} from '../constants/default-categories.constant';
 import { slugifyCategory } from '../utils/marketplace-module.util';
 
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
@@ -49,7 +52,10 @@ export class MarketplaceCategoriesService {
    * y el slug ya está tomado.
    */
   async ensureDefaults(complexId: string): Promise<void> {
-    const rows = DEFAULT_MARKETPLACE_CATEGORIES.map((category) => ({
+    const rows = [
+      ...DEFAULT_MARKETPLACE_CATEGORIES,
+      ...DEFAULT_SERVICE_CATEGORIES,
+    ].map((category) => ({
       complexId,
       kind: category.kind,
       name: category.name,

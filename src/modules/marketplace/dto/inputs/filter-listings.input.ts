@@ -1,5 +1,6 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
   IsNumber,
@@ -32,6 +33,19 @@ export class FilterListingsInput {
   @IsOptional()
   @IsEnum(MarketplaceListingType)
   type?: MarketplaceListingType;
+
+  /**
+   * Tipos que NO se quieren. La vitrina de clasificados excluye `SERVICE`, que
+   * tiene su propio directorio; filtrar en el cliente rompería la paginación.
+   */
+  @Field(() => [MarketplaceListingType], {
+    nullable: true,
+    description: 'Tipos de publicación que se excluyen del listado',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(MarketplaceListingType, { each: true })
+  excludeTypes?: MarketplaceListingType[];
 
   @Field(() => MarketplacePriceType, { nullable: true })
   @IsOptional()
