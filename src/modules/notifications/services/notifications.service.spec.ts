@@ -159,7 +159,11 @@ describe('NotificationsService — destacar un aviso', () => {
       isStarred: false,
     });
 
-    const result = await h.service.setStarred('11111111-1111-4111-8111-111111111111', true, user);
+    const result = await h.service.setStarred(
+      '11111111-1111-4111-8111-111111111111',
+      true,
+      user,
+    );
 
     expect(result.isStarred).toBe(true);
     expect(h.save).toHaveBeenCalledTimes(1);
@@ -174,7 +178,11 @@ describe('NotificationsService — destacar un aviso', () => {
       isStarred: true,
     });
 
-    await h.service.setStarred('11111111-1111-4111-8111-111111111111', true, user);
+    await h.service.setStarred(
+      '11111111-1111-4111-8111-111111111111',
+      true,
+      user,
+    );
 
     expect(h.save).not.toHaveBeenCalled();
   });
@@ -188,7 +196,9 @@ describe('NotificationsService — destacar un aviso', () => {
       isStarred: false,
     });
 
-    await expect(h.service.setStarred('11111111-1111-4111-8111-111111111111', true, user)).rejects.toBeDefined();
+    await expect(
+      h.service.setStarred('11111111-1111-4111-8111-111111111111', true, user),
+    ).rejects.toBeDefined();
     expect(h.save).not.toHaveBeenCalled();
   });
 });
@@ -281,5 +291,125 @@ describe('NotificationsService — acciones en lote', () => {
 
     expect(result).toEqual({ affected: 0, skipped: 1 });
     expect(h.qb.execute).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Spec de QUÉ ve cada sombrero.
+ *
+ * La bandeja se direcciona por `recipientUserId`, así que devuelve todo lo
+ * dirigido a una persona sin importar desde dónde mire. Quien administra y
+ * además vive en el conjunto entra a la app con una sesión acotada a residente,
+ * y ahí no puede aparecerle la operación del conjunto.
+ */
+describe('NotificationsService — audiencia de la bandeja', () => {
+  /** Captura los `andWhere` para ver si se aplicó el recorte por tipo. */
+  const buildQb = () => {
+    const conditions: string[] = [];
+    const params: Record<string, unknown> = {};
+    const qb: any = {
+      where: jest.fn(() => qb),
+      andWhere: jest.fn((sql: string, p?: Record<string, unknown>) => {
+        conditions.push(sql);
+        Object.assign(params, p ?? {});
+        return qb;
+      }),
+      orderBy: jest.fn(() => qb),
+      skip: jest.fn(() => qb),
+      take: jest.fn(() => qb),
+      getCount: jest.fn(async () => 0),
+      getMany: jest.fn(async () => []),
+    };
+    return { qb, conditions, params };
+  };
+
+  const buildService = (qb: any) =>
+    new NotificationsService(
+      { createQueryBuilder: jest.fn(() => qb) } as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null,
+      null,
+      null as never,
+    );
+
+  const pagination = { page: 1, limit: 20 };
+
+  it('la sesión de residente solo ve los tipos de su audiencia', async () => {
+    const { qb, conditions, params } = buildQb();
+
+    await buildService(qb).findByUser(COMPLEX_ID, pagination, {}, {
+      sub: 'user-1',
+      roles: [ValidRoles.RESIDENT_ROL],
+      complexId: COMPLEX_ID,
+    } as never);
+
+    expect(conditions).toContain('n.type IN (:...audienceTypes)');
+    const tipos = params.audienceTypes as string[];
+    // Lo de la unidad entra; la operación del conjunto no.
+    expect(tipos).toContain('PACKAGE_RECEIVED');
+    expect(tipos).toContain('PANIC_ALERT');
+    expect(tipos).not.toContain('PET_INCIDENT_REPORTED');
+    expect(tipos).not.toContain('RESIDENT_PENDING');
+  });
+
+  it('el consejero sigue siendo una sesión de residente', async () => {
+    const { qb, conditions } = buildQb();
+
+    await buildService(qb).findByUser(COMPLEX_ID, pagination, {}, {
+      sub: 'user-1',
+      roles: [ValidRoles.RESIDENT_ROL, ValidRoles.COUNCIL_ROL],
+      complexId: COMPLEX_ID,
+    } as never);
+
+    expect(conditions).toContain('n.type IN (:...audienceTypes)');
+  });
+
+  it('una sesión con cargo no se recorta', async () => {
+    const { qb, conditions } = buildQb();
+
+    await buildService(qb).findByUser(COMPLEX_ID, pagination, {}, {
+      sub: 'user-1',
+      roles: [ValidRoles.COMPLEX_ROL],
+      complexId: COMPLEX_ID,
+    } as never);
+
+    expect(conditions).not.toContain('n.type IN (:...audienceTypes)');
+  });
+
+  it('la misma cuenta con los dos sombreros ve todo con el token completo', async () => {
+    // Entrar por correo y contraseña emite el token con todos los roles: ahí sí
+    // corresponde ver la operación del conjunto.
+    const { qb, conditions } = buildQb();
+
+    await buildService(qb).findByUser(COMPLEX_ID, pagination, {}, {
+      sub: 'user-1',
+      roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL],
+      complexId: COMPLEX_ID,
+    } as never);
+
+    expect(conditions).not.toContain('n.type IN (:...audienceTypes)');
+  });
+
+  it('el badge cuenta lo mismo que la bandeja muestra', async () => {
+    const { qb, conditions } = buildQb();
+
+    await buildService(qb).getUnreadCount(COMPLEX_ID, {
+      sub: 'user-1',
+      roles: [ValidRoles.RESIDENT_ROL],
+      complexId: COMPLEX_ID,
+    } as never);
+
+    expect(conditions).toContain('n.type IN (:...audienceTypes)');
   });
 });

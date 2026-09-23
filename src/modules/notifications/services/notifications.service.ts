@@ -10,7 +10,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
-import { Between, In, IsNull, Not, Repository } from 'typeorm';
+import {
+  Between,
+  In,
+  IsNull,
+  Not,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging, type Message } from 'firebase-admin/messaging';
 import * as webpush from 'web-push';
@@ -31,6 +38,10 @@ import {
   panicEscalationJobId,
 } from '../queues/panic-escalation.queue.constants';
 import { NotificationType } from '../enums/notification-type.enum';
+import {
+  RESIDENT_VISIBLE_TYPES,
+  isResidentOnlySession,
+} from '../constants/notification-audience.map';
 import { NotificationPriority } from '../enums/notification-priority.enum';
 import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../enums/notification-action-result.enum';
@@ -1093,6 +1104,8 @@ export class NotificationsService implements OnModuleInit {
       });
     }
 
+    this.applyAudienceScope(qb, currentUser);
+
     if (filters.type) qb.andWhere('n.type = :type', { type: filters.type });
     if (filters.priority)
       qb.andWhere('n.priority = :priority', { priority: filters.priority });
@@ -1224,6 +1237,22 @@ export class NotificationsService implements OnModuleInit {
     const notif = await this.notifRepo.findOne({ where });
 
     if (!notif) {
+      throw new CustomError({
+        message: 'Notificación no encontrada',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+
+    // Filtrar la lista no basta: por acá pasan también el detalle y las
+    // mutaciones (marcar leída, destacar, borrar, ejecutar la acción). Sin esto,
+    // una sesión de residente que tenga el id abriría una notificación de
+    // operación dirigida a la misma persona. Se responde igual que si no
+    // existiera: revelar que existe pero no se puede ver no aporta nada.
+    if (
+      isResidentOnlySession(currentUser.roles) &&
+      !RESIDENT_VISIBLE_TYPES.includes(notif.type)
+    ) {
       throw new CustomError({
         message: 'Notificación no encontrada',
         statusCode: HttpStatus.NOT_FOUND,
@@ -1405,8 +1434,33 @@ export class NotificationsService implements OnModuleInit {
       });
     }
 
+    // El badge tiene que contar lo mismo que la bandeja muestra, o el número
+    // queda pegado en algo que el residente no puede abrir.
+    this.applyAudienceScope(qb, currentUser);
+
     const count = await qb.getCount();
     return { count };
+  }
+
+  /**
+   * Acota la consulta a lo que la sesión puede leer con su sombrero.
+   *
+   * Solo muerde en las sesiones acotadas a residente —las que abren WhatsApp,
+   * OTP, el código de sistema, la clave del dispositivo o la aprobación desde
+   * otro equipo—. Una sesión con cargo ve todo lo suyo, como siempre.
+   *
+   * Es una lista de permitidos: un tipo nuevo sin clasificar se queda fuera de
+   * la app en vez de colarse solo. Ver NOTIFICATION_AUDIENCE.
+   */
+  private applyAudienceScope(
+    qb: SelectQueryBuilder<Notification>,
+    currentUser: JwtAccessPayload,
+  ): void {
+    if (!isResidentOnlySession(currentUser.roles)) return;
+
+    qb.andWhere('n.type IN (:...audienceTypes)', {
+      audienceTypes: [...RESIDENT_VISIBLE_TYPES],
+    });
   }
 
   /** Historial paginado de envíos masivos realizados por el usuario en el complejo */
