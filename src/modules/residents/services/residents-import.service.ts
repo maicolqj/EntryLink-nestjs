@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { extname } from 'path';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -21,6 +21,7 @@ import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { Role } from '../../roles/entities/role.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
 import { Unit } from '../../residential-complex/entities/unit.entity';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { Building } from '../../residential-complex/entities/building.entity';
@@ -250,6 +251,11 @@ export class ResidentsImportService {
           );
         }
         resolvedUserId = existingUser.id;
+
+        // Mismo arreglo que en createResident: importar sobre una cuenta que ya
+        // existía no puede dejarla sin RESIDENT_ROL, o el residente queda sin
+        // poder iniciar sesión por ningún canal de residente.
+        await ensureResidentRole(manager, resolvedUserId, residentRole.id);
       } else {
         // Create new user
         const dummyPassword = await hash(randomBytes(32).toString('hex'), 10);

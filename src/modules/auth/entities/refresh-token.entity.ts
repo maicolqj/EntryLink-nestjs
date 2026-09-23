@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, ID, HideField } from '@nestjs/graphql';
 import { User } from '../../users/entities/user.entity';
+import { ValidRoles } from '../../roles/enums/valid-roles';
 
 // Definimos un tipo para el JSONB para que GraphQL sepa qué estructura esperar
 @ObjectType()
@@ -111,4 +112,18 @@ export class RefreshToken {
     nullable: true,
   })
   refreshExpiry?: string;
+
+  /**
+   * Roles a los que está limitada esta sesión. Nula = sin límite, el token sale
+   * con todos los roles del usuario (comportamiento de siempre).
+   *
+   * Vive en la fila y no solo en el JWT porque la rotación reconstruye el
+   * access token desde la base (`rotateRefreshToken`). Sin persistirlo, una
+   * sesión de residente abierta por una cuenta que además administra recuperaba
+   * los roles administrativos en el primer refresh —una escalada silenciosa,
+   * quince minutos después de entrar—.
+   */
+  @HideField()
+  @Column({ name: 'role_scope', type: 'jsonb', nullable: true })
+  roleScope?: ValidRoles[] | null;
 }

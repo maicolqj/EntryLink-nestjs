@@ -4,6 +4,7 @@ import { Role } from '../../../modules/roles/entities/role.entity';
 import { UserRole } from '../../../modules/users/entities/user_has_roles.entity';
 import { ValidRoles } from '../../../modules/roles/enums/valid-roles';
 import { USER_TO_SEED } from './datas/users-data.seed';
+import { ensureResidentRole } from '../../../modules/roles/utils/resident-base-role.util';
 
 export const runUserSeed = async (dataSource: DataSource) => {
   const userRepository = dataSource.getRepository(User);
@@ -41,7 +42,14 @@ export const runUserSeed = async (dataSource: DataSource) => {
       });
 
       await userRoleRepository.save(newUserRole);
-      console.log(`Usuario ${savedUser.email} creado con rol ADMIN.`);
+
+      // RESIDENT_ROL es el rol base y se suma al del cargo: el administrador
+      // también puede vivir en un complejo. Ver ROLES_WITH_RESIDENT_BASE.
+      await ensureResidentRole(dataSource.manager, savedUser.id);
+
+      console.log(
+        `Usuario ${savedUser.email} creado con rol ADMIN + RESIDENT_ROL base.`,
+      );
     }
   }
 };

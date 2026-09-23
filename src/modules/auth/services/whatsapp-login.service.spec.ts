@@ -12,6 +12,7 @@ import { SessionService } from './session.service';
 import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
+import { RESIDENT_SESSION_ROLES } from '../constants/resident-session.constants';
 
 /**
  * Garantías de seguridad del login "reverse-OTP":
@@ -213,6 +214,36 @@ describe('WhatsAppLoginService', () => {
       {
         errorCode: 'WA_LOGIN_CHALLENGE_CONSUMED',
       },
+    );
+  });
+
+  it('la sesión sale acotada a residente aunque la cuenta administre', async () => {
+    // Una cuenta puede ser residente y administrar el conjunto a la vez. Este
+    // canal probó posesión del teléfono, no la contraseña: si el token saliera
+    // con todos los roles, enviar un WhatsApp abriría una sesión de
+    // SUPER_ADMIN.
+    userQueryBuilder.getOne.mockResolvedValueOnce({
+      ...resident,
+      userRoles: [
+        { role: { name: 'RESIDENT_ROL', permissions: [] } },
+        { role: { name: 'SUPER_ADMIN_ROL', permissions: [] } },
+      ],
+    });
+
+    const res = await request();
+    await service.confirmFromInboundMessage(
+      '573001234567',
+      `INGRESAR ${res.nonce}`,
+    );
+    await service.redeem(res.challengeId, device);
+
+    expect(tokenService.generateTokenPair).toHaveBeenCalledWith(
+      expect.anything(),
+      device,
+      false,
+      'user',
+      undefined,
+      RESIDENT_SESSION_ROLES,
     );
   });
 

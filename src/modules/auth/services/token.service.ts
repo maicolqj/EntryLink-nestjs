@@ -53,6 +53,7 @@ export class TokenService {
     rememberMe = false,
     entityType: 'user' | 'complex' = 'user',
     refreshExpiryOverride?: RefreshExpiry,
+    roleScope?: readonly ValidRoles[],
   ): Promise<TokenPair> {
     const sessionId = this.generateSecureId();
     const tokenFamily = this.generateSecureId();
@@ -60,6 +61,7 @@ export class TokenService {
       user,
       sessionId,
       entityType,
+      roleScope,
     );
     const refreshToken = await this.generateRefreshToken(
       user.id,
@@ -70,6 +72,7 @@ export class TokenService {
       entityType,
       undefined,
       refreshExpiryOverride,
+      roleScope,
     );
     return {
       accessToken,
@@ -151,20 +154,30 @@ export class TokenService {
     });
   }
 
-  private extractRoles(user: User): ValidRoles[] {
-    if (!user.userRoles?.length) return [];
-    return user.userRoles
-      .filter((ur) => ur.role)
+  /**
+   * `roleScope` limita la sesión a un subconjunto de los roles del usuario.
+   * Sin él (undefined) salen todos, que es el comportamiento de siempre.
+   * Los permisos se derivan DESPUÉS del recorte: si no, una cuenta que además
+   * administra conservaría los permisos de administrador aunque el token
+   * dijera que entró como residente.
+   */
+  private extractRoles(
+    user: User,
+    roleScope?: readonly ValidRoles[],
+  ): ValidRoles[] {
+    return this.scopedUserRoles(user, roleScope)
       .map((ur) => ur.role.name)
       .filter((role): role is ValidRoles =>
         Object.values(ValidRoles).includes(role),
       );
   }
 
-  private extractPermissions(user: User): ValidPermissions[] {
-    if (!user.userRoles?.length) return [];
+  private extractPermissions(
+    user: User,
+    roleScope?: readonly ValidRoles[],
+  ): ValidPermissions[] {
     const perms = new Set<ValidPermissions>();
-    user.userRoles.forEach((ur) => {
+    this.scopedUserRoles(user, roleScope).forEach((ur) => {
       ur.role?.permissions?.forEach((p) => {
         if (Object.values(ValidPermissions).includes(p.name)) {
           perms.add(p.name);
@@ -174,10 +187,22 @@ export class TokenService {
     return Array.from(perms);
   }
 
+  /** Roles del usuario ya filtrados por el alcance de la sesión. */
+  private scopedUserRoles(user: User, roleScope?: readonly ValidRoles[]) {
+    if (!user.userRoles?.length) return [];
+
+    return user.userRoles
+      .filter((ur) => ur.role)
+      .filter(
+        (ur) => !roleScope || roleScope.includes(ur.role.name as ValidRoles),
+      );
+  }
+
   private async generateAccessToken(
     user: User,
     sessionId: string,
     entityType: 'user' | 'complex' = 'user',
+    roleScope?: readonly ValidRoles[],
   ): Promise<string> {
     const payload: JwtAccessPayload = {
       sub: user.id,
@@ -186,8 +211,8 @@ export class TokenService {
       entityType,
       tokenVersion: user.tokenVersion ?? 0,
       sessionId,
-      roles: this.extractRoles(user),
-      permissions: this.extractPermissions(user),
+      roles: this.extractRoles(user, roleScope),
+      permissions: this.extractPermissions(user, roleScope),
       complexId: user.complexId ?? undefined,
     };
 
@@ -212,6 +237,7 @@ export class TokenService {
     entityType: 'user' | 'complex' = 'user',
     complexId?: string,
     refreshExpiryOverride?: RefreshExpiry,
+    roleScope?: readonly ValidRoles[],
   ): Promise<string> {
     const tokenId = this.generateSecureId();
     const expiresIn =
@@ -255,6 +281,7 @@ export class TokenService {
       lastUsedAt: new Date(),
       rememberMe,
       refreshExpiry: expiresIn,
+      roleScope: roleScope ? [...roleScope] : null,
     });
     return refreshToken;
   }
@@ -389,6 +416,7 @@ export class TokenService {
         storedToken.user,
         storedToken.sessionId,
         'user',
+        storedToken.roleScope ?? undefined,
       );
       newRefreshToken = await this.jwtService.signAsync(
         {
@@ -429,6 +457,9 @@ export class TokenService {
       lastUsedAt: new Date(),
       rememberMe: storedToken.rememberMe,
       refreshExpiry,
+      // El alcance viaja con la familia de tokens: rotar no puede devolverle
+      // a una sesión de residente los roles administrativos de la cuenta.
+      roleScope: storedToken.roleScope ?? null,
     });
 
     // Cache the result so concurrent requests with the old token are served idempotently

@@ -14,6 +14,7 @@ import { SessionService } from './session.service';
 import { ResidentDeviceService } from './resident-device.service';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { RESIDENT_SESSION_ROLES } from '../constants/resident-session.constants';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AuthResponse } from '../dto/responses/auth-response';
 import { WhatsAppLoginChallengeResponse } from '../dto/responses/whatsapp-login-challenge.response';
@@ -342,11 +343,16 @@ export class WhatsAppLoginService {
       AUTH_CONSTANTS.MAX_SESSIONS_PER_USER,
     );
 
+    // La sesión sale acotada a residente. Una cuenta puede ser residente y
+    // administrar el conjunto a la vez; este canal probó posesión del teléfono,
+    // no la contraseña, así que no puede entregar privilegios administrativos.
     const tokenPair = await this.tokenService.generateTokenPair(
       user,
       deviceInfo,
       false,
       'user',
+      undefined,
+      RESIDENT_SESSION_ROLES,
     );
 
     await this.sessionService.createOrUpdateSession(

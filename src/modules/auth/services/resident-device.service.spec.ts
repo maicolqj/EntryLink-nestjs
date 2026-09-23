@@ -12,6 +12,7 @@ import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
+import { RESIDENT_SESSION_ROLES } from '../constants/resident-session.constants';
 import { AuditService } from '../../audit/services/audit.service';
 
 /**
@@ -231,6 +232,7 @@ describe('ResidentDeviceService', () => {
       true,
       'user',
       AUTH_CONSTANTS.RESIDENT_DEVICE_REFRESH_EXPIRY,
+      RESIDENT_SESSION_ROLES,
     );
   });
 
