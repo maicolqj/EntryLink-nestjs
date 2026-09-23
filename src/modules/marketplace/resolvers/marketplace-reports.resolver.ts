@@ -3,6 +3,7 @@ import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { MarketplaceListingReport } from '../entities/marketplace-listing-report.entity';
 import { MarketplaceReportsService } from '../services/marketplace-reports.service';
 import { MarketplaceReportStatus } from '../enums/marketplace-report-status.enum';
+import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { ReportListingInput } from '../dto/inputs/report-listing.input';
 import { ResolveListingReportInput } from '../dto/inputs/resolve-listing-report.input';
 import { PaginatedListingReportsResponse } from '../dto/responses/paginated-listing-reports.response';
@@ -35,6 +36,13 @@ export class MarketplaceReportsResolver {
     @Args('pagination', { nullable: true }) pagination: PaginationInput,
     @Args('status', { type: () => MarketplaceReportStatus, nullable: true })
     status: MarketplaceReportStatus,
+    @Args('types', {
+      type: () => [MarketplaceListingType],
+      nullable: true,
+      description:
+        'Solo estos tipos de publicación. Separa el directorio de servicios de clasificados',
+    })
+    types: MarketplaceListingType[] | undefined,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedListingReportsResponse> {
     return this.reportsService.findByComplex(
@@ -42,6 +50,7 @@ export class MarketplaceReportsResolver {
       pagination ?? { page: 1, limit: 10 },
       status,
       currentUser,
+      types,
     );
   }
 

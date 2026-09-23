@@ -8,6 +8,7 @@ import {
 } from '@nestjs/graphql';
 
 import { MarketplaceListing } from '../entities/marketplace-listing.entity';
+import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplaceListingsService } from '../services/marketplace-listings.service';
 import { UpdateListingInput } from '../dto/inputs/update-listing.input';
 import { FilterListingsInput } from '../dto/inputs/filter-listings.input';
@@ -90,9 +91,16 @@ export class MarketplaceListingsResolver {
   })
   marketplaceStats(
     @Args('complexId') complexId: string,
+    @Args('types', {
+      type: () => [MarketplaceListingType],
+      nullable: true,
+      description:
+        'Solo estos tipos de publicación. Separa el directorio de servicios de clasificados',
+    })
+    types: MarketplaceListingType[] | undefined,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MarketplaceStatsResponse> {
-    return this.listingsService.getStats(complexId, currentUser);
+    return this.listingsService.getStats(complexId, currentUser, types);
   }
 
   // ================================================================

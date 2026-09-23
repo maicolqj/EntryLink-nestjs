@@ -1110,14 +1110,19 @@ export class MarketplaceListingsService {
     });
   }
 
-  /** Los números del encabezado del tablero. */
+  /**
+   * Los números del encabezado del tablero. Con `types` cuenta solo esos tipos:
+   * el directorio de servicios y clasificados tienen cada uno su encabezado.
+   */
   async getStats(
     complexId: string,
     currentUser: JwtAccessPayload,
+    types?: MarketplaceListingType[],
   ): Promise<MarketplaceStatsResponse> {
     await this.complexService.assertComplexAccess(complexId, currentUser);
 
     const soonLimit = this.addDays(new Date(), 7);
+    const typeWhere = types?.length ? { type: In(types) } : {};
 
     const [published, pendingReview, paused, reported, expiringSoon] =
       await Promise.all([
@@ -1126,6 +1131,7 @@ export class MarketplaceListingsService {
             complexId,
             status: MarketplaceListingStatus.PUBLISHED,
             deletedAt: IsNull(),
+            ...typeWhere,
           },
         }),
         this.listingRepo.count({
@@ -1133,6 +1139,7 @@ export class MarketplaceListingsService {
             complexId,
             status: MarketplaceListingStatus.PENDING_REVIEW,
             deletedAt: IsNull(),
+            ...typeWhere,
           },
         }),
         this.listingRepo.count({
@@ -1140,21 +1147,29 @@ export class MarketplaceListingsService {
             complexId,
             status: MarketplaceListingStatus.PAUSED,
             deletedAt: IsNull(),
+            ...typeWhere,
           },
         }),
-        this.listingRepo
-          .createQueryBuilder('l')
-          .where('l.complexId = :complexId', { complexId })
-          .andWhere('l.deletedAt IS NULL')
-          .andWhere('l.pendingReportsCount > 0')
-          .select('COALESCE(SUM(l.pendingReportsCount), 0)', 'total')
-          .getRawOne<{ total: string }>(),
+        (() => {
+          const qb = this.listingRepo
+            .createQueryBuilder('l')
+            .where('l.complexId = :complexId', { complexId })
+            .andWhere('l.deletedAt IS NULL')
+            .andWhere('l.pendingReportsCount > 0');
+          if (types?.length) {
+            qb.andWhere('l.type IN (:...types)', { types });
+          }
+          return qb
+            .select('COALESCE(SUM(l.pendingReportsCount), 0)', 'total')
+            .getRawOne<{ total: string }>();
+        })(),
         this.listingRepo.count({
           where: {
             complexId,
             status: MarketplaceListingStatus.PUBLISHED,
             expiresAt: LessThan(soonLimit),
             deletedAt: IsNull(),
+            ...typeWhere,
           },
         }),
       ]);

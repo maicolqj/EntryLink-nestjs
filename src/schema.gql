@@ -5858,9 +5858,25 @@ type Query {
   maintenanceSlaConfigs(complexId: String!): [MaintenanceSlaConfig!]!
   marketplaceListings(complexId: String!, pagination: PaginationInput, filters: FilterListingsInput): PaginatedListingsResponse!
   marketplaceListing(listingId: String!): MarketplaceListing!
-  marketplaceStats(complexId: String!): MarketplaceStatsResponse!
+  marketplaceStats(
+    complexId: String!
+
+    """
+    Solo estos tipos de publicación. Separa el directorio de servicios de clasificados
+    """
+    types: [MarketplaceListingType!]
+  ): MarketplaceStatsResponse!
   marketplaceCategories(complexId: String!, kind: MarketplaceCategoryKind, includeInactive: Boolean): [MarketplaceCategory!]!
-  listingReports(complexId: String!, pagination: PaginationInput, status: MarketplaceReportStatus): PaginatedListingReportsResponse!
+  listingReports(
+    complexId: String!
+    pagination: PaginationInput
+    status: MarketplaceReportStatus
+
+    """
+    Solo estos tipos de publicación. Separa el directorio de servicios de clasificados
+    """
+    types: [MarketplaceListingType!]
+  ): PaginatedListingReportsResponse!
   marketplaceSettings(complexId: String!): MarketplaceSettings!
 
   """Módulos cuyos datos se pueden descargar en el complejo"""
