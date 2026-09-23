@@ -5283,6 +5283,15 @@ type MarketplaceCategory {
   complex: ResidentialComplex
 }
 
+"""Público de una publicación que se consulta"""
+enum MarketplaceAudienceKind {
+  """Quienes tocaron el corazón (me gusta)"""
+  FAVORITES
+
+  """Quienes tocaron el botón me interesa"""
+  INTERESTED
+}
+
 """Vitrina a la que pertenece la categoría"""
 enum MarketplaceCategoryKind {
   """Clasificados y comercio interno"""
@@ -5505,6 +5514,30 @@ enum MarketplaceReportStatus {
 }
 
 """Ajustes del módulo de clasificados del complejo"""
+"""Vecino que marcó me gusta o me interesa"""
+type ListingAudienceEntry {
+  userId: String!
+  name: String!
+  profilePicture: String
+
+  """Torre y unidad; nulo si ya no vive en el conjunto"""
+  unitLabel: String
+
+  """Cuándo marcó me gusta o me interesa"""
+  at: DateTime!
+
+  """Mensaje que dejó el interesado"""
+  message: String
+
+  """Canal que usó el interesado"""
+  channel: MarketplaceContactPreference
+}
+
+type PaginatedListingAudienceResponse {
+  items: [ListingAudienceEntry!]!
+  pagination: PaginationReponse!
+}
+
 type MarketplaceSettings {
   complexId: String!
   moderationMode: MarketplaceModerationMode!
@@ -5866,6 +5899,7 @@ type Query {
     """
     types: [MarketplaceListingType!]
   ): MarketplaceStatsResponse!
+  listingAudience(listingId: String!, kind: MarketplaceAudienceKind!, pagination: PaginationInput): PaginatedListingAudienceResponse!
   marketplaceCategories(complexId: String!, kind: MarketplaceCategoryKind, includeInactive: Boolean): [MarketplaceCategory!]!
   listingReports(
     complexId: String!
