@@ -450,3 +450,60 @@ describe('MarketplaceChatService — cierre por moderación', () => {
     });
   });
 });
+
+describe('MarketplaceChatService — no leídos por tablero', () => {
+  it('separa clasificados y servicios, y suma el total', async () => {
+    const { service, conversationRepo } = buildHarness();
+
+    const qb: Record<string, jest.Mock> = {};
+    for (const m of [
+      'innerJoin',
+      'select',
+      'addSelect',
+      'where',
+      'andWhere',
+      'setParameter',
+      'groupBy',
+    ]) {
+      qb[m] = jest.fn(() => qb);
+    }
+    qb.getRawMany = jest.fn(() =>
+      Promise.resolve([
+        { board: 'classifieds', total: '3' },
+        { board: 'services', total: '2' },
+      ]),
+    );
+    conversationRepo.createQueryBuilder.mockReturnValueOnce(qb as never);
+
+    await expect(service.unreadSummary('complex-1', BUYER)).resolves.toEqual({
+      total: 5,
+      classifieds: 3,
+      services: 2,
+    });
+  });
+
+  it('sin conversaciones, todo en cero', async () => {
+    const { service, conversationRepo } = buildHarness();
+
+    const qb: Record<string, jest.Mock> = {};
+    for (const m of [
+      'innerJoin',
+      'select',
+      'addSelect',
+      'where',
+      'andWhere',
+      'setParameter',
+      'groupBy',
+    ]) {
+      qb[m] = jest.fn(() => qb);
+    }
+    qb.getRawMany = jest.fn(() => Promise.resolve([]));
+    conversationRepo.createQueryBuilder.mockReturnValueOnce(qb as never);
+
+    await expect(service.unreadSummary('complex-1', BUYER)).resolves.toEqual({
+      total: 0,
+      classifieds: 0,
+      services: 0,
+    });
+  });
+});

@@ -16,6 +16,7 @@ import { MarketplaceMessage } from '../entities/marketplace-message.entity';
 import {
   MarketplaceConversationView,
   MarketplaceMessagesPage,
+  MarketplaceUnreadSummary,
   PaginatedConversationsResponse,
 } from '../dto/responses/marketplace-conversation.response';
 import {
@@ -79,6 +80,12 @@ export class MarketplaceChatResolver {
       description: 'Solo las de un aviso (útil para quien lo publicó)',
     })
     listingId: string,
+    @Args('types', {
+      type: () => [MarketplaceListingType],
+      nullable: true,
+      description: 'Solo las de avisos de estos tipos (un tablero)',
+    })
+    types: MarketplaceListingType[] | undefined,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<PaginatedConversationsResponse> {
     return this.chatService.findMine(
@@ -86,6 +93,7 @@ export class MarketplaceChatResolver {
       pagination ?? { page: 1, limit: 20 },
       currentUser,
       listingId,
+      types,
     );
   }
 
@@ -132,6 +140,18 @@ export class MarketplaceChatResolver {
       limit,
       currentUser,
     );
+  }
+
+  @Query(() => MarketplaceUnreadSummary, {
+    name: 'marketplaceUnreadSummary',
+    description: 'Mensajes sin leer en total, de clasificados y de servicios',
+  })
+  @Auth(AUTH)
+  marketplaceUnreadSummary(
+    @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceUnreadSummary> {
+    return this.chatService.unreadSummary(complexId, currentUser);
   }
 
   @Query(() => Int, {

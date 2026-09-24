@@ -23,6 +23,7 @@ import {
   ConversationRole,
   MarketplaceConversationView,
   MarketplaceMessagesPage,
+  MarketplaceUnreadSummary,
   PaginatedConversationsResponse,
 } from '../dto/responses/marketplace-conversation.response';
 import { listingPriceLabel } from '../utils/marketplace-price.util';
@@ -198,6 +199,7 @@ export class MarketplaceChatService {
     pagination: PaginationInput,
     currentUser: JwtAccessPayload,
     listingId?: string,
+    types?: MarketplaceListingType[],
   ): Promise<PaginatedConversationsResponse> {
     const { page, limit } = pagination;
     const archiveBefore = new Date(
@@ -226,6 +228,7 @@ export class MarketplaceChatService {
       );
 
     if (listingId) qb.andWhere('c.listingId = :listingId', { listingId });
+    if (types?.length) qb.andWhere('l.type IN (:...types)', { types });
 
     qb.orderBy('c.lastMessageAt', 'DESC', 'NULLS LAST')
       .addOrderBy('c.createdAt', 'DESC')
@@ -296,6 +299,48 @@ export class MarketplaceChatService {
       .getRawOne<{ total: string }>();
 
     return Number(row?.total ?? 0);
+  }
+
+  /**
+   * Mensajes sin leer separados por tablero: los del directorio de servicios y
+   * los de clasificados. Es lo que pinta un número en cada acceso del inicio,
+   * para que el vecino sepa dónde le escribieron sin abrir los dos.
+   */
+  async unreadSummary(
+    complexId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceUnreadSummary> {
+    const rows = await this.conversationRepo
+      .createQueryBuilder('c')
+      .innerJoin('c.listing', 'l')
+      .select(
+        `CASE WHEN l.type = :serviceType THEN 'services' ELSE 'classifieds' END`,
+        'board',
+      )
+      .addSelect(
+        `COALESCE(SUM(CASE WHEN c.ownerUserId = :me THEN c.ownerUnreadCount ELSE c.interestedUnreadCount END), 0)`,
+        'total',
+      )
+      .where('c.complexId = :complexId', { complexId })
+      .andWhere(
+        new Brackets((w) =>
+          w
+            .where('c.ownerUserId = :me', { me: currentUser.sub })
+            .orWhere('c.interestedUserId = :me', { me: currentUser.sub }),
+        ),
+      )
+      .setParameter('serviceType', MarketplaceListingType.SERVICE)
+      .groupBy('board')
+      .getRawMany<{ board: 'services' | 'classifieds'; total: string }>();
+
+    const services = Number(
+      rows.find((r) => r.board === 'services')?.total ?? 0,
+    );
+    const classifieds = Number(
+      rows.find((r) => r.board === 'classifieds')?.total ?? 0,
+    );
+
+    return { total: services + classifieds, classifieds, services };
   }
 
   /**

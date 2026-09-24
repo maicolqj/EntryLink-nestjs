@@ -134,6 +134,20 @@ export class PaginatedConversationsResponse {
   pagination: PaginationReponse;
 }
 
+@ObjectType({
+  description: 'Mensajes sin leer, en total y por tablero',
+})
+export class MarketplaceUnreadSummary {
+  @Field(() => Int)
+  total: number;
+
+  @Field(() => Int, { description: 'De avisos de clasificados' })
+  classifieds: number;
+
+  @Field(() => Int, { description: 'Del directorio de servicios' })
+  services: number;
+}
+
 @ObjectType({ description: 'Página de mensajes, del más nuevo al más viejo' })
 export class MarketplaceMessagesPage {
   @Field(() => [MarketplaceMessage])
