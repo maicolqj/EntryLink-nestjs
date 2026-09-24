@@ -10,6 +10,7 @@ import { MarketplaceSettings } from './entities/marketplace-settings.entity';
 import { MarketplaceConversation } from './entities/marketplace-conversation.entity';
 import { MarketplaceMessage } from './entities/marketplace-message.entity';
 import { MarketplaceUserBlock } from './entities/marketplace-user-block.entity';
+import { MarketplaceConversationReport } from './entities/marketplace-conversation-report.entity';
 
 import { MarketplaceListingsService } from './services/marketplace-listings.service';
 import { MarketplaceCategoriesService } from './services/marketplace-categories.service';
@@ -17,6 +18,7 @@ import { MarketplaceReportsService } from './services/marketplace-reports.servic
 import { MarketplaceSettingsService } from './services/marketplace-settings.service';
 import { MarketplaceAudienceService } from './services/marketplace-audience.service';
 import { MarketplaceChatService } from './services/marketplace-chat.service';
+import { MarketplaceChatReportsService } from './services/marketplace-chat-reports.service';
 
 import { MarketplaceListingsResolver } from './resolvers/marketplace-listings.resolver';
 import { MarketplaceCategoriesResolver } from './resolvers/marketplace-categories.resolver';
@@ -45,6 +47,7 @@ import { AuditModule } from '../audit/audit.module';
       MarketplaceConversation,
       MarketplaceMessage,
       MarketplaceUserBlock,
+      MarketplaceConversationReport,
     ]),
     ResidentialComplexModule, // ResidentialComplexService + UnitService
     ResidentsModule, // la unidad desde la que se publica y quién pregunta
@@ -60,6 +63,7 @@ import { AuditModule } from '../audit/audit.module';
     MarketplaceSettingsService,
     MarketplaceAudienceService,
     MarketplaceChatService,
+    MarketplaceChatReportsService,
     MarketplaceListingsResolver,
     MarketplaceCategoriesResolver,
     MarketplaceReportsResolver,

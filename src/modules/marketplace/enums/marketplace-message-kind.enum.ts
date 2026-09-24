@@ -10,6 +10,7 @@ import { registerEnumType } from '@nestjs/graphql';
 export enum MarketplaceMessageKind {
   TEXT = 'TEXT',
   PHONE_SHARED = 'PHONE_SHARED',
+  IMAGE = 'IMAGE',
 }
 
 registerEnumType(MarketplaceMessageKind, {
@@ -19,6 +20,10 @@ registerEnumType(MarketplaceMessageKind, {
     TEXT: { description: 'Mensaje de texto' },
     PHONE_SHARED: {
       description: 'Su autor compartió su WhatsApp con esta persona',
+    },
+    IMAGE: {
+      description:
+        'Una foto. Se descarga por `imagePath`, que exige sesión de un participante',
     },
   },
 });

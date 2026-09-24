@@ -93,6 +93,8 @@ const buildHarness = (
     blocked?: boolean;
     recentMessages?: number;
     allowPhoneContact?: boolean;
+    reports?: number;
+    message?: Record<string, unknown> | null;
   } = {},
 ) => {
   const conversation =
@@ -123,6 +125,15 @@ const buildHarness = (
     ),
     count: jest.fn(() => Promise.resolve(options.recentMessages ?? 0)),
     find: jest.fn(() => Promise.resolve([])),
+    findOne: jest.fn(() => Promise.resolve(options.message ?? null)),
+  };
+
+  const reportRepo = {
+    count: jest.fn(() => Promise.resolve(options.reports ?? 0)),
+    find: jest.fn(() => Promise.resolve([])),
+  };
+  const complexService = {
+    assertComplexAccess: jest.fn(() => Promise.resolve(undefined)),
   };
 
   const blockRepo = {
@@ -139,6 +150,9 @@ const buildHarness = (
   const listingsService = {
     findById: jest.fn(() => Promise.resolve(listing)),
     findByIdInternal: jest.fn(() => Promise.resolve(listing)),
+    isModerator: jest.fn((user: JwtAccessPayload) =>
+      user.roles.includes(ValidRoles.COMPLEX_ROL),
+    ),
     registerInterest: jest.fn(() => Promise.resolve(listing)),
     notifyInterest: jest.fn(() => Promise.resolve()),
   };
@@ -179,11 +193,13 @@ const buildHarness = (
     messageRepo as never,
     blockRepo as never,
     contactRepo as never,
+    reportRepo as never,
     listingsService as never,
     settingsService as never,
     notificationsService as never,
     socketService as never,
     { getRepository: (entity: unknown) => repos.get(entity) } as never,
+    complexService as never,
   );
 
   return {
@@ -354,5 +370,83 @@ describe('MarketplaceChatService — me interesa', () => {
       errorCode: MarketplaceErrorCode.CONVERSATION_BLOCKED,
     });
     expect(listingsService.registerInterest).not.toHaveBeenCalled();
+  });
+});
+
+describe('MarketplaceChatService — fotos', () => {
+  const imageMessage = {
+    id: 'msg-img',
+    conversationId: 'conv-1',
+    senderUserId: 'buyer-1',
+    kind: MarketplaceMessageKind.IMAGE,
+    body: 'EntryLink/conjunto/marketplace-chat/conv-1/secreto.jpg',
+  };
+
+  it('la llave de R2 nunca sale: se cambia por la ruta del API', () => {
+    const { service } = buildHarness();
+
+    const out = service.toPublic(imageMessage as never, 'owner-1');
+
+    expect(out.body).toBe('');
+    expect(out.imagePath).toBe(
+      '/api/v1/marketplace/conversations/conv-1/messages/msg-img/image',
+    );
+    expect(out.isMine).toBe(false);
+  });
+
+  it('un participante recibe la foto', async () => {
+    const { service } = buildHarness({ message: imageMessage });
+
+    await expect(
+      service.resolveImageKey('conv-1', 'msg-img', OWNER),
+    ).resolves.toBe(imageMessage.body);
+  });
+
+  it('la administración no ve fotos de un chat sin reporte', async () => {
+    const { service } = buildHarness({ message: imageMessage, reports: 0 });
+
+    await expect(
+      service.resolveImageKey(
+        'conv-1',
+        'msg-img',
+        userOf('admin-1', [ValidRoles.COMPLEX_ROL]),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.CONVERSATION_ACCESS_DENIED,
+    });
+  });
+
+  it('con un reporte, la administración sí las ve', async () => {
+    const { service } = buildHarness({ message: imageMessage, reports: 1 });
+
+    await expect(
+      service.resolveImageKey(
+        'conv-1',
+        'msg-img',
+        userOf('admin-1', [ValidRoles.COMPLEX_ROL]),
+      ),
+    ).resolves.toBe(imageMessage.body);
+  });
+
+  it('un vecino cualquiera no, aunque haya reporte', async () => {
+    const { service } = buildHarness({ message: imageMessage, reports: 1 });
+
+    await expect(
+      service.resolveImageKey('conv-1', 'msg-img', userOf('otro-vecino')),
+    ).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.CONVERSATION_ACCESS_DENIED,
+    });
+  });
+});
+
+describe('MarketplaceChatService — cierre por moderación', () => {
+  it('una conversación cerrada por la administración no admite mensajes', async () => {
+    const { service } = buildHarness({
+      conversation: conversationOf({ moderationClosedAt: new Date() }),
+    });
+
+    await expect(service.send('conv-1', 'hola', BUYER)).rejects.toMatchObject({
+      errorCode: MarketplaceErrorCode.CONVERSATION_CLOSED_BY_MODERATION,
+    });
   });
 });

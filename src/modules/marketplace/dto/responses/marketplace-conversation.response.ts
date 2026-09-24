@@ -92,9 +92,19 @@ export class MarketplaceConversationView {
 
   @Field(() => Boolean, {
     description:
-      'El aviso se cerró, venció o se retiró: se lee pero no se escribe',
+      'El aviso se cerró, venció o se retiró —o la administración cerró el chat—: se lee pero no se escribe',
   })
   isReadOnly: boolean;
+
+  @Field(() => Boolean, {
+    description: 'La administración cerró la conversación por un reporte',
+  })
+  closedByModeration: boolean;
+
+  @Field(() => Boolean, {
+    description: 'Quien consulta tiene un reporte pendiente sobre este chat',
+  })
+  reportedByMe: boolean;
 
   @Field(() => Boolean, {
     description: 'No se puede escribir porque alguno bloqueó al otro',

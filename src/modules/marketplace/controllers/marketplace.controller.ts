@@ -2,20 +2,28 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Logger,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
+  Res,
+  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 import { MarketplaceListingsService } from '../services/marketplace-listings.service';
+import { MarketplaceChatService } from '../services/marketplace-chat.service';
 import { CreateListingDto } from '../dto/inputs/create-listing.input';
 
 import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
-import { multipleImagesInterceptor } from '../../../core/infrastructure/r2/upload-interceptors';
+import {
+  multipleImagesInterceptor,
+  singleImageInterceptor,
+} from '../../../core/infrastructure/r2/upload-interceptors';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { Auth } from '../../shared/decorators/auth.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
@@ -47,7 +55,92 @@ export class MarketplaceController {
     private readonly listingsService: MarketplaceListingsService,
     private readonly storageService: R2StorageService,
     private readonly complexService: ResidentialComplexService,
+    private readonly chatService: MarketplaceChatService,
   ) {}
+
+  /**
+   * POST /api/v1/marketplace/conversations/:conversationId/images
+   *
+   * Manda una foto por el chat. Body (multipart/form-data): `image`.
+   * Carpeta R2: EntryLink/{complex-slug}/marketplace-chat/{conversationId}
+   *
+   * La foto NO se sirve por la URL pública del bucket: la llave queda en el
+   * mensaje y solo sale por el GET de abajo, que valida quién la pide.
+   */
+  @Post('conversations/:conversationId/images')
+  @Auth({ roles: PUBLISHER_ROLES })
+  @UseInterceptors(singleImageInterceptor('image', { maxSizeMb: 8 }))
+  async sendChatImage(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @UploadedFile() image: Express.Multer.File,
+    @Req() req: Request,
+  ) {
+    const currentUser = req.user as JwtAccessPayload;
+
+    if (!image) {
+      throw new BadRequestException('El campo image es requerido');
+    }
+
+    // Antes de subir nada: participante, chat abierto y sin exceso de mensajes.
+    const conversation = await this.chatService.assertCanSendImage(
+      conversationId,
+      currentUser,
+    );
+    const complexSlug = await this.complexService.getSlugById(
+      conversation.complexId,
+    );
+    const folder = this.storageService.buildFolder(
+      complexSlug,
+      'marketplace-chat',
+      conversationId,
+    );
+
+    const uploaded = await this.storageService.uploadBuffer(
+      image.buffer,
+      folder,
+      image.originalname,
+    );
+
+    try {
+      return await this.chatService.sendImage(
+        conversationId,
+        uploaded.publicId,
+        currentUser,
+      );
+    } catch (error) {
+      await this.cleanupUploads([uploaded.publicId]);
+      throw error;
+    }
+  }
+
+  /**
+   * GET /api/v1/marketplace/conversations/:conversationId/messages/:messageId/image
+   *
+   * Sirve una foto del chat. Solo a los dos participantes, o a la
+   * administración si la conversación fue reportada.
+   */
+  @Get('conversations/:conversationId/messages/:messageId/image')
+  @Auth({ roles: PUBLISHER_ROLES })
+  async getChatImage(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const key = await this.chatService.resolveImageKey(
+      conversationId,
+      messageId,
+      req.user as JwtAccessPayload,
+    );
+
+    const file = await this.storageService.getObjectStream(key);
+
+    res.setHeader('Content-Type', file.contentType);
+    if (file.length) res.setHeader('Content-Length', String(file.length));
+    // Privada: ningún proxy ni CDN intermedio puede guardarla.
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    file.stream.pipe(res);
+  }
 
   /**
    * POST /api/v1/marketplace/listings
