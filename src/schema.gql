@@ -1799,6 +1799,7 @@ enum NotificationType {
   LISTING_APPROVED
   LISTING_REJECTED
   LISTING_INTEREST
+  MARKETPLACE_CHAT_MESSAGE
   LISTING_REPORTED
   LISTING_PAUSED_BY_REPORTS
   LISTING_EXPIRING
@@ -5541,6 +5542,103 @@ enum MarketplaceModerationMode {
   PREVIA
 }
 
+"""Mensaje del chat entre vecinos por un aviso"""
+type MarketplaceMessage {
+  id: ID!
+  conversationId: String!
+  senderUserId: String!
+  kind: MarketplaceMessageKind!
+  body: String!
+  createdAt: DateTime!
+  isMine: Boolean!
+}
+
+"""Tipo de mensaje del chat de clasificados"""
+enum MarketplaceMessageKind {
+  """Mensaje de texto"""
+  TEXT
+
+  """Su autor compartió su WhatsApp con esta persona"""
+  PHONE_SHARED
+}
+
+"""El aviso del que se habla, en corto"""
+type ConversationListingSummary {
+  id: String!
+  title: String!
+  type: MarketplaceListingType!
+  status: MarketplaceListingStatus!
+  imageUrl: String
+
+  """Precio ya formateado para mostrar"""
+  priceLabel: String!
+}
+
+"""El otro participante de la conversación"""
+type ConversationCounterpart {
+  name: String!
+  profilePicture: String
+  unitLabel: String
+}
+
+"""Conversación vista desde quien consulta"""
+type MarketplaceConversationView {
+  id: String!
+  role: ConversationRole!
+  listing: ConversationListingSummary!
+  counterpart: ConversationCounterpart!
+  lastMessagePreview: String
+  lastMessageAt: DateTime
+
+  """El último mensaje lo escribí yo"""
+  lastMessageIsMine: Boolean!
+
+  """Mensajes sin leer de quien consulta"""
+  unreadCount: Int!
+
+  """
+  Hasta cuándo leyó el otro; sirve para el "visto"
+  """
+  counterpartLastReadAt: DateTime
+
+  """El aviso se cerró, venció o se retiró: se lee pero no se escribe"""
+  isReadOnly: Boolean!
+
+  """No se puede escribir porque alguno bloqueó al otro"""
+  isBlocked: Boolean!
+
+  """Quien consulta bloqueó al otro"""
+  blockedByMe: Boolean!
+
+  """Quien consulta ya compartió su WhatsApp aquí"""
+  myPhoneShared: Boolean!
+
+  """El conjunto permite compartir el teléfono"""
+  canSharePhone: Boolean!
+}
+
+"""Lado de la conversación de quien consulta"""
+enum ConversationRole {
+  """Publicó el aviso"""
+  OWNER
+
+  """Se interesó en el aviso"""
+  INTERESTED
+}
+
+type PaginatedConversationsResponse {
+  items: [MarketplaceConversationView!]!
+  pagination: PaginationReponse!
+}
+
+"""Página de mensajes, del más nuevo al más viejo"""
+type MarketplaceMessagesPage {
+  items: [MarketplaceMessage!]!
+
+  """Hay mensajes más viejos"""
+  hasMore: Boolean!
+}
+
 """Vecino que marcó me gusta o me interesa"""
 type ListingAudienceEntry {
   userId: String!
@@ -5903,6 +6001,27 @@ type Query {
     types: [MarketplaceListingType!]
   ): PaginatedListingReportsResponse!
   marketplaceSettings(complexId: String!): MarketplaceSettings!
+  myMarketplaceConversations(
+    complexId: String!
+    pagination: PaginationInput
+
+    """Solo las de un aviso (útil para quien lo publicó)"""
+    listingId: String
+  ): PaginatedConversationsResponse!
+  marketplaceConversation(conversationId: String!): MarketplaceConversationView!
+
+  """Mi conversación sobre un aviso ajeno, si ya existe"""
+  myListingConversation(listingId: String!): MarketplaceConversationView
+  marketplaceMessages(
+    conversationId: String!
+
+    """Fecha del mensaje más viejo que ya se tiene"""
+    before: DateTime
+    limit: Int
+  ): MarketplaceMessagesPage!
+
+  """Mensajes sin leer en todas mis conversaciones"""
+  marketplaceUnreadMessages(complexId: String!): Int!
 
   """Módulos cuyos datos se pueden descargar en el complejo"""
   dataExportModules(complexId: String!): [DataExportModuleInfo!]!
@@ -6765,6 +6884,18 @@ type Mutation {
   reportListing(input: ReportListingInput!): MarketplaceListingReport!
   resolveListingReport(input: ResolveListingReportInput!): MarketplaceListingReport!
   updateMarketplaceSettings(input: UpdateMarketplaceSettingsInput!): MarketplaceSettings!
+
+  """"Me interesa": registra el interés y abre el chat"""
+  openListingConversation(input: OpenListingConversationInput!): MarketplaceConversationView!
+  sendMarketplaceMessage(input: SendMarketplaceMessageInput!): MarketplaceMessage!
+
+  """Comparte mi WhatsApp con el otro vecino de esta conversación"""
+  shareMyPhoneInConversation(conversationId: String!): MarketplaceMessage!
+  markMarketplaceConversationRead(conversationId: String!): Boolean!
+
+  """Bloquea al otro vecino: ninguno puede escribirle al otro"""
+  blockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
+  unblockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -8763,4 +8894,16 @@ input UpdateMarketplaceSettingsInput {
   allowPhoneContact: Boolean
   allowWantedListings: Boolean
   termsText: String
+}
+
+input OpenListingConversationInput {
+  listingId: String!
+
+  """Primer mensaje para quien publicó"""
+  message: String
+}
+
+input SendMarketplaceMessageInput {
+  conversationId: String!
+  body: String!
 }

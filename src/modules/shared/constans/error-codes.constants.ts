@@ -478,6 +478,19 @@ export enum MarketplaceErrorCode {
   MARKETPLACE_SETTINGS_INVALID = 'MARKETPLACE_SETTINGS_INVALID',
   MARKETPLACE_MODULE_DISABLED = 'MARKETPLACE_MODULE_DISABLED',
   MARKETPLACE_CATEGORY_KIND_MISMATCH = 'MARKETPLACE_CATEGORY_KIND_MISMATCH',
+  // Chat entre vecinos
+  CONVERSATION_NOT_FOUND = 'CONVERSATION_NOT_FOUND',
+  /** Solo los dos participantes leen la conversación; la administración no. */
+  CONVERSATION_ACCESS_DENIED = 'CONVERSATION_ACCESS_DENIED',
+  /** El aviso se cerró, venció o se retiró: el chat queda de solo lectura. */
+  CONVERSATION_READ_ONLY = 'CONVERSATION_READ_ONLY',
+  /** Uno de los dos bloqueó al otro. No se dice cuál. */
+  CONVERSATION_BLOCKED = 'CONVERSATION_BLOCKED',
+  MESSAGE_EMPTY = 'MESSAGE_EMPTY',
+  MESSAGE_RATE_LIMITED = 'MESSAGE_RATE_LIMITED',
+  /** El conjunto apagó el contacto por teléfono en los clasificados. */
+  PHONE_SHARING_DISABLED = 'PHONE_SHARING_DISABLED',
+  PHONE_NOT_AVAILABLE = 'PHONE_NOT_AVAILABLE',
 }
 
 /**
