@@ -12,6 +12,8 @@ import {
 import { MarketplaceConversation } from '../entities/marketplace-conversation.entity';
 import { MarketplaceMessage } from '../entities/marketplace-message.entity';
 import { MarketplaceUserBlock } from '../entities/marketplace-user-block.entity';
+import { MarketplaceConversationReport } from '../entities/marketplace-conversation-report.entity';
+import { MarketplaceReportStatus } from '../enums/marketplace-report-status.enum';
 import { MarketplaceListing } from '../entities/marketplace-listing.entity';
 import { MarketplaceListingContact } from '../entities/marketplace-listing-contact.entity';
 import { MarketplaceListingStatus } from '../enums/marketplace-listing-status.enum';
@@ -39,6 +41,14 @@ import { SocketService } from '../../../core/infrastructure/socket/socket.servic
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { User } from '../../users/entities/user.entity';
 import { Unit } from '../../residential-complex/entities/unit.entity';
+import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
+
+/** Ruta del API que sirve una foto del chat. Nunca la llave de R2. */
+export const imagePathFor = (message: {
+  conversationId: string;
+  id: string;
+}): string =>
+  `/api/v1/marketplace/conversations/${message.conversationId}/messages/${message.id}/image`;
 
 /** Aviso cerrado: el chat se lee pero ya no se escribe. */
 const CLOSED_STATUSES = [
@@ -85,11 +95,14 @@ export class MarketplaceChatService {
     private readonly blockRepo: Repository<MarketplaceUserBlock>,
     @InjectRepository(MarketplaceListingContact)
     private readonly contactRepo: Repository<MarketplaceListingContact>,
+    @InjectRepository(MarketplaceConversationReport)
+    private readonly reportRepo: Repository<MarketplaceConversationReport>,
     private readonly listingsService: MarketplaceListingsService,
     private readonly settingsService: MarketplaceSettingsService,
     private readonly notificationsService: NotificationsService,
     private readonly socketService: SocketService,
     private readonly dataSource: DataSource,
+    private readonly complexService: ResidentialComplexService,
   ) {}
 
   // ================================================================
@@ -415,6 +428,128 @@ export class MarketplaceChatService {
     return this.withIsMine(message, currentUser);
   }
 
+  // ================================================================
+  // FOTOS
+  // ================================================================
+
+  /**
+   * Valida que se pueda mandar una foto ANTES de subirla: subir primero y
+   * preguntar después deja archivos huérfanos en R2. Devuelve la conversación
+   * para que el controlador arme la carpeta.
+   */
+  async assertCanSendImage(
+    conversationId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceConversation> {
+    const conversation = await this.findParticipantConversation(
+      conversationId,
+      currentUser,
+    );
+    await this.assertWritable(conversation, currentUser);
+    await this.assertRate(currentUser.sub);
+    return conversation;
+  }
+
+  /** Guarda la foto ya subida como mensaje. `key` es la llave en R2. */
+  async sendImage(
+    conversationId: string,
+    key: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceMessage> {
+    const conversation = await this.findParticipantConversation(
+      conversationId,
+      currentUser,
+    );
+
+    const message = await this.appendMessage(
+      conversation,
+      currentUser.sub,
+      key,
+      {
+        kind: MarketplaceMessageKind.IMAGE,
+        push: true,
+        preview: '📷 Foto',
+      },
+    );
+
+    return this.withIsMine(message, currentUser);
+  }
+
+  /**
+   * La llave en R2 de una foto del chat, si quien pide puede verla.
+   *
+   * Pueden los dos participantes. La administración solo si la conversación
+   * tiene un reporte: es la misma puerta por la que lee los mensajes.
+   */
+  async resolveImageKey(
+    conversationId: string,
+    messageId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<string> {
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new CustomError({
+        message: 'Conversación no encontrada',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: MarketplaceErrorCode.CONVERSATION_NOT_FOUND,
+      });
+    }
+
+    const isParticipant =
+      conversation.ownerUserId === currentUser.sub ||
+      conversation.interestedUserId === currentUser.sub;
+
+    if (!isParticipant) {
+      await this.assertModeratorCanRead(conversation, currentUser);
+    }
+
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId, conversationId },
+    });
+
+    if (!message || message.kind !== MarketplaceMessageKind.IMAGE) {
+      throw new CustomError({
+        message: 'Ese mensaje no es una foto',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: MarketplaceErrorCode.MESSAGE_NOT_IMAGE,
+      });
+    }
+
+    return message.body;
+  }
+
+  /**
+   * La administración entra a un chat solo si fue reportado, y solo en su
+   * conjunto. Sin reporte, ni siquiera el SUPER_ADMIN.
+   */
+  async assertModeratorCanRead(
+    conversation: MarketplaceConversation,
+    currentUser: JwtAccessPayload,
+  ): Promise<void> {
+    const reported =
+      this.listingsService.isModerator(currentUser) &&
+      (await this.reportRepo.count({
+        where: { conversationId: conversation.id },
+      })) > 0;
+
+    if (reported) {
+      await this.complexService.assertComplexAccess(
+        conversation.complexId,
+        currentUser,
+      );
+      return;
+    }
+
+    throw new CustomError({
+      message: 'No participas en esta conversación',
+      statusCode: HttpStatus.FORBIDDEN,
+      errorCode: MarketplaceErrorCode.CONVERSATION_ACCESS_DENIED,
+    });
+  }
+
   /** Marca la conversación como leída y le avisa al otro (el "visto"). */
   async markRead(
     conversationId: string,
@@ -544,10 +679,11 @@ export class MarketplaceChatService {
       ? conversation.interestedUserId
       : conversation.ownerUserId;
 
+    // Por el socket sale la versión pública: sin la llave de R2 de las fotos.
     this.socketService.emitToUsers(
       [conversation.ownerUserId, conversation.interestedUserId],
       SocketEvent.MARKETPLACE_CHAT_MESSAGE,
-      { conversationId: conversation.id, message },
+      { conversationId: conversation.id, message: this.toPublic(message) },
     );
 
     if (options.push) {
@@ -603,6 +739,14 @@ export class MarketplaceChatService {
     }
   }
 
+  /** La conversación, si quien consulta participa en ella. */
+  findParticipantOrFail(
+    conversationId: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceConversation> {
+    return this.findParticipantConversation(conversationId, currentUser);
+  }
+
   private async findParticipantConversation(
     conversationId: string,
     currentUser: JwtAccessPayload,
@@ -638,6 +782,14 @@ export class MarketplaceChatService {
     conversation: MarketplaceConversation,
     currentUser: JwtAccessPayload,
   ): Promise<void> {
+    if (conversation.moderationClosedAt) {
+      throw new CustomError({
+        message: 'La administración cerró esta conversación',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: MarketplaceErrorCode.CONVERSATION_CLOSED_BY_MODERATION,
+      });
+    }
+
     const listing = await this.listingsService.findByIdInternal(
       conversation.listingId,
     );
@@ -713,8 +865,24 @@ export class MarketplaceChatService {
     message: MarketplaceMessage,
     currentUser: JwtAccessPayload,
   ): MarketplaceMessage {
-    message.isMine = message.senderUserId === currentUser.sub;
-    return message;
+    return this.toPublic(message, currentUser.sub);
+  }
+
+  /**
+   * El mensaje tal como puede salir del servidor. En una foto, `body` guarda la
+   * llave del archivo en R2: se vacía y en su lugar va `imagePath`, la ruta del
+   * API que la sirve después de validar quién la pide.
+   */
+  toPublic(message: MarketplaceMessage, viewerId?: string): MarketplaceMessage {
+    const copy = Object.assign(new MarketplaceMessage(), message);
+    copy.isMine = viewerId ? message.senderUserId === viewerId : false;
+
+    if (message.kind === MarketplaceMessageKind.IMAGE) {
+      copy.body = '';
+      copy.imagePath = imagePathFor(message);
+    }
+
+    return copy;
   }
 
   /**
@@ -753,6 +921,16 @@ export class MarketplaceChatService {
 
     const listingById = new Map(listings.map((l) => [l.id, l]));
     const userById = new Map(users.map((u) => [u.id, u]));
+
+    const myPendingReports = await this.reportRepo.find({
+      where: {
+        conversationId: In(conversations.map((c) => c.id)),
+        reporterUserId: me,
+        status: MarketplaceReportStatus.PENDING,
+      },
+      select: { id: true, conversationId: true },
+    });
+    const reportedIds = new Set(myPendingReports.map((r) => r.conversationId));
 
     // La unidad del otro: la del aviso si el otro publicó, la guardada al
     // preguntar si el otro es el interesado.
@@ -799,7 +977,9 @@ export class MarketplaceChatService {
           (b) => b.blockerUserId === otherId && b.blockedUserId === me,
         );
 
+      const closedByModeration = !!c.moderationClosedAt;
       const isReadOnly =
+        closedByModeration ||
         !listing ||
         !!listing.deletedAt ||
         CLOSED_STATUSES.includes(listing.status);
@@ -832,6 +1012,8 @@ export class MarketplaceChatService {
           ? c.interestedLastReadAt
           : c.ownerLastReadAt,
         isReadOnly,
+        closedByModeration,
+        reportedByMe: reportedIds.has(c.id),
         isBlocked,
         blockedByMe,
         myPhoneShared: !!(isOwner

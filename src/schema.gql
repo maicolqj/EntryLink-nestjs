@@ -1800,6 +1800,8 @@ enum NotificationType {
   LISTING_REJECTED
   LISTING_INTEREST
   MARKETPLACE_CHAT_MESSAGE
+  MARKETPLACE_CHAT_REPORTED
+  MARKETPLACE_CHAT_REPORT_RESOLVED
   LISTING_REPORTED
   LISTING_PAUSED_BY_REPORTS
   LISTING_EXPIRING
@@ -5551,6 +5553,7 @@ type MarketplaceMessage {
   body: String!
   createdAt: DateTime!
   isMine: Boolean!
+  imagePath: String
 }
 
 """Tipo de mensaje del chat de clasificados"""
@@ -5560,6 +5563,11 @@ enum MarketplaceMessageKind {
 
   """Su autor compartió su WhatsApp con esta persona"""
   PHONE_SHARED
+
+  """
+  Una foto. Se descarga por `imagePath`, que exige sesión de un participante
+  """
+  IMAGE
 }
 
 """El aviso del que se habla, en corto"""
@@ -5601,8 +5609,16 @@ type MarketplaceConversationView {
   """
   counterpartLastReadAt: DateTime
 
-  """El aviso se cerró, venció o se retiró: se lee pero no se escribe"""
+  """
+  El aviso se cerró, venció o se retiró —o la administración cerró el chat—: se lee pero no se escribe
+  """
   isReadOnly: Boolean!
+
+  """La administración cerró la conversación por un reporte"""
+  closedByModeration: Boolean!
+
+  """Quien consulta tiene un reporte pendiente sobre este chat"""
+  reportedByMe: Boolean!
 
   """No se puede escribir porque alguno bloqueó al otro"""
   isBlocked: Boolean!
@@ -5704,6 +5720,56 @@ type MarketplaceStatsResponse {
 
 type PaginatedListingReportsResponse {
   items: [MarketplaceListingReport!]!
+  pagination: PaginationReponse!
+}
+
+"""Conversación reportada, para moderación"""
+type ConversationReportView {
+  id: String!
+  conversationId: String!
+  reason: MarketplaceChatReportReason!
+  comment: String
+  status: MarketplaceReportStatus!
+  resolutionNote: String
+  createdAt: DateTime!
+  resolvedAt: DateTime
+  listing: ConversationListingSummary!
+
+  """Para marcar sus mensajes"""
+  reporterUserId: String!
+  reporter: ConversationCounterpart!
+
+  """Para marcar sus mensajes"""
+  reportedUserId: String!
+  reported: ConversationCounterpart!
+  messagesCount: Int!
+
+  """La conversación ya está cerrada"""
+  conversationClosed: Boolean!
+}
+
+"""Motivo del reporte de una conversación"""
+enum MarketplaceChatReportReason {
+  """
+  Acoso o insistencia después de un "no"
+  """
+  HARASSMENT
+
+  """Parece una estafa"""
+  SCAM
+
+  """Lenguaje ofensivo o amenazas"""
+  OFFENSIVE
+
+  """Mensajes repetidos o publicidad"""
+  SPAM
+
+  """Otro motivo"""
+  OTHER
+}
+
+type PaginatedConversationReportsResponse {
+  items: [ConversationReportView!]!
   pagination: PaginationReponse!
 }
 
@@ -6022,6 +6088,18 @@ type Query {
 
   """Mensajes sin leer en todas mis conversaciones"""
   marketplaceUnreadMessages(complexId: String!): Int!
+  marketplaceConversationReports(
+    complexId: String!
+    status: MarketplaceReportStatus
+
+    """Solo los chats de avisos de estos tipos (tablero)"""
+    types: [MarketplaceListingType!]
+    pagination: PaginationInput
+  ): PaginatedConversationReportsResponse!
+  marketplaceConversationReport(reportId: String!): ConversationReportView!
+
+  """Los mensajes del chat reportado, del más nuevo al más viejo"""
+  marketplaceConversationReportMessages(reportId: String!, before: DateTime, limit: Int): MarketplaceMessagesPage!
 
   """Módulos cuyos datos se pueden descargar en el complejo"""
   dataExportModules(complexId: String!): [DataExportModuleInfo!]!
@@ -6895,6 +6973,12 @@ type Mutation {
 
   """Bloquea al otro vecino: ninguno puede escribirle al otro"""
   blockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
+
+  """
+  Reporta la conversación a la administración. Es lo único que le permite leerla
+  """
+  reportMarketplaceConversation(input: ReportConversationInput!): Boolean!
+  resolveMarketplaceConversationReport(input: ResolveConversationReportInput!): ConversationReportView!
   unblockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
 }
 
@@ -8906,4 +8990,30 @@ input OpenListingConversationInput {
 input SendMarketplaceMessageInput {
   conversationId: String!
   body: String!
+}
+
+input ReportConversationInput {
+  conversationId: String!
+  reason: MarketplaceChatReportReason!
+  comment: String
+
+  """Además de reportar, bloquear al otro vecino"""
+  alsoBlock: Boolean
+}
+
+input ResolveConversationReportInput {
+  reportId: String!
+  action: MarketplaceChatReportAction!
+
+  """Le llega a quien reportó"""
+  note: String
+}
+
+"""Resolución de un reporte de conversación"""
+enum MarketplaceChatReportAction {
+  """No procede: la conversación sigue abierta"""
+  DISMISS
+
+  """Procede: la conversación queda cerrada para los dos"""
+  CLOSE_CONVERSATION
 }

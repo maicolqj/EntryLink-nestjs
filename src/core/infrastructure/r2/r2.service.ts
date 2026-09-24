@@ -4,7 +4,9 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 // import { v4 as uuidv4 } from 'uuid';
 import { randomUUID } from 'crypto';
@@ -136,6 +138,27 @@ export class R2StorageService implements OnModuleInit {
       publicId: key,
       format,
       bytes: buffer.length,
+    };
+  }
+
+  /**
+   * Lee un archivo por su llave, sin pasar por la URL pública.
+   *
+   * Es para lo que no debe quedar a la vista de cualquiera con el enlace —las
+   * fotos del chat entre vecinos—: el backend valida quién pide y sirve el
+   * archivo él mismo, y la llave nunca sale hacia el cliente.
+   */
+  async getObjectStream(
+    key: string,
+  ): Promise<{ stream: Readable; contentType: string; length?: number }> {
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.bucketName, Key: key }),
+    );
+
+    return {
+      stream: result.Body as Readable,
+      contentType: result.ContentType ?? 'application/octet-stream',
+      length: result.ContentLength,
     };
   }
 

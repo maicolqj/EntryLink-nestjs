@@ -1,6 +1,17 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
 import { MarketplaceChatService } from '../services/marketplace-chat.service';
+import { MarketplaceChatReportsService } from '../services/marketplace-chat-reports.service';
+import {
+  ConversationReportView,
+  PaginatedConversationReportsResponse,
+} from '../dto/responses/conversation-report.response';
+import {
+  ReportConversationInput,
+  ResolveConversationReportInput,
+} from '../dto/inputs/conversation-report.input';
+import { MarketplaceReportStatus } from '../enums/marketplace-report-status.enum';
+import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplaceMessage } from '../entities/marketplace-message.entity';
 import {
   MarketplaceConversationView,
@@ -34,6 +45,12 @@ const AUTH = {
   permissions: [ValidPermissions.VIEW_MARKETPLACE],
 };
 
+/** Revisar chats reportados es de la administración, como los avisos reportados. */
+const MODERATION_AUTH = {
+  roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+  permissions: [ValidPermissions.MANAGE_LISTING_REPORTS],
+};
+
 /**
  * Chat entre quien publicó y quien se interesó. Cada operación valida que
  * quien consulta participe en la conversación; la administración no lee chats.
@@ -41,7 +58,10 @@ const AUTH = {
 @RequireModule([ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS])
 @Resolver()
 export class MarketplaceChatResolver {
-  constructor(private readonly chatService: MarketplaceChatService) {}
+  constructor(
+    private readonly chatService: MarketplaceChatService,
+    private readonly reportsService: MarketplaceChatReportsService,
+  ) {}
 
   // ================================================================
   // QUERIES
@@ -186,6 +206,91 @@ export class MarketplaceChatResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MarketplaceConversationView> {
     return this.chatService.block(conversationId, currentUser);
+  }
+
+  // ================================================================
+  // REPORTES
+  // ================================================================
+
+  @Mutation(() => Boolean, {
+    name: 'reportMarketplaceConversation',
+    description:
+      'Reporta la conversación a la administración. Es lo único que le permite leerla',
+  })
+  @Auth(AUTH)
+  reportMarketplaceConversation(
+    @Args('input') input: ReportConversationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    return this.reportsService.report(input, currentUser);
+  }
+
+  @Query(() => PaginatedConversationReportsResponse, {
+    name: 'marketplaceConversationReports',
+  })
+  @Auth(MODERATION_AUTH)
+  marketplaceConversationReports(
+    @Args('complexId') complexId: string,
+    @Args('status', { type: () => MarketplaceReportStatus, nullable: true })
+    status: MarketplaceReportStatus | undefined,
+    @Args('types', {
+      type: () => [MarketplaceListingType],
+      nullable: true,
+      description: 'Solo los chats de avisos de estos tipos (tablero)',
+    })
+    types: MarketplaceListingType[] | undefined,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedConversationReportsResponse> {
+    return this.reportsService.findByComplex(
+      complexId,
+      status,
+      types,
+      pagination ?? { page: 1, limit: 20 },
+      currentUser,
+    );
+  }
+
+  @Query(() => ConversationReportView, {
+    name: 'marketplaceConversationReport',
+  })
+  @Auth(MODERATION_AUTH)
+  marketplaceConversationReport(
+    @Args('reportId') reportId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ConversationReportView> {
+    return this.reportsService.findOne(reportId, currentUser);
+  }
+
+  @Query(() => MarketplaceMessagesPage, {
+    name: 'marketplaceConversationReportMessages',
+    description: 'Los mensajes del chat reportado, del más nuevo al más viejo',
+  })
+  @Auth(MODERATION_AUTH)
+  marketplaceConversationReportMessages(
+    @Args('reportId') reportId: string,
+    @Args('before', { type: () => Date, nullable: true })
+    before: Date | undefined,
+    @Args('limit', { type: () => Int, nullable: true }) limit: number,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MarketplaceMessagesPage> {
+    return this.reportsService.findMessages(
+      reportId,
+      before,
+      limit,
+      currentUser,
+    );
+  }
+
+  @Mutation(() => ConversationReportView, {
+    name: 'resolveMarketplaceConversationReport',
+  })
+  @Auth(MODERATION_AUTH)
+  resolveMarketplaceConversationReport(
+    @Args('input') input: ResolveConversationReportInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ConversationReportView> {
+    return this.reportsService.resolve(input, currentUser);
   }
 
   @Mutation(() => MarketplaceConversationView, {

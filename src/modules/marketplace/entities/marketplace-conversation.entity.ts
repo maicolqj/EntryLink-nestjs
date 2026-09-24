@@ -90,6 +90,14 @@ export class MarketplaceConversation {
   })
   interestedPhoneSharedAt?: Date | null;
 
+  /** La administración la cerró al aceptar un reporte: solo lectura. */
+  @Column({
+    name: 'moderation_closed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  moderationClosedAt?: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

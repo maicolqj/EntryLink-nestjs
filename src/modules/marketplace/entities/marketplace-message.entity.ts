@@ -36,7 +36,9 @@ export class MarketplaceMessage {
 
   /**
    * El texto. En `PHONE_SHARED` es el número que su dueño decidió compartir con
-   * ESTA persona: vive en el mensaje, no en el perfil.
+   * ESTA persona: vive en el mensaje, no en el perfil. En `IMAGE` guarda la
+   * llave del archivo en R2 y NUNCA sale al cliente: el servidor la vacía y
+   * entrega `imagePath` en su lugar.
    */
   @Field(() => String)
   @Column({ type: 'text' })
@@ -49,4 +51,11 @@ export class MarketplaceMessage {
   /** Lo calcula el servidor para quien consulta. */
   @Field(() => Boolean)
   isMine?: boolean;
+
+  /**
+   * Ruta del API que sirve la foto (solo en `IMAGE`). Exige el token de un
+   * participante —o de la administración si la conversación fue reportada—.
+   */
+  @Field(() => String, { nullable: true })
+  imagePath?: string | null;
 }
