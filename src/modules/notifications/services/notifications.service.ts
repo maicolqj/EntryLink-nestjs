@@ -125,6 +125,12 @@ export interface NotifyParams {
    * `alertId` para que el ACK del dispositivo sepa qué alerta confirma.
    */
   panicAlertId?: string;
+  /**
+   * Etiqueta de la notificación en Android. Dos push con la misma etiqueta se
+   * reemplazan en vez de apilarse: el chat la usa para dejar un solo aviso por
+   * conversación con el último mensaje.
+   */
+  androidTag?: string;
 }
 
 @Injectable()
@@ -2695,6 +2701,7 @@ export class NotificationsService implements OnModuleInit {
                   : 'default',
             defaultVibrateTimings: true,
             sound: 'default',
+            ...(params.androidTag ? { tag: params.androidTag } : {}),
           },
         }),
       },

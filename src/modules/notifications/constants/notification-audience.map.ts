@@ -153,6 +153,8 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.LISTING_APPROVED]: NotificationAudience.RESIDENT,
   [NotificationType.LISTING_REJECTED]: NotificationAudience.RESIDENT,
   [NotificationType.LISTING_INTEREST]: NotificationAudience.RESIDENT,
+  // El chat es entre vecinos; sale solo como push.
+  [NotificationType.MARKETPLACE_CHAT_MESSAGE]: NotificationAudience.RESIDENT,
   // Quién reportó un aviso es dato de moderación, no del vecino publicador.
   [NotificationType.LISTING_REPORTED]: NotificationAudience.STAFF,
   // Sale por `notifyOwner`: la recibe quien publicó, que es un vecino.

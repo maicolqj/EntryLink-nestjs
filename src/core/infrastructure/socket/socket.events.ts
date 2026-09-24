@@ -60,6 +60,10 @@ export enum SocketEvent {
    * nadie recargue.
    */
   MARKETPLACE_LISTING_UPDATED = 'marketplace:listing:updated',
+  /** Mensaje nuevo en un chat de clasificados. Solo a los dos participantes. */
+  MARKETPLACE_CHAT_MESSAGE = 'marketplace:chat:message',
+  /** El otro leyó la conversación: para el "visto". */
+  MARKETPLACE_CHAT_READ = 'marketplace:chat:read',
 
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
