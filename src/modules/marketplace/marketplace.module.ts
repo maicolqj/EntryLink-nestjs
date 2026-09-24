@@ -12,6 +12,7 @@ import { MarketplaceListingsService } from './services/marketplace-listings.serv
 import { MarketplaceCategoriesService } from './services/marketplace-categories.service';
 import { MarketplaceReportsService } from './services/marketplace-reports.service';
 import { MarketplaceSettingsService } from './services/marketplace-settings.service';
+import { MarketplaceAudienceService } from './services/marketplace-audience.service';
 
 import { MarketplaceListingsResolver } from './resolvers/marketplace-listings.resolver';
 import { MarketplaceCategoriesResolver } from './resolvers/marketplace-categories.resolver';
@@ -49,6 +50,7 @@ import { AuditModule } from '../audit/audit.module';
     MarketplaceCategoriesService,
     MarketplaceReportsService,
     MarketplaceSettingsService,
+    MarketplaceAudienceService,
     MarketplaceListingsResolver,
     MarketplaceCategoriesResolver,
     MarketplaceReportsResolver,

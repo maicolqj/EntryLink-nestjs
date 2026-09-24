@@ -5541,6 +5541,30 @@ enum MarketplaceModerationMode {
   PREVIA
 }
 
+"""Vecino que marcó me gusta o me interesa"""
+type ListingAudienceEntry {
+  userId: String!
+  name: String!
+  profilePicture: String
+
+  """Torre y unidad; nulo si ya no vive en el conjunto"""
+  unitLabel: String
+
+  """Cuándo marcó me gusta o me interesa"""
+  at: DateTime!
+
+  """Mensaje que dejó el interesado"""
+  message: String
+
+  """Canal que usó el interesado"""
+  channel: MarketplaceContactPreference
+}
+
+type PaginatedListingAudienceResponse {
+  items: [ListingAudienceEntry!]!
+  pagination: PaginationReponse!
+}
+
 type PaginatedListingsResponse {
   items: [MarketplaceListing!]!
   pagination: PaginationReponse!
@@ -5866,6 +5890,7 @@ type Query {
     """
     types: [MarketplaceListingType!]
   ): MarketplaceStatsResponse!
+  listingAudience(listingId: String!, kind: MarketplaceAudienceKind!, pagination: PaginationInput): PaginatedListingAudienceResponse!
   marketplaceCategories(complexId: String!, kind: MarketplaceCategoryKind, includeInactive: Boolean): [MarketplaceCategory!]!
   listingReports(
     complexId: String!
@@ -6277,6 +6302,15 @@ input FilterListingsInput {
 
   """Solo las que tienen reportes sin resolver"""
   onlyReported: Boolean
+}
+
+"""Público de una publicación que se consulta"""
+enum MarketplaceAudienceKind {
+  """Quienes tocaron el corazón (me gusta)"""
+  FAVORITES
+
+  """Quienes tocaron el botón me interesa"""
+  INTERESTED
 }
 
 type Mutation {

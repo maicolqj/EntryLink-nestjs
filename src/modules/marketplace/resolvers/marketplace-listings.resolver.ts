@@ -9,6 +9,9 @@ import {
 
 import { MarketplaceListing } from '../entities/marketplace-listing.entity';
 import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
+import { MarketplaceAudienceKind } from '../enums/marketplace-audience-kind.enum';
+import { MarketplaceAudienceService } from '../services/marketplace-audience.service';
+import { PaginatedListingAudienceResponse } from '../dto/responses/listing-audience.response';
 import { MarketplaceListingsService } from '../services/marketplace-listings.service';
 import { UpdateListingInput } from '../dto/inputs/update-listing.input';
 import { FilterListingsInput } from '../dto/inputs/filter-listings.input';
@@ -46,7 +49,10 @@ const MODERATOR_ROLES = [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL];
 @RequireModule([ComplexModule.CLASIFICADOS, ComplexModule.SERVICIOS])
 @Resolver(() => MarketplaceListing)
 export class MarketplaceListingsResolver {
-  constructor(private readonly listingsService: MarketplaceListingsService) {}
+  constructor(
+    private readonly listingsService: MarketplaceListingsService,
+    private readonly audienceService: MarketplaceAudienceService,
+  ) {}
 
   // ================================================================
   // QUERIES
@@ -101,6 +107,30 @@ export class MarketplaceListingsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MarketplaceStatsResponse> {
     return this.listingsService.getStats(complexId, currentUser, types);
+  }
+
+  /**
+   * Quién marcó me gusta o me interesa. Solo para quien modera: el autor ve
+   * los contadores, no la lista.
+   */
+  @Query(() => PaginatedListingAudienceResponse, { name: 'listingAudience' })
+  @Auth({
+    roles: MODERATOR_ROLES,
+    permissions: [ValidPermissions.MODERATE_LISTINGS],
+  })
+  listingAudience(
+    @Args('listingId') listingId: string,
+    @Args('kind', { type: () => MarketplaceAudienceKind })
+    kind: MarketplaceAudienceKind,
+    @Args('pagination', { nullable: true }) pagination: PaginationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PaginatedListingAudienceResponse> {
+    return this.audienceService.findAudience(
+      listingId,
+      kind,
+      pagination ?? { page: 1, limit: 20 },
+      currentUser,
+    );
   }
 
   // ================================================================
