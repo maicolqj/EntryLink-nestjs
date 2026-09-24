@@ -5647,6 +5647,17 @@ type PaginatedConversationsResponse {
   pagination: PaginationReponse!
 }
 
+"""Mensajes sin leer, en total y por tablero"""
+type MarketplaceUnreadSummary {
+  total: Int!
+
+  """De avisos de clasificados"""
+  classifieds: Int!
+
+  """Del directorio de servicios"""
+  services: Int!
+}
+
 """Página de mensajes, del más nuevo al más viejo"""
 type MarketplaceMessagesPage {
   items: [MarketplaceMessage!]!
@@ -6073,6 +6084,9 @@ type Query {
 
     """Solo las de un aviso (útil para quien lo publicó)"""
     listingId: String
+
+    """Solo las de avisos de estos tipos (un tablero)"""
+    types: [MarketplaceListingType!]
   ): PaginatedConversationsResponse!
   marketplaceConversation(conversationId: String!): MarketplaceConversationView!
 
@@ -6085,6 +6099,9 @@ type Query {
     before: DateTime
     limit: Int
   ): MarketplaceMessagesPage!
+
+  """Mensajes sin leer en total, de clasificados y de servicios"""
+  marketplaceUnreadSummary(complexId: String!): MarketplaceUnreadSummary!
 
   """Mensajes sin leer en todas mis conversaciones"""
   marketplaceUnreadMessages(complexId: String!): Int!
