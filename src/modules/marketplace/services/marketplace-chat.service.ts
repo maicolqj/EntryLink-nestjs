@@ -620,7 +620,20 @@ export class MarketplaceChatService {
       { conversationId: conversation.id, readAt },
     );
 
+    this.clearChatNotifications(currentUser.sub, conversation.id);
+
     return true;
+  }
+
+  /** Los avisos de mensajes de esta conversación ya vistos en el chat. */
+  private clearChatNotifications(userId: string, conversationId: string): void {
+    void this.notificationsService
+      .markEntityAsReadFor(userId, 'marketplace_conversation', conversationId)
+      .catch((err: Error) =>
+        this.logger.warn(
+          `No se pudieron marcar leídos los avisos de ${conversationId}: ${err?.message}`,
+        ),
+      );
   }
 
   // ================================================================
@@ -724,6 +737,10 @@ export class MarketplaceChatService {
       ? conversation.interestedUserId
       : conversation.ownerUserId;
 
+    // Escribir en el chat es haberlo leído: los avisos pendientes de quien
+    // escribe se dan por vistos.
+    this.clearChatNotifications(senderUserId, conversation.id);
+
     // Por el socket sale la versión pública: sin la llave de R2 de las fotos.
     this.socketService.emitToUsers(
       [conversation.ownerUserId, conversation.interestedUserId],
@@ -739,9 +756,13 @@ export class MarketplaceChatService {
   }
 
   /**
-   * El push del mensaje. Solo push: un chat activo llenaría la bandeja de
-   * notificaciones con cada "ok, gracias". Lleva la misma etiqueta por
-   * conversación para que Android deje un solo aviso con el último mensaje.
+   * El aviso del mensaje: queda en la bandeja de notificaciones y llega como
+   * push. Un vecino que no tiene el chat abierto tiene que enterarse de que le
+   * escribieron. Al abrir la conversación, `markRead` da por leídos todos sus
+   * avisos, así la campana no acumula mensajes ya vistos.
+   *
+   * La etiqueta por conversación hace que Android deje un solo aviso visible
+   * con el último mensaje, en vez de apilar uno por cada "ok, gracias".
    */
   private async pushMessage(
     conversation: MarketplaceConversation,
@@ -761,7 +782,7 @@ export class MarketplaceChatService {
       const name =
         `${sender?.name ?? ''} ${sender?.lastName ?? ''}`.trim() || 'Un vecino';
 
-      await this.notificationsService.dispatchPushOnly([recipientId], {
+      await this.notificationsService.notify({
         complexId: conversation.complexId,
         userIds: [recipientId],
         type: NotificationType.MARKETPLACE_CHAT_MESSAGE,

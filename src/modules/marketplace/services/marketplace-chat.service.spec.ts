@@ -164,7 +164,8 @@ const buildHarness = (
   };
 
   const notificationsService = {
-    dispatchPushOnly: jest.fn(() => Promise.resolve()),
+    notify: jest.fn(() => Promise.resolve([])),
+    markEntityAsReadFor: jest.fn(() => Promise.resolve(0)),
   };
   const socketService = { emitToUsers: jest.fn(), emitToUser: jest.fn() };
 
@@ -243,7 +244,7 @@ describe('MarketplaceChatService — quién lee', () => {
 });
 
 describe('MarketplaceChatService — escribir', () => {
-  it('el mensaje llega por socket a los dos y por push solo al otro', async () => {
+  it('el mensaje llega por socket a los dos y como notificación solo al otro', async () => {
     const { service, socketService, notificationsService } = buildHarness();
 
     const message = await service.send('conv-1', ' ¿Sigue disponible? ', BUYER);
@@ -256,10 +257,12 @@ describe('MarketplaceChatService — escribir', () => {
       SocketEvent.MARKETPLACE_CHAT_MESSAGE,
       expect.objectContaining({ conversationId: 'conv-1' }),
     );
-    expect(notificationsService.dispatchPushOnly).toHaveBeenCalledWith(
-      ['owner-1'],
+    expect(notificationsService.notify).toHaveBeenCalledWith(
       expect.objectContaining({
+        userIds: ['owner-1'],
         type: NotificationType.MARKETPLACE_CHAT_MESSAGE,
+        entityType: 'marketplace_conversation',
+        entityId: 'conv-1',
         androidTag: 'chat-conv-1',
       }),
     );
@@ -345,7 +348,7 @@ describe('MarketplaceChatService — me interesa', () => {
       'conv-1',
     );
     // El mensaje queda en el chat, pero no genera un segundo push.
-    expect(notificationsService.dispatchPushOnly).not.toHaveBeenCalled();
+    expect(notificationsService.notify).not.toHaveBeenCalled();
   });
 
   it('reabrir con un mensaje nuevo lo manda como mensaje del chat', async () => {
@@ -355,9 +358,8 @@ describe('MarketplaceChatService — me interesa', () => {
     await flush();
 
     expect(listingsService.notifyInterest).not.toHaveBeenCalled();
-    expect(notificationsService.dispatchPushOnly).toHaveBeenCalledWith(
-      ['owner-1'],
-      expect.anything(),
+    expect(notificationsService.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userIds: ['owner-1'] }),
     );
   });
 
