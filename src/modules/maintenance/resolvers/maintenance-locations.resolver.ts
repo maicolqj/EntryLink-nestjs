@@ -6,7 +6,10 @@ import {
   CreateMaintenanceLocationTagInput,
   UpdateMaintenanceLocationTagInput,
 } from '../dto/inputs/maintenance-location-tag.inputs';
-import { MaintenanceReportOptionsResponse } from '../dto/responses/maintenance-report-options.response';
+import {
+  MaintenanceReportOptionsResponse,
+  MaintenanceScanMethodsResponse,
+} from '../dto/responses/maintenance-report-options.response';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
@@ -113,6 +116,32 @@ export class MaintenanceLocationsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MaintenanceReportOptionsResponse> {
     return this.locationsService.findReportOptions(complexId, currentUser);
+  }
+
+  /**
+   * Qué botones ofrecen las apps para identificar el sitio de un daño:
+   * escanear el QR, leer el chip NFC o ambos. Lo decide la administración
+   * según lo que pegó en las paredes.
+   */
+  @Mutation(() => MaintenanceScanMethodsResponse, {
+    name: 'setMaintenanceScanMethods',
+  })
+  @Auth({
+    roles: MANAGER_ROLES,
+    permissions: [ValidPermissions.MANAGE_MAINTENANCE_LOCATIONS],
+  })
+  setMaintenanceScanMethods(
+    @Args('complexId') complexId: string,
+    @Args('qrEnabled') qrEnabled: boolean,
+    @Args('nfcEnabled') nfcEnabled: boolean,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MaintenanceScanMethodsResponse> {
+    return this.locationsService.setScanMethods(
+      complexId,
+      qrEnabled,
+      nfcEnabled,
+      currentUser,
+    );
   }
 
   /**

@@ -383,6 +383,12 @@ type ResidentialComplex {
   """Precisión mínima del GPS para pintar el pin (metros)"""
   maintenanceGpsAccuracyMeters: Int!
 
+  """Las apps ofrecen escanear el QR del sitio"""
+  maintenanceQrEnabled: Boolean!
+
+  """Las apps ofrecen leer el chip NFC del sitio"""
+  maintenanceNfcEnabled: Boolean!
+
   """CountryCode"""
   countryCode: Country!
 
@@ -5327,6 +5333,18 @@ type MaintenanceReportOptionsResponse {
 
   """Error máximo del GPS aceptado como ubicación confiable"""
   gpsAccuracyMeters: Int!
+
+  """El conjunto identifica sus sitios con stickers QR"""
+  qrEnabled: Boolean!
+
+  """El conjunto identifica sus sitios con chips NFC"""
+  nfcEnabled: Boolean!
+}
+
+"""Medios con que las apps identifican el sitio de un daño"""
+type MaintenanceScanMethodsResponse {
+  qrEnabled: Boolean!
+  nfcEnabled: Boolean!
 }
 
 """Categoría de publicaciones del complejo"""
@@ -7030,6 +7048,7 @@ type Mutation {
   createMaintenanceLocationTag(input: CreateMaintenanceLocationTagInput!): MaintenanceLocationTag!
   updateMaintenanceLocationTag(input: UpdateMaintenanceLocationTagInput!): MaintenanceLocationTag!
   deactivateMaintenanceLocationTag(id: String!): MaintenanceLocationTag!
+  setMaintenanceScanMethods(complexId: String!, qrEnabled: Boolean!, nfcEnabled: Boolean!): MaintenanceScanMethodsResponse!
   createMaintenanceVendor(input: CreateMaintenanceVendorInput!): MaintenanceVendor!
   updateMaintenanceVendor(input: UpdateMaintenanceVendorInput!): MaintenanceVendor!
   deactivateMaintenanceVendor(id: String!): MaintenanceVendor!

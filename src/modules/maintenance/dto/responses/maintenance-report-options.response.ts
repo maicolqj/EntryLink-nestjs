@@ -36,4 +36,25 @@ export class MaintenanceReportOptionsResponse {
     description: 'Error máximo del GPS aceptado como ubicación confiable',
   })
   gpsAccuracyMeters: number;
+
+  /** La app muestra "Escanear el código del sitio" solo si viene en true. */
+  @Field(() => Boolean, {
+    description: 'El conjunto identifica sus sitios con stickers QR',
+  })
+  qrEnabled: boolean;
+
+  /** La app muestra "Leer chip NFC" solo si viene en true (y el celular tiene NFC). */
+  @Field(() => Boolean, {
+    description: 'El conjunto identifica sus sitios con chips NFC',
+  })
+  nfcEnabled: boolean;
+}
+
+@ObjectType({ description: 'Medios con que las apps identifican el sitio de un daño' })
+export class MaintenanceScanMethodsResponse {
+  @Field(() => Boolean)
+  qrEnabled: boolean;
+
+  @Field(() => Boolean)
+  nfcEnabled: boolean;
 }
