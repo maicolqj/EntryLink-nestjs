@@ -3351,6 +3351,11 @@ type RotationTypeStatus {
   """Número del gran ciclo actual para este tipo"""
   grandCycleNumber: Int!
 
+  """
+  Vehículos con cupo ahora (dentro del parqueadero), con su número de cupo
+  """
+  vehiclesInside: [Vehicle!]!
+
   """Vehículos actualmente fuera por rotación"""
   vehiclesSuspendedByRotation: [Vehicle!]!
 
