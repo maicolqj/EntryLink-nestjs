@@ -1,4 +1,5 @@
 import { NotificationsService } from './notifications.service';
+import { NotificationChannel } from '../enums/notification-channel.enum';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 
 /**
@@ -411,5 +412,54 @@ describe('NotificationsService — audiencia de la bandeja', () => {
     } as never);
 
     expect(conditions).toContain('n.type IN (:...audienceTypes)');
+  });
+
+  describe('canal panel', () => {
+    const superAdminResidente = {
+      sub: 'user-1',
+      roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL],
+      complexId: null,
+    } as never;
+
+    it('el panel deja fuera los avisos de la unidad de quien administra', async () => {
+      // El super admin que vive en un conjunto recibía en el panel el paquete
+      // de su apartamento mezclado con los avisos del sistema.
+      const { qb, conditions, params } = buildQb();
+
+      await buildService(qb).findByUser(
+        null,
+        pagination,
+        {},
+        superAdminResidente,
+        NotificationChannel.PANEL,
+      );
+
+      expect(conditions).toContain('n.type IN (:...panelTypes)');
+      const tipos = params.panelTypes as string[];
+      expect(tipos).toContain('DPA_SIGNED');
+      expect(tipos).toContain('PANIC_ALERT');
+      expect(tipos).not.toContain('PACKAGE_RECEIVED');
+      expect(tipos).not.toContain('PAYMENT_DUE');
+    });
+
+    it('el badge del panel cuenta lo mismo que su bandeja', async () => {
+      const { qb, conditions } = buildQb();
+
+      await buildService(qb).getUnreadCount(
+        null,
+        superAdminResidente,
+        NotificationChannel.PANEL,
+      );
+
+      expect(conditions).toContain('n.type IN (:...panelTypes)');
+    });
+
+    it('sin canal la app no cambia', async () => {
+      const { qb, conditions } = buildQb();
+
+      await buildService(qb).findByUser(null, pagination, {}, superAdminResidente);
+
+      expect(conditions).not.toContain('n.type IN (:...panelTypes)');
+    });
   });
 });

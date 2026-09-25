@@ -229,3 +229,16 @@ export function isResidentOnlySession(roles?: readonly string[]): boolean {
     (RESIDENT_SESSION_ROLES as readonly string[]).includes(role),
   );
 }
+
+/**
+ * Los tipos que se leen en el panel web: todo lo que no sea de la unidad.
+ *
+ * Quien administra y además vive en un conjunto recibe los avisos de su unidad
+ * con el mismo `recipientUserId`; esos se leen en la app, no en el panel.
+ * Lista de permitidos, igual que RESIDENT_VISIBLE_TYPES: un tipo sin clasificar
+ * cae en STAFF y entra al panel, que es donde se atiende.
+ */
+export const PANEL_VISIBLE_TYPES: readonly NotificationType[] =
+  Object.values(NotificationType).filter(
+    (type) => audienceOf(type) !== NotificationAudience.RESIDENT,
+  );

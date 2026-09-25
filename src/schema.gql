@@ -1718,6 +1718,7 @@ type Notification {
   actionResult: NotificationActionResult
   createdAt: DateTime!
   updatedAt: DateTime!
+  audience: NotificationAudience
 }
 
 """Tipo de evento que originó la notificación"""
@@ -1824,6 +1825,13 @@ enum NotificationPriority {
   NORMAL
   HIGH
   URGENT
+}
+
+"""Con qué rol se lee una notificación"""
+enum NotificationAudience {
+  RESIDENT
+  STAFF
+  ANY
 }
 
 """
@@ -5888,6 +5896,12 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 """
 scalar JSON
 
+"""Pantalla desde la que se lee la bandeja"""
+enum NotificationChannel {
+  PANEL
+  APP
+}
+
 type Query {
   """
   Estado del registro mientras la app espera en "Revisa tu correo". El enlace se abre en el navegador, así que la app solo puede enterarse consultando. No devuelve datos del usuario.
@@ -5922,10 +5936,10 @@ type Query {
   """
   pendingDeviceApprovals: [PendingDeviceApproval!]!
   devicePushHealth(deviceToken: String!): DevicePushHealthStatus!
-  myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
+  myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput, channel: NotificationChannel): PaginatedNotificationsResponse!
   complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   notificationDetail(notificationId: String!, complexId: String): NotificationDetailResponse!
-  unreadNotificationsCount(complexId: String): UnreadCountResponse!
+  unreadNotificationsCount(complexId: String, channel: NotificationChannel): UnreadCountResponse!
   sentNotifications(complexId: String!, pagination: PaginationInput): SentNotificationPaginatedResult!
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!

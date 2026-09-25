@@ -38,10 +38,14 @@ import {
   panicEscalationJobId,
 } from '../queues/panic-escalation.queue.constants';
 import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationChannel } from '../enums/notification-channel.enum';
 import {
   RESIDENT_VISIBLE_TYPES,
   isResidentOnlySession,
+  PANEL_VISIBLE_TYPES,
+  audienceOf,
 } from '../constants/notification-audience.map';
+import { NotificationAudience } from '../enums/notification-audience.enum';
 import { NotificationPriority } from '../enums/notification-priority.enum';
 import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../enums/notification-action-result.enum';
@@ -1112,6 +1116,7 @@ export class NotificationsService implements OnModuleInit {
     pagination: PaginationInput,
     filters: FilterNotificationsInput,
     currentUser: JwtAccessPayload,
+    channel?: NotificationChannel | null,
   ): Promise<PaginatedNotificationsResponse> {
     const { page, limit } = pagination;
 
@@ -1130,6 +1135,7 @@ export class NotificationsService implements OnModuleInit {
     }
 
     this.applyAudienceScope(qb, currentUser);
+    this.applyChannelScope(qb, channel);
 
     if (filters.type) qb.andWhere('n.type = :type', { type: filters.type });
     if (filters.priority)
@@ -1444,6 +1450,7 @@ export class NotificationsService implements OnModuleInit {
   async getUnreadCount(
     complexId: string | null,
     currentUser: JwtAccessPayload,
+    channel?: NotificationChannel | null,
   ): Promise<UnreadCountResponse> {
     // Siempre acotado al destinatario: cada cuenta cuenta solo sus propias
     // notificaciones. SUPER_ADMIN cuenta las de todos los complejos.
@@ -1462,6 +1469,7 @@ export class NotificationsService implements OnModuleInit {
     // El badge tiene que contar lo mismo que la bandeja muestra, o el número
     // queda pegado en algo que el residente no puede abrir.
     this.applyAudienceScope(qb, currentUser);
+    this.applyChannelScope(qb, channel);
 
     const count = await qb.getCount();
     return { count };
@@ -1485,6 +1493,24 @@ export class NotificationsService implements OnModuleInit {
 
     qb.andWhere('n.type IN (:...audienceTypes)', {
       audienceTypes: [...RESIDENT_VISIBLE_TYPES],
+    });
+  }
+
+  /**
+   * Acota la bandeja a la pantalla que la pide.
+   *
+   * En el panel web no entran los avisos de la unidad: quien administra y
+   * además vive en un conjunto los recibe con su mismo id, y se mezclaban con
+   * los del sistema. Sin canal no se filtra, para no cambiarle nada a la app.
+   */
+  private applyChannelScope(
+    qb: SelectQueryBuilder<Notification>,
+    channel?: NotificationChannel | null,
+  ): void {
+    if (channel !== NotificationChannel.PANEL) return;
+
+    qb.andWhere('n.type IN (:...panelTypes)', {
+      panelTypes: [...PANEL_VISIBLE_TYPES],
     });
   }
 
@@ -2759,6 +2785,11 @@ export class NotificationsService implements OnModuleInit {
     notifIdByUser?: Map<string, string>,
   ): Promise<void> {
     if (!this.webPushEnabled || subs.length === 0) return;
+
+    // Web Push solo existe en el panel, y el panel no muestra los avisos de la
+    // unidad (ver applyChannelScope). Mandarlos igual haría sonar el navegador
+    // del administrador por el paquete que le llegó a su apartamento.
+    if (audienceOf(params.type) === NotificationAudience.RESIDENT) return;
 
     await Promise.allSettled(
       subs.map(async (sub) => {

@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  AfterLoad,
+  AfterInsert,
 } from 'typeorm';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import GraphQLJSON from 'graphql-type-json';
@@ -13,6 +15,8 @@ import { NotificationType } from '../enums/notification-type.enum';
 import { NotificationPriority } from '../enums/notification-priority.enum';
 import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../enums/notification-action-result.enum';
+import { NotificationAudience } from '../enums/notification-audience.enum';
+import { audienceOf } from '../constants/notification-audience.map';
 
 /**
  * Notificación persistida en base de datos.
@@ -193,4 +197,20 @@ export class Notification {
   @Field()
   @UpdateDateColumn()
   updatedAt: Date;
+
+  // ─── Audiencia (calculada, no es columna) ─────────────────────
+
+  /**
+   * Con qué sombrero se lee el aviso. Viaja también en el socket: el panel
+   * descarta en vivo los de residente, que de otro modo aparecerían como
+   * banner aunque la bandeja ya no los liste.
+   */
+  @Field(() => NotificationAudience, { nullable: true })
+  audience?: NotificationAudience;
+
+  @AfterLoad()
+  @AfterInsert()
+  protected fillAudience(): void {
+    if (this.type) this.audience = audienceOf(this.type);
+  }
 }
