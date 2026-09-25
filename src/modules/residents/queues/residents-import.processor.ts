@@ -83,10 +83,13 @@ export class ResidentsImportProcessor extends WorkerHost {
         result.successCount,
         result.errorCount,
         result.errors,
+        result.aborted,
       );
 
       this.logger.log(
-        `Importación completada — jobId: ${jobId} | ok: ${result.successCount} | errores: ${result.errorCount}`,
+        result.aborted
+          ? `Importación rechazada, no se creó ningún residente — jobId: ${jobId} | errores: ${result.errorCount}`
+          : `Importación completada — jobId: ${jobId} | creados: ${result.successCount}`,
       );
     } finally {
       try {
@@ -104,6 +107,7 @@ export class ResidentsImportProcessor extends WorkerHost {
     successCount: number,
     errorCount: number,
     errors: ResidentImportError[],
+    aborted: boolean,
   ): void {
     this.socketService.emitToComplex(
       complexId,
@@ -115,6 +119,8 @@ export class ResidentsImportProcessor extends WorkerHost {
         successCount,
         errorCount,
         errors,
+        // true = el archivo tenía errores y no se creó ningún residente.
+        aborted,
       },
     );
   }
