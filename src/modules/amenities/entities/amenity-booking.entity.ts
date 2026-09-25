@@ -177,6 +177,10 @@ export class AmenityBooking {
   @Column({ name: 'checked_in_by_user_id', type: 'uuid', nullable: true })
   checkedInByUserId?: string | null;
 
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'checked_out_by_user_id', type: 'uuid', nullable: true })
+  checkedOutByUserId?: string | null;
+
   // ─── Cobro ────────────────────────────────────────────────────────────────
 
   /** Tarifa calculada al momento de reservar (congelada: la zona puede cambiarla después). */

@@ -75,6 +75,7 @@ export enum NotificationType {
   AMENITY_DAMAGE_CHARGED = 'AMENITY_DAMAGE_CHARGED', // Se cargó a la unidad un valor por daños en la zona
   AMENITY_CLEANING_UPDATED = 'AMENITY_CLEANING_UPDATED', // La administración cambió el aseo de la reserva
   AMENITY_PAYMENT_RECEIVED = 'AMENITY_PAYMENT_RECEIVED', // La administración recibió el pago del alquiler
+  AMENITY_BOOKING_NOVELTY = 'AMENITY_BOOKING_NOVELTY', // Portería registró una novedad al recibir la zona (admin)
   AMENITY_REFUND_PAID = 'AMENITY_REFUND_PAID', // Se le entregó la devolución por una reserva cancelada
 
   // ── Mascotas y convivencia ─────────────────────────────────────

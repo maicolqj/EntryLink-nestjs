@@ -6,11 +6,14 @@ import { AmenitySchedule } from './entities/amenity-schedule.entity';
 import { AmenityBlackout } from './entities/amenity-blackout.entity';
 import { AmenityScheduleException } from './entities/amenity-schedule-exception.entity';
 import { AmenityBooking } from './entities/amenity-booking.entity';
+import { AmenityBookingNovelty } from './entities/amenity-booking-novelty.entity';
+import { User } from '../users/entities/user.entity';
 import { PropertyAccountStatus } from '../finance/entities/property-account-status.entity';
 
 import { AmenitiesService } from './services/amenities.service';
 import { AmenityAvailabilityService } from './services/amenity-availability.service';
 import { AmenityBookingsService } from './services/amenity-bookings.service';
+import { AmenityBookingNoveltiesService } from './services/amenity-booking-novelties.service';
 import { AmenitiesResolver } from './resolvers/amenities.resolver';
 import { AmenityBookingsResolver } from './resolvers/amenity-bookings.resolver';
 import { AmenitiesController } from './controllers/amenities.controller';
@@ -30,6 +33,9 @@ import { AuditModule } from '../audit/audit.module';
       AmenityBlackout,
       AmenityScheduleException,
       AmenityBooking,
+      AmenityBookingNovelty,
+      // Solo lectura: nombre de quien registra una novedad.
+      User,
       // Solo lectura: el bloqueo por cartera consulta el saldo materializado de
       // la unidad, que es el mismo número del estado de cuenta.
       PropertyAccountStatus,
@@ -46,6 +52,7 @@ import { AuditModule } from '../audit/audit.module';
     AmenitiesService,
     AmenityAvailabilityService,
     AmenityBookingsService,
+    AmenityBookingNoveltiesService,
     AmenitiesResolver,
     AmenityBookingsResolver,
     AmenityBookingsCron,

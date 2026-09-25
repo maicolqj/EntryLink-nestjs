@@ -14,6 +14,8 @@ import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-booking
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
 import { AmenityAccessCodeValidation } from '../dto/responses/access-code-validation.response';
+import { AmenityBookingNovelty } from '../entities/amenity-booking-novelty.entity';
+import { AmenityBookingNoveltiesService } from '../services/amenity-booking-novelties.service';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -34,7 +36,10 @@ const STAFF_ROLES = [
 @RequireModule(ComplexModule.ZONAS_COMUNES)
 @Resolver(() => AmenityBooking)
 export class AmenityBookingsResolver {
-  constructor(private readonly bookingsService: AmenityBookingsService) {}
+  constructor(
+    private readonly bookingsService: AmenityBookingsService,
+    private readonly noveltiesService: AmenityBookingNoveltiesService,
+  ) {}
 
   // ================================================================
   // MUTATIONS — Ciclo de vida de la reserva
@@ -132,6 +137,22 @@ export class AmenityBookingsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
     return this.bookingsService.checkIn(complexId, accessCode, currentUser);
+  }
+
+  /**
+   * Novedades que portería registró sobre la reserva: lo que la administración
+   * mira antes de decidir un cobro por daños. Se radican por REST (llevan fotos).
+   */
+  @Query(() => [AmenityBookingNovelty], { name: 'amenityBookingNovelties' })
+  @Auth({
+    roles: [...STAFF_ROLES, ValidRoles.SECURITY_ROL],
+    permissions: [ValidPermissions.CHECK_IN_AMENITY_BOOKING],
+  })
+  findNovelties(
+    @Args('bookingId') bookingId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<AmenityBookingNovelty[]> {
+    return this.noveltiesService.findByBooking(bookingId, currentUser);
   }
 
   @Mutation(() => AmenityBooking, { name: 'checkOutAmenityBooking' })

@@ -354,8 +354,7 @@ export class AmenityBookingsService {
     await this.assertSlotStillFree(amenity, booking);
 
     booking.status = AmenityBookingStatus.APPROVED;
-    booking.approvedByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.approvedByUserId = this.actorId(currentUser);
     booking.approvedAt = new Date();
 
     const activated = await this.activate(booking, amenity, actingUserId);
@@ -409,8 +408,7 @@ export class AmenityBookingsService {
 
     booking.status = AmenityBookingStatus.REJECTED;
     booking.rejectionReason = input.reason;
-    booking.approvedByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.approvedByUserId = this.actorId(currentUser);
     booking.approvedAt = new Date();
 
     const saved = await this.bookingRepo.save(booking);
@@ -496,8 +494,7 @@ export class AmenityBookingsService {
 
     booking.status = AmenityBookingStatus.CANCELLED;
     booking.cancelledAt = new Date();
-    booking.cancelledByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.cancelledByUserId = this.actorId(currentUser);
     booking.cancellationReason = input.reason ?? null;
 
     const performedBy =
@@ -603,8 +600,7 @@ export class AmenityBookingsService {
     for (const booking of affected) {
       booking.status = AmenityBookingStatus.CANCELLED;
       booking.cancelledAt = new Date();
-      booking.cancelledByUserId =
-        currentUser.entityType === 'user' ? currentUser.sub : null;
+      booking.cancelledByUserId = this.actorId(currentUser);
       booking.cancellationReason = reason;
 
       // Cancelación por decisión del complejo: el cargo se anula y la garantía
@@ -704,8 +700,7 @@ export class AmenityBookingsService {
 
     booking.status = AmenityBookingStatus.CHECKED_IN;
     booking.checkInAt = now;
-    booking.checkedInByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.checkedInByUserId = this.actorId(currentUser);
 
     const saved = await this.bookingRepo.save(booking);
     await this.amenitiesService.invalidate(complexId);
@@ -741,6 +736,7 @@ export class AmenityBookingsService {
 
     booking.status = AmenityBookingStatus.COMPLETED;
     booking.checkOutAt = new Date();
+    booking.checkedOutByUserId = this.actorId(currentUser);
 
     // El cobro por daños NO se registra aquí: exige revisar la zona y dejar
     // constancia del estado en que se recibe. Eso va en `chargeDamage`.
@@ -839,8 +835,7 @@ export class AmenityBookingsService {
     booking.damageAmount = input.amount;
     booking.damageDescription = description;
     booking.damageChargedAt = new Date();
-    booking.damageChargedByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.damageChargedByUserId = this.actorId(currentUser);
 
     const saved = await this.bookingRepo.save(booking);
 
@@ -1248,8 +1243,7 @@ export class AmenityBookingsService {
     booking.directIncomeId = income.id;
     booking.directPaymentAmount = amount;
     booking.directPaymentAt = new Date();
-    booking.directPaymentByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.directPaymentByUserId = this.actorId(currentUser);
 
     // Pagó: ya puede entrar. Este es el momento en que nace el código para las
     // reservas que se cobran.
@@ -1504,8 +1498,7 @@ export class AmenityBookingsService {
     booking.blockedUntilAt = blockedUntilAt;
     booking.cleaningByComplex = cleaningByComplex;
     booking.cleaningUpdatedAt = new Date();
-    booking.cleaningUpdatedByUserId =
-      currentUser.entityType === 'user' ? currentUser.sub : null;
+    booking.cleaningUpdatedByUserId = this.actorId(currentUser);
 
     if (!cleaningByComplex) {
       // Deja de prestarse el servicio: el cargo se anula entero. Los asientos
@@ -2375,6 +2368,18 @@ export class AmenityBookingsService {
   /** Suma minutos a una fecha sin tocar la original. */
   private addMinutes(date: Date, minutes: number): Date {
     return new Date(date.getTime() + minutes * MINUTE_MS);
+  }
+
+  /**
+   * Quién hizo la operación, para las columnas `*_by_user_id` de la reserva.
+   *
+   * Es el `sub` del token tal cual, como en residentes, vehículos y
+   * mantenimiento: si actúa la cuenta del complejo queda su id. Antes se
+   * guardaba null en ese caso y la aprobación o la cancelación hecha por la
+   * administración quedaba sin autor.
+   */
+  private actorId(currentUser: JwtAccessPayload): string {
+    return currentUser.sub;
   }
 
   /**
