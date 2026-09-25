@@ -365,10 +365,9 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
-   * El pánico no le llega al SUPER_ADMIN_ROL, aunque además viva en el conjunto
-   * (RESIDENT_ROL es rol base): administra la plataforma, no atiende la
-   * emergencia de un conjunto, y su celular sonaba con cada pánico de donde
-   * vive. Se filtra aquí —en el envío— y no en cada lista de destinatarios, para
+   * El pánico no le llega al SUPER_ADMIN_ROL que no es residente: administra la
+   * plataforma, no atiende la emergencia de un conjunto. Si además tiene
+   * RESIDENT_ROL vive en un conjunto y la alarma de donde vive sí le llega. Se filtra aquí —en el envío— y no en cada lista de destinatarios, para
    * que ningún camino (disparo, escalada, re-push) se lo salte.
    */
   private async withoutPanicExcluded(
@@ -377,17 +376,17 @@ export class NotificationsService implements OnModuleInit {
     if (params.type !== NotificationType.PANIC_ALERT || params.userIds.length === 0) {
       return params;
     }
-    const superAdmins = new Set(await this.findSuperAdminUserIds());
-    if (superAdmins.size === 0) return params;
+    const excluded = new Set(await this.findPanicExcludedUserIds());
+    if (excluded.size === 0) return params;
     return {
       ...params,
-      userIds: params.userIds.filter((id) => !superAdmins.has(id)),
+      userIds: params.userIds.filter((id) => !excluded.has(id)),
     };
   }
 
   /**
    * Emite el pánico en tiempo real a la sala del complejo con la lista de
-   * usuarios que deben ignorarlo (los SUPER_ADMIN_ROL).
+   * usuarios que deben ignorarlo (SUPER_ADMIN_ROL sin rol de residente).
    *
    * La sala es de todo el complejo y la sesión de residente de un super admin
    * que vive ahí no lleva su rol en el token, así que el socket no puede
@@ -400,7 +399,7 @@ export class NotificationsService implements OnModuleInit {
   ): Promise<void> {
     let skipUserIds: string[] = [];
     try {
-      skipUserIds = await this.findSuperAdminUserIds();
+      skipUserIds = await this.findPanicExcludedUserIds();
     } catch (err) {
       // Nunca demorar ni perder un pánico por esto.
       this.logger.warn(
@@ -411,6 +410,31 @@ export class NotificationsService implements OnModuleInit {
       ...payload,
       skipUserIds,
     });
+  }
+
+  /**
+   * A quién no le llega el pánico en el celular: el SUPER_ADMIN_ROL que NO es
+   * residente. Si además tiene RESIDENT_ROL vive en un conjunto, y la alarma de
+   * donde vive sí le corresponde (en la app de residente).
+   */
+  private async findPanicExcludedUserIds(): Promise<string[]> {
+    const rows = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.user', 'u')
+      .innerJoin('ur.role', 'r')
+      .where('r.name = :role', { role: ValidRoles.SUPER_ADMIN_ROL })
+      .andWhere('u.deleted_at IS NULL')
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM user_has_roles ur2
+            JOIN roles r2 ON r2.id = ur2.role_id
+           WHERE ur2.user_id = u.id AND r2.name = :resident)`,
+        { resident: ValidRoles.RESIDENT_ROL },
+      )
+      .select('u.id', 'userId')
+      .distinct(true)
+      .getRawMany<{ userId: string }>();
+    return rows.map((x) => x.userId);
   }
 
   /** IDs de todos los usuarios SUPER_ADMIN activos (no scoped a complejo). */
@@ -2499,13 +2523,10 @@ export class NotificationsService implements OnModuleInit {
     complexId: string,
     currentUser?: JwtAccessPayload,
   ): Promise<Notification[]> {
-    // El pánico no es del SUPER_ADMIN_ROL. Se mira en la base y no en el token:
-    // su sesión de residente (RemoteLink) solo lleva RESIDENT_ROL, y con esta
-    // consulta la app encendería el modal —y la sirena— al conectarse.
-    if (
-      currentUser?.entityType === 'user' &&
-      (await this.findSuperAdminUserIds()).includes(currentUser.sub)
-    ) {
+    // El panel del SUPER_ADMIN_ROL no muestra pánicos. Se mira el TOKEN a
+    // propósito: su sesión de residente (RemoteLink) solo lleva RESIDENT_ROL y
+    // ahí sí debe recibir la alarma del conjunto donde vive.
+    if (currentUser?.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
       return [];
     }
     return this.notifRepo.find({
@@ -2848,6 +2869,15 @@ export class NotificationsService implements OnModuleInit {
     notifIdByUser?: Map<string, string>,
   ): Promise<void> {
     if (!this.webPushEnabled || subs.length === 0) return;
+
+    // El pánico no llega al panel web del SUPER_ADMIN_ROL, aunque además sea
+    // residente: como residente lo recibe en la app (FCM), no en el navegador
+    // con el que administra la plataforma.
+    if (params.type === NotificationType.PANIC_ALERT) {
+      const superAdmins = new Set(await this.findSuperAdminUserIds());
+      subs = subs.filter((sub) => !superAdmins.has(sub.userId));
+      if (subs.length === 0) return;
+    }
 
     // Web Push solo existe en el panel, y el panel no muestra los avisos de la
     // unidad (ver applyChannelScope). Mandarlos igual haría sonar el navegador
