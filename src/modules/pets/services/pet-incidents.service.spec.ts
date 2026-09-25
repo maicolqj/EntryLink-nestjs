@@ -347,6 +347,37 @@ describe('PetIncidentsService — debido proceso antes de sancionar', () => {
   });
 });
 
+describe('PetIncidentsService — la sanción le llega a la unidad', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  it.each([
+    [PetSanction.WARNING, undefined, 'PET_WARNING_ISSUED'],
+    [PetSanction.FINE, 80000, 'PET_FINE_CHARGED'],
+  ])('%s notifica a los residentes de la unidad', async (sanction, fineAmount, type) => {
+    const h = buildHarness();
+    h.incidents.findOne.mockResolvedValue(incidentOf({ statementDueAt: null }));
+
+    await h.service.sanction(
+      {
+        incidentId: 'incident-1',
+        sanction,
+        fineAmount,
+        resolutionNotes: 'Se verificó el incumplimiento con la evidencia.',
+      },
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+    await flush();
+
+    expect(h.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type,
+        userIds: ['resident-user-1'],
+        entityType: 'pet_incident',
+      }),
+    );
+  });
+});
+
 describe('PetIncidentsService — evidencia obligatoria', () => {
   it('rechaza un reporte sin fotos', async () => {
     const h = buildHarness();
