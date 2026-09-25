@@ -107,6 +107,8 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.AMENITY_CLEANING_UPDATED]: NotificationAudience.RESIDENT,
   [NotificationType.AMENITY_PAYMENT_RECEIVED]: NotificationAudience.RESIDENT,
   [NotificationType.AMENITY_REFUND_PAID]: NotificationAudience.RESIDENT,
+  // Insumo para cobrar daños: es trabajo de la administración, no del residente.
+  [NotificationType.AMENITY_BOOKING_NOVELTY]: NotificationAudience.STAFF,
 
   // ── PQRF y votaciones ───────────────────────────────────────────────────
   // El consejo es residente y a la vez instancia destinataria, y vota desde la

@@ -1773,6 +1773,7 @@ enum NotificationType {
   AMENITY_DAMAGE_CHARGED
   AMENITY_CLEANING_UPDATED
   AMENITY_PAYMENT_RECEIVED
+  AMENITY_BOOKING_NOVELTY
   AMENITY_REFUND_PAID
   PET_REGISTERED
   PET_APPROVED
@@ -4469,6 +4470,7 @@ type AmenityBooking {
   checkInAt: DateTime
   checkOutAt: DateTime
   checkedInByUserId: String
+  checkedOutByUserId: String
   feeAmount: Float!
   feeChargeId: String
 
@@ -4519,6 +4521,31 @@ enum AmenityBookingStatus {
   COMPLETED
   NO_SHOW
   EXPIRED
+}
+
+"""Novedad registrada por portería sobre una reserva"""
+type AmenityBookingNovelty {
+  id: ID!
+  bookingId: String!
+  complexId: String!
+
+  """Qué encontró portería"""
+  description: String!
+
+  """Portería reporta daño en la zona: insumo para el cobro"""
+  hasDamage: Boolean!
+
+  """Fotos de evidencia (R2)"""
+  photoUrls: [String!]!
+
+  """SHA-256 de cada foto, en el orden de photoUrls"""
+  photoHashes: [String!]!
+  reportedByUserId: String
+  reportedByName: String
+  reportedByRole: String
+
+  """Hora del servidor al recibir la novedad"""
+  createdAt: DateTime!
 }
 
 type PaginatedAmenitiesResponse {
@@ -6039,6 +6066,7 @@ type Query {
   amenityAvailability(input: AmenityAvailabilityInput!): AmenityAvailabilityResponse!
   amenityBlackouts(amenityId: String!): [AmenityBlackout!]!
   validateAmenityAccessCode(complexId: String!, accessCode: String!): AmenityAccessCodeValidation!
+  amenityBookingNovelties(bookingId: String!): [AmenityBookingNovelty!]!
   amenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
   myUnitAmenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
   myAmenityCouncilQuota(amenityId: String!): AmenityCouncilQuotaResponse!
