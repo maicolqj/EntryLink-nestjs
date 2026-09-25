@@ -1827,13 +1827,6 @@ enum NotificationPriority {
   URGENT
 }
 
-"""Con qué rol se lee una notificación"""
-enum NotificationAudience {
-  RESIDENT
-  STAFF
-  ANY
-}
-
 """
 Escenario de acción requerida. El frontend usa este valor para determinar qué botones mostrar.
 """
@@ -1867,6 +1860,13 @@ enum NotificationActionResult {
 
   """Alerta reconocida"""
   ACKNOWLEDGED
+}
+
+"""Con qué rol se lee una notificación"""
+enum NotificationAudience {
+  RESIDENT
+  STAFF
+  ANY
 }
 
 type PanicAlert {
@@ -5897,12 +5897,6 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 """
 scalar JSON
 
-"""Pantalla desde la que se lee la bandeja"""
-enum NotificationChannel {
-  PANEL
-  APP
-}
-
 type Query {
   """
   Estado del registro mientras la app espera en "Revisa tu correo". El enlace se abre en el navegador, así que la app solo puede enterarse consultando. No devuelve datos del usuario.
@@ -6208,6 +6202,12 @@ input FilterNotificationsInput {
   isRead: Boolean
   isStarred: Boolean
   search: String
+}
+
+"""Pantalla desde la que se lee la bandeja"""
+enum NotificationChannel {
+  PANEL
+  APP
 }
 
 input FilterResidentsInput {
