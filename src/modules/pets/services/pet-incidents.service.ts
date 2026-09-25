@@ -962,11 +962,16 @@ export class PetIncidentsService {
   }
 
   /**
-   * Le quita a quien no es administración los datos de quien reportó.
+   * Le quita a quien no es administración lo que no le corresponde ver.
    *
-   * Es la regla que sostiene el módulo: el vecino reporta sabiendo que su
-   * nombre no le llega al acusado. Sin esto, nadie reporta —o el que reporta
-   * termina teniendo el problema—.
+   * 1. El expediente (observaciones de la administración y descargos): es el
+   *    insumo con el que la oficina decide, no un chat entre vecinos. El
+   *    residente —acusado o quien reportó— solo ve la decisión
+   *    (`resolutionNotes`). Se quita aquí y no en la app para que el hilo ni
+   *    siquiera viaje al teléfono.
+   * 2. Quién reportó, salvo para quien reportó: el vecino reporta sabiendo que
+   *    su nombre no le llega al acusado. Sin esto, nadie reporta —o el que
+   *    reporta termina teniendo el problema—.
    */
   private maskReporter(
     incident: PetIncident,
@@ -974,6 +979,9 @@ export class PetIncidentsService {
     isStaff: boolean,
   ): PetIncident {
     if (isStaff) return incident;
+
+    incident.statements = [];
+
     if (incident.reportedByUserId === currentUser.sub) return incident;
 
     incident.reportedByUserId = null;

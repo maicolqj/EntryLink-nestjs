@@ -180,6 +180,53 @@ describe('PetIncidentsService — identidad de quien reporta', () => {
   });
 });
 
+describe('PetIncidentsService — el expediente es de la administración', () => {
+  const thread = () =>
+    [
+      { id: 'st-1', isDefense: false, text: 'Observación de la oficina' },
+      { id: 'st-2', isDefense: true, text: 'Descargos de la unidad' },
+    ] as never;
+
+  it('el residente acusado no recibe las intervenciones del expediente', async () => {
+    const h = buildHarness();
+    h.incidents.findOne.mockResolvedValue(incidentOf({ statements: thread() }));
+
+    const result = await h.service.findById(
+      'incident-1',
+      userOf([ValidRoles.RESIDENT_ROL], 'resident-user-1'),
+    );
+
+    expect(result.statements).toEqual([]);
+  });
+
+  it('quien reportó tampoco las recibe', async () => {
+    const h = buildHarness();
+    const incident = incidentOf({ statements: thread() });
+    h.incidents.findOne.mockResolvedValue(incident);
+
+    const result = await h.service.findById(
+      'incident-1',
+      userOf([ValidRoles.RESIDENT_ROL], incident.reportedByUserId as string),
+    );
+
+    expect(result.statements).toEqual([]);
+    // Su propio nombre sí lo sigue viendo.
+    expect(result.reportedByName).toBe('ANA VECINA');
+  });
+
+  it('la administración ve el hilo completo', async () => {
+    const h = buildHarness();
+    h.incidents.findOne.mockResolvedValue(incidentOf({ statements: thread() }));
+
+    const result = await h.service.findById(
+      'incident-1',
+      userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+    );
+
+    expect(result.statements).toHaveLength(2);
+  });
+});
+
 describe('PetIncidentsService — debido proceso antes de sancionar', () => {
   const futureDeadline = () => {
     const date = new Date();
