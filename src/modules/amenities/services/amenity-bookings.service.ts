@@ -19,6 +19,7 @@ import { randomBytes } from 'node:crypto';
 
 import { Amenity } from '../entities/amenity.entity';
 import { AmenityBooking } from '../entities/amenity-booking.entity';
+import { AmenityBookingNovelty } from '../entities/amenity-booking-novelty.entity';
 
 import { AmenityBookingMode } from '../enums/amenity-booking-mode.enum';
 import { AmenityFeeType } from '../enums/amenity-fee-type.enum';
@@ -879,7 +880,43 @@ export class AmenityBookingsService {
     currentUser: JwtAccessPayload,
   ): Promise<PaginatedAmenityBookingsResponse> {
     await this.complexService.findById(complexId, currentUser);
-    return this.queryBookings(complexId, pagination, filters);
+    const result = await this.queryBookings(complexId, pagination, filters);
+    await this.attachNoveltySummary(result.items);
+    return result;
+  }
+
+  /**
+   * Cuántas novedades tiene cada reserva de la página y si alguna reporta
+   * daño. Una sola consulta agrupada: resolverlo por reserva serían cien
+   * consultas por página.
+   *
+   * Solo para la lista de la administración: al residente no le corresponde
+   * enterarse de lo que portería anotó antes de que la oficina lo revise.
+   */
+  private async attachNoveltySummary(items: AmenityBooking[]): Promise<void> {
+    for (const item of items) {
+      item.noveltyCount = 0;
+      item.hasDamageNovelty = false;
+    }
+    if (items.length === 0) return;
+
+    const rows = await this.dataSource
+      .getRepository(AmenityBookingNovelty)
+      .createQueryBuilder('n')
+      .select('n.bookingId', 'bookingId')
+      .addSelect('COUNT(*)::int', 'total')
+      .addSelect('BOOL_OR(n.hasDamage)', 'hasDamage')
+      .where('n.bookingId IN (:...ids)', { ids: items.map((b) => b.id) })
+      .groupBy('n.bookingId')
+      .getRawMany<{ bookingId: string; total: number; hasDamage: boolean }>();
+
+    const byBooking = new Map(rows.map((r) => [r.bookingId, r]));
+    for (const item of items) {
+      const row = byBooking.get(item.id);
+      if (!row) continue;
+      item.noveltyCount = Number(row.total);
+      item.hasDamageNovelty = row.hasDamage === true;
+    }
   }
 
   /** Reservas de la unidad del residente autenticado. El scope se fuerza aquí. */

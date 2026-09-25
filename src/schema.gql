@@ -4503,6 +4503,8 @@ type AmenityBooking {
   damageChargeId: String
   damageChargedAt: DateTime
   damageChargedByUserId: String
+  noveltyCount: Int
+  hasDamageNovelty: Boolean
   complexId: String!
   complex: ResidentialComplex
   reminderSentAt: DateTime

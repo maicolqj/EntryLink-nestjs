@@ -416,6 +416,21 @@ export class AmenityBooking {
   @Column({ name: 'damage_charged_by_user_id', type: 'uuid', nullable: true })
   damageChargedByUserId?: string | null;
 
+  // ─── Novedades de portería (calculadas, no son columnas) ─────────────────
+
+  /**
+   * Cuántas novedades registró portería sobre la reserva. Solo se llena en la
+   * lista de la administración (`amenityBookings`): sin este número la reserva
+   * con daño reportado se ve igual que las demás y el aviso lleva a una fila
+   * que no dice nada. Nulo en cualquier otra consulta (no se calculó).
+   */
+  @Field(() => Int, { nullable: true })
+  noveltyCount?: number;
+
+  /** Alguna de esas novedades reporta daño: insumo para el cobro. */
+  @Field(() => Boolean, { nullable: true })
+  hasDamageNovelty?: boolean;
+
   // ─── Multi-tenant ─────────────────────────────────────────────────────────
 
   @Field()
