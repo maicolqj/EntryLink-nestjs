@@ -191,7 +191,7 @@ describe('PetsNotificationDetailProvider — qué se puede hacer desde el aviso'
         status: PetIncidentStatus.UNDER_DEFENSE,
         unitId: 'unit-1',
         statementDueAt: inDays(3),
-        statements: [{ id: 'st-1' }] as never,
+        statements: [{ id: 'st-1', isDefense: true }] as never,
       }),
       manager,
     );
@@ -202,6 +202,22 @@ describe('PetsNotificationDetailProvider — qué se puede hacer desde el aviso'
     expect(
       actions.find((a) => a.code === PetActionCode.INCIDENT_WARN)?.isEnabled,
     ).toBe(true);
+  });
+
+  it('la observación de quien dio curso no abre la sanción', async () => {
+    const actions = await actionsFor(
+      incidentOf({
+        status: PetIncidentStatus.UNDER_DEFENSE,
+        unitId: 'unit-1',
+        statementDueAt: inDays(3),
+        statements: [{ id: 'st-1', isDefense: false }] as never,
+      }),
+      manager,
+    );
+
+    const warn = actions.find((a) => a.code === PetActionCode.INCIDENT_WARN);
+    expect(warn?.isEnabled).toBe(false);
+    expect(warn?.disabledReason).toContain('plazo');
   });
 
   it('un caso cerrado no se reabre desde el aviso', async () => {

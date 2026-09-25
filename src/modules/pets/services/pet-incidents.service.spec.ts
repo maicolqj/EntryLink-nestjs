@@ -211,6 +211,33 @@ describe('PetIncidentsService — debido proceso antes de sancionar', () => {
     expect(h.emitPetFineCharge).not.toHaveBeenCalled();
   });
 
+  it('la observación de quien dio curso no cuenta como descargo', async () => {
+    // Dar curso con una observación la guardaba en el mismo hilo, y el plazo
+    // se daba por cerrado en el acto: al reabrir, el caso ya "se podía
+    // resolver" sin que la unidad hubiera respondido.
+    const h = buildHarness();
+    h.incidents.findOne.mockResolvedValue(
+      incidentOf({ statementDueAt: futureDeadline() }),
+    );
+    h.statements.count.mockImplementation(
+      async ({ where }: { where: { isDefense?: boolean } }) =>
+        where.isDefense ? 0 : 1,
+    );
+
+    await expect(
+      h.service.sanction(
+        {
+          incidentId: 'incident-1',
+          sanction: PetSanction.WARNING,
+          resolutionNotes: 'Se evidencia el ruido en horario nocturno.',
+        },
+        userOf([ValidRoles.COMPLEX_ROL], 'admin-1'),
+      ),
+    ).rejects.toMatchObject({
+      errorCode: PetErrorCode.PET_INCIDENT_DEFENSE_WINDOW_OPEN,
+    });
+  });
+
   it('deja multar antes del plazo si la unidad ya presentó descargos', async () => {
     const h = buildHarness();
     h.incidents.findOne.mockResolvedValue(

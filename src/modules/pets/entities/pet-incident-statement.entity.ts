@@ -67,6 +67,14 @@ export class PetIncidentStatement {
   })
   imageUrls: string[];
 
+  /**
+   * Descargo de la unidad señalada (true) u observación de la administración
+   * (false). Solo los descargos cierran el plazo de defensa.
+   */
+  @Field(() => Boolean, { defaultValue: false })
+  @Column({ name: 'is_defense', type: 'boolean', default: false })
+  isDefense: boolean;
+
   @Field(() => String, { nullable: true })
   @Column({ name: 'author_user_id', type: 'uuid', nullable: true })
   authorUserId?: string | null;

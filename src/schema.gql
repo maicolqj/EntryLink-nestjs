@@ -4809,6 +4809,7 @@ type PetIncidentStatement {
 
   """Soportes adjuntos (R2)"""
   imageUrls: [String!]
+  isDefense: Boolean!
   authorUserId: String
 
   """Rol de quien responde, congelado al momento del descargo"""
