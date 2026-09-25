@@ -13,6 +13,7 @@ import { RegisterAmenityBookingRefundInput } from '../dto/inputs/register-amenit
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
+import { AmenityAccessCodeValidation } from '../dto/responses/access-code-validation.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -95,6 +96,29 @@ export class AmenityBookingsResolver {
   // ================================================================
   // MUTATIONS — Portería
   // ================================================================
+
+  /**
+   * Muestra a quién pertenece el código y si el ingreso procede, sin registrar
+   * nada. Portería valida primero y confirma después.
+   */
+  @Query(() => AmenityAccessCodeValidation, {
+    name: 'validateAmenityAccessCode',
+  })
+  @Auth({
+    roles: [...STAFF_ROLES, ValidRoles.SECURITY_ROL],
+    permissions: [ValidPermissions.CHECK_IN_AMENITY_BOOKING],
+  })
+  validateAccessCode(
+    @Args('complexId') complexId: string,
+    @Args('accessCode') accessCode: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<AmenityAccessCodeValidation> {
+    return this.bookingsService.validateAccessCode(
+      complexId,
+      accessCode,
+      currentUser,
+    );
+  }
 
   /** Valida el código que muestra el residente y registra el ingreso. */
   @Mutation(() => AmenityBooking, { name: 'checkInAmenityBooking' })

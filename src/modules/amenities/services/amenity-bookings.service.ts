@@ -44,6 +44,7 @@ import { IncomeCategory } from '../../finance/enums/income-category.enum';
 import { FilterAmenityBookingsInput } from '../dto/inputs/filter-amenity-bookings.input';
 import { PaginatedAmenityBookingsResponse } from '../dto/responses/paginated-amenity-bookings.response';
 import { AmenityCouncilQuotaResponse } from '../dto/responses/council-quota.response';
+import { AmenityAccessCodeValidation } from '../dto/responses/access-code-validation.response';
 
 import { AmenitiesService } from './amenities.service';
 import { AmenityAvailabilityService } from './amenity-availability.service';
@@ -646,6 +647,36 @@ export class AmenityBookingsService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
+   * Valida el código que muestra el residente sin registrar nada: devuelve la
+   * reserva y si el ingreso procede ahora. Las reglas salen de
+   * `checkInBlocker`, las mismas de `checkIn`: lo que aquí dice "procede" es
+   * exactamente lo que el ingreso va a aceptar.
+   */
+  async validateAccessCode(
+    complexId: string,
+    accessCode: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityAccessCodeValidation> {
+    const booking = await this.findByAccessCodeOrFail(
+      complexId,
+      accessCode,
+      currentUser,
+    );
+    const blocker = this.checkInBlocker(booking, new Date());
+
+    return {
+      booking,
+      canCheckIn: !blocker,
+      canCheckOut: booking.status === AmenityBookingStatus.CHECKED_IN,
+      reason: blocker?.message ?? null,
+      reasonCode: blocker?.errorCode ?? null,
+      checkInOpensAt: new Date(
+        booking.startAt.getTime() - CHECK_IN_GRACE_MINUTES * MINUTE_MS,
+      ),
+    };
+  }
+
+  /**
    * Registra el ingreso a la zona validando el código que muestra el residente.
    * Se admite desde `CHECK_IN_GRACE_MINUTES` antes del inicio: llegar puntual no
    * puede depender de que el reloj del guarda coincida al segundo.
@@ -655,44 +686,19 @@ export class AmenityBookingsService {
     accessCode: string,
     currentUser: JwtAccessPayload,
   ): Promise<AmenityBooking> {
-    await this.complexService.findById(complexId, currentUser);
-
-    const booking = await this.bookingRepo.findOne({
-      where: {
-        complexId,
-        accessCode: accessCode.trim().toUpperCase(),
-        deletedAt: IsNull(),
-      },
-      relations: ['amenity', 'unit'],
-    });
-
-    if (!booking) {
-      throw new CustomError({
-        message: 'Código de reserva inválido',
-        statusCode: HttpStatus.NOT_FOUND,
-        errorCode: AmenityErrorCode.BOOKING_ACCESS_CODE_INVALID,
-      });
-    }
-
-    if (booking.status === AmenityBookingStatus.CHECKED_IN) {
-      throw new CustomError({
-        message: 'Esta reserva ya registró ingreso',
-        statusCode: HttpStatus.CONFLICT,
-        errorCode: AmenityErrorCode.BOOKING_ALREADY_CHECKED_IN,
-      });
-    }
-
-    this.assertStatus(booking, [AmenityBookingStatus.APPROVED]);
+    const booking = await this.findByAccessCodeOrFail(
+      complexId,
+      accessCode,
+      currentUser,
+    );
 
     const now = new Date();
-    if (
-      now.getTime() <
-      booking.startAt.getTime() - CHECK_IN_GRACE_MINUTES * MINUTE_MS
-    ) {
+    const blocker = this.checkInBlocker(booking, now);
+    if (blocker) {
       throw new CustomError({
-        message: `El ingreso se habilita ${CHECK_IN_GRACE_MINUTES} minutos antes del inicio de la reserva`,
+        message: blocker.message,
         statusCode: HttpStatus.CONFLICT,
-        errorCode: AmenityErrorCode.BOOKING_CHECK_IN_TOO_EARLY,
+        errorCode: blocker.errorCode,
       });
     }
 
@@ -2589,6 +2595,77 @@ export class AmenityBookingsService {
         errorCode: AmenityErrorCode.BOOKING_NOT_OWNED_BY_UNIT,
       });
     }
+  }
+
+  private async findByAccessCodeOrFail(
+    complexId: string,
+    accessCode: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<AmenityBooking> {
+    await this.complexService.findById(complexId, currentUser);
+
+    const booking = await this.bookingRepo.findOne({
+      where: {
+        complexId,
+        accessCode: accessCode.trim().toUpperCase(),
+        deletedAt: IsNull(),
+      },
+      relations: ['amenity', 'unit', 'unit.building'],
+    });
+
+    if (!booking) {
+      throw new CustomError({
+        message: 'Código de reserva inválido',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: AmenityErrorCode.BOOKING_ACCESS_CODE_INVALID,
+      });
+    }
+
+    return booking;
+  }
+
+  /**
+   * Por qué no se puede registrar el ingreso ahora, o null si se puede.
+   *
+   * Pasada la hora de fin tampoco: la franja ya puede ser de otra unidad, y un
+   * código viejo no puede servir para entrar otro día.
+   */
+  private checkInBlocker(
+    booking: AmenityBooking,
+    now: Date,
+  ): { message: string; errorCode: AmenityErrorCode } | null {
+    if (booking.status === AmenityBookingStatus.CHECKED_IN) {
+      return {
+        message: 'Esta reserva ya registró ingreso',
+        errorCode: AmenityErrorCode.BOOKING_ALREADY_CHECKED_IN,
+      };
+    }
+
+    if (booking.status !== AmenityBookingStatus.APPROVED) {
+      return {
+        message: `La reserva está en estado ${booking.status} y no admite ingreso`,
+        errorCode: AmenityErrorCode.BOOKING_INVALID_STATUS,
+      };
+    }
+
+    if (
+      now.getTime() <
+      booking.startAt.getTime() - CHECK_IN_GRACE_MINUTES * MINUTE_MS
+    ) {
+      return {
+        message: `El ingreso se habilita ${CHECK_IN_GRACE_MINUTES} minutos antes del inicio de la reserva`,
+        errorCode: AmenityErrorCode.BOOKING_CHECK_IN_TOO_EARLY,
+      };
+    }
+
+    if (now.getTime() >= booking.endAt.getTime()) {
+      return {
+        message: 'La franja de esta reserva ya terminó',
+        errorCode: AmenityErrorCode.BOOKING_CHECK_IN_EXPIRED,
+      };
+    }
+
+    return null;
   }
 
   private assertStatus(

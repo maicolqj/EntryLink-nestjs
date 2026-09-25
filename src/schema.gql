@@ -4591,6 +4591,29 @@ type AmenityCouncilQuotaResponse {
   year: Int!
 }
 
+"""Validación del código de ingreso de una reserva de zona común"""
+type AmenityAccessCodeValidation {
+  """La reserva a la que pertenece el código"""
+  booking: AmenityBooking!
+
+  """El ingreso se puede registrar ahora mismo"""
+  canCheckIn: Boolean!
+
+  """Ya tiene ingreso registrado: lo que procede es la salida"""
+  canCheckOut: Boolean!
+
+  """
+  Por qué no procede el ingreso, en palabras para el guarda. Null si procede
+  """
+  reason: String
+
+  """Código de error del motivo, el mismo que devolvería el ingreso"""
+  reasonCode: String
+
+  """Desde cuándo se admite el ingreso (inicio menos la gracia)"""
+  checkInOpensAt: DateTime!
+}
+
 """Mascota registrada por un residente"""
 type Pet {
   id: String!
@@ -6015,6 +6038,7 @@ type Query {
   amenity(amenityId: String!): Amenity!
   amenityAvailability(input: AmenityAvailabilityInput!): AmenityAvailabilityResponse!
   amenityBlackouts(amenityId: String!): [AmenityBlackout!]!
+  validateAmenityAccessCode(complexId: String!, accessCode: String!): AmenityAccessCodeValidation!
   amenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
   myUnitAmenityBookings(complexId: String!, pagination: PaginationInput, filters: FilterAmenityBookingsInput): PaginatedAmenityBookingsResponse!
   myAmenityCouncilQuota(amenityId: String!): AmenityCouncilQuotaResponse!
