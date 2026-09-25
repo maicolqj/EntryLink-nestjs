@@ -464,7 +464,7 @@ describe('NotificationsService — audiencia de la bandeja', () => {
   });
 });
 
-describe('NotificationsService — el pánico no le llega al super admin', () => {
+describe('NotificationsService — el pánico y el super admin', () => {
   const buildPush = (superAdminIds: string[]) => {
     const qb = {
       innerJoin: jest.fn().mockReturnThis(),
@@ -505,7 +505,10 @@ describe('NotificationsService — el pánico no le llega al super admin', () =>
     body: 'Alerta',
   }) as never;
 
-  it('el re-push de un pánico salta a los SUPER_ADMIN_ROL', async () => {
+  // El query builder falso devuelve a quienes la consulta excluye: los
+  // SUPER_ADMIN_ROL SIN rol de residente. Un super admin que además es residente
+  // vive en un conjunto y la alarma de donde vive sí le llega.
+  it('el re-push de un pánico salta al super admin que no es residente', async () => {
     const h = buildPush(['super-1']);
 
     await h.service.dispatchPushOnly(['guard-1', 'super-1'], panic(['guard-1', 'super-1']));
@@ -535,5 +538,37 @@ describe('NotificationsService — el pánico no le llega al super admin', () =>
     } as never);
 
     expect(h.pushSubRepo.find).toHaveBeenCalled();
+  });
+});
+
+describe('NotificationsService — pánicos activos por sesión', () => {
+  const buildActive = () => {
+    const find = jest.fn(async () => [{ id: 'panic-1' }]);
+    const service = new NotificationsService(
+      { find } as never,
+      null as never, null as never, null as never, null as never, null as never,
+      null, null as never, null as never, null as never, null as never,
+      null as never, null as never, null, null, null as never,
+    );
+    return { service, find };
+  };
+
+  it('el panel del super admin no recibe pánicos', async () => {
+    const h = buildActive();
+    const result = await h.service.activePanicAlerts(COMPLEX_ID, {
+      sub: 'super-1',
+      roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL],
+    } as never);
+    expect(result).toEqual([]);
+    expect(h.find).not.toHaveBeenCalled();
+  });
+
+  it('la sesión de residente del mismo usuario sí los recibe', async () => {
+    const h = buildActive();
+    const result = await h.service.activePanicAlerts(COMPLEX_ID, {
+      sub: 'super-1',
+      roles: [ValidRoles.RESIDENT_ROL],
+    } as never);
+    expect(result).toHaveLength(1);
   });
 });
