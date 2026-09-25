@@ -463,3 +463,77 @@ describe('NotificationsService — audiencia de la bandeja', () => {
     });
   });
 });
+
+describe('NotificationsService — el pánico no le llega al super admin', () => {
+  const buildPush = (superAdminIds: string[]) => {
+    const qb = {
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(superAdminIds.map((userId) => ({ userId }))),
+    };
+    const pushSubRepo = { find: jest.fn(async () => []) };
+    const service = new NotificationsService(
+      null as never,
+      pushSubRepo as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null,
+      null as never,
+      null as never,
+      { createQueryBuilder: jest.fn(() => qb) } as never,
+      null as never,
+      null as never,
+      null as never,
+      null,
+      null,
+      null as never,
+    );
+    return { service, pushSubRepo };
+  };
+
+  const panic = (userIds: string[]) => ({
+    complexId: COMPLEX_ID,
+    userIds,
+    type: 'PANIC_ALERT',
+    priority: 'URGENT',
+    title: 'Pánico',
+    body: 'Alerta',
+  }) as never;
+
+  it('el re-push de un pánico salta a los SUPER_ADMIN_ROL', async () => {
+    const h = buildPush(['super-1']);
+
+    await h.service.dispatchPushOnly(['guard-1', 'super-1'], panic(['guard-1', 'super-1']));
+
+    const where = (h.pushSubRepo.find.mock.calls[0] as any)[0].where;
+    expect(where.userId.value).toEqual(['guard-1']);
+  });
+
+  it('si solo quedaba el super admin, no se envía nada', async () => {
+    const h = buildPush(['super-1']);
+
+    await h.service.dispatchPushOnly(['super-1'], panic(['super-1']));
+
+    expect(h.pushSubRepo.find).not.toHaveBeenCalled();
+  });
+
+  it('otros avisos no se filtran', async () => {
+    const h = buildPush(['super-1']);
+
+    await h.service.dispatchPushOnly(['super-1'], {
+      complexId: COMPLEX_ID,
+      userIds: ['super-1'],
+      type: 'LOGIN_APPROVAL_REQUEST',
+      priority: 'HIGH',
+      title: 't',
+      body: 'b',
+    } as never);
+
+    expect(h.pushSubRepo.find).toHaveBeenCalled();
+  });
+});

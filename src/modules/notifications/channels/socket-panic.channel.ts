@@ -1,13 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 
-import { SocketService } from '../../../core/infrastructure/socket/socket.service';
-import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { PanicDeliveryChannel } from '../enums/panic-delivery-channel.enum';
 import {
   PanicChannel,
   PanicChannelContext,
   PanicChannelResult,
 } from './panic-channel.interface';
+import { NotificationsService } from '../services/notifications.service';
 
 /**
  * Reemite la alerta al dashboard de portería.
@@ -21,7 +20,13 @@ export class SocketPanicChannel implements PanicChannel {
   readonly channel = PanicDeliveryChannel.SOCKET;
   private readonly logger = new Logger(SocketPanicChannel.name);
 
-  constructor(private readonly socketService: SocketService) {}
+  constructor(
+    // forwardRef: NotificationsService es quien construye los canales al escalar,
+    // así que la dependencia es circular por diseño. Se emite por su método para
+    // que la escalada también lleve la lista de quién debe ignorar el pánico.
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   isAvailable(): boolean {
     return true;
@@ -33,18 +38,14 @@ export class SocketPanicChannel implements PanicChannel {
 
   async send(ctx: PanicChannelContext): Promise<PanicChannelResult> {
     try {
-      this.socketService.emitToComplex(
-        ctx.alert.complexId,
-        SocketEvent.PANIC_ALERT_NEW,
-        {
-          complexId: ctx.alert.complexId,
-          alertId: ctx.alert.id,
-          unitId: ctx.alert.unitId,
-          triggeredBy: ctx.alert.triggeredByUserId,
-          triggeredByLabel: ctx.alert.triggeredByLabel,
-          escalationLevel: ctx.escalationLevel,
-        },
-      );
+      await this.notificationsService.emitPanicNew(ctx.alert.complexId, {
+        complexId: ctx.alert.complexId,
+        alertId: ctx.alert.id,
+        unitId: ctx.alert.unitId,
+        triggeredBy: ctx.alert.triggeredByUserId,
+        triggeredByLabel: ctx.alert.triggeredByLabel,
+        escalationLevel: ctx.escalationLevel,
+      });
       // Sin destinatario individual: se emite a la sala del complejo, así que no
       // hay forma de contar cuántos navegadores lo recibieron.
       return { reached: 1 };
