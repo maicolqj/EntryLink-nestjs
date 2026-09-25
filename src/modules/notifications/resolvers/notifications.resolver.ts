@@ -3,6 +3,7 @@ import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { Notification } from '../entities/notification.entity';
 import { NotificationsService } from '../services/notifications.service';
 import { FilterNotificationsInput } from '../dto/inputs/filter-notifications.input';
+import { NotificationChannel } from '../enums/notification-channel.enum';
 import { SavePushSubscriptionInput } from '../dto/inputs/save-push-subscription.input';
 import { SaveMobileTokenInput } from '../dto/inputs/save-mobile-token.input';
 import { SendNotificationInput } from '../dto/inputs/send-notification.input';
@@ -311,12 +312,15 @@ export class NotificationsResolver {
     @Args('pagination', { nullable: true })
     pagination: PaginationInput = { page: 1, limit: 20 },
     @Args('filters', { nullable: true }) filters: FilterNotificationsInput = {},
+    @Args('channel', { type: () => NotificationChannel, nullable: true })
+    channel: NotificationChannel | null = null,
   ): Promise<PaginatedNotificationsResponse> {
     return this.notificationsService.findByUser(
       complexId,
       pagination,
       filters,
       currentUser,
+      channel,
     );
   }
 
@@ -377,8 +381,14 @@ export class NotificationsResolver {
   getUnreadCount(
     @CurrentUser() currentUser: JwtAccessPayload,
     @Args('complexId', { nullable: true }) complexId: string | null = null,
+    @Args('channel', { type: () => NotificationChannel, nullable: true })
+    channel: NotificationChannel | null = null,
   ): Promise<UnreadCountResponse> {
-    return this.notificationsService.getUnreadCount(complexId, currentUser);
+    return this.notificationsService.getUnreadCount(
+      complexId,
+      currentUser,
+      channel,
+    );
   }
 
   /**
