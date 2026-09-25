@@ -405,6 +405,99 @@ describe('AmenityBookingsService — cobro por daños', () => {
     });
   });
 
+  // ── Portería valida el código antes de abrir ─────────────────────
+  describe('validar el código en portería', () => {
+    const inWindow = () =>
+      bookingOf({
+        accessCode: 'ZC-ABC234',
+        startAt: new Date(Date.now() + 10 * 60 * 1000),
+        endAt: new Date(Date.now() + 2 * HOUR),
+      });
+
+    it('muestra la reserva y no registra nada', async () => {
+      const { service, saved } = build(inWindow());
+
+      const result = await service.validateAccessCode(
+        'complex-1',
+        'zc-abc234',
+        staff,
+      );
+
+      expect(result.canCheckIn).toBe(true);
+      expect(result.canCheckOut).toBe(false);
+      expect(result.reason).toBeNull();
+      expect(result.booking.id).toBe('booking-1');
+      expect(saved).toHaveLength(0);
+    });
+
+    it('antes de la gracia dice desde cuándo se abre', async () => {
+      const startAt = new Date(Date.now() + 3 * HOUR);
+      const { service } = build(
+        bookingOf({ startAt, endAt: new Date(startAt.getTime() + 2 * HOUR) }),
+      );
+
+      const result = await service.validateAccessCode(
+        'complex-1',
+        'ZC-ABC234',
+        staff,
+      );
+
+      expect(result.canCheckIn).toBe(false);
+      expect(result.reasonCode).toBe('BOOKING_CHECK_IN_TOO_EARLY');
+      expect(result.checkInOpensAt.getTime()).toBe(
+        startAt.getTime() - 30 * 60 * 1000,
+      );
+    });
+
+    it('con ingreso ya registrado, lo que procede es la salida', async () => {
+      const { service } = build(
+        bookingOf({ status: AmenityBookingStatus.CHECKED_IN }),
+      );
+
+      const result = await service.validateAccessCode(
+        'complex-1',
+        'ZC-ABC234',
+        staff,
+      );
+
+      expect(result.canCheckIn).toBe(false);
+      expect(result.canCheckOut).toBe(true);
+    });
+
+    it('un código de una franja que ya terminó no abre la zona', async () => {
+      // La franja ya puede ser de otra unidad: el código viejo no sirve.
+      const past = bookingOf({
+        startAt: new Date(Date.now() - 3 * HOUR),
+        endAt: new Date(Date.now() - HOUR),
+      });
+      const { service, saved } = build(past);
+
+      const result = await service.validateAccessCode(
+        'complex-1',
+        'ZC-ABC234',
+        staff,
+      );
+      expect(result.canCheckIn).toBe(false);
+      expect(result.reasonCode).toBe('BOOKING_CHECK_IN_EXPIRED');
+
+      await expect(
+        service.checkIn('complex-1', 'ZC-ABC234', staff),
+      ).rejects.toThrow('La franja de esta reserva ya terminó');
+      expect(saved).toHaveLength(0);
+    });
+
+    it('lo que la validación aprueba, el ingreso lo acepta', async () => {
+      const { service, saved } = build(inWindow());
+
+      await service.checkIn('complex-1', 'ZC-ABC234', staff);
+
+      expect(saved[saved.length - 1].status).toBe(
+        AmenityBookingStatus.CHECKED_IN,
+      );
+      expect(saved[saved.length - 1].checkInAt).toBeInstanceOf(Date);
+    });
+  });
+
   // ── Pago recibido en la administración ───────────────────────────
   describe('registrar el pago del alquiler', () => {
     it('no se puede cobrar una reserva que todavía no se aprueba', async () => {
