@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 
 import { Vehicle } from '../entities/vehicle.entity';
 import { VehicleStatus } from '../enums/vehicle-status.enum';
@@ -17,6 +17,7 @@ import {
   RotationTypeStatus,
 } from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
+import { planRotation } from '../utils/rotation-planner';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
@@ -55,6 +56,9 @@ const ACTIVE_STATES = [
   VehicleStatus.ACTIVE,
   VehicleStatus.SUSPENDED,
 ];
+
+/** Autor de lo que hace el sistema solo (la rotación automática). */
+const SYSTEM_ACTOR = '00000000-0000-0000-0000-000000000000';
 
 @Injectable()
 export class VehiclesService {
@@ -823,8 +827,7 @@ export class VehiclesService {
       });
     }
 
-    const configuredTypes = Object.keys(config.slotsByType);
-    if (configuredTypes.length === 0) {
+    if (Object.keys(config.slotsByType).length === 0) {
       throw new CustomError({
         message: 'No hay tipos de vehículo configurados en slotsByType',
         statusCode: HttpStatus.BAD_REQUEST,
@@ -832,100 +835,215 @@ export class VehiclesService {
       });
     }
 
+    await this.runRotation(
+      config,
+      currentUser.entityType === 'user' ? currentUser.sub : null,
+    );
+
+    return this.getRotationStatus(complexId, currentUser);
+  }
+
+  /**
+   * Rotaciones que ya tocan: activas, con fecha vencida y que ya se
+   * ejecutaron al menos una vez a mano.
+   *
+   * Lo último es a propósito: la rotación automática continúa un ciclo que la
+   * administración arrancó. Sin eso, el primer despliegue rotaría de golpe
+   * conjuntos que la configuraron hace meses y nunca la pusieron en marcha.
+   */
+  async findDueRotationsInternal(now: Date): Promise<ParkingRotationConfig[]> {
+    return this.rotationConfigRepo.find({
+      where: {
+        isActive: true,
+        nextExecutionAt: LessThanOrEqual(now),
+        lastExecutedAt: Not(IsNull()),
+      },
+    });
+  }
+
+  /**
+   * Ejecuta la rotación de un complejo: la usan el botón de la administración
+   * y el cron diario. Ver `planRotation` para la regla.
+   *
+   * Además de mover quién está dentro y quién fuera:
+   *  - revuelve al azar los números de cupo entre los que quedan dentro;
+   *  - avisa a cada unidad afectada (sale, vuelve o cambia de número);
+   *  - causa de una vez el cobro de los que vuelven: quien queda fuera no paga
+   *    ese mes (la causación mensual solo cobra vehículos activos) y quien
+   *    entra sí, desde que entra.
+   */
+  async runRotation(
+    config: ParkingRotationConfig,
+    actorUserId: string | null,
+  ): Promise<void> {
+    const complexId = config.complexId;
     const now = new Date();
-    const grandCycleByType = { ...config.grandCycleByType };
-    const vehiclesToSave: Vehicle[] = [];
-
-    for (const vehicleType of configuredTypes) {
-      const availableSlots = config.slotsByType[vehicleType] ?? 0;
-
-      // Pool = vehículos activos O suspendidos por rotación de este tipo
-      const pool = await this.vehicleRepo
-        .createQueryBuilder('v')
-        .where('v.complex_id = :complexId', { complexId })
-        .andWhere('v.type = :type', { type: vehicleType })
-        .andWhere('v.deleted_at IS NULL')
-        .andWhere(
-          '(v.status = :active OR (v.status = :suspended AND v.suspended_by_rotation = TRUE))',
-          { active: VehicleStatus.ACTIVE, suspended: VehicleStatus.SUSPENDED },
-        )
-        .orderBy('v.rotation_cycle_count', 'ASC')
-        .addOrderBy('v.rotation_suspended_at', 'ASC', 'NULLS FIRST')
-        .getMany();
-
-      const totalVehicles = pool.length;
-      const excessCount = totalVehicles - availableSlots;
-
-      if (excessCount <= 0) {
-        this.logger.log(
-          `[${vehicleType}] Sin exceso (${totalVehicles} vehículos, ${availableSlots} cupos) — sin rotación`,
-        );
-        continue;
-      }
-
-      // Paso 1: Reactivar los que están fuera por rotación
-      const currentlyRotated = pool.filter((v) => v.suspendedByRotation);
-      for (const v of currentlyRotated) {
-        v.status = VehicleStatus.ACTIVE;
-        v.suspendedByRotation = false;
-        v.rejectionReason = null;
-      }
-
-      // Paso 2: Reinicio de gran ciclo si todos han rotado al menos una vez
-      const allHaveRotated = pool.every((v) => v.rotationCycleCount > 0);
-      if (allHaveRotated) {
-        pool.forEach((v) => (v.rotationCycleCount = 0));
-        grandCycleByType[vehicleType] =
-          (grandCycleByType[vehicleType] ?? 1) + 1;
-        this.logger.log(
-          `[${vehicleType}] Gran ciclo completado — iniciando ciclo ${grandCycleByType[vehicleType]}`,
-        );
-      }
-
-      // Paso 3: Seleccionar candidatos a suspender
-      // Orden: menor rotationCycleCount primero, luego rotationSuspendedAt más antiguo (nulls primero)
-      const sorted = [...pool].sort((a, b) => {
-        if (a.rotationCycleCount !== b.rotationCycleCount) {
-          return a.rotationCycleCount - b.rotationCycleCount;
-        }
-        const aTime = a.rotationSuspendedAt?.getTime() ?? 0;
-        const bTime = b.rotationSuspendedAt?.getTime() ?? 0;
-        return aTime - bTime;
-      });
-
-      const toSuspend = sorted.slice(0, excessCount);
-      const cycleNum = grandCycleByType[vehicleType] ?? 1;
-
-      for (const v of toSuspend) {
-        v.status = VehicleStatus.SUSPENDED;
-        v.suspendedByRotation = true;
-        v.rejectionReason = `Fuera de parqueadero por rotación — Ciclo ${cycleNum}`;
-        v.rotationSuspendedAt = now;
-        v.rotationCycleCount += 1;
-      }
-
-      vehiclesToSave.push(...currentlyRotated, ...toSuspend);
-      this.logger.log(
-        `[${vehicleType}] Rotación: ${currentlyRotated.length} reactivados, ${toSuspend.length} suspendidos`,
-      );
-    }
-
-    // Guardar todos los vehículos modificados en una sola operación
-    if (vehiclesToSave.length > 0) {
-      await this.vehicleRepo.save(vehiclesToSave);
-      await this.cacheService.deleteByPrefix(BK.vehicle.prefix(complexId));
-    }
-
-    config.lastExecutedAt = now;
-    config.nextExecutionAt = this.calcNextExecution(
+    const nextExecutionAt = this.calcNextExecution(
       now,
       config.rotationIntervalValue,
       config.rotationIntervalUnit,
     );
+    const grandCycleByType = { ...config.grandCycleByType };
+
+    const toSave: Vehicle[] = [];
+    const leaving: Vehicle[] = [];
+    const returning: Vehicle[] = [];
+    const moved: Vehicle[] = [];
+
+    for (const [vehicleType, availableSlots] of Object.entries(
+      config.slotsByType,
+    )) {
+      const pool = await this.findRotationPool(complexId, vehicleType);
+      const plan = planRotation(pool, availableSlots ?? 0);
+
+      if (!plan) {
+        this.logger.log(
+          `[${vehicleType}] Sin exceso (${pool.length} vehículos, ${availableSlots} cupos) — sin rotación`,
+        );
+        continue;
+      }
+
+      if (plan.cycleCompleted) {
+        grandCycleByType[vehicleType] = (grandCycleByType[vehicleType] ?? 1) + 1;
+        this.logger.log(
+          `[${vehicleType}] Gran ciclo completado — iniciando ciclo ${grandCycleByType[vehicleType]}`,
+        );
+      }
+      const cycleNum = grandCycleByType[vehicleType] ?? 1;
+      const leavingIds = new Set(plan.suspend.map((v) => v.id));
+      const returningIds = new Set(plan.reactivate.map((v) => v.id));
+
+      for (const v of pool) {
+        const previousSpot = v.parkingSpot ?? null;
+        if (plan.cycleCompleted) v.rotationCycleCount = 0;
+
+        if (leavingIds.has(v.id)) {
+          v.status = VehicleStatus.SUSPENDED;
+          v.suspendedByRotation = true;
+          v.rejectionReason = `Fuera de parqueadero por rotación — Ciclo ${cycleNum}`;
+          v.rotationSuspendedAt = now;
+          v.rotationCycleCount += 1;
+          leaving.push(v);
+        } else {
+          v.status = VehicleStatus.ACTIVE;
+          v.suspendedByRotation = false;
+          v.rejectionReason = null;
+          if (returningIds.has(v.id)) returning.push(v);
+        }
+
+        v.parkingSpot = plan.spotById.get(v.id) ?? null;
+        if (
+          !leavingIds.has(v.id) &&
+          !returningIds.has(v.id) &&
+          v.parkingSpot &&
+          v.parkingSpot !== previousSpot
+        ) {
+          moved.push(v);
+        }
+        toSave.push(v);
+      }
+
+      this.logger.log(
+        `[${vehicleType}] Rotación: ${plan.reactivate.length} vuelven, ${plan.suspend.length} salen`,
+      );
+    }
+
+    if (toSave.length > 0) {
+      await this.vehicleRepo.save(toSave);
+      await this.cacheService.deleteByPrefix(BK.vehicle.prefix(complexId));
+    }
+
+    config.lastExecutedAt = now;
+    config.nextExecutionAt = nextExecutionAt;
     config.grandCycleByType = grandCycleByType;
     await this.rotationConfigRepo.save(config);
 
-    return this.getRotationStatus(complexId, currentUser);
+    // Cobro de los que vuelven: idempotente por vehículo y período.
+    for (const unitId of new Set(returning.map((v) => v.unitId))) {
+      await this.financeService.triggerVehicleCharges(unitId, complexId);
+    }
+
+    this.notifyRotation(leaving, returning, moved, nextExecutionAt);
+
+    void this.auditService.log({
+      entityType: AuditEntityType.Vehicle,
+      entityId: config.id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        leaving: leaving.map((v) => v.plate),
+        returning: returning.map((v) => v.plate),
+        nextExecutionAt,
+      },
+      performedById: actorUserId ?? SYSTEM_ACTOR,
+      performedByName: actorUserId ? undefined : 'Rotación automática',
+      performedByRole: actorUserId ? '' : 'SYSTEM',
+      complexId,
+      description: `Rotación de parqueaderos: ${leaving.length} salen, ${returning.length} vuelven`,
+    });
+  }
+
+  /** Vehículos que compiten por cupo en un tipo: activos y fuera por rotación. */
+  private findRotationPool(
+    complexId: string,
+    vehicleType: string,
+  ): Promise<Vehicle[]> {
+    return this.vehicleRepo
+      .createQueryBuilder('v')
+      .leftJoinAndSelect('v.unit', 'unit')
+      .leftJoinAndSelect('unit.building', 'building')
+      .leftJoinAndSelect('v.resident', 'resident')
+      .leftJoinAndSelect('resident.user', 'residentUser')
+      .where('v.complexId = :complexId', { complexId })
+      .andWhere('v.type = :type', { type: vehicleType })
+      .andWhere('v.deletedAt IS NULL')
+      .andWhere(
+        '(v.status = :active OR (v.status = :suspended AND v.suspendedByRotation = TRUE))',
+        { active: VehicleStatus.ACTIVE, suspended: VehicleStatus.SUSPENDED },
+      )
+      .orderBy('v.plate', 'ASC')
+      .getMany();
+  }
+
+  /** Avisos de la rotación a cada unidad (fire & forget). */
+  private notifyRotation(
+    leaving: Vehicle[],
+    returning: Vehicle[],
+    moved: Vehicle[],
+    nextExecutionAt: Date,
+  ): void {
+    const until = this.formatDate(nextExecutionAt);
+    const warn = (v: Vehicle) => (err: Error) =>
+      this.logger.warn(
+        `Error al notificar la rotación del vehículo ${v.id}: ${err?.message}`,
+      );
+
+    for (const v of leaving) {
+      this.notifyUnit(
+        v,
+        NotificationType.VEHICLE_SUSPENDED,
+        NotificationPriority.HIGH,
+        'Tu vehículo sale del parqueadero por rotación',
+        `${this.describeVehicle(v)} queda por fuera del parqueadero del conjunto desde hoy y hasta la próxima rotación (${until}). Mientras esté por fuera no se cobra parqueadero.`,
+      ).catch(warn(v));
+    }
+    for (const v of returning) {
+      this.notifyUnit(
+        v,
+        NotificationType.VEHICLE_REACTIVATED,
+        NotificationPriority.NORMAL,
+        'Tu vehículo vuelve al parqueadero',
+        `Por la rotación, ${this.describeVehicle(v)} vuelve a tener cupo${v.parkingSpot ? ` en el parqueadero ${v.parkingSpot}` : ''} hasta la próxima rotación (${until}).`,
+      ).catch(warn(v));
+    }
+    for (const v of moved) {
+      this.notifyUnit(
+        v,
+        NotificationType.PARKING_ASSIGNED,
+        NotificationPriority.NORMAL,
+        'Cambió tu parqueadero',
+        `Por la rotación, ${this.describeVehicle(v)} ahora usa el parqueadero ${v.parkingSpot}.`,
+      ).catch(warn(v));
+    }
   }
 
   // ================================================================
@@ -952,42 +1070,16 @@ export class VehiclesService {
     for (const [vehicleType, availableSlots] of Object.entries(
       config.slotsByType,
     )) {
-      const pool = await this.vehicleRepo.find({
-        where: [
-          {
-            complexId,
-            type: vehicleType as VehicleType,
-            status: VehicleStatus.ACTIVE,
-            deletedAt: IsNull(),
-          },
-          {
-            complexId,
-            type: vehicleType as VehicleType,
-            status: VehicleStatus.SUSPENDED,
-            suspendedByRotation: true,
-            deletedAt: IsNull(),
-          },
-        ],
-        relations: ['resident', 'resident.user', 'unit', 'unit.building'],
-        order: { rotationCycleCount: 'ASC', rotationSuspendedAt: 'ASC' },
-      });
+      const pool = await this.findRotationPool(complexId, vehicleType);
 
       const active = pool.filter((v) => v.status === VehicleStatus.ACTIVE);
       const suspendedByRotation = pool.filter((v) => v.suspendedByRotation);
       const excessVehicles = Math.max(0, pool.length - availableSlots);
       const grandCycleNumber = config.grandCycleByType[vehicleType] ?? 1;
 
-      // Candidatos a salir en la próxima rotación (entre los activos, los de menor prioridad)
-      const nextCandidates = [...active]
-        .sort((a, b) => {
-          if (a.rotationCycleCount !== b.rotationCycleCount) {
-            return a.rotationCycleCount - b.rotationCycleCount;
-          }
-          const aTime = a.rotationSuspendedAt?.getTime() ?? 0;
-          const bTime = b.rotationSuspendedAt?.getTime() ?? 0;
-          return aTime - bTime;
-        })
-        .slice(0, excessVehicles);
+      // La misma regla que ejecutará la rotación: quién sale en la próxima.
+      // Los números de cupo NO se anticipan: se sortean al rotar.
+      const next = planRotation(pool, availableSlots);
 
       byType.push({
         vehicleType,
@@ -997,8 +1089,9 @@ export class VehiclesService {
         suspendedByRotationCount: suspendedByRotation.length,
         excessVehicles,
         grandCycleNumber,
+        vehiclesInside: active,
         vehiclesSuspendedByRotation: suspendedByRotation,
-        nextRotationCandidates: nextCandidates,
+        nextRotationCandidates: next?.suspend ?? [],
       });
     }
 

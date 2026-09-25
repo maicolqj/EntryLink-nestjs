@@ -17,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
 import { FinanceModule } from '../finance/finance.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { VehiclesNotificationDetailProvider } from './providers/vehicles-notification-detail.provider';
+import { ParkingRotationCron } from './cron/parking-rotation.cron';
 
 @Module({
   imports: [
@@ -39,6 +40,8 @@ import { VehiclesNotificationDetailProvider } from './providers/vehicles-notific
     VehiclesNotificationDetailProvider,
     VehiclesService,
     VehiclesResolver,
+    // Ejecuta sola la rotación de parqueadero cuando llega su fecha.
+    ParkingRotationCron,
   ],
   exports: [VehiclesService],
 })

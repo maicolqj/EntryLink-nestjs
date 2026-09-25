@@ -41,6 +41,12 @@ export class RotationTypeStatus {
   grandCycleNumber: number;
 
   @Field(() => [Vehicle], {
+    description:
+      'Vehículos con cupo ahora (dentro del parqueadero), con su número de cupo',
+  })
+  vehiclesInside: Vehicle[];
+
+  @Field(() => [Vehicle], {
     description: 'Vehículos actualmente fuera por rotación',
   })
   vehiclesSuspendedByRotation: Vehicle[];
