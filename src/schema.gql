@@ -1799,6 +1799,9 @@ enum NotificationType {
   LISTING_APPROVED
   LISTING_REJECTED
   LISTING_INTEREST
+  MARKETPLACE_CHAT_MESSAGE
+  MARKETPLACE_CHAT_REPORTED
+  MARKETPLACE_CHAT_REPORT_RESOLVED
   LISTING_REPORTED
   LISTING_PAUSED_BY_REPORTS
   LISTING_EXPIRING
@@ -5541,6 +5544,128 @@ enum MarketplaceModerationMode {
   PREVIA
 }
 
+"""Mensaje del chat entre vecinos por un aviso"""
+type MarketplaceMessage {
+  id: ID!
+  conversationId: String!
+  senderUserId: String!
+  kind: MarketplaceMessageKind!
+  body: String!
+  createdAt: DateTime!
+  isMine: Boolean!
+  imagePath: String
+}
+
+"""Tipo de mensaje del chat de clasificados"""
+enum MarketplaceMessageKind {
+  """Mensaje de texto"""
+  TEXT
+
+  """Su autor compartió su WhatsApp con esta persona"""
+  PHONE_SHARED
+
+  """
+  Una foto. Se descarga por `imagePath`, que exige sesión de un participante
+  """
+  IMAGE
+}
+
+"""El aviso del que se habla, en corto"""
+type ConversationListingSummary {
+  id: String!
+  title: String!
+  type: MarketplaceListingType!
+  status: MarketplaceListingStatus!
+  imageUrl: String
+
+  """Precio ya formateado para mostrar"""
+  priceLabel: String!
+}
+
+"""El otro participante de la conversación"""
+type ConversationCounterpart {
+  name: String!
+  profilePicture: String
+  unitLabel: String
+}
+
+"""Conversación vista desde quien consulta"""
+type MarketplaceConversationView {
+  id: String!
+  role: ConversationRole!
+  listing: ConversationListingSummary!
+  counterpart: ConversationCounterpart!
+  lastMessagePreview: String
+  lastMessageAt: DateTime
+
+  """El último mensaje lo escribí yo"""
+  lastMessageIsMine: Boolean!
+
+  """Mensajes sin leer de quien consulta"""
+  unreadCount: Int!
+
+  """
+  Hasta cuándo leyó el otro; sirve para el "visto"
+  """
+  counterpartLastReadAt: DateTime
+
+  """
+  El aviso se cerró, venció o se retiró —o la administración cerró el chat—: se lee pero no se escribe
+  """
+  isReadOnly: Boolean!
+
+  """La administración cerró la conversación por un reporte"""
+  closedByModeration: Boolean!
+
+  """Quien consulta tiene un reporte pendiente sobre este chat"""
+  reportedByMe: Boolean!
+
+  """No se puede escribir porque alguno bloqueó al otro"""
+  isBlocked: Boolean!
+
+  """Quien consulta bloqueó al otro"""
+  blockedByMe: Boolean!
+
+  """Quien consulta ya compartió su WhatsApp aquí"""
+  myPhoneShared: Boolean!
+
+  """El conjunto permite compartir el teléfono"""
+  canSharePhone: Boolean!
+}
+
+"""Lado de la conversación de quien consulta"""
+enum ConversationRole {
+  """Publicó el aviso"""
+  OWNER
+
+  """Se interesó en el aviso"""
+  INTERESTED
+}
+
+type PaginatedConversationsResponse {
+  items: [MarketplaceConversationView!]!
+  pagination: PaginationReponse!
+}
+
+"""Mensajes sin leer, en total y por tablero"""
+type MarketplaceUnreadSummary {
+  total: Int!
+
+  """De avisos de clasificados"""
+  classifieds: Int!
+
+  """Del directorio de servicios"""
+  services: Int!
+}
+
+"""Página de mensajes, del más nuevo al más viejo"""
+type MarketplaceMessagesPage {
+  items: [MarketplaceMessage!]!
+
+  """Hay mensajes más viejos"""
+  hasMore: Boolean!
+}
+
 """Vecino que marcó me gusta o me interesa"""
 type ListingAudienceEntry {
   userId: String!
@@ -5606,6 +5731,56 @@ type MarketplaceStatsResponse {
 
 type PaginatedListingReportsResponse {
   items: [MarketplaceListingReport!]!
+  pagination: PaginationReponse!
+}
+
+"""Conversación reportada, para moderación"""
+type ConversationReportView {
+  id: String!
+  conversationId: String!
+  reason: MarketplaceChatReportReason!
+  comment: String
+  status: MarketplaceReportStatus!
+  resolutionNote: String
+  createdAt: DateTime!
+  resolvedAt: DateTime
+  listing: ConversationListingSummary!
+
+  """Para marcar sus mensajes"""
+  reporterUserId: String!
+  reporter: ConversationCounterpart!
+
+  """Para marcar sus mensajes"""
+  reportedUserId: String!
+  reported: ConversationCounterpart!
+  messagesCount: Int!
+
+  """La conversación ya está cerrada"""
+  conversationClosed: Boolean!
+}
+
+"""Motivo del reporte de una conversación"""
+enum MarketplaceChatReportReason {
+  """
+  Acoso o insistencia después de un "no"
+  """
+  HARASSMENT
+
+  """Parece una estafa"""
+  SCAM
+
+  """Lenguaje ofensivo o amenazas"""
+  OFFENSIVE
+
+  """Mensajes repetidos o publicidad"""
+  SPAM
+
+  """Otro motivo"""
+  OTHER
+}
+
+type PaginatedConversationReportsResponse {
+  items: [ConversationReportView!]!
   pagination: PaginationReponse!
 }
 
@@ -5903,6 +6078,45 @@ type Query {
     types: [MarketplaceListingType!]
   ): PaginatedListingReportsResponse!
   marketplaceSettings(complexId: String!): MarketplaceSettings!
+  myMarketplaceConversations(
+    complexId: String!
+    pagination: PaginationInput
+
+    """Solo las de un aviso (útil para quien lo publicó)"""
+    listingId: String
+
+    """Solo las de avisos de estos tipos (un tablero)"""
+    types: [MarketplaceListingType!]
+  ): PaginatedConversationsResponse!
+  marketplaceConversation(conversationId: String!): MarketplaceConversationView!
+
+  """Mi conversación sobre un aviso ajeno, si ya existe"""
+  myListingConversation(listingId: String!): MarketplaceConversationView
+  marketplaceMessages(
+    conversationId: String!
+
+    """Fecha del mensaje más viejo que ya se tiene"""
+    before: DateTime
+    limit: Int
+  ): MarketplaceMessagesPage!
+
+  """Mensajes sin leer en total, de clasificados y de servicios"""
+  marketplaceUnreadSummary(complexId: String!): MarketplaceUnreadSummary!
+
+  """Mensajes sin leer en todas mis conversaciones"""
+  marketplaceUnreadMessages(complexId: String!): Int!
+  marketplaceConversationReports(
+    complexId: String!
+    status: MarketplaceReportStatus
+
+    """Solo los chats de avisos de estos tipos (tablero)"""
+    types: [MarketplaceListingType!]
+    pagination: PaginationInput
+  ): PaginatedConversationReportsResponse!
+  marketplaceConversationReport(reportId: String!): ConversationReportView!
+
+  """Los mensajes del chat reportado, del más nuevo al más viejo"""
+  marketplaceConversationReportMessages(reportId: String!, before: DateTime, limit: Int): MarketplaceMessagesPage!
 
   """Módulos cuyos datos se pueden descargar en el complejo"""
   dataExportModules(complexId: String!): [DataExportModuleInfo!]!
@@ -6765,6 +6979,24 @@ type Mutation {
   reportListing(input: ReportListingInput!): MarketplaceListingReport!
   resolveListingReport(input: ResolveListingReportInput!): MarketplaceListingReport!
   updateMarketplaceSettings(input: UpdateMarketplaceSettingsInput!): MarketplaceSettings!
+
+  """"Me interesa": registra el interés y abre el chat"""
+  openListingConversation(input: OpenListingConversationInput!): MarketplaceConversationView!
+  sendMarketplaceMessage(input: SendMarketplaceMessageInput!): MarketplaceMessage!
+
+  """Comparte mi WhatsApp con el otro vecino de esta conversación"""
+  shareMyPhoneInConversation(conversationId: String!): MarketplaceMessage!
+  markMarketplaceConversationRead(conversationId: String!): Boolean!
+
+  """Bloquea al otro vecino: ninguno puede escribirle al otro"""
+  blockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
+
+  """
+  Reporta la conversación a la administración. Es lo único que le permite leerla
+  """
+  reportMarketplaceConversation(input: ReportConversationInput!): Boolean!
+  resolveMarketplaceConversationReport(input: ResolveConversationReportInput!): ConversationReportView!
+  unblockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -8763,4 +8995,42 @@ input UpdateMarketplaceSettingsInput {
   allowPhoneContact: Boolean
   allowWantedListings: Boolean
   termsText: String
+}
+
+input OpenListingConversationInput {
+  listingId: String!
+
+  """Primer mensaje para quien publicó"""
+  message: String
+}
+
+input SendMarketplaceMessageInput {
+  conversationId: String!
+  body: String!
+}
+
+input ReportConversationInput {
+  conversationId: String!
+  reason: MarketplaceChatReportReason!
+  comment: String
+
+  """Además de reportar, bloquear al otro vecino"""
+  alsoBlock: Boolean
+}
+
+input ResolveConversationReportInput {
+  reportId: String!
+  action: MarketplaceChatReportAction!
+
+  """Le llega a quien reportó"""
+  note: String
+}
+
+"""Resolución de un reporte de conversación"""
+enum MarketplaceChatReportAction {
+  """No procede: la conversación sigue abierta"""
+  DISMISS
+
+  """Procede: la conversación queda cerrada para los dos"""
+  CLOSE_CONVERSATION
 }

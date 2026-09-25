@@ -11,6 +11,7 @@ import { MarketplaceListing } from '../entities/marketplace-listing.entity';
 import { MarketplaceListingType } from '../enums/marketplace-listing-type.enum';
 import { MarketplaceAudienceKind } from '../enums/marketplace-audience-kind.enum';
 import { MarketplaceAudienceService } from '../services/marketplace-audience.service';
+import { MarketplaceChatService } from '../services/marketplace-chat.service';
 import { PaginatedListingAudienceResponse } from '../dto/responses/listing-audience.response';
 import { MarketplaceListingsService } from '../services/marketplace-listings.service';
 import { UpdateListingInput } from '../dto/inputs/update-listing.input';
@@ -52,6 +53,7 @@ export class MarketplaceListingsResolver {
   constructor(
     private readonly listingsService: MarketplaceListingsService,
     private readonly audienceService: MarketplaceAudienceService,
+    private readonly chatService: MarketplaceChatService,
   ) {}
 
   // ================================================================
@@ -231,11 +233,18 @@ export class MarketplaceListingsResolver {
     roles: RESIDENT_ROLES,
     permissions: [ValidPermissions.VIEW_MARKETPLACE],
   })
-  registerListingInterest(
+  async registerListingInterest(
     @Args('input') input: RegisterListingInterestInput,
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<MarketplaceListing> {
-    return this.listingsService.registerInterest(input, currentUser);
+    // Pasa por el chat para que todo "me interesa" —también el de las
+    // versiones de la app que aún no tienen chat— deje la conversación abierta.
+    await this.chatService.openFromInterest(
+      input.listingId,
+      input.message,
+      currentUser,
+    );
+    return this.listingsService.findById(input.listingId, currentUser);
   }
 
   @Mutation(() => Boolean, {

@@ -737,9 +737,14 @@ export class MarketplaceListingsService {
    * Volver a tocar el botón reenvía el aviso pero no crea otra fila —el índice
    * único lo impide— para que el contador que ve el publicador no se infle.
    */
+  /**
+   * Con `notify: false` no se avisa aquí: lo hace el chat, que es quien sabe si
+   * la conversación es nueva y puede mandar su id en el aviso.
+   */
   async registerInterest(
     input: RegisterListingInterestInput,
     currentUser: JwtAccessPayload,
+    options: { notify?: boolean } = {},
   ): Promise<MarketplaceListing> {
     const listing = await this.findById(input.listingId, currentUser);
 
@@ -789,7 +794,9 @@ export class MarketplaceListingsService {
       await this.listingRepo.increment({ id: listing.id }, 'contactsCount', 1);
     }
 
-    void this.notifyInterest(listing, input.message, currentUser);
+    if (options.notify !== false) {
+      void this.notifyInterest(listing, input.message, currentUser);
+    }
 
     return this.loadRelations(listing.id);
   }
@@ -1789,10 +1796,15 @@ export class MarketplaceListingsService {
     }
   }
 
-  private async notifyInterest(
+  /**
+   * Avisa al publicador. Con `conversationId`, la notificación abre el chat en
+   * vez de solo la ficha del aviso.
+   */
+  async notifyInterest(
     listing: MarketplaceListing,
     message: string | undefined,
     currentUser: JwtAccessPayload,
+    conversationId?: string,
   ): Promise<void> {
     try {
       const contact = await this.resolveViewerIdentity(
@@ -1817,6 +1829,7 @@ export class MarketplaceListingsService {
           listingId: listing.id,
           title: listing.title,
           interestedBy: contact,
+          ...(conversationId ? { conversationId } : {}),
         },
       });
     } catch (err) {
