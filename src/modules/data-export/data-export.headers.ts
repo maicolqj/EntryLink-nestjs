@@ -139,6 +139,7 @@ export const HEADER_LABELS: Record<string, string> = {
   // ── Personas ─────────────────────────────────────────────────────────────
   authorName: 'Autor',
   authorRole: 'Rol del autor',
+  isDefense: 'Es descargo de la unidad',
   authorUserId: 'Autor (id)',
   agentName: 'Agente',
   agentUserId: 'Agente (id)',

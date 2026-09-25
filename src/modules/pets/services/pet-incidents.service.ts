@@ -313,6 +313,8 @@ export class PetIncidentsService {
           incidentId: saved.id,
           complexId: saved.complexId,
           text: input.notes.trim(),
+          // Observación de quien revisa, no descargo: no cierra el plazo.
+          isDefense: false,
           authorUserId:
             currentUser.entityType === 'user' ? currentUser.sub : null,
           authorRole: currentUser.roles?.[0] ?? null,
@@ -629,6 +631,7 @@ export class PetIncidentsService {
         incidentId: incident.id,
         complexId: incident.complexId,
         text: input.text.trim(),
+        isDefense: true,
         authorUserId: currentUser.sub,
         authorRole: currentUser.roles?.[0] ?? null,
         authorName: authorName || currentUser.email || null,
@@ -897,12 +900,15 @@ export class PetIncidentsService {
   /**
    * La sanción espera a que la unidad haya podido defenderse. Si ya presentó
    * descargos no tiene sentido seguir esperando: ya fue oída.
+   *
+   * Solo cuentan los DESCARGOS: la observación que la administración deja al
+   * dar curso vive en el mismo hilo, y contarla cerraba el plazo en el acto.
    */
   private async assertDefenseWindowClosed(
     incident: PetIncident,
   ): Promise<void> {
     const answered = await this.statementRepo.count({
-      where: { incidentId: incident.id },
+      where: { incidentId: incident.id, isDefense: true },
     });
     if (answered > 0) return;
 
@@ -1023,7 +1029,14 @@ export class PetIncidentsService {
       incident.unitId,
     );
     const userIds = residents.map((r) => r.userId).filter(Boolean);
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) {
+      // Sin residentes activos en la unidad el aviso no tiene a quién llegar.
+      // Antes se cortaba sin rastro y parecía que la sanción no notificaba.
+      this.logger.warn(
+        `[${type}] ${incident.code}: la unidad ${incident.unitId} no tiene residentes activos; no se notificó a nadie`,
+      );
+      return;
+    }
 
     await this.notificationsService.notify({
       complexId: incident.complexId,

@@ -386,8 +386,9 @@ export class PetsNotificationDetailProvider
           ),
           field(
             'Descargos presentados',
-            incident.statements?.length
-              ? `${incident.statements.length}`
+            // La observación de quien dio curso no es un descargo.
+            incident.statements?.some((s) => s.isDefense)
+              ? `${incident.statements.filter((s) => s.isDefense).length}`
               : null,
           ),
           field(
@@ -801,7 +802,9 @@ export class PetsNotificationDetailProvider
    * error.
    */
   private defenseBlocker(incident: PetIncident): string | null {
-    const answered = incident.statements?.length ?? 0;
+    // Solo los descargos de la unidad; la observación de quien dio curso no.
+    const answered =
+      incident.statements?.filter((s) => s.isDefense).length ?? 0;
     if (answered > 0) return null;
 
     if (
