@@ -325,6 +325,7 @@ export class NotificationsService implements OnModuleInit {
    *   );
    */
   async notify(params: NotifyParams): Promise<Notification[]> {
+    params = await this.withoutPanicExcluded(params);
     if (params.userIds.length === 0) return [];
 
     // 1. Persistir en base de datos
@@ -361,6 +362,55 @@ export class NotificationsService implements OnModuleInit {
     ]);
 
     return saved;
+  }
+
+  /**
+   * El pánico no le llega al SUPER_ADMIN_ROL, aunque además viva en el conjunto
+   * (RESIDENT_ROL es rol base): administra la plataforma, no atiende la
+   * emergencia de un conjunto, y su celular sonaba con cada pánico de donde
+   * vive. Se filtra aquí —en el envío— y no en cada lista de destinatarios, para
+   * que ningún camino (disparo, escalada, re-push) se lo salte.
+   */
+  private async withoutPanicExcluded(
+    params: NotifyParams,
+  ): Promise<NotifyParams> {
+    if (params.type !== NotificationType.PANIC_ALERT || params.userIds.length === 0) {
+      return params;
+    }
+    const superAdmins = new Set(await this.findSuperAdminUserIds());
+    if (superAdmins.size === 0) return params;
+    return {
+      ...params,
+      userIds: params.userIds.filter((id) => !superAdmins.has(id)),
+    };
+  }
+
+  /**
+   * Emite el pánico en tiempo real a la sala del complejo con la lista de
+   * usuarios que deben ignorarlo (los SUPER_ADMIN_ROL).
+   *
+   * La sala es de todo el complejo y la sesión de residente de un super admin
+   * que vive ahí no lleva su rol en el token, así que el socket no puede
+   * excluirlo por sala: lo excluye la app al leer `skipUserIds`. El push
+   * ya lo filtra `withoutPanicExcluded`.
+   */
+  async emitPanicNew(
+    complexId: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    let skipUserIds: string[] = [];
+    try {
+      skipUserIds = await this.findSuperAdminUserIds();
+    } catch (err) {
+      // Nunca demorar ni perder un pánico por esto.
+      this.logger.warn(
+        `No se pudo resolver a quién excluir del pánico: ${(err as Error)?.message}`,
+      );
+    }
+    this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, {
+      ...payload,
+      skipUserIds,
+    });
   }
 
   /** IDs de todos los usuarios SUPER_ADMIN activos (no scoped a complejo). */
@@ -512,6 +562,9 @@ export class NotificationsService implements OnModuleInit {
     userIds: string[],
     params: NotifyParams,
   ): Promise<void> {
+    if (params.type === NotificationType.PANIC_ALERT) {
+      userIds = (await this.withoutPanicExcluded({ ...params, userIds })).userIds;
+    }
     if (userIds.length === 0) return;
     const subscriptions = await this.pushSubRepo.find({
       where: { userId: In(userIds), isActive: true },
@@ -1793,7 +1846,7 @@ export class NotificationsService implements OnModuleInit {
         ...new Set([...residentIds, ...securityIds, ...staffIds]),
       ].filter((id) => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, {
+      void this.emitPanicNew(complexId, {
         complexId,
         alertId: alert.id,
         triggeredBy: currentUser.sub,
@@ -1859,7 +1912,7 @@ export class NotificationsService implements OnModuleInit {
         ]),
       ].filter((id) => id !== currentUser.sub);
 
-      this.socketService.emitToComplex(complexId, SocketEvent.PANIC_ALERT_NEW, {
+      void this.emitPanicNew(complexId, {
         complexId,
         alertId: alert.id,
         triggeredBy: currentUser.sub,
@@ -1991,9 +2044,8 @@ export class NotificationsService implements OnModuleInit {
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
-        this.socketService.emitToComplex(
+        void this.emitPanicNew(
           complexId,
-          SocketEvent.PANIC_ALERT_NEW,
           {
             complexId,
             alertId: alert.id,
@@ -2081,9 +2133,8 @@ export class NotificationsService implements OnModuleInit {
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
-        this.socketService.emitToComplex(
+        void this.emitPanicNew(
           complexId,
-          SocketEvent.PANIC_ALERT_NEW,
           {
             complexId,
             alertId: alert.id,
