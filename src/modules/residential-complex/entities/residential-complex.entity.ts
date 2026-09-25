@@ -331,6 +331,24 @@ export class ResidentialComplex {
   })
   maintenanceGpsAccuracyMeters: number;
 
+  /**
+   * Cómo se identifica el sitio de un daño en las apps. Cada botón ("Escanear
+   * el código", "Leer chip NFC") aparece solo si el conjunto usa ese medio:
+   * no tiene sentido ofrecer NFC donde solo hay stickers QR. Escribir el
+   * código a mano sigue disponible siempre.
+   */
+  @Field(() => Boolean, {
+    description: 'Las apps ofrecen escanear el QR del sitio',
+  })
+  @Column({ name: 'maintenance_qr_enabled', type: 'boolean', default: true })
+  maintenanceQrEnabled: boolean;
+
+  @Field(() => Boolean, {
+    description: 'Las apps ofrecen leer el chip NFC del sitio',
+  })
+  @Column({ name: 'maintenance_nfc_enabled', type: 'boolean', default: false })
+  maintenanceNfcEnabled: boolean;
+
   // ==================== CONTACTO ====================
 
   @Column({

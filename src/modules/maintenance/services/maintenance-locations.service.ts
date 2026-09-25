@@ -17,7 +17,10 @@ import { ResidentialComplexService } from '../../residential-complex/services/re
 import { BuildingService } from '../../residential-complex/services/building.service';
 import { AmenitiesService } from '../../amenities/services/amenities.service';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { MaintenanceReportOptionsResponse } from '../dto/responses/maintenance-report-options.response';
+import {
+  MaintenanceReportOptionsResponse,
+  MaintenanceScanMethodsResponse,
+} from '../dto/responses/maintenance-report-options.response';
 import { isMaintenanceModuleEnabled } from '../utils/maintenance-status.util';
 
 /** Lo que quien reporta manda sobre el sitio, antes de validarse. */
@@ -212,7 +215,29 @@ export class MaintenanceLocationsService {
       tags,
       residentReportingEnabled: complex.maintenanceResidentReportingEnabled,
       gpsAccuracyMeters: complex.maintenanceGpsAccuracyMeters ?? 100,
+      qrEnabled: complex.maintenanceQrEnabled ?? true,
+      nfcEnabled: complex.maintenanceNfcEnabled ?? false,
     };
+  }
+
+  /**
+   * Qué botones ofrecen las apps para identificar el sitio: escanear el QR,
+   * leer el chip NFC o ambos. Lo decide la administración según lo que pegó en
+   * las paredes. Apagar los dos deja solo el código escrito a mano, que sigue
+   * funcionando siempre.
+   */
+  async setScanMethods(
+    complexId: string,
+    qrEnabled: boolean,
+    nfcEnabled: boolean,
+    currentUser: JwtAccessPayload,
+  ): Promise<MaintenanceScanMethodsResponse> {
+    await this.complexService.findById(complexId, currentUser);
+    await this.tagRepo.manager.update(ResidentialComplex, complexId, {
+      maintenanceQrEnabled: qrEnabled,
+      maintenanceNfcEnabled: nfcEnabled,
+    });
+    return { qrEnabled, nfcEnabled };
   }
 
   /**
