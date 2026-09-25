@@ -170,6 +170,7 @@ export const HEADER_LABELS: Record<string, string> = {
   deliveredByUserId: 'Entregado por (id)',
   cancelledByUserId: 'Cancelado por (id)',
   checkedInByUserId: 'Ingreso registrado por (id)',
+  checkedOutByUserId: 'Salida registrada por (id)',
   exitRegisteredByUserId: 'Salida registrada por (id)',
   closedByUserId: 'Cerrado por (id)',
   resolvedById: 'Resuelto por (id)',
