@@ -1212,7 +1212,7 @@ export class NotificationsService implements OnModuleInit {
     }
 
     this.applyAudienceScope(qb, currentUser);
-    this.applyChannelScope(qb, channel);
+    this.applyChannelScope(qb, channel, currentUser);
 
     if (filters.type) qb.andWhere('n.type = :type', { type: filters.type });
     if (filters.priority)
@@ -1546,7 +1546,7 @@ export class NotificationsService implements OnModuleInit {
     // El badge tiene que contar lo mismo que la bandeja muestra, o el número
     // queda pegado en algo que el residente no puede abrir.
     this.applyAudienceScope(qb, currentUser);
-    this.applyChannelScope(qb, channel);
+    this.applyChannelScope(qb, channel, currentUser);
 
     const count = await qb.getCount();
     return { count };
@@ -1582,13 +1582,34 @@ export class NotificationsService implements OnModuleInit {
    */
   private applyChannelScope(
     qb: SelectQueryBuilder<Notification>,
-    channel?: NotificationChannel | null,
+    channel: NotificationChannel | null | undefined,
+    currentUser: JwtAccessPayload,
   ): void {
     if (channel !== NotificationChannel.PANEL) return;
 
-    qb.andWhere('n.type IN (:...panelTypes)', {
-      panelTypes: [...PANEL_VISIBLE_TYPES],
-    });
+    // La cuenta del complejo no vive en ninguna unidad: todo lo que le llega es
+    // de la administración, aunque el TIPO se clasifique como de residente.
+    // AMENITY_BOOKING_CANCELLED, por ejemplo, le llega a la unidad ("tu
+    // reserva") y a la administración: filtrar por tipo le borraba al complejo
+    // avisos suyos del panel.
+    if (currentUser.entityType !== 'user') return;
+
+    // Un usuario solo pierde en el panel los avisos de residente de un conjunto
+    // donde VIVE (tiene residencia activa): esos son de su unidad y se leen en
+    // la app. En cualquier otro conjunto, el mismo tipo es un aviso de su cargo.
+    qb.andWhere(
+      `(n.type IN (:...panelTypes) OR NOT EXISTS (
+        SELECT 1 FROM residents pr
+         WHERE pr.user_id::text = :panelUserId
+           AND pr.complex_id::text = n."complexId"
+           AND pr.status = :panelActive
+           AND pr.deleted_at IS NULL))`,
+      {
+        panelTypes: [...PANEL_VISIBLE_TYPES],
+        panelUserId: currentUser.sub,
+        panelActive: 'ACTIVE',
+      },
+    );
   }
 
   /** Historial paginado de envíos masivos realizados por el usuario en el complejo */
@@ -2880,9 +2901,24 @@ export class NotificationsService implements OnModuleInit {
     }
 
     // Web Push solo existe en el panel, y el panel no muestra los avisos de la
-    // unidad (ver applyChannelScope). Mandarlos igual haría sonar el navegador
-    // del administrador por el paquete que le llegó a su apartamento.
-    if (audienceOf(params.type) === NotificationAudience.RESIDENT) return;
+    // unidad (ver applyChannelScope). Un aviso de residente no hace sonar el
+    // navegador de quien VIVE en ese conjunto (es de su apartamento), pero sí
+    // el de la administración: el mismo tipo le llega a los dos.
+    if (audienceOf(params.type) === NotificationAudience.RESIDENT) {
+      const userIds = [...new Set(subs.map((sub) => sub.userId))];
+      const livesHere = new Set(
+        (
+          await this.pushSubRepo.manager.query(
+            `SELECT DISTINCT user_id FROM residents
+              WHERE user_id::text = ANY($1) AND complex_id::text = $2
+                AND status = 'ACTIVE' AND deleted_at IS NULL`,
+            [userIds, params.complexId],
+          )
+        ).map((row: { user_id: string }) => String(row.user_id)),
+      );
+      subs = subs.filter((sub) => !livesHere.has(sub.userId));
+      if (subs.length === 0) return;
+    }
 
     await Promise.allSettled(
       subs.map(async (sub) => {

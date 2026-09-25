@@ -417,13 +417,18 @@ describe('NotificationsService — audiencia de la bandeja', () => {
   describe('canal panel', () => {
     const superAdminResidente = {
       sub: 'user-1',
+      entityType: 'user',
       roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.RESIDENT_ROL],
       complexId: null,
     } as never;
 
-    it('el panel deja fuera los avisos de la unidad de quien administra', async () => {
+    const panelCondition = (conditions: string[]) =>
+      conditions.find((c) => c.includes('n.type IN (:...panelTypes)'));
+
+    it('a quien vive en el conjunto le oculta del panel los avisos de su unidad', async () => {
       // El super admin que vive en un conjunto recibía en el panel el paquete
-      // de su apartamento mezclado con los avisos del sistema.
+      // de su apartamento mezclado con los avisos del sistema. Se ocultan solo
+      // en los conjuntos donde tiene residencia activa.
       const { qb, conditions, params } = buildQb();
 
       await buildService(qb).findByUser(
@@ -434,12 +439,28 @@ describe('NotificationsService — audiencia de la bandeja', () => {
         NotificationChannel.PANEL,
       );
 
-      expect(conditions).toContain('n.type IN (:...panelTypes)');
+      const clause = panelCondition(conditions);
+      expect(clause).toContain('FROM residents');
+      expect(params.panelUserId).toBe('user-1');
       const tipos = params.panelTypes as string[];
       expect(tipos).toContain('DPA_SIGNED');
-      expect(tipos).toContain('PANIC_ALERT');
       expect(tipos).not.toContain('PACKAGE_RECEIVED');
-      expect(tipos).not.toContain('PAYMENT_DUE');
+    });
+
+    it('a la cuenta del complejo no le oculta nada', async () => {
+      // AMENITY_BOOKING_CANCELLED es de audiencia RESIDENT pero también le
+      // llega a la administración: filtrar por tipo le borraba avisos suyos.
+      const { qb, conditions } = buildQb();
+
+      await buildService(qb).findByUser(
+        COMPLEX_ID,
+        pagination,
+        {},
+        { sub: COMPLEX_ID, entityType: 'complex', roles: [ValidRoles.COMPLEX_ROL], complexId: COMPLEX_ID } as never,
+        NotificationChannel.PANEL,
+      );
+
+      expect(panelCondition(conditions)).toBeUndefined();
     });
 
     it('el badge del panel cuenta lo mismo que su bandeja', async () => {
@@ -451,7 +472,7 @@ describe('NotificationsService — audiencia de la bandeja', () => {
         NotificationChannel.PANEL,
       );
 
-      expect(conditions).toContain('n.type IN (:...panelTypes)');
+      expect(panelCondition(conditions)).toBeDefined();
     });
 
     it('sin canal la app no cambia', async () => {
@@ -459,7 +480,7 @@ describe('NotificationsService — audiencia de la bandeja', () => {
 
       await buildService(qb).findByUser(null, pagination, {}, superAdminResidente);
 
-      expect(conditions).not.toContain('n.type IN (:...panelTypes)');
+      expect(panelCondition(conditions)).toBeUndefined();
     });
   });
 });
