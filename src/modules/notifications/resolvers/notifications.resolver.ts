@@ -443,7 +443,8 @@ export class NotificationsResolver {
   })
   activePanicAlerts(
     @Args('complexId') complexId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<Notification[]> {
-    return this.notificationsService.activePanicAlerts(complexId);
+    return this.notificationsService.activePanicAlerts(complexId, currentUser);
   }
 }

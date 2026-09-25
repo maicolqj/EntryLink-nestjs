@@ -2495,7 +2495,19 @@ export class NotificationsService implements OnModuleInit {
    * Retorna las alertas de pánico activas (sin ACK) del complejo.
    * El frontend las consulta al reconectar para mostrar solo alarmas pendientes.
    */
-  async activePanicAlerts(complexId: string): Promise<Notification[]> {
+  async activePanicAlerts(
+    complexId: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<Notification[]> {
+    // El pánico no es del SUPER_ADMIN_ROL. Se mira en la base y no en el token:
+    // su sesión de residente (RemoteLink) solo lleva RESIDENT_ROL, y con esta
+    // consulta la app encendería el modal —y la sirena— al conectarse.
+    if (
+      currentUser?.entityType === 'user' &&
+      (await this.findSuperAdminUserIds()).includes(currentUser.sub)
+    ) {
+      return [];
+    }
     return this.notifRepo.find({
       where: {
         complexId,
