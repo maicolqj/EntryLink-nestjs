@@ -195,8 +195,9 @@ export class AmenitiesController {
         uploadedUrls.push(result.url);
       }
 
-      const updated = await this.amenitiesService.update(
-        { id: amenityId, imageUrls: [...current, ...uploadedUrls] },
+      const updated = await this.amenitiesService.addImages(
+        amenityId,
+        uploadedUrls,
         currentUser,
       );
 

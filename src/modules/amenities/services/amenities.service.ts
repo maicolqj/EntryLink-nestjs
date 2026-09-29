@@ -48,6 +48,8 @@ import { AuditService } from '../../audit/services/audit.service';
 import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { diffAmenityImages } from '../utils/amenity-images.util';
 import {
   BK,
   filterKey,
@@ -75,6 +77,7 @@ export class AmenitiesService {
     private readonly bookingsService: AmenityBookingsService,
     private readonly auditService: AuditService,
     private readonly cacheService: CacheService,
+    private readonly storageService: R2StorageService,
   ) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -165,6 +168,13 @@ export class AmenitiesService {
       changes.maxDurationMinutes ?? amenity.maxDurationMinutes,
     );
 
+    // La galería solo se recorta o se reordena por aquí; lo que sale se borra
+    // de R2 una vez guardado el cambio.
+    const removedImages =
+      changes.imageUrls !== undefined
+        ? diffAmenityImages(amenity.imageUrls ?? [], changes.imageUrls)
+        : [];
+
     const previous = {
       name: amenity.name,
       status: amenity.status,
@@ -178,6 +188,7 @@ export class AmenitiesService {
 
     const saved = await this.amenityRepo.save(amenity);
     await this.invalidate(saved.complexId);
+    void this.purgeImages(removedImages);
 
     void this.auditService.log({
       entityType: AuditEntityType.Amenity,
@@ -198,6 +209,47 @@ export class AmenitiesService {
     });
 
     return this.findByIdOrFail(saved.id);
+  }
+
+  /**
+   * Agrega a la galería fotos que ya quedaron en R2.
+   *
+   * Es el único camino por el que entra una URL nueva: `update` solo deja
+   * quitar o reordenar. El tope de fotos lo valida el controlador antes de
+   * subir nada.
+   */
+  async addImages(
+    amenityId: string,
+    urls: string[],
+    currentUser: JwtAccessPayload,
+  ): Promise<Amenity> {
+    const amenity = await this.findByIdOrFail(amenityId);
+    await this.complexService.findById(amenity.complexId, currentUser);
+
+    amenity.imageUrls = [...(amenity.imageUrls ?? []), ...urls];
+    amenity.updatedByUserId =
+      currentUser.entityType === 'user' ? currentUser.sub : null;
+
+    const saved = await this.amenityRepo.save(amenity);
+    await this.invalidate(saved.complexId);
+    return saved;
+  }
+
+  /**
+   * Borra de R2 las fotos que la zona dejó de mostrar. Si falla no se revierte
+   * nada: la galería ya quedó bien y un archivo huérfano no afecta a nadie.
+   */
+  private async purgeImages(urls: string[]): Promise<void> {
+    const results = await Promise.allSettled(
+      urls
+        .map((url) => this.storageService.keyFromPublicUrl(url))
+        .filter((key): key is string => !!key)
+        .map((key) => this.storageService.deleteByPublicId(key)),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed) {
+      this.logger.warn(`No se pudieron borrar ${failed} fotos de zona en R2`);
+    }
   }
 
   /**
