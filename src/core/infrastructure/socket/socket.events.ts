@@ -20,6 +20,8 @@ export enum SocketEvent {
   // Panic
   PANIC_ALERT_NEW = 'panic:alert:new',
   PANIC_ALERT_ACKNOWLEDGED = 'panic:alert:acknowledged',
+  /** Llegó (o mejoró) la ubicación de quien activó la alerta. */
+  PANIC_ALERT_LOCATION = 'panic:alert:location',
 
   // Amenities / Reservas de zonas comunes
   AMENITY_BOOKING_REQUESTED = 'amenity:booking:requested',

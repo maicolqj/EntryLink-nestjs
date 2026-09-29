@@ -86,6 +86,14 @@ export class PanicAlert {
   @Column({ type: 'numeric', precision: 8, scale: 2, nullable: true })
   accuracy?: number;
 
+  /**
+   * Cuándo tomó el equipo la lectura. Con ella el modal puede decir "hace 40 s"
+   * en vez de presentar como actual una posición vieja.
+   */
+  @Field(() => Date, { nullable: true })
+  @Column({ name: 'location_captured_at', type: 'timestamptz', nullable: true })
+  locationCapturedAt?: Date;
+
   // ─── Estado ───────────────────────────────────────────────────────────────
 
   @Field(() => PanicAlertStatus)

@@ -511,6 +511,14 @@ export enum MarketplaceErrorCode {
  * cambió entre que se abrió el aviso y se pulsó el botón —otro administrador ya
  * resolvió el caso, o el plazo de descargos sigue corriendo.
  */
+export enum PanicErrorCode {
+  PANIC_ALERT_NOT_FOUND = 'PANIC_ALERT_NOT_FOUND',
+  /** Reportar: no la activó quien reporta. Consultar: no la recibió. */
+  PANIC_LOCATION_NOT_ALLOWED = 'PANIC_LOCATION_NOT_ALLOWED',
+  /** La alerta se cerró o pasaron más de 10 minutos desde el disparo. */
+  PANIC_LOCATION_WINDOW_CLOSED = 'PANIC_LOCATION_WINDOW_CLOSED',
+}
+
 export enum NotificationActionErrorCode {
   /** El módulo dueño del asunto no expone acciones. */
   NOTIFICATION_ACTION_UNSUPPORTED = 'NOTIFICATION_ACTION_UNSUPPORTED',

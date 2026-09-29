@@ -18,6 +18,7 @@ import { SupervisorVisit } from '../supervisor-visits/entities/supervisor-visit.
 import { ResidentsModule } from '../residents/residents.module';
 
 import { NotificationsService } from './services/notifications.service';
+import { PanicLocationService } from './services/panic-location.service';
 import { NotificationDetailRegistry } from './services/notification-detail.registry';
 import { NotificationSnapshotService } from './services/notification-snapshot.service';
 import { PanicAckTokenService } from './services/panic-ack-token.service';
@@ -64,6 +65,7 @@ import {
   controllers: [PanicController, DeviceHealthController],
   providers: [
     NotificationsService,
+    PanicLocationService,
     NotificationDetailRegistry,
     NotificationSnapshotService,
     PanicAckTokenService,

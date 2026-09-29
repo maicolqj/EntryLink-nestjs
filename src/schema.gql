@@ -1886,6 +1886,7 @@ type PanicAlert {
   latitude: Float
   longitude: Float
   accuracy: Float
+  locationCapturedAt: DateTime
   status: PanicAlertStatus!
   deliveredAt: DateTime
   acknowledgedByUserId: String
@@ -2370,6 +2371,7 @@ type SentNotificationPaginatedResult {
 
 type TriggerPanicAlertResult {
   success: Boolean!
+  panicAlertId: String
 }
 
 type RequestSecurityCallResult {
@@ -5954,6 +5956,7 @@ type Query {
   """
   pendingDeviceApprovals: [PendingDeviceApproval!]!
   devicePushHealth(deviceToken: String!): DevicePushHealthStatus!
+  panicAlertLocation(panicAlertId: String!): PanicAlert!
   myNotifications(complexId: String, pagination: PaginationInput, filters: FilterNotificationsInput, channel: NotificationChannel): PaginatedNotificationsResponse!
   complexNotifications(complexId: String!, pagination: PaginationInput, filters: FilterNotificationsInput): PaginatedNotificationsResponse!
   notificationDetail(notificationId: String!, complexId: String): NotificationDetailResponse!
@@ -6762,6 +6765,7 @@ type Mutation {
   sendNotification(input: SendNotificationInput!): SendNotificationResult!
   savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
   triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
+  reportPanicLocation(input: ReportPanicLocationInput!): PanicAlert!
   requestSecurityCall(complexId: String!): RequestSecurityCallResult!
   acknowledgePanicAlert(notificationId: String!): Notification!
   resolvePanicAlert(panicAlertId: String!, resolutionNotes: String, falseAlarm: Boolean): PanicAlert!
@@ -7229,6 +7233,14 @@ input SavePushSubscriptionInput {
   endpoint: String!
   p256dh: String!
   auth: String!
+}
+
+input ReportPanicLocationInput {
+  panicAlertId: String!
+  latitude: Float!
+  longitude: Float!
+  accuracy: Float!
+  capturedAt: String
 }
 
 input SaveMobileTokenInput {
