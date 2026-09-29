@@ -162,6 +162,18 @@ export class R2StorageService implements OnModuleInit {
     };
   }
 
+  /**
+   * La llave de un archivo a partir de su URL pública, o null si la URL no es
+   * de este bucket. Sirve para borrar lo que una entidad deja de referenciar
+   * cuando solo se guardó la URL.
+   */
+  keyFromPublicUrl(url: string): string | null {
+    const prefix = `${this.publicUrl}/`;
+    return this.publicUrl && url.startsWith(prefix)
+      ? url.slice(prefix.length)
+      : null;
+  }
+
   async deleteByPublicId(
     publicId: string,
     _resourceType?: 'image' | 'raw' | 'auto',
