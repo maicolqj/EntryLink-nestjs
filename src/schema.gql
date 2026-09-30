@@ -389,6 +389,26 @@ type ResidentialComplex {
   """Las apps ofrecen leer el chip NFC del sitio"""
   maintenanceNfcEnabled: Boolean!
 
+  """
+  Mi Conjunto muestra "Llamar"
+  """
+  myComplexShowCall: Boolean!
+
+  """
+  Mi Conjunto muestra "Correo"
+  """
+  myComplexShowEmail: Boolean!
+
+  """
+  Mi Conjunto muestra "Cómo llegar"
+  """
+  myComplexShowDirections: Boolean!
+
+  """
+  Mi Conjunto muestra "Sitio web"
+  """
+  myComplexShowWebsite: Boolean!
+
   """CountryCode"""
   countryCode: Country!
 
@@ -5182,6 +5202,14 @@ type ComplexPublicInfo {
   logoUrl: String
 }
 
+"""Botones de Mi Conjunto que eligió la administración"""
+type ComplexInfoSettings {
+  showCall: Boolean!
+  showEmail: Boolean!
+  showDirections: Boolean!
+  showWebsite: Boolean!
+}
+
 type MyComplexDocument {
   document: ComplexDocument!
 
@@ -5198,6 +5226,7 @@ type MyComplexDocument {
 """Mi Conjunto: datos, contactos y documentos"""
 type MyComplexInfoResponse {
   complex: ComplexPublicInfo!
+  settings: ComplexInfoSettings!
   contacts: [ComplexContact!]!
 
   """Publicados y dirigidos a él; sin el texto (usar myComplexDocument)"""
@@ -6414,6 +6443,9 @@ type Query {
   """Qué unidades confirmaron la lectura de la versión vigente"""
   complexDocumentAckReport(id: ID!): ComplexDocumentAckReport!
 
+  """Qué botones muestra la app en Mi Conjunto"""
+  complexInfoSettings(complexId: String!): ComplexInfoSettings!
+
   """Directorio de contactos, incluidos los ocultos"""
   complexContacts(complexId: String!): [ComplexContact!]!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
@@ -7339,6 +7371,7 @@ type Mutation {
   createComplexDocument(input: CreateComplexDocumentInput!): ComplexDocument!
   updateComplexDocument(id: ID!, input: UpdateComplexDocumentInput!): ComplexDocument!
   deleteComplexDocument(id: ID!): Boolean!
+  updateComplexInfoSettings(complexId: String!, input: UpdateComplexInfoSettingsInput!): ComplexInfoSettings!
   createComplexContact(input: CreateComplexContactInput!): ComplexContact!
   updateComplexContact(id: ID!, input: UpdateComplexContactInput!): ComplexContact!
   deleteComplexContact(id: ID!): Boolean!
@@ -9299,6 +9332,13 @@ input UpdateComplexDocumentInput {
   Avisar a los residentes al publicar o al cambiar el contenido. true por defecto
   """
   notifyResidents: Boolean
+}
+
+input UpdateComplexInfoSettingsInput {
+  showCall: Boolean
+  showEmail: Boolean
+  showDirections: Boolean
+  showWebsite: Boolean
 }
 
 input CreateComplexContactInput {

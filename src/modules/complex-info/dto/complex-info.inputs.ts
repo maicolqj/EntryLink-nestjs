@@ -119,6 +119,29 @@ export class UpdateComplexDocumentInput extends PartialType(
   notifyResidents?: boolean;
 }
 
+@InputType()
+export class UpdateComplexInfoSettingsInput {
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  showCall?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  showEmail?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  showDirections?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  showWebsite?: boolean;
+}
+
 const PHONE_PATTERN = /^[+\d][\d\s()-]{5,29}$/;
 
 @InputType()

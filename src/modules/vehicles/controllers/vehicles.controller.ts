@@ -71,9 +71,9 @@ export class VehiclesController {
       throw new BadRequestException('El campo photo es requerido');
     }
 
-    // La foto se guarda bajo el complejo dueño del vehículo; findById además
-    // valida el acceso del usuario antes de que subamos nada a R2.
-    const vehicleRecord = await this.vehiclesService.findById(
+    // Se valida antes de subir nada a R2: la administración en cualquier
+    // vehículo del conjunto, el residente solo en los de su unidad.
+    const vehicleRecord = await this.vehiclesService.assertCanChangePhoto(
       vehicleId,
       currentUser,
     );
@@ -95,13 +95,20 @@ export class VehiclesController {
       );
       publicId = result.publicId;
 
-      const vehicle = await this.vehiclesService.updatePhotoUrl(
-        vehicleId,
-        result.url,
-        currentUser,
-      );
+      await this.vehiclesService.updatePhotoUrl(vehicleId, result.url);
       this.logger.log(`Foto subida para vehículo ${vehicleId}`);
-      return { success: true, photoUrl: vehicle.photoUrl };
+
+      // La anterior deja de estar referenciada: se borra para no pagarla en R2.
+      const previousKey = vehicleRecord.photoUrl
+        ? this.storageService.keyFromPublicUrl(vehicleRecord.photoUrl)
+        : null;
+      if (previousKey && previousKey !== publicId) {
+        this.storageService
+          .deleteByPublicId(previousKey)
+          .catch(() => undefined);
+      }
+
+      return { success: true, photoUrl: result.url };
     } catch (err: any) {
       if (publicId) {
         this.logger.warn(`Rollback R2: eliminando imagen huérfana ${publicId}`);

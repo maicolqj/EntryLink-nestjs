@@ -349,6 +349,33 @@ export class ResidentialComplex {
   @Column({ name: 'maintenance_nfc_enabled', type: 'boolean', default: false })
   maintenanceNfcEnabled: boolean;
 
+  // ==================== MI CONJUNTO ====================
+
+  /**
+   * Botones de acción rápida que la app muestra en "Mi Conjunto". La
+   * administración decide cuáles: hay conjuntos que no quieren recibir
+   * llamadas del residente o cuya dirección no conviene publicar.
+   */
+  @Field(() => Boolean, { description: 'Mi Conjunto muestra "Llamar"' })
+  @Column({ name: 'my_complex_show_call', type: 'boolean', default: true })
+  myComplexShowCall: boolean;
+
+  @Field(() => Boolean, { description: 'Mi Conjunto muestra "Correo"' })
+  @Column({ name: 'my_complex_show_email', type: 'boolean', default: true })
+  myComplexShowEmail: boolean;
+
+  @Field(() => Boolean, { description: 'Mi Conjunto muestra "Cómo llegar"' })
+  @Column({
+    name: 'my_complex_show_directions',
+    type: 'boolean',
+    default: true,
+  })
+  myComplexShowDirections: boolean;
+
+  @Field(() => Boolean, { description: 'Mi Conjunto muestra "Sitio web"' })
+  @Column({ name: 'my_complex_show_website', type: 'boolean', default: true })
+  myComplexShowWebsite: boolean;
+
   // ==================== CONTACTO ====================
 
   @Column({
