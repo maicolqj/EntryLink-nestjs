@@ -449,6 +449,7 @@ export const HEADER_LABELS: Record<string, string> = {
   latitude: 'Latitud',
   longitude: 'Longitud',
   accuracy: 'Precisión GPS (m)',
+  locationCapturedAt: 'Hora de la ubicación',
   gpsAccuracyMeters: 'Precisión GPS (m)',
   checkInLat: 'Latitud de entrada',
   checkInLng: 'Longitud de entrada',

@@ -1916,7 +1916,7 @@ export class NotificationsService implements OnModuleInit {
         );
       }
 
-      return { success: true };
+      return { success: true, panicAlertId: alert.id };
     }
 
     // ── Caso: guardia de seguridad ──────────────────────────────────────────
@@ -1979,7 +1979,7 @@ export class NotificationsService implements OnModuleInit {
         this.logger.error(`PANIC notify error (security): ${e?.message}`),
       );
 
-      return { success: true };
+      return { success: true, panicAlertId: alert.id };
     }
 
     // ── Casos 1 y 2: residente ──────────────────────────────────────────────
@@ -2027,6 +2027,7 @@ export class NotificationsService implements OnModuleInit {
       );
 
       let triggeredByLabel: string;
+      let panicAlertId: string;
 
       if (unit.buildingId) {
         // ── Caso 1: edificio/torre ──────────────────────────────────────────
@@ -2039,6 +2040,7 @@ export class NotificationsService implements OnModuleInit {
           unitId: unit.id,
           residentId: resident.id,
         });
+        panicAlertId = alert.id;
         const buildingBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(
@@ -2133,6 +2135,7 @@ export class NotificationsService implements OnModuleInit {
           unitId: unit.id,
           residentId: resident.id,
         });
+        panicAlertId = alert.id;
         const complexBody = `Alerta de pánico activada. ${triggeredByLabel}.`;
         const securityBody = `Alerta de pánico. ${triggeredByLabel}. Requiere atención inmediata.`;
         this.logger.warn(`[PANIC][resident] Caso 2 (casa individual)`);
@@ -2217,7 +2220,7 @@ export class NotificationsService implements OnModuleInit {
       this.logger.warn(
         `PANIC ALERT (resident) — complejo ${complexId}, unidad ${unitNumber}, activado por ${currentUser.sub}`,
       );
-      return { success: true };
+      return { success: true, panicAlertId };
     } catch (err) {
       const e = err as Error & {
         code?: string;

@@ -2,6 +2,7 @@ import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 
 import { Notification } from '../entities/notification.entity';
 import { NotificationsService } from '../services/notifications.service';
+import { PanicLocationService } from '../services/panic-location.service';
 import { FilterNotificationsInput } from '../dto/inputs/filter-notifications.input';
 import { NotificationChannel } from '../enums/notification-channel.enum';
 import { SavePushSubscriptionInput } from '../dto/inputs/save-push-subscription.input';
@@ -20,6 +21,7 @@ import { BulkNotificationActionInput } from '../dto/inputs/bulk-notification-act
 import { BulkNotificationActionResult } from '../dto/responses/bulk-notification-action.response';
 import { NotificationEntitySnapshot } from '../dto/responses/notification-snapshot.response';
 import { ExecuteNotificationActionInput } from '../dto/inputs/execute-notification-action.input';
+import { ReportPanicLocationInput } from '../dto/inputs/report-panic-location.input';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -30,7 +32,10 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 
 @Resolver(() => Notification)
 export class NotificationsResolver {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly panicLocationService: PanicLocationService,
+  ) {}
 
   // ================================================================
   // MUTATIONS
@@ -176,6 +181,51 @@ export class NotificationsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<TriggerPanicAlertResult> {
     return this.notificationsService.triggerPanicAlert(complexId, currentUser);
+  }
+
+  /**
+   * Quien activó el pánico reporta dónde está. Va aparte del disparo para que
+   * la alarma no espere al GPS; se acepta durante 10 minutos y mientras la
+   * alerta siga abierta. Emite `panic:alert:location` a la sala del complejo.
+   */
+  @Mutation(() => PanicAlert, { name: 'reportPanicLocation' })
+  @Auth({
+    roles: [
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
+  reportPanicLocation(
+    @Args('input') input: ReportPanicLocationInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PanicAlert> {
+    return this.panicLocationService.report(input, currentUser);
+  }
+
+  /**
+   * La alerta con su ubicación, para el modal que se abre desde el push. La ven
+   * quien la activó, quienes la recibieron y el personal del conjunto.
+   */
+  @Query(() => PanicAlert, { name: 'panicAlertLocation' })
+  @Auth({
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+      ValidRoles.SECURITY_ROL,
+      ValidRoles.RESIDENT_ROL,
+      ValidRoles.ACCOUNTANT_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
+  panicAlertLocation(
+    @Args('panicAlertId') panicAlertId: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<PanicAlert> {
+    return this.panicLocationService.find(panicAlertId, currentUser);
   }
 
   /**
