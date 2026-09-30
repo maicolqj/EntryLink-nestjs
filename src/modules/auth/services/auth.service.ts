@@ -439,7 +439,10 @@ export class AuthService {
   // QR Login: generar token (SUPER_ADMIN genera para un complejo)
   // ═══════════════════════════════════════════════════════════════
 
-  async generateQrLoginToken(complexId: string): Promise<QrLoginTokenResponse> {
+  async generateQrLoginToken(
+    complexId: string,
+    generatedByUserId?: string,
+  ): Promise<QrLoginTokenResponse> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId },
     });
@@ -468,12 +471,24 @@ export class AuthService {
     const rawPin = nitBase.slice(-4);
     const hashedPin = await bcrypt.hash(rawPin, 12);
 
+    // Un complejo que se registró solo (formulario público) no tiene owner, y la
+    // sesión de la cuenta del complejo cuelga de él (FK de user_sessions). Sin
+    // esto el canje del QR fallaba siempre; queda como owner quien genera el QR,
+    // igual que cuando el SUPER_ADMIN crea el complejo a mano.
+    const assignOwner = !complex.ownerId && generatedByUserId;
+
     const updateResult = await this.complexRepo.update(complexId, {
       qrLoginToken: token,
       qrLoginTokenExp: expiresAt,
       qrLoginTokenUsed: false,
       qrLoginPin: hashedPin,
+      ...(assignOwner && { ownerId: generatedByUserId }),
     });
+    if (assignOwner) {
+      this.logger.log(
+        `Complejo ${complexId} sin owner: se asigna ${generatedByUserId} al generar el QR`,
+      );
+    }
 
     this.logger.log(
       `QR login token generado para complejo ${complexId} | affected: ${updateResult.affected} | pinLen: ${rawPin.length} | hashLen: ${hashedPin.length} | hashPrefix: ${hashedPin.substring(0, 7)}`,
@@ -561,14 +576,6 @@ export class AuthService {
       });
     }
 
-    // Marcar como usado antes de crear la sesión (one-time use).
-    // qrLoginToken se conserva para que "ya fue utilizado" pueda disparar si se reintenta;
-    // se limpia definitivamente en setInitialPassword.
-    await this.complexRepo.update(complex.id, {
-      qrLoginTokenUsed: true,
-      qrLoginPin: null,
-    });
-
     this.assertComplexAccountActive(complex);
 
     if (!complex.owner) {
@@ -581,10 +588,42 @@ export class AuthService {
 
     this.assertUserAccountActive(complex.owner);
 
+    // El token se quema recién ahora, con todo validado: antes se marcaba al
+    // principio y cualquier fallo posterior (complejo sin owner, cuenta
+    // suspendida) lo dejaba usado sin haber entrado nunca, y el siguiente
+    // intento decía "ya fue utilizado". La condición sobre qr_login_token_used
+    // mantiene el uso único si llegan dos canjes a la vez.
+    const claimed = await this.complexRepo.update(
+      { id: complex.id, qrLoginToken: token, qrLoginTokenUsed: false },
+      { qrLoginTokenUsed: true },
+    );
+    if (!claimed.affected) {
+      throw new CustomError({
+        message: 'Este token QR ya fue utilizado',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.QR_TOKEN_ALREADY_USED,
+      });
+    }
+
+    let session: AuthResponse;
+    try {
+      session = await this.createComplexSession(complex, deviceInfo, false);
+    } catch (err) {
+      // Sin sesión no hubo acceso: el QR vuelve a quedar disponible.
+      await this.complexRepo
+        .update(complex.id, { qrLoginTokenUsed: false })
+        .catch(() => {});
+      throw err;
+    }
+
+    // El PIN deja de servir en cuanto hay sesión; el token se limpia en
+    // setInitialPassword.
+    await this.complexRepo.update(complex.id, { qrLoginPin: null });
+
     this.logger.log(
       `QR token canjeado — complexId: ${complex.id} | owner: ${complex.ownerId}`,
     );
-    return this.createComplexSession(complex, deviceInfo, false);
+    return session;
   }
 
   // ═══════════════════════════════════════════════════════════════

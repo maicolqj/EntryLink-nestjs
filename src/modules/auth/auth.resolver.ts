@@ -225,8 +225,9 @@ export class AuthResolver {
   })
   async generateQrLoginToken(
     @Args('complexId', { type: () => String }) complexId: string,
+    @CurrentUser() payload: JwtAccessPayload,
   ): Promise<QrLoginTokenResponse> {
-    return this.authService.generateQrLoginToken(complexId);
+    return this.authService.generateQrLoginToken(complexId, payload.sub);
   }
 
   // ── QR Login: Canjear token ───────────────────────────────────────────────
