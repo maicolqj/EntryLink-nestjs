@@ -68,6 +68,7 @@ export enum NotificationType {
   PQRF_RESOLVED = 'PQRF_RESOLVED', // Todos los destinatarios marcaron el radicado como resuelto
   PQRF_REMINDER = 'PQRF_REMINDER', // Al radicado le queda poco para vencerse
   VOTING_OPENED = 'VOTING_OPENED', // Se abrió una pregunta en la que el usuario puede votar
+  COMPLEX_DOCUMENT_PUBLISHED = 'COMPLEX_DOCUMENT_PUBLISHED', // Mi Conjunto: documento nuevo o actualizado
   AMENITY_BOOKING_APPROVED = 'AMENITY_BOOKING_APPROVED', // Reserva aprobada (residente)
   AMENITY_BOOKING_REJECTED = 'AMENITY_BOOKING_REJECTED', // Reserva rechazada (residente)
   AMENITY_BOOKING_CANCELLED = 'AMENITY_BOOKING_CANCELLED', // Reserva cancelada (contraparte)
