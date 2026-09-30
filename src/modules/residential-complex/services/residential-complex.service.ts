@@ -55,6 +55,9 @@ import { BK } from '../../../core/infrastructure/cache/business-cache.constants'
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 
+/** Documentos que el complejo adjunta al registrarse. */
+export type RegistrationDocumentKind = 'rut' | 'legal-rep';
+
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
   [ComplexPlan.FREE]: 10,
@@ -968,6 +971,53 @@ export class ResidentialComplexService {
       throw new InternalServerErrorException(
         'Error al registrar el complejo. Intenta de nuevo.',
       );
+    }
+  }
+
+  /**
+   * Llave en R2 y nombre de descarga de un documento del registro (RUT o
+   * documento del representante legal). La web no recibe la URL pública: el
+   * backend sirve el archivo tras validar el rol en el controller.
+   */
+  async resolveRegistrationDocument(
+    complexId: string,
+    doc: RegistrationDocumentKind,
+  ): Promise<{ key: string; fileName: string }> {
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+      select: ['id', 'slug', 'rutFileUrl', 'legalRepDocumentUrl'],
+    });
+    if (!complex) throw new NotFoundException('Complejo no encontrado');
+
+    const url =
+      doc === 'rut' ? complex.rutFileUrl : complex.legalRepDocumentUrl;
+    const key = url ? this.registrationDocumentKey(url) : null;
+    if (!key) {
+      throw new NotFoundException(
+        doc === 'rut'
+          ? 'El complejo no tiene RUT cargado'
+          : 'El complejo no tiene documento del representante legal cargado',
+      );
+    }
+
+    const label = doc === 'rut' ? 'rut' : 'documento-rep-legal';
+    return { key, fileName: `${label}-${complex.slug}.pdf` };
+  }
+
+  /**
+   * La llave a partir de la URL guardada. Si R2_PUBLIC_URL cambió (o estaba
+   * vacía) al momento del registro, la URL no calza con el prefijo actual; en
+   * ese caso la llave es la ruta de la URL.
+   */
+  private registrationDocumentKey(url: string): string | null {
+    const fromPrefix = this.storageService.keyFromPublicUrl(url);
+    if (fromPrefix) return fromPrefix;
+    try {
+      const path = /^https?:\/\//.test(url) ? new URL(url).pathname : url;
+      const key = decodeURIComponent(path).replace(/^\/+/, '');
+      return key || null;
+    } catch {
+      return null;
     }
   }
 
