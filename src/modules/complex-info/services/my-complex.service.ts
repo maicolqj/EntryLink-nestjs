@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
-import { MyComplexInfoResponse } from '../dto/complex-info.responses';
+import {
+  ComplexInfoSettings,
+  MyComplexInfoResponse,
+} from '../dto/complex-info.responses';
+import { UpdateComplexInfoSettingsInput } from '../dto/complex-info.inputs';
 import { ComplexInfoAccessService } from './complex-info-access.service';
 import { ComplexDocumentsService } from './complex-documents.service';
 import { ComplexContactsService } from './complex-contacts.service';
@@ -47,6 +51,10 @@ export class MyComplexService {
           'website',
           'nit',
           'logoUrl',
+          'myComplexShowCall',
+          'myComplexShowEmail',
+          'myComplexShowDirections',
+          'myComplexShowWebsite',
         ],
       }),
       this.contactsService.listVisible(complexId),
@@ -63,9 +71,73 @@ export class MyComplexService {
 
     return {
       complex,
+      settings: toSettings(complex),
       contacts,
       documents: docs.documents,
       pendingAcknowledgements: docs.pending,
     };
   }
+
+  /** Los botones que muestra la app, para el formulario de la administración. */
+  async getSettings(
+    complexId: string,
+    user: JwtAccessPayload,
+  ): Promise<ComplexInfoSettings> {
+    await this.access.assertAdmin(complexId, user);
+    return toSettings(await this.findComplexOrFail(complexId));
+  }
+
+  async updateSettings(
+    complexId: string,
+    input: UpdateComplexInfoSettingsInput,
+    user: JwtAccessPayload,
+  ): Promise<ComplexInfoSettings> {
+    await this.access.assertAdmin(complexId, user);
+    const patch: Partial<ResidentialComplex> = {};
+    if (input.showCall !== undefined) patch.myComplexShowCall = input.showCall;
+    if (input.showEmail !== undefined)
+      patch.myComplexShowEmail = input.showEmail;
+    if (input.showDirections !== undefined) {
+      patch.myComplexShowDirections = input.showDirections;
+    }
+    if (input.showWebsite !== undefined) {
+      patch.myComplexShowWebsite = input.showWebsite;
+    }
+    if (Object.keys(patch).length) {
+      await this.complexRepo.update(complexId, patch);
+    }
+    return toSettings(await this.findComplexOrFail(complexId));
+  }
+
+  private async findComplexOrFail(
+    complexId: string,
+  ): Promise<ResidentialComplex> {
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId, deletedAt: IsNull() },
+      select: [
+        'id',
+        'myComplexShowCall',
+        'myComplexShowEmail',
+        'myComplexShowDirections',
+        'myComplexShowWebsite',
+      ],
+    });
+    if (!complex) {
+      throw new CustomError({
+        message: 'Conjunto no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+      });
+    }
+    return complex;
+  }
+}
+
+function toSettings(complex: ResidentialComplex): ComplexInfoSettings {
+  return {
+    showCall: complex.myComplexShowCall,
+    showEmail: complex.myComplexShowEmail,
+    showDirections: complex.myComplexShowDirections,
+    showWebsite: complex.myComplexShowWebsite,
+  };
 }

@@ -7,9 +7,11 @@ import {
   CreateComplexDocumentInput,
   UpdateComplexContactInput,
   UpdateComplexDocumentInput,
+  UpdateComplexInfoSettingsInput,
 } from '../dto/complex-info.inputs';
 import {
   ComplexDocumentAckReport,
+  ComplexInfoSettings,
   MyComplexDocument,
   MyComplexInfoResponse,
 } from '../dto/complex-info.responses';
@@ -127,6 +129,30 @@ export class ComplexInfoResolver {
     @CurrentUser() user: JwtAccessPayload,
   ): Promise<ComplexDocumentAckReport> {
     return this.documentsService.ackReport(id, user);
+  }
+
+  // ── Administración: botones de acción rápida ──────────────────────
+
+  @Query(() => ComplexInfoSettings, {
+    name: 'complexInfoSettings',
+    description: 'Qué botones muestra la app en Mi Conjunto',
+  })
+  @Auth({ roles: ADMIN })
+  complexInfoSettings(
+    @Args('complexId') complexId: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<ComplexInfoSettings> {
+    return this.myComplexService.getSettings(complexId, user);
+  }
+
+  @Mutation(() => ComplexInfoSettings, { name: 'updateComplexInfoSettings' })
+  @Auth({ roles: ADMIN })
+  updateComplexInfoSettings(
+    @Args('complexId') complexId: string,
+    @Args('input') input: UpdateComplexInfoSettingsInput,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<ComplexInfoSettings> {
+    return this.myComplexService.updateSettings(complexId, input, user);
   }
 
   // ── Administración: contactos ─────────────────────────────────────

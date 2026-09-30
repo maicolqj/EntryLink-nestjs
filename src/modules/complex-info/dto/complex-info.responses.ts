@@ -40,6 +40,24 @@ export class ComplexPublicInfo {
   logoUrl?: string | null;
 }
 
+/** Qué botones de acción rápida muestra la app en "Mi Conjunto". */
+@ObjectType({
+  description: 'Botones de Mi Conjunto que eligió la administración',
+})
+export class ComplexInfoSettings {
+  @Field()
+  showCall: boolean;
+
+  @Field()
+  showEmail: boolean;
+
+  @Field()
+  showDirections: boolean;
+
+  @Field()
+  showWebsite: boolean;
+}
+
 /** Un documento tal como lo ve un residente: con su acuse, si lo pide. */
 @ObjectType()
 export class MyComplexDocument {
@@ -64,6 +82,9 @@ export class MyComplexDocument {
 export class MyComplexInfoResponse {
   @Field(() => ComplexPublicInfo)
   complex: ComplexPublicInfo;
+
+  @Field(() => ComplexInfoSettings)
+  settings: ComplexInfoSettings;
 
   @Field(() => [ComplexContact])
   contacts: ComplexContact[];
