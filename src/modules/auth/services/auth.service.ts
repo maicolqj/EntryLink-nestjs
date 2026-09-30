@@ -1180,7 +1180,8 @@ export class AuthService {
         key: input.token,
       },
     });
-    await this.tokenService.clearUserTokenVersionCache(user.id);
+    // Quien pidió el restablecimiento no tiene sesión aquí: se cierran todas.
+    await this.tokenService.invalidateUserSessions(user.id, 'password_reset');
 
     this.logger.log(`Password restablecido — userId=${user.id}`);
     return { success: true };

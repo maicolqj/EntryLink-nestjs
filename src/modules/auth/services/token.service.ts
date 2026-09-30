@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, Not } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { User } from '../../users/entities/user.entity';
@@ -593,6 +593,33 @@ export class TokenService {
       { userId, isRevoked: false },
       { isRevoked: true, revokedReason: reason },
     );
+  }
+
+  /**
+   * Cierra las sesiones de un usuario después de cambiar su contraseña.
+   *
+   * Subir `tokenVersion` no basta: la versión vive 5 minutos en caché, y la
+   * rotación del refresh token no la mira, así que quien tuviera una sesión
+   * abierta —por ejemplo con una contraseña filtrada— la seguía renovando y
+   * recibía tokens nuevos con la versión nueva. Aquí se revocan sus refresh
+   * tokens y se limpia la caché para que el access token viejo muera ya.
+   *
+   * `exceptSessionId` conserva la sesión desde la que el usuario cambió su
+   * propia contraseña: su access token caduca por la versión, el cliente
+   * renueva con ese refresh token y sigue trabajando sin volver a entrar.
+   */
+  async invalidateUserSessions(
+    userId: string,
+    reason: string,
+    exceptSessionId?: string,
+  ): Promise<void> {
+    await this.refreshTokenRepo.update(
+      exceptSessionId
+        ? { userId, isRevoked: false, sessionId: Not(exceptSessionId) }
+        : { userId, isRevoked: false },
+      { isRevoked: true, revokedReason: reason },
+    );
+    await this.clearUserTokenVersionCache(userId);
   }
 
   async revokeSession(sessionId: string, reason: string): Promise<void> {

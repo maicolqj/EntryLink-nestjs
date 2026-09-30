@@ -1328,6 +1328,7 @@ export class UsersService {
   async changePassword(
     id: string,
     { currentPassword, newPassword, confirmPassword }: ChangePasswordInput,
+    currentSessionId?: string,
   ): Promise<ChangePasswordResponse> {
     if (newPassword !== confirmPassword) {
       throw new CustomError({
@@ -1375,6 +1376,13 @@ export class UsersService {
       lastPasswordChange: new Date(),
       tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
     });
+
+    // Las demás sesiones se cierran; la de este equipo sigue.
+    await this.tokenService.invalidateUserSessions(
+      id,
+      'password_changed',
+      currentSessionId,
+    );
 
     return {
       success: true,
@@ -1437,7 +1445,10 @@ export class UsersService {
       tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
     });
 
-    await this.tokenService.clearUserTokenVersionCache(user.id);
+    await this.tokenService.invalidateUserSessions(
+      user.id,
+      'password_reset_by_admin',
+    );
 
     this.logger.warn(
       `Contraseña restablecida por administrador: usuario ${user.id} | por: ${currentUser?.sub}`,

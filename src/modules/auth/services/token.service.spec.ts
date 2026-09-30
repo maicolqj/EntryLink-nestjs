@@ -270,4 +270,47 @@ describe('TokenService — alcance de roles de la sesión', () => {
     ]);
     expect(rows[0].roleScope).toBeNull();
   });
+
+  describe('cerrar sesiones al cambiar la contraseña', () => {
+    type UpdateCall = [
+      { userId: string; isRevoked: boolean; sessionId?: { value?: string } },
+      { isRevoked: boolean; revokedReason: string },
+    ];
+    const lastUpdate = () =>
+      refreshTokenRepo.update.mock.calls[0] as unknown as UpdateCall;
+
+    it('revoca las demás sesiones y conserva la de quien la cambió', async () => {
+      await service.invalidateUserSessions(
+        'user-1',
+        'password_changed',
+        'sess-1',
+      );
+
+      const [where, changes] = lastUpdate();
+      expect(where.userId).toBe('user-1');
+      expect(where.isRevoked).toBe(false);
+      // Not('sess-1'): la sesión actual queda fuera de la revocación.
+      expect(where.sessionId?.value).toBe('sess-1');
+      expect(changes).toEqual({
+        isRevoked: true,
+        revokedReason: 'password_changed',
+      });
+    });
+
+    it('sin sesión actual (restablecimiento) las revoca todas', async () => {
+      await service.invalidateUserSessions('user-1', 'password_reset');
+
+      const [where] = lastUpdate();
+      expect(where).toEqual({ userId: 'user-1', isRevoked: false });
+    });
+
+    it('limpia la caché de la versión para que el access token viejo muera ya', async () => {
+      await service.invalidateUserSessions('user-1', 'password_reset');
+
+      const [arg] = cacheService.delete.mock.calls[0] as unknown as [
+        { key: { key: string } },
+      ];
+      expect(arg.key.key).toBe('user-1');
+    });
+  });
 });
