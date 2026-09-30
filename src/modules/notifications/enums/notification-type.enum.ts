@@ -128,6 +128,7 @@ export enum NotificationType {
   ACCESS_REVOKED_INACTIVITY = 'ACCESS_REVOKED_INACTIVITY', // Acceso revocado por 30 días sin check-in
 
   // ── Legal / Documentos ─────────────────────────────────────────
+  COMPLEX_REGISTERED = 'COMPLEX_REGISTERED', // Un complejo se registró y espera revisión (aviso a SUPER_ADMIN)
   DPA_SIGNED = 'DPA_SIGNED', // Un complejo subió su DPA (Anexo B2B) firmado (aviso a SUPER_ADMIN)
   DPA_APPROVED = 'DPA_APPROVED', // El SUPER_ADMIN validó el DPA firmado (aviso al complejo)
   DPA_REJECTED = 'DPA_REJECTED', // El SUPER_ADMIN rechazó el DPA firmado (aviso al complejo, con motivo)

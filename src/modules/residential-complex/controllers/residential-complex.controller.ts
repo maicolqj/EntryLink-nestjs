@@ -3,11 +3,17 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   Logger,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Post,
+  Query,
   Req,
+  Res,
   UploadedFile,
   UploadedFiles,
   UseGuards,
@@ -18,10 +24,15 @@ import {
   FileInterceptor,
 } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 import { RegisterComplexDto } from '../dto/inputs/register-complex.dto';
-import { ResidentialComplexService } from '../services/residential-complex.service';
+import {
+  RegistrationDocumentKind,
+  ResidentialComplexService,
+} from '../services/residential-complex.service';
+import { R2StorageService } from '../../../core/infrastructure/r2/r2.service';
+import { Auth } from '../../shared/decorators/auth.decorator';
 import { ALLOWED_DOCUMENT_MIME_TYPES } from '../../../core/infrastructure/r2/upload-interceptors';
 import { JwtRestGuard } from '../../shared/guards/jwt-rest.guard';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
@@ -30,11 +41,16 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 /** Tope del PDF firmado, alineado con los documentos del registro. */
 const MAX_SIGNED_DPA_MB = 20;
 
+const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = ['rut', 'legal-rep'];
+
 @Controller('complexes')
 export class ResidentialComplexController {
   private readonly logger = new Logger(ResidentialComplexController.name);
 
-  constructor(private readonly complexService: ResidentialComplexService) {}
+  constructor(
+    private readonly complexService: ResidentialComplexService,
+    private readonly storageService: R2StorageService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -84,6 +100,59 @@ export class ResidentialComplexController {
       files.rutFile[0],
       files.legalRepDocument[0],
     );
+  }
+
+  /**
+   * GET /api/v1/complexes/:id/registration-documents/:doc?download=1
+   *
+   * Sirve el RUT (`rut`) o el documento del representante legal (`legal-rep`)
+   * que el complejo adjuntó al registrarse. Son datos personales: solo los ven
+   * SUPER_ADMIN y el oficial de cumplimiento, y el archivo lo transmite el
+   * backend, sin entregar la URL de R2.
+   */
+  @Get(':id/registration-documents/:doc')
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
+  async getRegistrationDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('doc') doc: string,
+    @Query('download') download: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!REGISTRATION_DOCUMENTS.includes(doc as RegistrationDocumentKind)) {
+      throw new BadRequestException(
+        `Documento no válido: usa ${REGISTRATION_DOCUMENTS.join(' o ')}`,
+      );
+    }
+
+    const { key, fileName } =
+      await this.complexService.resolveRegistrationDocument(
+        id,
+        doc as RegistrationDocumentKind,
+      );
+
+    let file: Awaited<ReturnType<R2StorageService['getObjectStream']>>;
+    try {
+      file = await this.storageService.getObjectStream(key);
+    } catch (err: any) {
+      this.logger.warn(
+        `Documento de registro ${doc} del complejo ${id} no está en R2: ${err?.message}`,
+      );
+      throw new NotFoundException(
+        'El archivo no se encontró en el almacenamiento',
+      );
+    }
+
+    const disposition = download ? 'attachment' : 'inline';
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${fileName}"`,
+    );
+    if (file.length) res.setHeader('Content-Length', String(file.length));
+    res.setHeader('Cache-Control', 'private, no-store');
+    file.stream.pipe(res);
   }
 
   /**

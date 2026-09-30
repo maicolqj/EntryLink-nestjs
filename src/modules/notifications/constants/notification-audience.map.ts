@@ -183,6 +183,7 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.ACCESS_REVOKED_INACTIVITY]: NotificationAudience.STAFF,
 
   // ── Legal ───────────────────────────────────────────────────────────────
+  [NotificationType.COMPLEX_REGISTERED]: NotificationAudience.STAFF,
   [NotificationType.DPA_SIGNED]: NotificationAudience.STAFF,
   [NotificationType.DPA_APPROVED]: NotificationAudience.STAFF,
   [NotificationType.DPA_REJECTED]: NotificationAudience.STAFF,

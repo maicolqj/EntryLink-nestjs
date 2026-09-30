@@ -452,6 +452,43 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * Avisa a los SUPER_ADMIN que un complejo se registró desde el formulario
+   * público y espera revisión. Best-effort: el registro nunca falla por esto.
+   */
+  async notifyComplexRegistered(complex: {
+    id: string;
+    name: string;
+    email?: string | null;
+    legalRepresentativeName?: string | null;
+  }): Promise<void> {
+    try {
+      const superAdminIds = await this.findSuperAdminUserIds();
+      if (superAdminIds.length === 0) return;
+
+      await this.notify({
+        complexId: complex.id,
+        userIds: superAdminIds,
+        type: NotificationType.COMPLEX_REGISTERED,
+        priority: NotificationPriority.HIGH,
+        title: 'Nuevo complejo por revisar',
+        body: `"${complex.name}" se registró y espera tu revisión.`,
+        entityId: complex.id,
+        entityType: 'ResidentialComplex',
+        metadata: {
+          complexId: complex.id,
+          complexName: complex.name,
+          email: complex.email ?? null,
+          legalRepresentativeName: complex.legalRepresentativeName ?? null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo notificar el registro del complejo ${complex.id}: ${err?.message}`,
+      );
+    }
+  }
+
+  /**
    * Avisa a los SUPER_ADMIN que un complejo subió su DPA (Anexo B2B) firmado.
    * Best-effort: nunca interrumpe el flujo que la origina.
    */
