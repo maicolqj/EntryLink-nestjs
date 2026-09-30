@@ -7,8 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as mammoth from 'mammoth';
-import sanitizeHtml from 'sanitize-html';
 
 import { LegalDocument } from '../entities/legal-document.entity';
 import { LegalAudience } from '../enums/legal-audience.enum';
@@ -19,52 +17,7 @@ import {
   PLATFORM_SCOPE,
 } from '../../../core/infrastructure/r2/r2.service';
 import { decodeBase64File } from '../../shared/utils/base64-file.utils';
-
-const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
-  allowedTags: [
-    'h1',
-    'h2',
-    'h3',
-    'h4',
-    'h5',
-    'h6',
-    'p',
-    'a',
-    'ul',
-    'ol',
-    'li',
-    'blockquote',
-    'strong',
-    'em',
-    'b',
-    'i',
-    'u',
-    's',
-    'br',
-    'hr',
-    'table',
-    'thead',
-    'tbody',
-    'tr',
-    'th',
-    'td',
-    'sup',
-    'sub',
-    'span',
-    'div',
-  ],
-  allowedAttributes: {
-    a: ['href', 'name', 'target', 'rel'],
-    '*': ['id'],
-  },
-  transformTags: {
-    a: sanitizeHtml.simpleTransform(
-      'a',
-      { rel: 'noopener noreferrer', target: '_blank' },
-      true,
-    ),
-  },
-};
+import { docxBase64ToHtml } from '../../shared/utils/docx-html.utils';
 
 @Injectable()
 export class LegalDocumentService {
@@ -96,28 +49,6 @@ export class LegalDocumentService {
       'raw',
     );
     return { url: result.url, publicId: result.publicId };
-  }
-
-  /** Convierte un .docx (base64) a HTML sanitizado. */
-  private async docxToHtml(base64: string): Promise<string> {
-    const buffer = decodeBase64File(base64, 'El archivo .docx');
-
-    let rawHtml: string;
-    try {
-      const result = await mammoth.convertToHtml({ buffer });
-      rawHtml = result.value;
-    } catch (err: any) {
-      this.logger.error(`Error convirtiendo .docx: ${err.message}`);
-      throw new BadRequestException(
-        'No se pudo procesar el archivo .docx. Verifica que sea un Word válido.',
-      );
-    }
-
-    const html = sanitizeHtml(rawHtml, SANITIZE_OPTIONS).trim();
-    if (!html) {
-      throw new BadRequestException('El documento no contiene texto legible.');
-    }
-    return html;
   }
 
   // ── Lectura pública ────────────────────────────────────────────────
@@ -177,7 +108,7 @@ export class LegalDocumentService {
     }
 
     const contentHtml = input.docxBase64
-      ? await this.docxToHtml(input.docxBase64)
+      ? await docxBase64ToHtml(input.docxBase64)
       : undefined;
 
     let downloadFileUrl: string | undefined;
@@ -233,7 +164,7 @@ export class LegalDocumentService {
     if (input.audience !== undefined) doc.audience = input.audience;
 
     if (input.docxBase64) {
-      doc.contentHtml = await this.docxToHtml(input.docxBase64);
+      doc.contentHtml = await docxBase64ToHtml(input.docxBase64);
       doc.version += 1;
     }
 

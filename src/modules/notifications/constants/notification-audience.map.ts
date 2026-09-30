@@ -119,6 +119,7 @@ export const NOTIFICATION_AUDIENCE: Record<
   // Votar no: los destinatarios salen de `findCouncilUserIds` o de los
   // residentes activos del complejo. Unos y otros son residentes.
   [NotificationType.VOTING_OPENED]: NotificationAudience.RESIDENT,
+  [NotificationType.COMPLEX_DOCUMENT_PUBLISHED]: NotificationAudience.RESIDENT,
 
   // ── Mascotas y convivencia ──────────────────────────────────────────────
   [NotificationType.PET_REGISTERED]: NotificationAudience.STAFF,

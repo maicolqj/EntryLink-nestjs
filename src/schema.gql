@@ -1773,6 +1773,7 @@ enum NotificationType {
   PQRF_RESOLVED
   PQRF_REMINDER
   VOTING_OPENED
+  COMPLEX_DOCUMENT_PUBLISHED
   AMENITY_BOOKING_APPROVED
   AMENITY_BOOKING_REJECTED
   AMENITY_BOOKING_CANCELLED
@@ -5028,6 +5029,210 @@ type MyUnitResponse {
   members: [UnitMember!]!
 }
 
+"""Documento del conjunto (Mi Conjunto)"""
+type ComplexDocument {
+  id: ID!
+  complexId: String!
+  category: ComplexDocumentCategory!
+  title: String!
+  description: String
+
+  """Texto del documento (HTML sanitizado desde un .docx)"""
+  contentHtml: String
+
+  """Nombre del PDF adjunto; null = sin PDF"""
+  fileName: String
+
+  """Tamaño del PDF en bytes"""
+  fileSize: Int
+  audience: ComplexDocumentAudience!
+
+  """Visible para los residentes"""
+  isPublished: Boolean!
+  publishedAt: DateTime
+
+  """Destacado arriba en la app"""
+  isPinned: Boolean!
+
+  """Pide al residente confirmar que lo leyó"""
+  requiresAcknowledgement: Boolean!
+
+  """Vigente desde (YYYY-MM-DD). Ej: fecha de aprobación en asamblea"""
+  effectiveDate: String
+
+  """Sube cada vez que cambia el contenido"""
+  version: Int!
+
+  """Último cambio del contenido (texto o PDF)"""
+  contentUpdatedAt: DateTime!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Categoría de un documento del conjunto"""
+enum ComplexDocumentCategory {
+  """Manual de convivencia"""
+  COEXISTENCE_MANUAL
+
+  """Reglamento de propiedad horizontal"""
+  BYLAWS
+
+  """Normas de zonas comunes"""
+  COMMON_AREA_RULES
+
+  """Circulares y comunicados"""
+  CIRCULARS
+
+  """Actas de asamblea y consejo"""
+  ASSEMBLY_MINUTES
+
+  """Estados financieros y presupuesto"""
+  FINANCIAL_REPORTS
+
+  """Pólizas y certificados"""
+  INSURANCE
+
+  """Formatos y solicitudes"""
+  FORMS
+
+  """Otros documentos"""
+  OTHER
+}
+
+"""Quién ve el documento en la app"""
+enum ComplexDocumentAudience {
+  """Todos los residentes"""
+  ALL_RESIDENTS
+
+  """Solo propietarios"""
+  OWNERS_ONLY
+}
+
+"""Contacto del directorio del conjunto"""
+type ComplexContact {
+  id: ID!
+  complexId: String!
+  category: ComplexContactCategory!
+
+  """
+  Nombre. Ej: "Administración", "Ascensores Andino"
+  """
+  name: String!
+
+  """
+  Cargo o qué atiende. Ej: "Administradora", "Portería torre 2"
+  """
+  role: String
+  phone: String
+  email: String
+
+  """
+  Horario. Ej: "Lun a vie 8:00 a. m. – 5:00 p. m."
+  """
+  schedule: String
+  notes: String
+
+  """Orden dentro de su sección"""
+  sortOrder: Int!
+
+  """Visible para los residentes"""
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Sección del directorio de contactos del conjunto"""
+enum ComplexContactCategory {
+  """Administración"""
+  ADMINISTRATION
+
+  """Portería y seguridad"""
+  SECURITY
+
+  """Consejo de administración"""
+  COUNCIL
+
+  """Mantenimiento"""
+  MAINTENANCE
+
+  """Emergencias"""
+  EMERGENCY
+
+  """Servicios (aseo, jardinería, ascensores…)"""
+  SERVICE
+
+  """Otros"""
+  OTHER
+}
+
+"""Datos generales del conjunto para el residente"""
+type ComplexPublicInfo {
+  id: String!
+  name: String!
+  description: String
+  address: String
+  city: String
+  state: String
+  phoneNumber: String
+  email: String
+  website: String
+
+  """NIT de la copropiedad"""
+  nit: String
+  logoUrl: String
+}
+
+type MyComplexDocument {
+  document: ComplexDocument!
+
+  """Cuándo confirmó haber leído la versión VIGENTE; null = pendiente"""
+  acknowledgedAt: DateTime
+
+  """Tiene texto para leer en la app"""
+  hasContent: Boolean!
+
+  """Tiene PDF adjunto"""
+  hasFile: Boolean!
+}
+
+"""Mi Conjunto: datos, contactos y documentos"""
+type MyComplexInfoResponse {
+  complex: ComplexPublicInfo!
+  contacts: [ComplexContact!]!
+
+  """Publicados y dirigidos a él; sin el texto (usar myComplexDocument)"""
+  documents: [MyComplexDocument!]!
+
+  """Documentos que piden acuse y el residente no ha confirmado"""
+  pendingAcknowledgements: Int!
+}
+
+type ComplexDocumentAckEntry {
+  unitId: String!
+
+  """
+  Ej: "Torre 2 - 504"
+  """
+  unitLabel: String!
+  residentName: String
+
+  """null = no ha confirmado"""
+  acknowledgedAt: DateTime
+}
+
+"""Acuses de lectura de la versión vigente"""
+type ComplexDocumentAckReport {
+  documentId: String!
+  version: Int!
+
+  """Unidades a las que va dirigido"""
+  totalUnits: Int!
+  acknowledgedUnits: Int!
+
+  """Una fila por unidad: primero las pendientes"""
+  units: [ComplexDocumentAckEntry!]!
+}
+
 """Anotación en la bitácora de un ticket"""
 type MaintenanceTicketEvent {
   id: ID!
@@ -6196,6 +6401,21 @@ type Query {
   petIncident(id: String!): PetIncident!
   petIncidentsByPet(petId: String!): [PetIncident!]!
   myUnit(complexId: String!): MyUnitResponse!
+
+  """Mi Conjunto: datos, contactos y documentos para el residente"""
+  myComplexInfo(complexId: String!): MyComplexInfoResponse!
+
+  """Un documento publicado, con su texto completo"""
+  myComplexDocument(id: ID!): MyComplexDocument!
+
+  """Todos los documentos del conjunto, incluidos los borradores"""
+  complexDocuments(complexId: String!): [ComplexDocument!]!
+
+  """Qué unidades confirmaron la lectura de la versión vigente"""
+  complexDocumentAckReport(id: ID!): ComplexDocumentAckReport!
+
+  """Directorio de contactos, incluidos los ocultos"""
+  complexContacts(complexId: String!): [ComplexContact!]!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7113,6 +7333,15 @@ type Mutation {
   dismissPetIncident(incidentId: String!, reason: String!): PetIncident!
   sanctionPetIncident(input: SanctionPetIncidentInput!): PetIncident!
   addPetIncidentStatement(input: CreatePetIncidentStatementInput!): PetIncident!
+
+  """El residente confirma que leyó la versión vigente"""
+  acknowledgeComplexDocument(id: ID!): MyComplexDocument!
+  createComplexDocument(input: CreateComplexDocumentInput!): ComplexDocument!
+  updateComplexDocument(id: ID!, input: UpdateComplexDocumentInput!): ComplexDocument!
+  deleteComplexDocument(id: ID!): Boolean!
+  createComplexContact(input: CreateComplexContactInput!): ComplexContact!
+  updateComplexContact(id: ID!, input: UpdateComplexContactInput!): ComplexContact!
+  deleteComplexContact(id: ID!): Boolean!
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9019,6 +9248,82 @@ input CreatePetIncidentStatementInput {
 
   """Respuesta de la unidad"""
   text: String!
+}
+
+input CreateComplexDocumentInput {
+  complexId: String!
+  category: ComplexDocumentCategory!
+  title: String!
+  description: String
+
+  """
+  Word (.docx) en base64: su texto se convierte a HTML para leerlo en la app
+  """
+  docxBase64: String
+
+  """ALL_RESIDENTS por defecto"""
+  audience: ComplexDocumentAudience
+  isPinned: Boolean
+  requiresAcknowledgement: Boolean
+
+  """YYYY-MM-DD"""
+  effectiveDate: String
+}
+
+input UpdateComplexDocumentInput {
+  category: ComplexDocumentCategory
+  title: String
+  description: String
+
+  """
+  Word (.docx) en base64: su texto se convierte a HTML para leerlo en la app
+  """
+  docxBase64: String
+
+  """ALL_RESIDENTS por defecto"""
+  audience: ComplexDocumentAudience
+  isPinned: Boolean
+  requiresAcknowledgement: Boolean
+
+  """YYYY-MM-DD. Cadena vacía = quitar la fecha"""
+  effectiveDate: String
+
+  """Quita el texto del documento (deja solo el PDF)"""
+  removeContent: Boolean
+
+  """Quita el PDF adjunto (deja solo el texto)"""
+  removeFile: Boolean
+  isPublished: Boolean
+
+  """
+  Avisar a los residentes al publicar o al cambiar el contenido. true por defecto
+  """
+  notifyResidents: Boolean
+}
+
+input CreateComplexContactInput {
+  complexId: String!
+  category: ComplexContactCategory!
+  name: String!
+  role: String
+  phone: String
+  email: String
+  schedule: String
+  notes: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
+input UpdateComplexContactInput {
+  category: ComplexContactCategory
+  name: String
+  role: String
+  phone: String
+  email: String
+  schedule: String
+  notes: String
+  sortOrder: Int
+  isActive: Boolean
 }
 
 input TriageMaintenanceTicketInput {

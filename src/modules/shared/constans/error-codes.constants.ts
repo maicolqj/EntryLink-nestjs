@@ -535,3 +535,21 @@ export enum NotificationActionErrorCode {
   NOTIFICATION_ACTION_BLOCKED = 'NOTIFICATION_ACTION_BLOCKED',
   NOTIFICATION_ACTION_FIELD_REQUIRED = 'NOTIFICATION_ACTION_FIELD_REQUIRED',
 }
+
+/**
+ * "Mi Conjunto": documentos y directorio de contactos del conjunto.
+ */
+export enum ComplexInfoErrorCode {
+  COMPLEX_DOCUMENT_NOT_FOUND = 'COMPLEX_DOCUMENT_NOT_FOUND',
+  /** Publicar sin texto ni PDF: el residente abriría una página vacía. */
+  COMPLEX_DOCUMENT_EMPTY = 'COMPLEX_DOCUMENT_EMPTY',
+  /** El archivo no es un PDF válido. */
+  COMPLEX_DOCUMENT_INVALID_FILE = 'COMPLEX_DOCUMENT_INVALID_FILE',
+  /** El documento no tiene PDF adjunto. */
+  COMPLEX_DOCUMENT_NO_FILE = 'COMPLEX_DOCUMENT_NO_FILE',
+  /** El documento no pide acuse de lectura. */
+  COMPLEX_DOCUMENT_ACK_NOT_REQUIRED = 'COMPLEX_DOCUMENT_ACK_NOT_REQUIRED',
+  COMPLEX_CONTACT_NOT_FOUND = 'COMPLEX_CONTACT_NOT_FOUND',
+  /** Un contacto sin teléfono ni correo no le sirve a nadie. */
+  COMPLEX_CONTACT_UNREACHABLE = 'COMPLEX_CONTACT_UNREACHABLE',
+}
