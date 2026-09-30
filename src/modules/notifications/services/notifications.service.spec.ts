@@ -593,3 +593,43 @@ describe('NotificationsService — pánicos activos por sesión', () => {
     expect(result).toHaveLength(1);
   });
 });
+
+/**
+ * El registro público de un complejo no avisaba a nadie: el complejo quedaba en
+ * PENDING_REVIEW y el SUPER_ADMIN solo se enteraba si revisaba el listado.
+ */
+describe('NotificationsService — registro de un complejo', () => {
+  it('avisa a todos los SUPER_ADMIN', async () => {
+    const service = build([{ userId: 'super-1' }, { userId: 'super-2' }]);
+    const notify = jest.spyOn(service, 'notify').mockResolvedValue([] as never);
+
+    await service.notifyComplexRegistered({ id: COMPLEX_ID, name: 'Torres' });
+
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        complexId: COMPLEX_ID,
+        userIds: ['super-1', 'super-2'],
+        type: 'COMPLEX_REGISTERED',
+        entityId: COMPLEX_ID,
+      }),
+    );
+  });
+
+  it('sin SUPER_ADMIN no intenta notificar', async () => {
+    const service = build([]);
+    const notify = jest.spyOn(service, 'notify');
+
+    await service.notifyComplexRegistered({ id: COMPLEX_ID, name: 'Torres' });
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('un fallo al notificar no se propaga al registro', async () => {
+    const service = build([{ userId: 'super-1' }]);
+    jest.spyOn(service, 'notify').mockRejectedValue(new Error('enum'));
+
+    await expect(
+      service.notifyComplexRegistered({ id: COMPLEX_ID, name: 'Torres' }),
+    ).resolves.toBeUndefined();
+  });
+});

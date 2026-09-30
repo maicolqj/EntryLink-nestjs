@@ -943,6 +943,14 @@ export class ResidentialComplexService {
         `Complejo registrado (PENDING_REVIEW): ${saved.id} — "${saved.name}"`,
       );
 
+      // Fuera del flujo: un aviso caído no puede revertir un registro ya guardado.
+      void this.notificationsService.notifyComplexRegistered({
+        id: saved.id,
+        name: saved.name,
+        email: saved.email,
+        legalRepresentativeName: saved.legalRepresentativeName,
+      });
+
       return {
         id: saved.id,
         name: saved.name,
