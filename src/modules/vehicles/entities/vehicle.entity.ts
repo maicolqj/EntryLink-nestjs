@@ -11,6 +11,7 @@ import {
   Index,
 } from 'typeorm';
 import { ObjectType, Field, Int, Float } from '@nestjs/graphql';
+import { UnitAsset } from '../../residential-complex/entities/unit-asset.entity';
 
 import { VehicleType } from '../enums/vehicle-type.enum';
 import { VehicleStatus } from '../enums/vehicle-status.enum';
@@ -156,6 +157,33 @@ export class Vehicle {
   })
   @Column({ name: 'approved_by_user_id', type: 'uuid', nullable: true })
   approvedByUserId?: string;
+
+  /**
+   * Parqueadero propio de la unidad asignado de forma fija a este vehículo.
+   * Con él, el vehículo queda FUERA del sorteo de la rotación: su cupo no se
+   * rota ni se reparte. Null = participa en la rotación (si el conjunto rota).
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'fixed_parking_asset_id', type: 'uuid', nullable: true })
+  fixedParkingAssetId?: string | null;
+
+  @Field(() => UnitAsset, {
+    nullable: true,
+    description: 'Parqueadero fijo de la unidad asignado al vehículo',
+  })
+  @ManyToOne(() => UnitAsset, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'fixed_parking_asset_id' })
+  fixedParkingAsset?: UnitAsset | null;
+
+  /** Por qué se dio de baja (lo vendió, se mudó…). Solo en REMOVED. */
+  @Field(() => String, { nullable: true, description: 'Motivo de la baja' })
+  @Column({
+    name: 'removal_reason',
+    type: 'varchar',
+    length: 300,
+    nullable: true,
+  })
+  removalReason?: string | null;
 
   // ==================== ROTACIÓN DE PARQUEADEROS ====================
 

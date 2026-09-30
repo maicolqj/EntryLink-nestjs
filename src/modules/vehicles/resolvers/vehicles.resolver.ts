@@ -160,9 +160,40 @@ export class VehiclesResolver {
   async remove(
     @Args('vehicleId') vehicleId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('reason', {
+      nullable: true,
+      description: 'Por qué se da de baja (lo vendió, se mudó…)',
+    })
+    reason?: string,
   ): Promise<boolean> {
-    const result = await this.vehiclesService.remove(vehicleId, currentUser);
+    const result = await this.vehiclesService.remove(
+      vehicleId,
+      currentUser,
+      reason,
+    );
     return result.success;
+  }
+
+  /**
+   * Asigna (o quita, con `assetId` null) un parqueadero propio de la unidad al
+   * vehículo. Con parqueadero fijo queda fuera de la rotación.
+   */
+  @Mutation(() => Vehicle, { name: 'setVehicleFixedParking' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    permissions: [ValidPermissions.EDIT_VEHICLE],
+  })
+  setFixedParking(
+    @Args('vehicleId') vehicleId: string,
+    @Args('assetId', { type: () => String, nullable: true })
+    assetId: string | null,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<Vehicle> {
+    return this.vehiclesService.setFixedParking(
+      vehicleId,
+      assetId ?? null,
+      currentUser,
+    );
   }
 
   // ================================================================

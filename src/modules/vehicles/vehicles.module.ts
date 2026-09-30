@@ -11,6 +11,7 @@ import { VehiclesController } from './controllers/vehicles.controller';
 
 import { FeeCharge } from '../finance/entities/fee-charge.entity';
 
+import { UnitAsset } from '../residential-complex/entities/unit-asset.entity';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { ResidentsModule } from '../residents/residents.module';
 import { AuditModule } from '../audit/audit.module';
@@ -24,6 +25,7 @@ import { ParkingRotationCron } from './cron/parking-rotation.cron';
     TypeOrmModule.forFeature([
       Vehicle,
       ParkingRotationConfig,
+      UnitAsset, // parqueaderos fijos de la unidad
 
       ParkingRecord,
       FeeCharge, // necesario para crear cargos en CHARGE_TO_UNIT

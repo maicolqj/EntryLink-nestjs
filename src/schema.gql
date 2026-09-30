@@ -2253,6 +2253,35 @@ type ResidentStatsResponse {
   byType: ResidentTypeBreakdown!
 }
 
+"""Parqueadero o bodega propia de una unidad"""
+type UnitAsset {
+  id: ID!
+  type: UnitAssetType!
+
+  """
+  Número o código. Ej: "S1-14", "P-203"
+  """
+  code: String!
+
+  """
+  Dónde queda. Ej: "Sótano 1, junto al ascensor"
+  """
+  location: String
+  unitId: String!
+  complexId: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Parqueadero o bodega propia de una unidad"""
+enum UnitAssetType {
+  """Parqueadero propio de la unidad"""
+  PARKING
+
+  """Bodega o depósito de la unidad"""
+  STORAGE
+}
+
 """Pesos para derivar el coeficiente de copropiedad por características"""
 type CoefficientWeighting {
   id: ID!
@@ -2846,6 +2875,13 @@ type Vehicle {
 
   """ID del usuario que aprobó o rechazó"""
   approvedByUserId: String
+  fixedParkingAssetId: String
+
+  """Parqueadero fijo de la unidad asignado al vehículo"""
+  fixedParkingAsset: UnitAsset
+
+  """Motivo de la baja"""
+  removalReason: String
 
   """
   Indica si la suspensión actual fue generada por rotación automática de parqueaderos
@@ -4965,6 +5001,33 @@ type PaginatedPetIncidentsResponse {
   pagination: PaginationReponse!
 }
 
+"""Integrante de la unidad del residente"""
+type UnitMember {
+  residentId: String!
+  name: String!
+  lastName: String
+  phoneNumber: String
+  type: ResidentType!
+  isMainResident: Boolean!
+  startDate: DateTime
+  isMe: Boolean!
+}
+
+"""Todo lo de la unidad del residente, en una consulta"""
+type MyUnitResponse {
+  unit: Unit!
+
+  """Parqueaderos y bodegas propios de la unidad"""
+  assets: [UnitAsset!]!
+
+  """Vehículos de la unidad (sin los rechazados ni los retirados)"""
+  vehicles: [Vehicle!]!
+  nextRotationAt: DateTime
+
+  """Integrantes activos de la unidad"""
+  members: [UnitMember!]!
+}
+
 """Anotación en la bitácora de un ticket"""
 type MaintenanceTicketEvent {
   id: ID!
@@ -5971,6 +6034,7 @@ type Query {
   pendingResidents(pagination: PaginationInput): PaginatedResidentsResponse!
   resident(id: String!): Resident!
   residentHistoryByUnit(unitId: String!): [Resident!]!
+  unitAssets(unitId: String!): [UnitAsset!]!
 
   """Retorna todos los módulos disponibles en el sistema"""
   availableModules: [ComplexModule!]!
@@ -6131,6 +6195,7 @@ type Query {
   petIncidents(complexId: String!, pagination: PaginationInput, filters: FilterPetIncidentsInput): PaginatedPetIncidentsResponse!
   petIncident(id: String!): PetIncident!
   petIncidentsByPet(petId: String!): [PetIncident!]!
+  myUnit(complexId: String!): MyUnitResponse!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -6783,6 +6848,9 @@ type Mutation {
   bulkMoveOutResidents(input: BulkMoveOutResidentsInput!): [Resident!]!
   approveResident(input: ApproveResidentInput!): Resident!
   rejectResident(input: RejectResidentInput!): Resident!
+  createUnitAsset(input: CreateUnitAssetInput!): UnitAsset!
+  updateUnitAsset(input: UpdateUnitAssetInput!): UnitAsset!
+  removeUnitAsset(id: String!): Boolean!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
@@ -6891,7 +6959,13 @@ type Mutation {
   updateVehicle(input: UpdateVehicleInput!): Vehicle!
   suspendVehicle(vehicleId: String!, reason: String!): Vehicle!
   reactivateVehicle(vehicleId: String!): Vehicle!
-  removeVehicle(vehicleId: String!): Boolean!
+  removeVehicle(
+    vehicleId: String!
+
+    """Por qué se da de baja (lo vendió, se mudó…)"""
+    reason: String
+  ): Boolean!
+  setVehicleFixedParking(vehicleId: String!, assetId: String): Vehicle!
   configureRotation(input: ConfigureRotationInput!): ParkingRotationConfig!
   executeRotation(complexId: String!): RotationStatusResponse!
   upsertComplexFinanceConfig(input: UpsertComplexFinanceConfigInput!): ComplexFinanceConfig!
@@ -7368,6 +7442,23 @@ input RejectResidentInput {
 
   """Razón del rechazo (obligatoria)"""
   rejectionReason: String!
+}
+
+input CreateUnitAssetInput {
+  unitId: String!
+  type: UnitAssetType!
+
+  """
+  Número o código. Ej: "S1-14"
+  """
+  code: String!
+  location: String
+}
+
+input UpdateUnitAssetInput {
+  id: String!
+  code: String
+  location: String
 }
 
 input CreateComplexInput {

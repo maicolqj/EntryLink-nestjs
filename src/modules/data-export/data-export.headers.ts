@@ -208,6 +208,8 @@ export const HEADER_LABELS: Record<string, string> = {
   bathrooms: 'Baños',
   parkingSpots: 'Parqueaderos',
   parkingSpot: 'Parqueadero',
+  fixedParkingAssetId: 'Parqueadero fijo (id)',
+  removalReason: 'Motivo de la baja',
   storageRooms: 'Depósitos',
   hasElevator: 'Tiene ascensor',
   houseFloors: 'Pisos de la casa',
