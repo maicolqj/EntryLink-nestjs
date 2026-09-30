@@ -154,8 +154,10 @@ export class UsersResolver {
   async changePassword(
     @CurrentUserId() userId: string,
     @Args('input') input: ChangePasswordInput,
+    @CurrentUser() payload: JwtAccessPayload,
   ): Promise<ChangePasswordResponse> {
-    return this.usersService.changePassword(userId, input);
+    // La sesión desde la que se cambia sigue abierta; las demás se cierran.
+    return this.usersService.changePassword(userId, input, payload.sessionId);
   }
 
   @Mutation(() => SetPasswordResponse, {
