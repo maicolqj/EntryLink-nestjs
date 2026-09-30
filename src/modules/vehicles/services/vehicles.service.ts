@@ -835,15 +835,70 @@ export class VehiclesService {
     return vehicle;
   }
 
-  async updatePhotoUrl(
+  /**
+   * Quién puede poner o cambiar la foto de un vehículo, validado ANTES de
+   * subir nada a R2.
+   *
+   * La administración (y el supervisor en visita) la cambia en cualquier
+   * vehículo del conjunto. El residente, solo en los de SU unidad: validar
+   * el conjunto no basta, porque le dejaría cambiar la foto del carro de un
+   * vecino. La unidad sale de su ficha activa, no del token (quien además
+   * administra puede traer `complexId` vacío en el JWT).
+   */
+  async assertCanChangePhoto(
     vehicleId: string,
-    url: string,
     currentUser: JwtAccessPayload,
   ): Promise<Vehicle> {
-    const vehicle = await this.findById(vehicleId, currentUser);
-    await this.vehicleRepo.update(vehicleId, { photoUrl: url });
-    vehicle.photoUrl = url;
+    const isStaff = [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPERVISOR_ROL,
+    ].some((r) => currentUser.roles.includes(r));
+
+    const vehicle = isStaff
+      ? await this.findById(vehicleId, currentUser)
+      : await this.vehicleRepo.findOne({
+          where: { id: vehicleId, deletedAt: IsNull() },
+        });
+
+    if (!vehicle) {
+      throw new CustomError({
+        message: `Vehículo con ID "${vehicleId}" no encontrado`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: LogisticsErrorCode.VEHICLE_NOT_FOUND,
+      });
+    }
+
+    if (
+      vehicle.status === VehicleStatus.REMOVED ||
+      vehicle.status === VehicleStatus.REJECTED
+    ) {
+      throw new CustomError({
+        message: 'Este vehículo ya no está registrado en el conjunto',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    if (!isStaff) {
+      const household = await this.residentsService.findActiveByUnitInternal(
+        vehicle.unitId,
+      );
+      if (!household.some((r) => r.userId === currentUser.sub)) {
+        throw new CustomError({
+          message: 'Solo puedes cambiar la foto de los vehículos de tu unidad',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: GeneralErrorCode.FORBIDDEN,
+        });
+      }
+    }
+
     return vehicle;
+  }
+
+  /** Guarda la URL de la foto. El acceso ya lo validó `assertCanChangePhoto`. */
+  async updatePhotoUrl(vehicleId: string, url: string): Promise<void> {
+    await this.vehicleRepo.update(vehicleId, { photoUrl: url });
   }
 
   // ================================================================
