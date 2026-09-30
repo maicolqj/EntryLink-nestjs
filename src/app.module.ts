@@ -54,6 +54,7 @@ import { PqrfModule } from './modules/pqrf/pqrf.module';
 import { VotingModule } from './modules/voting/voting.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { PetsModule } from './modules/pets/pets.module';
+import { MyUnitModule } from './modules/my-unit/my-unit.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
@@ -250,6 +251,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     PqrfModule,
     VotingModule,
     PetsModule,
+    MyUnitModule,
     MaintenanceModule,
     MarketplaceModule,
     DataExportModule,

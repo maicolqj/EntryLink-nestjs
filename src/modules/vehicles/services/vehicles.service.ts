@@ -1,4 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { UnitAsset } from '../../residential-complex/entities/unit-asset.entity';
+import { UnitAssetType } from '../../residential-complex/enums/unit-asset-type.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 
@@ -69,6 +71,8 @@ export class VehiclesService {
     private readonly vehicleRepo: Repository<Vehicle>,
     @InjectRepository(ParkingRotationConfig)
     private readonly rotationConfigRepo: Repository<ParkingRotationConfig>,
+    @InjectRepository(UnitAsset)
+    private readonly unitAssetRepo: Repository<UnitAsset>,
     private readonly complexService: ResidentialComplexService,
     private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
@@ -416,12 +420,121 @@ export class VehiclesService {
   }
 
   // ================================================================
+  // PARQUEADERO FIJO (sale de la rotación)
+  // ================================================================
+
+  /**
+   * Asigna a un vehículo uno de los parqueaderos propios de su unidad, o se lo
+   * quita (`assetId` null). Con parqueadero fijo el vehículo queda fuera de la
+   * rotación; sin él vuelve a participar desde la próxima.
+   */
+  async setFixedParking(
+    vehicleId: string,
+    assetId: string | null,
+    currentUser: JwtAccessPayload,
+  ): Promise<Vehicle> {
+    const vehicle = await this.findById(vehicleId, currentUser);
+
+    if (
+      vehicle.status !== VehicleStatus.ACTIVE &&
+      vehicle.status !== VehicleStatus.PENDING_APPROVAL
+    ) {
+      throw new CustomError({
+        message:
+          'El parqueadero fijo solo se asigna a vehículos activos o por aprobar',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: LogisticsErrorCode.VEHICLE_NOT_ACTIVE,
+      });
+    }
+
+    if (assetId) {
+      const asset = await this.unitAssetRepo.findOne({
+        where: { id: assetId, deletedAt: IsNull() },
+      });
+      if (
+        !asset ||
+        asset.type !== UnitAssetType.PARKING ||
+        asset.unitId !== vehicle.unitId
+      ) {
+        throw new CustomError({
+          message: 'Ese parqueadero no es de la unidad del vehículo',
+          statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: LogisticsErrorCode.VEHICLE_FIXED_PARKING_INVALID,
+        });
+      }
+
+      const holder = await this.vehicleRepo.findOne({
+        where: {
+          fixedParkingAssetId: asset.id,
+          id: Not(vehicle.id),
+          deletedAt: IsNull(),
+        },
+      });
+      if (holder) {
+        throw new CustomError({
+          message: `El parqueadero ${asset.code} ya lo tiene el vehículo ${holder.plate}`,
+          statusCode: HttpStatus.CONFLICT,
+          errorCode: LogisticsErrorCode.VEHICLE_FIXED_PARKING_TAKEN,
+        });
+      }
+
+      vehicle.fixedParkingAssetId = asset.id;
+      vehicle.fixedParkingAsset = asset;
+      vehicle.parkingSpot = asset.code;
+      vehicle.suspendedByRotation = false;
+    } else {
+      // Vuelve a la rotación: el cupo lo asigna la próxima.
+      vehicle.fixedParkingAssetId = null;
+      vehicle.fixedParkingAsset = null;
+      vehicle.parkingSpot = undefined;
+    }
+
+    const saved = await this.vehicleRepo.save(vehicle);
+    await this.cacheService.deleteByPrefix(
+      BK.vehicle.prefix(vehicle.complexId),
+    );
+
+    this.notifyUnit(
+      vehicle,
+      NotificationType.PARKING_ASSIGNED,
+      NotificationPriority.NORMAL,
+      assetId
+        ? 'Parqueadero fijo asignado'
+        : 'Tu vehículo vuelve a la rotación',
+      assetId
+        ? `Tu vehículo ${this.describeVehicle(vehicle)} tiene parqueadero fijo: ${vehicle.parkingSpot}.`
+        : `Tu vehículo ${this.describeVehicle(vehicle)} ya no tiene parqueadero fijo y entra en la rotación de parqueaderos.`,
+    ).catch((err) =>
+      this.logger.warn(
+        `Error al notificar parqueadero fijo de ${vehicle.id}: ${err?.message}`,
+      ),
+    );
+
+    void this.auditService.log({
+      entityType: AuditEntityType.Vehicle,
+      entityId: vehicle.id,
+      action: AuditAction.UPDATE,
+      newValue: { fixedParkingAssetId: saved.fixedParkingAssetId ?? null },
+      performedById: currentUser.sub,
+      performedByName: currentUser.email,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: vehicle.complexId,
+      description: assetId
+        ? `Parqueadero fijo ${vehicle.parkingSpot} asignado al vehículo ${vehicle.plate}`
+        : `Parqueadero fijo retirado del vehículo ${vehicle.plate}`,
+    });
+
+    return saved;
+  }
+
+  // ================================================================
   // RETIRAR DEL COMPLEJO (permanente — COMPLEX_ROL)
   // ================================================================
 
   async remove(
     vehicleId: string,
     currentUser: JwtAccessPayload,
+    reason?: string,
   ): Promise<{ success: boolean; message: string }> {
     const vehicle = await this.findById(vehicleId, currentUser);
 
@@ -435,6 +548,10 @@ export class VehiclesService {
 
     vehicle.status = VehicleStatus.REMOVED;
     vehicle.deletedAt = new Date();
+    vehicle.removalReason = reason?.trim() || null;
+    // El parqueadero fijo queda libre para otro vehículo de la unidad.
+    vehicle.fixedParkingAssetId = null;
+    vehicle.fixedParkingAsset = null;
     await this.vehicleRepo.save(vehicle);
     await this.cacheService.deleteByPrefix(
       BK.vehicle.prefix(vehicle.complexId),
@@ -459,7 +576,11 @@ export class VehiclesService {
       entityId: vehicleId,
       action: AuditAction.DELETE,
       previousValue: { status: vehicle.status },
-      newValue: { status: VehicleStatus.REMOVED, deletedAt: vehicle.deletedAt },
+      newValue: {
+        status: VehicleStatus.REMOVED,
+        deletedAt: vehicle.deletedAt,
+        removalReason: vehicle.removalReason,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -596,6 +717,8 @@ export class VehiclesService {
       .leftJoinAndSelect('resident.user', 'user')
       .leftJoinAndSelect('v.unit', 'unit')
       .leftJoinAndSelect('unit.building', 'building')
+      // La lista muestra "Fijo · P-203": sin el join llegaría vacío.
+      .leftJoinAndSelect('v.fixedParkingAsset', 'fixedParkingAsset')
       .where('v.complex_id = :complexId', { complexId })
       .andWhere('v.deleted_at IS NULL');
 
@@ -904,7 +1027,8 @@ export class VehiclesService {
       }
 
       if (plan.cycleCompleted) {
-        grandCycleByType[vehicleType] = (grandCycleByType[vehicleType] ?? 1) + 1;
+        grandCycleByType[vehicleType] =
+          (grandCycleByType[vehicleType] ?? 1) + 1;
         this.logger.log(
           `[${vehicleType}] Gran ciclo completado — iniciando ciclo ${grandCycleByType[vehicleType]}`,
         );
@@ -987,21 +1111,25 @@ export class VehiclesService {
     complexId: string,
     vehicleType: string,
   ): Promise<Vehicle[]> {
-    return this.vehicleRepo
-      .createQueryBuilder('v')
-      .leftJoinAndSelect('v.unit', 'unit')
-      .leftJoinAndSelect('unit.building', 'building')
-      .leftJoinAndSelect('v.resident', 'resident')
-      .leftJoinAndSelect('resident.user', 'residentUser')
-      .where('v.complexId = :complexId', { complexId })
-      .andWhere('v.type = :type', { type: vehicleType })
-      .andWhere('v.deletedAt IS NULL')
-      .andWhere(
-        '(v.status = :active OR (v.status = :suspended AND v.suspendedByRotation = TRUE))',
-        { active: VehicleStatus.ACTIVE, suspended: VehicleStatus.SUSPENDED },
-      )
-      .orderBy('v.plate', 'ASC')
-      .getMany();
+    return (
+      this.vehicleRepo
+        .createQueryBuilder('v')
+        .leftJoinAndSelect('v.unit', 'unit')
+        .leftJoinAndSelect('unit.building', 'building')
+        .leftJoinAndSelect('v.resident', 'resident')
+        .leftJoinAndSelect('resident.user', 'residentUser')
+        .where('v.complexId = :complexId', { complexId })
+        .andWhere('v.type = :type', { type: vehicleType })
+        .andWhere('v.deletedAt IS NULL')
+        // Con parqueadero fijo el vehículo no entra al sorteo: su cupo es suyo.
+        .andWhere('v.fixedParkingAssetId IS NULL')
+        .andWhere(
+          '(v.status = :active OR (v.status = :suspended AND v.suspendedByRotation = TRUE))',
+          { active: VehicleStatus.ACTIVE, suspended: VehicleStatus.SUSPENDED },
+        )
+        .orderBy('v.plate', 'ASC')
+        .getMany()
+    );
   }
 
   /** Avisos de la rotación a cada unidad (fire & forget). */
