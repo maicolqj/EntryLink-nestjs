@@ -41,7 +41,11 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 /** Tope del PDF firmado, alineado con los documentos del registro. */
 const MAX_SIGNED_DPA_MB = 20;
 
-const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = ['rut', 'legal-rep'];
+const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = [
+  'rut',
+  'legal-rep',
+  'signed-dpa',
+];
 
 @Controller('complexes')
 export class ResidentialComplexController {
@@ -106,9 +110,10 @@ export class ResidentialComplexController {
    * GET /api/v1/complexes/:id/registration-documents/:doc?download=1
    *
    * Sirve el RUT (`rut`) o el documento del representante legal (`legal-rep`)
-   * que el complejo adjuntó al registrarse. Son datos personales: solo los ven
-   * SUPER_ADMIN y el oficial de cumplimiento, y el archivo lo transmite el
-   * backend, sin entregar la URL de R2.
+   * que el complejo adjuntó al registrarse, o el DPA (Anexo B2B) que firmó
+   * después (`signed-dpa`), en cualquier estado de revisión. Son datos
+   * personales: solo los ven SUPER_ADMIN y el oficial de cumplimiento, y el
+   * archivo lo transmite el backend, sin entregar la URL de R2.
    */
   @Get(':id/registration-documents/:doc')
   @Auth({
@@ -122,7 +127,7 @@ export class ResidentialComplexController {
   ): Promise<void> {
     if (!REGISTRATION_DOCUMENTS.includes(doc as RegistrationDocumentKind)) {
       throw new BadRequestException(
-        `Documento no válido: usa ${REGISTRATION_DOCUMENTS.join(' o ')}`,
+        `Documento no válido: usa ${REGISTRATION_DOCUMENTS.join(', ')}`,
       );
     }
 

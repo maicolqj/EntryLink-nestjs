@@ -79,4 +79,43 @@ describe('ResidentialComplexService — documentos del registro', () => {
       service.resolveRegistrationDocument('c1', 'legal-rep'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('DPA firmado: usa la llave guardada en signedDpaPublicId', async () => {
+    const service = build({
+      id: 'c1',
+      slug: 'torres',
+      signedDpaPublicId: 'entrylink/torres/documents/signed-dpa/d.pdf',
+      signedDpaUrl: 'https://otro.dominio/lo-que-sea.pdf',
+    });
+
+    await expect(
+      service.resolveRegistrationDocument('c1', 'signed-dpa'),
+    ).resolves.toEqual({
+      key: 'entrylink/torres/documents/signed-dpa/d.pdf',
+      fileName: 'dpa-firmado-torres.pdf',
+    });
+  });
+
+  it('DPA firmado: sin llave guardada la saca de la URL', async () => {
+    const service = build({
+      id: 'c1',
+      slug: 'torres',
+      signedDpaPublicId: null,
+      signedDpaUrl: `${PUBLIC}/entrylink/torres/documents/signed-dpa/e.pdf`,
+    });
+
+    const { key } = await service.resolveRegistrationDocument(
+      'c1',
+      'signed-dpa',
+    );
+    expect(key).toBe('entrylink/torres/documents/signed-dpa/e.pdf');
+  });
+
+  it('DPA firmado: 404 si el complejo aún no lo sube', async () => {
+    const service = build({ id: 'c1', slug: 'torres' });
+
+    await expect(
+      service.resolveRegistrationDocument('c1', 'signed-dpa'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
