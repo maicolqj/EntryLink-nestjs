@@ -34,6 +34,8 @@ async function bootstrap() {
       'x-device-id',
       'x-app-version',
     ],
+    // La web lee el nombre del archivo al descargar documentos privados.
+    exposedHeaders: ['Content-Disposition'],
   });
 
   // Gzip — reduce ancho de banda 60-80% en respuestas JSON/GraphQL

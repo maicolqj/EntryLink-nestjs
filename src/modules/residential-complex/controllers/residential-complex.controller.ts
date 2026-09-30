@@ -41,7 +41,11 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 /** Tope del PDF firmado, alineado con los documentos del registro. */
 const MAX_SIGNED_DPA_MB = 20;
 
-const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = ['rut', 'legal-rep'];
+const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = [
+  'rut',
+  'legal-rep',
+  'signed-dpa',
+];
 
 @Controller('complexes')
 export class ResidentialComplexController {
@@ -106,23 +110,43 @@ export class ResidentialComplexController {
    * GET /api/v1/complexes/:id/registration-documents/:doc?download=1
    *
    * Sirve el RUT (`rut`) o el documento del representante legal (`legal-rep`)
-   * que el complejo adjuntó al registrarse. Son datos personales: solo los ven
-   * SUPER_ADMIN y el oficial de cumplimiento, y el archivo lo transmite el
-   * backend, sin entregar la URL de R2.
+   * que el complejo adjuntó al registrarse, o el DPA (Anexo B2B) que firmó
+   * después (`signed-dpa`), en cualquier estado de revisión. Son datos
+   * personales: los ven SUPER_ADMIN, el oficial de cumplimiento y la cuenta
+   * del propio complejo (solo los suyos). El archivo lo transmite el backend,
+   * sin entregar la URL de R2: la carpeta `documents/` no es pública.
    */
   @Get(':id/registration-documents/:doc')
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
   })
   async getRegistrationDocument(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('doc') doc: string,
     @Query('download') download: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const currentUser = req.user as JwtAccessPayload;
+    const isPlatformStaff = currentUser.roles?.some(
+      (role) =>
+        role === ValidRoles.SUPER_ADMIN_ROL ||
+        role === ValidRoles.COMPILANCE_OFFICER_ROL,
+    );
+    // La cuenta del complejo lleva sub = complex.id (mismo criterio que la subida).
+    if (!isPlatformStaff && (currentUser.complexId ?? currentUser.sub) !== id) {
+      throw new ForbiddenException(
+        'Solo puedes ver los documentos de tu propio complejo',
+      );
+    }
+
     if (!REGISTRATION_DOCUMENTS.includes(doc as RegistrationDocumentKind)) {
       throw new BadRequestException(
-        `Documento no válido: usa ${REGISTRATION_DOCUMENTS.join(' o ')}`,
+        `Documento no válido: usa ${REGISTRATION_DOCUMENTS.join(', ')}`,
       );
     }
 

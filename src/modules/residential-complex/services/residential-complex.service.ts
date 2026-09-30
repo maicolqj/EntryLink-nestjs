@@ -55,8 +55,11 @@ import { BK } from '../../../core/infrastructure/cache/business-cache.constants'
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 
-/** Documentos que el complejo adjunta al registrarse. */
-export type RegistrationDocumentKind = 'rut' | 'legal-rep';
+/**
+ * Documentos privados del complejo: el RUT y el documento del representante
+ * legal que adjunta al registrarse, y el DPA (Anexo B2B) que firma después.
+ */
+export type RegistrationDocumentKind = 'rut' | 'legal-rep' | 'signed-dpa';
 
 // Límite de unidades por plan
 const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -975,9 +978,9 @@ export class ResidentialComplexService {
   }
 
   /**
-   * Llave en R2 y nombre de descarga de un documento del registro (RUT o
-   * documento del representante legal). La web no recibe la URL pública: el
-   * backend sirve el archivo tras validar el rol en el controller.
+   * Llave en R2 y nombre de descarga de un documento del complejo (RUT,
+   * documento del representante legal o DPA firmado). La web no recibe la URL
+   * pública: el backend sirve el archivo tras validar el rol en el controller.
    */
   async resolveRegistrationDocument(
     complexId: string,
@@ -985,9 +988,31 @@ export class ResidentialComplexService {
   ): Promise<{ key: string; fileName: string }> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId },
-      select: ['id', 'slug', 'rutFileUrl', 'legalRepDocumentUrl'],
+      select: [
+        'id',
+        'slug',
+        'rutFileUrl',
+        'legalRepDocumentUrl',
+        'signedDpaUrl',
+        'signedDpaPublicId',
+      ],
     });
     if (!complex) throw new NotFoundException('Complejo no encontrado');
+
+    if (doc === 'signed-dpa') {
+      // El DPA guarda su llave de R2 aparte; la URL queda como respaldo.
+      const key =
+        complex.signedDpaPublicId ||
+        (complex.signedDpaUrl
+          ? this.registrationDocumentKey(complex.signedDpaUrl)
+          : null);
+      if (!key) {
+        throw new NotFoundException(
+          'El complejo aún no ha subido el DPA firmado',
+        );
+      }
+      return { key, fileName: `dpa-firmado-${complex.slug}.pdf` };
+    }
 
     const url =
       doc === 'rut' ? complex.rutFileUrl : complex.legalRepDocumentUrl;
