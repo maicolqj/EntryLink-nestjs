@@ -48,7 +48,10 @@ describe('DataExportService', () => {
     return raw;
   };
 
-  const build = (rowsByEntity: Map<unknown, Record<string, unknown>[]>) => {
+  const build = (
+    rowsByEntity: Map<unknown, Record<string, unknown>[]>,
+    enabledModules: string[] = [],
+  ) => {
     const whereCalls: [string, unknown][] = [];
     const queryBuilder = (rows: Record<string, unknown>[]) => {
       const qb: Record<string, jest.Mock> = {};
@@ -106,7 +109,7 @@ describe('DataExportService', () => {
           id: 'complex-1',
           name: 'Conjunto Prueba',
           slug: 'conjunto-prueba',
-          enabledModules: [],
+          enabledModules,
           buildings: [
             {
               id: 'b-1',
@@ -256,6 +259,45 @@ describe('DataExportService', () => {
       'paquetes.xlsx',
     ]);
     expect(file.filename).toMatch(/^conjunto-prueba-respaldo-/);
+  });
+
+  it('los módulos apagados no aparecen en la lista del respaldo', async () => {
+    const { service } = build(new Map(), ['PAQUETES', 'MASCOTAS']);
+
+    const modules = await service.availableModules('complex-1', admin);
+
+    expect(modules.map((m) => m.module)).toEqual(['PAQUETES', 'MASCOTAS']);
+  });
+
+  it('el respaldo completo deja fuera los módulos apagados', async () => {
+    const { service } = build(new Map(), ['PAQUETES']);
+
+    const file = await service.exportBackup(
+      'complex-1',
+      ['PAQUETES', 'MASCOTAS'],
+      service.parseRange('2026-01-01', '2026-09-18'),
+      admin,
+    );
+
+    const JSZip = (await import('jszip')).default;
+    const zip = await JSZip.loadAsync(file.buffer);
+    expect(Object.keys(zip.files).sort()).toEqual([
+      'LEEME.txt',
+      'paquetes.xlsx',
+    ]);
+  });
+
+  it('rechaza el Excel de un módulo apagado', async () => {
+    const { service } = build(new Map(), ['PAQUETES']);
+
+    await expect(
+      service.exportModule(
+        'complex-1',
+        'MASCOTAS',
+        service.parseRange(),
+        admin,
+      ),
+    ).rejects.toThrow('apagado');
   });
 
   it('rechaza un módulo que no existe', async () => {
