@@ -40,7 +40,15 @@ const build = (opts: {
   const service = new SubscriptionRemindersService(
     { createQueryBuilder: () => qb } as never,
     { createQueryBuilder: () => insertQb } as never,
-    { notifyComplex, planLabel: () => 'Básico' } as never,
+    {
+      notifyComplex,
+      planLabel: () => 'Básico',
+      quoteFor: jest.fn(async () => ({
+        configured: true,
+        total: 333_200,
+        cycle: 'MONTHLY',
+      })),
+    } as never,
     { queueSubscriptionNoticeEmail: queueMail } as never,
     { get: () => 'https://entrylink.alternaqj.com' } as never,
   );
@@ -62,6 +70,9 @@ describe('SubscriptionRemindersService', () => {
       expect.objectContaining({
         type: NotificationType.SUBSCRIPTION_EXPIRING,
         title: 'Tu suscripción vence en 7 días',
+        body: expect.stringContaining(
+          'Debes renovarla por $\u00a0333.200 (mensual, impuestos incluidos)',
+        ),
       }),
     );
     expect(queueMail).toHaveBeenCalledWith(

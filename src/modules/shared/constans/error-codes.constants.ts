@@ -552,6 +552,7 @@ export enum SubscriptionErrorCode {
   SUBSCRIPTION_NOT_FOUND = 'SUBSCRIPTION_NOT_FOUND',
   /** El vencimiento ajustado queda antes del inicio del periodo. */
   SUBSCRIPTION_INVALID_END_DATE = 'SUBSCRIPTION_INVALID_END_DATE',
+  SUBSCRIPTION_TAX_NOT_FOUND = 'SUBSCRIPTION_TAX_NOT_FOUND',
 }
 
 export enum ComplexInfoErrorCode {

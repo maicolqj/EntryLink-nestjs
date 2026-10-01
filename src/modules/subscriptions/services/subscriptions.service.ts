@@ -1,11 +1,13 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, Not, Repository } from 'typeorm';
 
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
+import { Unit } from '../../residential-complex/entities/unit.entity';
+import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { PLAN_UNIT_LIMITS } from '../../residential-complex/services/residential-complex.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
@@ -18,6 +20,13 @@ import {
 import { round2 } from '../../finance/utils/numeric.transformer';
 import { SubscriptionPeriod } from '../entities/subscription-period.entity';
 import { SubscriptionPlanPrice } from '../entities/subscription-plan-price.entity';
+import { SubscriptionTax } from '../entities/subscription-tax.entity';
+import { SubscriptionPricingMode } from '../enums/subscription-pricing-mode.enum';
+import { SetComplexPricingInput } from '../dto/inputs/set-complex-pricing.input';
+import { SaveSubscriptionTaxInput } from '../dto/inputs/save-subscription-tax.input';
+import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
+import { SubscriptionPricing } from '../dto/responses/subscription-pricing.response';
+import { computeQuote, splitTotal } from '../utils/subscription-quote';
 import { BillingCycle } from '../enums/billing-cycle.enum';
 import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
 import { RenewSubscriptionInput } from '../dto/inputs/renew-subscription.input';
@@ -35,7 +44,7 @@ import {
   daysUntil,
   graceEndsAt,
 } from '../utils/subscription-status';
-import { formatBogotaDate } from '../utils/format-date';
+import { formatBogotaDate, formatCop } from '../utils/format-date';
 
 /** Planes que se pueden pagar. FREE es solo la prueba gratis. */
 const PAID_PLANS = [ComplexPlan.BASIC, ComplexPlan.PRO, ComplexPlan.ENTERPRISE];
@@ -58,6 +67,10 @@ export class SubscriptionsService {
     private readonly priceRepo: Repository<SubscriptionPlanPrice>,
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
+    @InjectRepository(SubscriptionTax)
+    private readonly taxRepo: Repository<SubscriptionTax>,
+    @InjectRepository(Unit)
+    private readonly unitRepo: Repository<Unit>,
     private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
     private readonly notificationsService: NotificationsService,
@@ -83,6 +96,8 @@ export class SubscriptionsService {
       complexId: complex.id,
       complexName: complex.name,
       plan: complex.plan,
+      pricing: this.toPricing(complex),
+      quote: await this.quoteFor(complex),
       status: computeSubscriptionStatus(endsAt, now),
       endsAt,
       daysLeft: endsAt ? daysUntil(endsAt, now) : null,
@@ -103,6 +118,85 @@ export class SubscriptionsService {
     return PAID_PLANS.map((plan) => prices.find((p) => p.plan === plan))
       .filter((p): p is SubscriptionPlanPrice => !!p)
       .map((p) => this.toPriceView(p));
+  }
+
+  // ================================================================
+  // COBRO PERSONALIZADO DEL CONJUNTO
+  // ================================================================
+
+  /**
+   * Valor a cobrar al conjunto. Por defecto con su plan y su ciclo; el
+   * formulario de pago lo pide con el plan o el ciclo que se vaya a registrar.
+   */
+  async getQuote(
+    complexId: string,
+    plan?: ComplexPlan,
+    cycle?: BillingCycle,
+  ): Promise<SubscriptionQuote> {
+    const complex = await this.findComplex(complexId);
+    return this.quoteFor(complex, plan, cycle);
+  }
+
+  async setPricing(
+    input: SetComplexPricingInput,
+    userId: string,
+  ): Promise<SubscriptionSummary> {
+    await this.findComplex(input.complexId);
+
+    const needsPrice = input.mode !== SubscriptionPricingMode.PLAN;
+    if (needsPrice && (input.price === null || input.price === undefined)) {
+      throw new CustomError({
+        message:
+          input.mode === SubscriptionPricingMode.PER_UNIT
+            ? 'Indica el valor por unidad'
+            : 'Indica el valor mensual acordado',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_PRICE_NOT_SET,
+      });
+    }
+
+    await this.complexRepo.update(input.complexId, {
+      subscriptionPricingMode: input.mode,
+      subscriptionPrice: needsPrice ? round2(input.price as number) : null,
+      subscriptionCycle: input.cycle,
+    });
+    await this.invalidate(input.complexId);
+
+    this.logger.log(
+      `Cobro del complejo ${input.complexId}: ${input.mode} ${input.price ?? ''} ${input.cycle} (por ${userId})`,
+    );
+    return this.getSummary(input.complexId);
+  }
+
+  // ================================================================
+  // IMPUESTOS
+  // ================================================================
+
+  listTaxes(): Promise<SubscriptionTax[]> {
+    return this.taxRepo.find({ order: { sortOrder: 'ASC', name: 'ASC' } });
+  }
+
+  async saveTax(input: SaveSubscriptionTaxInput): Promise<SubscriptionTax> {
+    const tax = input.id
+      ? await this.taxRepo.findOne({ where: { id: input.id } })
+      : this.taxRepo.create();
+    if (!tax) {
+      throw new CustomError({
+        message: 'Impuesto no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_TAX_NOT_FOUND,
+      });
+    }
+    tax.name = input.name.trim();
+    tax.rate = round2(input.rate);
+    if (input.isActive !== undefined) tax.isActive = input.isActive;
+    if (input.sortOrder !== undefined) tax.sortOrder = input.sortOrder;
+    return this.taxRepo.save(tax);
+  }
+
+  async deleteTax(id: string): Promise<boolean> {
+    const result = await this.taxRepo.delete(id);
+    return (result.affected ?? 0) > 0;
   }
 
   async setPlanPrice(
@@ -142,15 +236,31 @@ export class SubscriptionsService {
   ): Promise<SubscriptionSummary> {
     this.assertPaidPlan(input.plan);
 
-    const amount =
-      input.amount ?? (await this.priceFor(input.plan, input.cycle));
-    if (amount === null || amount === undefined) {
+    const quote = await this.getQuote(input.complexId, input.plan, input.cycle);
+    if (
+      (input.amount === null || input.amount === undefined) &&
+      !quote.configured
+    ) {
       throw new CustomError({
-        message: `El plan ${PLAN_LABELS[input.plan]} no tiene precio configurado. Indica el valor pagado o configura el precio del plan.`,
+        message:
+          'El conjunto no tiene un valor de suscripción configurado. Configura el cobro del conjunto o indica el valor pagado.',
         statusCode: HttpStatus.BAD_REQUEST,
         errorCode: SubscriptionErrorCode.SUBSCRIPTION_PRICE_NOT_SET,
       });
     }
+
+    // Lo pagado incluye impuestos. Si coincide con lo calculado se guarda ese
+    // desglose; si el SUPER_ADMIN registró otro valor, se reparte hacia atrás
+    // con las tarifas vigentes.
+    const amount = round2(input.amount ?? quote.total);
+    const breakdown =
+      quote.configured && amount === quote.total
+        ? {
+            subtotal: quote.subtotal,
+            taxes: quote.taxes,
+            taxAmount: quote.taxAmount,
+          }
+        : splitTotal(amount, await this.activeTaxes());
 
     const period = await this.dataSource.transaction(async (manager) => {
       // Bloqueo de la fila: dos pagos registrados a la vez no pueden arrancar
@@ -179,7 +289,19 @@ export class SubscriptionsService {
           cycle: input.cycle,
           startsAt,
           endsAt,
-          amount: round2(amount),
+          amount,
+          subtotal: breakdown.subtotal,
+          taxAmount: breakdown.taxAmount,
+          taxes: breakdown.taxes,
+          pricingMode: quote.pricingMode,
+          unitCount:
+            quote.pricingMode === SubscriptionPricingMode.PER_UNIT
+              ? quote.unitCount
+              : null,
+          unitPrice:
+            quote.pricingMode === SubscriptionPricingMode.PER_UNIT
+              ? (quote.price ?? null)
+              : null,
           paidAt: input.paidAt ?? now,
           paymentReference: input.paymentReference?.trim() || null,
           notes: input.notes?.trim() || null,
@@ -205,7 +327,7 @@ export class SubscriptionsService {
       type: NotificationType.SUBSCRIPTION_RENEWED,
       priority: NotificationPriority.NORMAL,
       title: 'Suscripción renovada',
-      body: `Registramos el pago del plan ${PLAN_LABELS[input.plan]} (${cycleLabel}). Tu suscripción queda vigente hasta el ${formatBogotaDate(period.endsAt)}.`,
+      body: `Registramos tu pago de ${formatCop(amount)} (${cycleLabel}). Tu suscripción queda vigente hasta el ${formatBogotaDate(period.endsAt)}.`,
       metadata: {
         periodId: period.id,
         plan: input.plan,
@@ -411,15 +533,106 @@ export class SubscriptionsService {
     return PLAN_LABELS[plan] ?? plan;
   }
 
-  private async priceFor(
-    plan: ComplexPlan,
-    cycle: BillingCycle,
-  ): Promise<number | null> {
-    const price = await this.priceRepo.findOne({ where: { plan } });
-    if (!price) return null;
-    return cycle === BillingCycle.ANNUAL
-      ? this.toPriceView(price).annualPrice
-      : price.monthlyPrice;
+  /** Valor a cobrar con la configuración del conjunto. */
+  async quoteFor(
+    complex: Pick<
+      ResidentialComplex,
+      | 'id'
+      | 'plan'
+      | 'totalUnits'
+      | 'subscriptionPricingMode'
+      | 'subscriptionPrice'
+      | 'subscriptionCycle'
+    >,
+    plan?: ComplexPlan,
+    cycle?: BillingCycle,
+  ): Promise<SubscriptionQuote> {
+    const pricing = this.toPricing(complex);
+    const effectiveCycle = cycle ?? pricing.cycle;
+    // La prueba (FREE) no se paga: la cotización usa el plan pago más bajo.
+    const effectivePlan =
+      plan ??
+      (PAID_PLANS.includes(complex.plan) ? complex.plan : ComplexPlan.BASIC);
+
+    const [units, taxes, planPrice] = await Promise.all([
+      pricing.mode === SubscriptionPricingMode.PER_UNIT
+        ? this.countUnits(complex.id, complex.totalUnits)
+        : Promise.resolve({ count: 0, source: 'REGISTERED' as const }),
+      this.activeTaxes(),
+      pricing.mode === SubscriptionPricingMode.PLAN
+        ? this.priceRepo.findOne({ where: { plan: effectivePlan } })
+        : Promise.resolve(null),
+    ]);
+
+    const result = computeQuote({
+      mode: pricing.mode,
+      cycle: effectiveCycle,
+      price: pricing.price,
+      planMonthlyPrice: planPrice?.monthlyPrice ?? null,
+      planAnnualPrice: planPrice?.annualPrice ?? null,
+      unitCount: units.count,
+      taxes,
+    });
+
+    return {
+      ...result,
+      pricingMode: pricing.mode,
+      plan: effectivePlan,
+      cycle: effectiveCycle,
+      unitCount: units.count,
+      unitCountSource: units.source,
+      price: pricing.price ?? null,
+    };
+  }
+
+  /**
+   * Unidades que se cobran: las registradas que no estén deshabilitadas. Un
+   * conjunto recién inscrito todavía no las ha cargado; mientras tanto se usan
+   * las que declaró al inscribirse.
+   */
+  private async countUnits(
+    complexId: string,
+    declared?: number | null,
+  ): Promise<{ count: number; source: 'REGISTERED' | 'DECLARED' }> {
+    const registered = await this.unitRepo.count({
+      where: {
+        complexId,
+        deletedAt: IsNull(),
+        status: Not(UnitStatus.DISABLED),
+      },
+    });
+    if (registered > 0 || !declared) {
+      return { count: registered, source: 'REGISTERED' };
+    }
+    return { count: declared, source: 'DECLARED' };
+  }
+
+  private async activeTaxes(): Promise<{ name: string; rate: number }[]> {
+    const taxes = await this.taxRepo.find({
+      where: { isActive: true },
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
+    return taxes.map((t) => ({ name: t.name, rate: t.rate }));
+  }
+
+  private toPricing(
+    complex: Pick<
+      ResidentialComplex,
+      'subscriptionPricingMode' | 'subscriptionPrice' | 'subscriptionCycle'
+    >,
+  ): SubscriptionPricing {
+    const modes = Object.values(SubscriptionPricingMode) as string[];
+    const mode = modes.includes(complex.subscriptionPricingMode)
+      ? (complex.subscriptionPricingMode as SubscriptionPricingMode)
+      : SubscriptionPricingMode.PLAN;
+    return {
+      mode,
+      price: complex.subscriptionPrice ?? null,
+      cycle:
+        complex.subscriptionCycle === BillingCycle.ANNUAL
+          ? BillingCycle.ANNUAL
+          : BillingCycle.MONTHLY,
+    };
   }
 
   private toPriceView(price: SubscriptionPlanPrice): SubscriptionPlanPriceView {
@@ -450,7 +663,16 @@ export class SubscriptionsService {
   private async findComplex(complexId: string): Promise<ResidentialComplex> {
     const complex = await this.complexRepo.findOne({
       where: { id: complexId, deletedAt: IsNull() },
-      select: ['id', 'name', 'plan', 'subscriptionEndsAt'],
+      select: [
+        'id',
+        'name',
+        'plan',
+        'totalUnits',
+        'subscriptionEndsAt',
+        'subscriptionPricingMode',
+        'subscriptionPrice',
+        'subscriptionCycle',
+      ],
     });
     if (!complex) throw this.complexNotFound(complexId);
     return complex;

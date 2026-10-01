@@ -5,11 +5,13 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Field, Float, ID, ObjectType } from '@nestjs/graphql';
+import { Field, Float, ID, Int, ObjectType } from '@nestjs/graphql';
 
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
 import { BillingCycle } from '../enums/billing-cycle.enum';
 import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
+import { SubscriptionPricingMode } from '../enums/subscription-pricing-mode.enum';
+import { SubscriptionTaxLine } from '../dto/responses/subscription-tax-line.response';
 import { moneyColumn } from '../../finance/utils/numeric.transformer';
 
 /**
@@ -65,7 +67,10 @@ export class SubscriptionPeriod {
   @Column({ name: 'ends_at', type: 'timestamptz' })
   endsAt: Date;
 
-  @Field(() => Float, { nullable: true, description: 'Valor pagado (COP)' })
+  @Field(() => Float, {
+    nullable: true,
+    description: 'Valor pagado (COP), impuestos incluidos',
+  })
   @Column({
     type: 'numeric',
     precision: 18,
@@ -74,6 +79,62 @@ export class SubscriptionPeriod {
     transformer: moneyColumn,
   })
   amount?: number | null;
+
+  @Field(() => SubscriptionPricingMode, {
+    nullable: true,
+    description: 'Modalidad con la que se calculó el cobro',
+  })
+  @Column({ name: 'pricing_mode', type: 'varchar', length: 20, nullable: true })
+  pricingMode?: SubscriptionPricingMode | null;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Unidades cobradas (modalidad por unidad)',
+  })
+  @Column({ name: 'unit_count', type: 'int', nullable: true })
+  unitCount?: number | null;
+
+  @Field(() => Float, { nullable: true, description: 'Valor por unidad' })
+  @Column({
+    name: 'unit_price',
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    nullable: true,
+    transformer: moneyColumn,
+  })
+  unitPrice?: number | null;
+
+  @Field(() => Float, {
+    nullable: true,
+    description: 'Valor antes de impuestos',
+  })
+  @Column({
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    nullable: true,
+    transformer: moneyColumn,
+  })
+  subtotal?: number | null;
+
+  @Field(() => Float, { nullable: true, description: 'Total de impuestos' })
+  @Column({
+    name: 'tax_amount',
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    nullable: true,
+    transformer: moneyColumn,
+  })
+  taxAmount?: number | null;
+
+  @Field(() => [SubscriptionTaxLine], {
+    nullable: true,
+    description: 'Impuestos aplicados, con la tarifa vigente al pagar',
+  })
+  @Column({ type: 'jsonb', nullable: true })
+  taxes?: SubscriptionTaxLine[] | null;
 
   @Field(() => Date, { nullable: true })
   @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })

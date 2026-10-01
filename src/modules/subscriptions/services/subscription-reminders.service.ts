@@ -16,7 +16,8 @@ import {
   daysUntil,
   graceEndsAt,
 } from '../utils/subscription-status';
-import { formatBogotaDate } from '../utils/format-date';
+import { formatBogotaDate, formatCop } from '../utils/format-date';
+import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
 import { SubscriptionsService } from './subscriptions.service';
 
 const STILL_WORKING =
@@ -73,7 +74,11 @@ export class SubscriptionRemindersService {
         'c.email',
         'c.plan',
         'c.status',
+        'c.totalUnits',
         'c.subscriptionEndsAt',
+        'c.subscriptionPricingMode',
+        'c.subscriptionPrice',
+        'c.subscriptionCycle',
       ])
       .where('c.deleted_at IS NULL')
       .andWhere('c.status IN (:...statuses)', { statuses: NOTIFIED_STATUSES })
@@ -104,7 +109,10 @@ export class SubscriptionRemindersService {
     const claimed = await this.claim(complex.id, endsAt, milestone);
     if (!claimed) return false;
 
-    const notice = this.buildNotice(complex, endsAt, milestone, now);
+    const quote = await this.subscriptionsService
+      .quoteFor(complex)
+      .catch(() => null);
+    const notice = this.buildNotice(complex, endsAt, milestone, now, quote);
 
     await this.subscriptionsService.notifyComplex({
       complexId: complex.id,
@@ -114,6 +122,8 @@ export class SubscriptionRemindersService {
       body: notice.body,
       metadata: {
         milestone,
+        amount: quote?.configured ? quote.total : null,
+        cycle: quote?.cycle ?? null,
         endsAt: endsAt.toISOString(),
         graceEndsAt: graceEndsAt(endsAt).toISOString(),
       },
@@ -164,17 +174,21 @@ export class SubscriptionRemindersService {
     endsAt: Date,
     milestone: ReminderMilestone,
     now: Date,
+    quote: SubscriptionQuote | null,
   ): Notice {
-    const plan = this.subscriptionsService.planLabel(complex.plan);
     const endDate = formatBogotaDate(endsAt);
     const graceDate = formatBogotaDate(graceEndsAt(endsAt));
+    // "Debes renovarla por $ 333.200 (mensual, impuestos incluidos)."
+    const renewFor = quote?.configured
+      ? `Debes renovarla por ${formatCop(quote.total)} (${quote.cycle === 'ANNUAL' ? 'anual' : 'mensual'}, impuestos incluidos), el valor configurado para el conjunto.`
+      : 'Comunícate con EntryLink para renovarla.';
 
     if (milestone === 'SUSPENDED') {
       return {
         type: NotificationType.SUBSCRIPTION_SUSPENDED,
         priority: NotificationPriority.HIGH,
         title: 'Suscripción suspendida',
-        body: `La suscripción venció el ${endDate} y no se renovó. El panel administrativo quedó en solo lectura: puedes consultar todo, pero para hacer cambios debes renovar.`,
+        body: `La suscripción venció el ${endDate} y no se renovó. El panel administrativo quedó en solo lectura: puedes consultar todo, pero para hacer cambios debes renovar. ${renewFor}`,
         tone: 'danger',
         superAdmins: {
           title: 'Suscripción suspendida',
@@ -188,7 +202,7 @@ export class SubscriptionRemindersService {
         type: NotificationType.SUBSCRIPTION_EXPIRED,
         priority: NotificationPriority.HIGH,
         title: 'Tu suscripción venció',
-        body: `La suscripción del plan ${plan} venció el ${endDate}. Tienes hasta el ${graceDate} para renovarla; después el panel administrativo quedará en solo lectura.`,
+        body: `La suscripción venció el ${endDate}. Tienes hasta el ${graceDate} para renovarla; después el panel administrativo quedará en solo lectura. ${renewFor}`,
         tone: 'danger',
         superAdmins: {
           title: 'Suscripción vencida',
@@ -206,7 +220,7 @@ export class SubscriptionRemindersService {
         left === 1
           ? `Tu suscripción vence ${endDate === formatBogotaDate(now) ? 'hoy' : 'mañana'}`
           : `Tu suscripción vence en ${left} días`,
-      body: `La suscripción del plan ${plan} vence el ${endDate}. Renuévala para seguir usando el panel sin interrupciones.`,
+      body: `La suscripción vence el ${endDate}. ${renewFor}`,
       tone: left <= 3 ? 'danger' : 'warning',
     };
   }

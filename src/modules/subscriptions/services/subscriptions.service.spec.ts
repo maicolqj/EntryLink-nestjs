@@ -15,6 +15,9 @@ const build = (opts: {
   endsAt?: Date | null;
   price?: { monthlyPrice: number; annualPrice?: number | null } | null;
   trialUsed?: boolean;
+  pricing?: { mode: string; price?: number | null; cycle?: string };
+  units?: number;
+  taxes?: { name: string; rate: number }[];
 }) => {
   const saved: Record<string, any>[] = [];
   const updates: Record<string, any>[] = [];
@@ -22,7 +25,11 @@ const build = (opts: {
     id: COMPLEX_ID,
     name: 'Torres',
     plan: ComplexPlan.FREE,
+    totalUnits: null,
     subscriptionEndsAt: opts.endsAt ?? null,
+    subscriptionPricingMode: opts.pricing?.mode ?? 'PLAN',
+    subscriptionPrice: opts.pricing?.price ?? null,
+    subscriptionCycle: opts.pricing?.cycle ?? 'MONTHLY',
   };
 
   const periodRepoTx = {
@@ -62,6 +69,13 @@ const build = (opts: {
         opts.price === null || opts.price === undefined
           ? null
           : { plan: ComplexPlan.BASIC, ...opts.price },
+      ),
+    },
+    complexRepo: { findOne: jest.fn(async () => complex) },
+    unitRepo: { count: jest.fn(async () => opts.units ?? 0) },
+    taxRepo: {
+      find: jest.fn(async () =>
+        (opts.taxes ?? []).map((t) => ({ ...t, isActive: true })),
       ),
     },
     cacheService: { delete: jest.fn() },
@@ -182,6 +196,108 @@ describe('SubscriptionsService — renovar', () => {
         'admin',
       ),
     ).rejects.toBeInstanceOf(CustomError);
+  });
+});
+
+describe('SubscriptionsService — cobro personalizado', () => {
+  const IVA = [{ name: 'IVA', rate: 19 }];
+
+  it('por unidad: cobra valor × unidades + IVA y guarda el desglose', async () => {
+    const { service, saved } = build({
+      pricing: { mode: 'PER_UNIT', price: 2_000 },
+      units: 140,
+      taxes: IVA,
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.PRO,
+        cycle: BillingCycle.MONTHLY,
+      },
+      'admin',
+    );
+
+    expect(saved[0]).toEqual(
+      expect.objectContaining({
+        amount: 333_200,
+        subtotal: 280_000,
+        taxAmount: 53_200,
+        unitCount: 140,
+        unitPrice: 2_000,
+        pricingMode: 'PER_UNIT',
+      }),
+    );
+  });
+
+  it('valor fijo anual = 10 mensualidades + IVA', async () => {
+    const { service, saved } = build({
+      pricing: { mode: 'FIXED', price: 500_000 },
+      taxes: IVA,
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.PRO,
+        cycle: BillingCycle.ANNUAL,
+      },
+      'admin',
+    );
+
+    expect(saved[0].amount).toBe(5_950_000);
+    expect(saved[0].unitCount).toBeNull();
+  });
+
+  it('un valor registrado distinto se reparte hacia atrás con el IVA', async () => {
+    const { service, saved } = build({
+      pricing: { mode: 'PER_UNIT', price: 2_000 },
+      units: 140,
+      taxes: IVA,
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.PRO,
+        cycle: BillingCycle.MONTHLY,
+        amount: 119_000,
+      },
+      'admin',
+    );
+
+    expect(saved[0]).toEqual(
+      expect.objectContaining({
+        amount: 119_000,
+        subtotal: 100_000,
+        taxAmount: 19_000,
+      }),
+    );
+  });
+
+  it('sin unidades registradas cobra las declaradas al inscribirse', async () => {
+    const { service } = build({
+      pricing: { mode: 'PER_UNIT', price: 1_000 },
+      units: 0,
+    });
+    (service as any).complexRepo.findOne = jest.fn(async () => ({
+      id: COMPLEX_ID,
+      plan: ComplexPlan.FREE,
+      totalUnits: 800,
+      subscriptionPricingMode: 'PER_UNIT',
+      subscriptionPrice: 1_000,
+      subscriptionCycle: 'MONTHLY',
+    }));
+
+    const quote = await service.getQuote(COMPLEX_ID);
+
+    expect(quote).toEqual(
+      expect.objectContaining({
+        unitCount: 800,
+        unitCountSource: 'DECLARED',
+        total: 800_000,
+      }),
+    );
   });
 });
 

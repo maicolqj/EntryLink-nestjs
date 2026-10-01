@@ -13,6 +13,12 @@ import { RenewSubscriptionInput } from '../dto/inputs/renew-subscription.input';
 import { GrantTrialInput } from '../dto/inputs/grant-trial.input';
 import { AdjustSubscriptionInput } from '../dto/inputs/adjust-subscription.input';
 import { SetPlanPriceInput } from '../dto/inputs/set-plan-price.input';
+import { SetComplexPricingInput } from '../dto/inputs/set-complex-pricing.input';
+import { SaveSubscriptionTaxInput } from '../dto/inputs/save-subscription-tax.input';
+import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
+import { SubscriptionTax } from '../entities/subscription-tax.entity';
+import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
+import { BillingCycle } from '../enums/billing-cycle.enum';
 
 /** La suscripción se consulta y se renueva aunque esté suspendida. */
 @AllowWhenSuspended()
@@ -117,5 +123,67 @@ export class SubscriptionsResolver {
     @CurrentUser() user: JwtAccessPayload,
   ): Promise<SubscriptionPlanPriceView> {
     return this.service.setPlanPrice(input, user.sub);
+  }
+
+  // ── Cobro personalizado e impuestos (SUPER_ADMIN) ────────────────
+
+  @Query(() => SubscriptionQuote, {
+    name: 'subscriptionQuote',
+    description:
+      'Valor a cobrar a un conjunto con su configuración. Plan y ciclo opcionales para cotizar otro.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  subscriptionQuote(
+    @Args('complexId', { type: () => ID }) complexId: string,
+    @Args('plan', { type: () => ComplexPlan, nullable: true })
+    plan?: ComplexPlan,
+    @Args('cycle', { type: () => BillingCycle, nullable: true })
+    cycle?: BillingCycle,
+  ): Promise<SubscriptionQuote> {
+    return this.service.getQuote(complexId, plan, cycle);
+  }
+
+  @Mutation(() => SubscriptionSummary, {
+    name: 'setComplexSubscriptionPricing',
+    description:
+      'Configura cómo se le cobra al conjunto: por unidad, por plan o valor fijo, y su ciclo.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  setComplexSubscriptionPricing(
+    @Args('input') input: SetComplexPricingInput,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<SubscriptionSummary> {
+    return this.service.setPricing(input, user.sub);
+  }
+
+  @Query(() => [SubscriptionTax], {
+    name: 'subscriptionTaxes',
+    description: 'Impuestos que se suman al valor de la suscripción.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  subscriptionTaxes(): Promise<SubscriptionTax[]> {
+    return this.service.listTaxes();
+  }
+
+  @Mutation(() => SubscriptionTax, {
+    name: 'saveSubscriptionTax',
+    description: 'Crea o edita un impuesto de la suscripción.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  saveSubscriptionTax(
+    @Args('input') input: SaveSubscriptionTaxInput,
+  ): Promise<SubscriptionTax> {
+    return this.service.saveTax(input);
+  }
+
+  @Mutation(() => Boolean, {
+    name: 'deleteSubscriptionTax',
+    description: 'Elimina un impuesto de la suscripción.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  deleteSubscriptionTax(
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<boolean> {
+    return this.service.deleteTax(id);
   }
 }

@@ -5298,6 +5298,15 @@ type ComplexDocumentAckReport {
   units: [ComplexDocumentAckEntry!]!
 }
 
+"""Impuesto aplicado a un cobro"""
+type SubscriptionTaxLine {
+  name: String!
+
+  """Tarifa en porcentaje (19 = 19 %)"""
+  rate: Float!
+  amount: Float!
+}
+
 """Periodo de suscripción de un complejo"""
 type SubscriptionPeriod {
   id: ID!
@@ -5310,8 +5319,26 @@ type SubscriptionPeriod {
   startsAt: DateTime!
   endsAt: DateTime!
 
-  """Valor pagado (COP)"""
+  """Valor pagado (COP), impuestos incluidos"""
   amount: Float
+
+  """Modalidad con la que se calculó el cobro"""
+  pricingMode: SubscriptionPricingMode
+
+  """Unidades cobradas (modalidad por unidad)"""
+  unitCount: Int
+
+  """Valor por unidad"""
+  unitPrice: Float
+
+  """Valor antes de impuestos"""
+  subtotal: Float
+
+  """Total de impuestos"""
+  taxAmount: Float
+
+  """Impuestos aplicados, con la tarifa vigente al pagar"""
+  taxes: [SubscriptionTaxLine!]
   paidAt: DateTime
 
   """Referencia del pago (número de transferencia, consignación…)"""
@@ -5342,6 +5369,73 @@ enum BillingCycle {
   ANNUAL
 }
 
+"""Modalidad de cobro de la suscripción del conjunto"""
+enum SubscriptionPricingMode {
+  """Valor por unidad × unidades"""
+  PER_UNIT
+
+  """Precio de lista del plan"""
+  PLAN
+
+  """Valor fijo acordado con el conjunto"""
+  FIXED
+}
+
+"""Impuesto aplicado a la suscripción"""
+type SubscriptionTax {
+  id: ID!
+  name: String!
+
+  """Tarifa en porcentaje (19 = 19 %)"""
+  rate: Float!
+  isActive: Boolean!
+  sortOrder: Int!
+  updatedAt: DateTime!
+}
+
+"""Cómo se le cobra a un conjunto"""
+type SubscriptionPricing {
+  mode: SubscriptionPricingMode!
+
+  """
+  Valor por unidad (PER_UNIT) o valor mensual fijo (FIXED), antes de impuestos
+  """
+  price: Float
+  cycle: BillingCycle!
+}
+
+"""Valor a cobrar al conjunto, con su desglose"""
+type SubscriptionQuote {
+  """false si falta configurar el precio: no hay valor que cobrar"""
+  configured: Boolean!
+  pricingMode: SubscriptionPricingMode!
+  plan: ComplexPlan!
+  cycle: BillingCycle!
+
+  """Unidades que se cobran (por unidad)"""
+  unitCount: Int!
+
+  """
+  De dónde salen las unidades: REGISTERED (registradas) o DECLARED (declaradas al inscribirse)
+  """
+  unitCountSource: String!
+
+  """Valor por unidad o valor fijo mensual configurado"""
+  price: Float
+
+  """Valor de un mes antes de impuestos"""
+  monthlySubtotal: Float!
+
+  """Meses que se cobran (anual = 10)"""
+  monthsCharged: Int!
+  subtotal: Float!
+  taxes: [SubscriptionTaxLine!]!
+  taxAmount: Float!
+
+  """Total a pagar, impuestos incluidos"""
+  total: Float!
+}
+
 """Estado de la suscripción de un complejo"""
 type SubscriptionSummary {
   complexId: String!
@@ -5356,6 +5450,12 @@ type SubscriptionSummary {
   """Hasta cuándo corre la gracia antes de suspender"""
   graceEndsAt: DateTime
   currentPeriod: SubscriptionPeriod
+
+  """Cómo se le cobra a este conjunto"""
+  pricing: SubscriptionPricing!
+
+  """Valor de la próxima renovación con el plan y ciclo del conjunto"""
+  quote: SubscriptionQuote!
 
   """Si ya usó la prueba gratis"""
   trialUsed: Boolean!
@@ -6572,6 +6672,14 @@ type Query {
 
   """Suscripción e historial de un complejo. Solo plataforma."""
   complexSubscription(complexId: ID!): SubscriptionSummary!
+
+  """
+  Valor a cobrar a un conjunto con su configuración. Plan y ciclo opcionales para cotizar otro.
+  """
+  subscriptionQuote(complexId: ID!, plan: ComplexPlan, cycle: BillingCycle): SubscriptionQuote!
+
+  """Impuestos que se suman al valor de la suscripción."""
+  subscriptionTaxes: [SubscriptionTax!]!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7513,6 +7621,17 @@ type Mutation {
 
   """Fija el precio mensual (y opcionalmente el anual) de un plan."""
   setSubscriptionPlanPrice(input: SetPlanPriceInput!): SubscriptionPlanPriceView!
+
+  """
+  Configura cómo se le cobra al conjunto: por unidad, por plan o valor fijo, y su ciclo.
+  """
+  setComplexSubscriptionPricing(input: SetComplexPricingInput!): SubscriptionSummary!
+
+  """Crea o edita un impuesto de la suscripción."""
+  saveSubscriptionTax(input: SaveSubscriptionTaxInput!): SubscriptionTax!
+
+  """Elimina un impuesto de la suscripción."""
+  deleteSubscriptionTax(id: ID!): Boolean!
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9543,6 +9662,30 @@ input SetPlanPriceInput {
 
   """Precio anual. Vacío = 10 mensualidades."""
   annualPrice: Float
+}
+
+"""Cómo se le cobra a un conjunto"""
+input SetComplexPricingInput {
+  complexId: ID!
+  mode: SubscriptionPricingMode!
+
+  """
+  Valor por unidad (PER_UNIT) o valor mensual fijo (FIXED), antes de impuestos. No aplica a PLAN.
+  """
+  price: Float
+  cycle: BillingCycle!
+}
+
+"""Crear o editar un impuesto de la suscripción"""
+input SaveSubscriptionTaxInput {
+  """Vacío = crear uno nuevo"""
+  id: ID
+  name: String!
+
+  """Tarifa en porcentaje (19 = 19 %)"""
+  rate: Float!
+  isActive: Boolean
+  sortOrder: Int
 }
 
 input TriageMaintenanceTicketInput {
