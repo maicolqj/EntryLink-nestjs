@@ -520,6 +520,11 @@ type ResidentialComplex {
 
   """Días para vencer; 0 o negativo si ya venció"""
   subscriptionDaysLeft: Int
+
+  """
+  Valor de la suscripción del conjunto (subtotal, impuestos y total). Solo SUPER_ADMIN y cumplimiento; vacío para los demás.
+  """
+  subscriptionQuote: SubscriptionQuote
 }
 
 """Tipo de complejo residencial"""
