@@ -54,6 +54,7 @@ import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
 import { BK } from '../../../core/infrastructure/cache/business-cache.constants';
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { SubscriptionPricingMode } from '../../subscriptions/enums/subscription-pricing-mode.enum';
 
 /**
  * Documentos privados del complejo: el RUT y el documento del representante
@@ -628,6 +629,10 @@ export class ResidentialComplexService {
 
   /**
    * Verifica que el complejo no haya superado el límite de unidades de su plan.
+   *
+   * Un conjunto que paga por unidad no tiene tope: cada unidad nueva sube lo
+   * que paga, así que limitarla por plan le impediría cargar el conjunto
+   * completo (una copropiedad de 800 unidades no cabe en Pro).
    */
   async assertUnitsLimit(
     complexId: string,
@@ -643,6 +648,12 @@ export class ResidentialComplexService {
         statusCode: HttpStatus.NOT_FOUND,
         errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
       });
+    }
+
+    if (
+      complex.subscriptionPricingMode === SubscriptionPricingMode.PER_UNIT
+    ) {
+      return;
     }
 
     if (currentCount >= complex.maxUnits) {
