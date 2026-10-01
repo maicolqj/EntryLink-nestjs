@@ -33,6 +33,12 @@ export const BK = {
     TTL: 600, // 10 min
   },
 
+  /** Vencimiento de la suscripción, para el guard que corre en cada mutación. */
+  complexSubscription: {
+    one: (id: string) => ({ prefix: 'cpxsub', key: id }),
+    TTL: 600, // 10 min; renovar o ajustar la fecha borra la llave
+  },
+
   /** Torres / Edificios */
   building: {
     list: (complexId: string, page: number, limit: number) => ({

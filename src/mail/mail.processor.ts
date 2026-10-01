@@ -8,6 +8,7 @@ import {
   SendPasswordResetJobPayload,
   SendEmailVerificationJobPayload,
   SendPanicAlertJobPayload,
+  SendSubscriptionNoticeJobPayload,
 } from './constants/mail.constants';
 
 /**
@@ -37,9 +38,37 @@ export class MailProcessor extends WorkerHost {
       case MAIL_JOBS.SEND_PANIC_ALERT:
         await this.handlePanicAlert(job as Job<SendPanicAlertJobPayload>);
         break;
+      case MAIL_JOBS.SEND_SUBSCRIPTION_NOTICE:
+        await this.handleSubscriptionNotice(
+          job as Job<SendSubscriptionNoticeJobPayload>,
+        );
+        break;
       default:
         this.logger.warn(`Job desconocido en cola mail: ${job.name}`);
     }
+  }
+
+  private async handleSubscriptionNotice(
+    job: Job<SendSubscriptionNoticeJobPayload>,
+  ): Promise<void> {
+    const d = job.data;
+
+    await this.mailerService.sendMail({
+      to: d.email,
+      subject: `${d.title} — ${d.complexName}`,
+      template: 'subscription-notice',
+      context: {
+        complexName: d.complexName,
+        title: d.title,
+        message: d.message,
+        note: d.note,
+        ctaUrl: d.ctaUrl,
+        headerColor: d.tone === 'danger' ? '#b00020' : '#b45309',
+        year: new Date().getFullYear(),
+      },
+    });
+
+    this.logger.log(`Aviso de suscripción enviado al complejo ${d.complexId}`);
   }
 
   private async handlePanicAlert(

@@ -5,6 +5,7 @@ import { RequirePermissions } from './require-permissions.decorator';
 import {
   ComplexModuleGuard,
   JwtAuthGuard,
+  SubscriptionGuard,
   UniversalRolePermissionGuard,
 } from '../guards';
 
@@ -25,8 +26,17 @@ export function Auth(options?: {
   // Va de último a propósito: a quien no puede ejecutar la operación por rol o
   // permiso se le responde eso, sin contarle de paso qué módulos tiene
   // contratado el conjunto.
+  //
+  // SubscriptionGuard va después por lo mismo: con la suscripción suspendida
+  // la administración queda en solo lectura, y eso solo se le dice a quien sí
+  // podía ejecutar la operación.
   const decorators = [
-    UseGuards(JwtAuthGuard, UniversalRolePermissionGuard, ComplexModuleGuard),
+    UseGuards(
+      JwtAuthGuard,
+      UniversalRolePermissionGuard,
+      ComplexModuleGuard,
+      SubscriptionGuard,
+    ),
   ];
 
   const hasRoles = !!options?.roles?.length;

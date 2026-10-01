@@ -25,11 +25,14 @@ import { ReportPanicLocationInput } from '../dto/inputs/report-panic-location.in
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../../shared/decorators/allow-when-suspended.decorator';
 import { Public } from '../../shared/decorators/public.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 
+// Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
+@AllowWhenSuspended()
 @Resolver(() => Notification)
 export class NotificationsResolver {
   constructor(

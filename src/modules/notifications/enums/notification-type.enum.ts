@@ -132,6 +132,12 @@ export enum NotificationType {
   DPA_SIGNED = 'DPA_SIGNED', // Un complejo subió su DPA (Anexo B2B) firmado (aviso a SUPER_ADMIN)
   DPA_APPROVED = 'DPA_APPROVED', // El SUPER_ADMIN validó el DPA firmado (aviso al complejo)
   DPA_REJECTED = 'DPA_REJECTED', // El SUPER_ADMIN rechazó el DPA firmado (aviso al complejo, con motivo)
+
+  // ── Suscripción de la plataforma ───────────────────────────────
+  SUBSCRIPTION_EXPIRING = 'SUBSCRIPTION_EXPIRING', // Faltan 15, 7, 3 o 1 días para vencer (aviso al complejo)
+  SUBSCRIPTION_EXPIRED = 'SUBSCRIPTION_EXPIRED', // Venció y corre la gracia (aviso al complejo y a SUPER_ADMIN)
+  SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED', // Pasó la gracia: panel en solo lectura (aviso al complejo y a SUPER_ADMIN)
+  SUBSCRIPTION_RENEWED = 'SUBSCRIPTION_RENEWED', // Se registró un pago o una prueba (aviso al complejo)
 }
 
 registerEnumType(NotificationType, {

@@ -25,8 +25,11 @@ import { Public } from '../shared/decorators/public.decorator';
 import { QrLoginTokenResponse } from './dto/responses/qr-login-token.response';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { Auth } from '../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../shared/decorators/allow-when-suspended.decorator';
 import { SetPasswordResponse } from './dto/responses/set-password.response';
 
+// Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
+@AllowWhenSuspended()
 @Resolver()
 export class AuthResolver {
   constructor(

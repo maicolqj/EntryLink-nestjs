@@ -132,6 +132,16 @@ export class ResidentialComplex {
   @Column({ type: 'int', default: 10 })
   maxUnits: number;
 
+  // ==================== SUSCRIPCIÓN ====================
+
+  @Field(() => Date, {
+    description:
+      'Vencimiento del periodo de suscripción vigente. Vacío = sin suscripción registrada.',
+    nullable: true,
+  })
+  @Column({ name: 'subscription_ends_at', type: 'timestamptz', nullable: true })
+  subscriptionEndsAt?: Date | null;
+
   // ==================== PQRF ====================
   //
   // El plazo de respuesta lo fija cada copropiedad en su reglamento. El valor

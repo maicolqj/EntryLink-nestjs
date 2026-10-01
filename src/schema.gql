@@ -330,6 +330,11 @@ type ResidentialComplex {
   """Máximo de unidades permitidas por el plan"""
   maxUnits: Int!
 
+  """
+  Vencimiento del periodo de suscripción vigente. Vacío = sin suscripción registrada.
+  """
+  subscriptionEndsAt: DateTime
+
   """Días que tiene el complejo para resolver un PQRF"""
   pqrfResolutionDays: Int!
 
@@ -509,6 +514,12 @@ type ResidentialComplex {
 
   """Rol fijo del complejo residencial"""
   roles: [ValidRoles!]!
+
+  """Estado de la suscripción calculado con su vencimiento"""
+  subscriptionStatus: SubscriptionStatus!
+
+  """Días para vencer; 0 o negativo si ya venció"""
+  subscriptionDaysLeft: Int
 }
 
 """Tipo de complejo residencial"""
@@ -565,6 +576,26 @@ enum ValidRoles {
   SECURITY_ROL
   COUNCIL_ROL
   MAINTENANCE_ROL
+}
+
+"""
+Estado de la suscripción del complejo, calculado a partir de su vencimiento
+"""
+enum SubscriptionStatus {
+  """Sin suscripción registrada"""
+  NONE
+
+  """Vigente"""
+  ACTIVE
+
+  """Por vencer (15 días o menos)"""
+  EXPIRING
+
+  """Vencida, en periodo de gracia"""
+  GRACE
+
+  """Suspendida por falta de pago"""
+  SUSPENDED
 }
 
 """Configuración del parqueadero para vehículos visitantes"""
@@ -1845,6 +1876,10 @@ enum NotificationType {
   DPA_SIGNED
   DPA_APPROVED
   DPA_REJECTED
+  SUBSCRIPTION_EXPIRING
+  SUBSCRIPTION_EXPIRED
+  SUBSCRIPTION_SUSPENDED
+  SUBSCRIPTION_RENEWED
 }
 
 """Prioridad de entrega de la notificación"""
@@ -5263,6 +5298,85 @@ type ComplexDocumentAckReport {
   units: [ComplexDocumentAckEntry!]!
 }
 
+"""Periodo de suscripción de un complejo"""
+type SubscriptionPeriod {
+  id: ID!
+  complexId: String!
+  kind: SubscriptionPeriodKind!
+  plan: ComplexPlan!
+
+  """Ciclo pagado. Vacío en la prueba gratis y el periodo inicial."""
+  cycle: BillingCycle
+  startsAt: DateTime!
+  endsAt: DateTime!
+
+  """Valor pagado (COP)"""
+  amount: Float
+  paidAt: DateTime
+
+  """Referencia del pago (número de transferencia, consignación…)"""
+  paymentReference: String
+  notes: String
+  createdById: String
+  createdAt: DateTime!
+}
+
+"""Origen de un periodo de suscripción"""
+enum SubscriptionPeriodKind {
+  """Periodo inicial al lanzar las suscripciones"""
+  INITIAL
+
+  """Prueba gratis"""
+  TRIAL
+
+  """Periodo pagado"""
+  PAID
+}
+
+"""Ciclo de cobro de la suscripción"""
+enum BillingCycle {
+  """Mensual"""
+  MONTHLY
+
+  """Anual"""
+  ANNUAL
+}
+
+"""Estado de la suscripción de un complejo"""
+type SubscriptionSummary {
+  complexId: String!
+  complexName: String!
+  plan: ComplexPlan!
+  status: SubscriptionStatus!
+  endsAt: DateTime
+
+  """Días para vencer; 0 o negativo si ya venció"""
+  daysLeft: Int
+
+  """Hasta cuándo corre la gracia antes de suspender"""
+  graceEndsAt: DateTime
+  currentPeriod: SubscriptionPeriod
+
+  """Si ya usó la prueba gratis"""
+  trialUsed: Boolean!
+
+  """Historial, el más reciente primero"""
+  periods: [SubscriptionPeriod!]!
+}
+
+"""Precio vigente de un plan"""
+type SubscriptionPlanPriceView {
+  plan: ComplexPlan!
+  monthlyPrice: Float!
+
+  """Precio anual efectivo"""
+  annualPrice: Float!
+
+  """true si el anual se fijó a mano; false = 10 mensualidades"""
+  annualPriceIsCustom: Boolean!
+  updatedAt: DateTime
+}
+
 """Anotación en la bitácora de un ticket"""
 type MaintenanceTicketEvent {
   id: ID!
@@ -6449,6 +6563,15 @@ type Query {
 
   """Directorio de contactos, incluidos los ocultos"""
   complexContacts(complexId: String!): [ComplexContact!]!
+
+  """Suscripción del complejo de la sesión (administración)."""
+  mySubscription: SubscriptionSummary!
+
+  """Precios vigentes de los planes pagos."""
+  subscriptionPlanPrices: [SubscriptionPlanPriceView!]!
+
+  """Suscripción e historial de un complejo. Solo plataforma."""
+  complexSubscription(complexId: ID!): SubscriptionSummary!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7376,6 +7499,20 @@ type Mutation {
   createComplexContact(input: CreateComplexContactInput!): ComplexContact!
   updateComplexContact(id: ID!, input: UpdateComplexContactInput!): ComplexContact!
   deleteComplexContact(id: ID!): Boolean!
+
+  """
+  Registra el pago de un periodo mensual o anual. Si aún no vence, el periodo nuevo arranca al terminar el actual.
+  """
+  renewComplexSubscription(input: RenewSubscriptionInput!): SubscriptionSummary!
+
+  """Otorga la prueba gratis de 30 días (una vez por complejo)."""
+  grantComplexTrial(input: GrantTrialInput!): SubscriptionSummary!
+
+  """Corrige a mano el vencimiento vigente, con motivo."""
+  adjustComplexSubscription(input: AdjustSubscriptionInput!): SubscriptionSummary!
+
+  """Fija el precio mensual (y opcionalmente el anual) de un plan."""
+  setSubscriptionPlanPrice(input: SetPlanPriceInput!): SubscriptionPlanPriceView!
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9365,6 +9502,47 @@ input UpdateComplexContactInput {
   notes: String
   sortOrder: Int
   isActive: Boolean
+}
+
+"""Registrar el pago de un periodo de suscripción"""
+input RenewSubscriptionInput {
+  complexId: ID!
+
+  """Plan pagado. FREE no se puede pagar: es solo la prueba."""
+  plan: ComplexPlan!
+  cycle: BillingCycle!
+
+  """Valor pagado. Vacío = el precio configurado del plan."""
+  amount: Float
+
+  """Fecha del pago. Vacío = ahora."""
+  paidAt: DateTime
+  paymentReference: String
+  notes: String
+}
+
+"""Otorgar la prueba gratis de 30 días"""
+input GrantTrialInput {
+  complexId: ID!
+  notes: String
+}
+
+"""Corregir a mano el vencimiento vigente"""
+input AdjustSubscriptionInput {
+  complexId: ID!
+  endsAt: DateTime!
+
+  """Motivo del ajuste (queda en el historial)"""
+  reason: String!
+}
+
+"""Precio de un plan"""
+input SetPlanPriceInput {
+  plan: ComplexPlan!
+  monthlyPrice: Float!
+
+  """Precio anual. Vacío = 10 mensualidades."""
+  annualPrice: Float
 }
 
 input TriageMaintenanceTicketInput {

@@ -62,7 +62,7 @@ import { NotificationsService } from '../../notifications/services/notifications
 export type RegistrationDocumentKind = 'rut' | 'legal-rep' | 'signed-dpa';
 
 // Límite de unidades por plan
-const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
+export const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
   [ComplexPlan.FREE]: 10,
   [ComplexPlan.BASIC]: 50,
   [ComplexPlan.PRO]: 200,
