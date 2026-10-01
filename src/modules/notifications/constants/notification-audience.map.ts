@@ -187,6 +187,14 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.DPA_SIGNED]: NotificationAudience.STAFF,
   [NotificationType.DPA_APPROVED]: NotificationAudience.STAFF,
   [NotificationType.DPA_REJECTED]: NotificationAudience.STAFF,
+
+  // ── Suscripción ─────────────────────────────────────────────────────────
+  // Es un asunto entre la administración y la plataforma: el residente no
+  // tiene nada que hacer con él.
+  [NotificationType.SUBSCRIPTION_EXPIRING]: NotificationAudience.STAFF,
+  [NotificationType.SUBSCRIPTION_EXPIRED]: NotificationAudience.STAFF,
+  [NotificationType.SUBSCRIPTION_SUSPENDED]: NotificationAudience.STAFF,
+  [NotificationType.SUBSCRIPTION_RENEWED]: NotificationAudience.STAFF,
 };
 
 /**

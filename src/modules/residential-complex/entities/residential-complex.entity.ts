@@ -23,6 +23,7 @@ import { Country, User } from '../../users/entities/user.entity';
 import { Building } from './building.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { VisitorParkingConfig } from '../../visitor-parking/entities/visitor-parking-config.entity';
+import { moneyColumn } from '../../finance/utils/numeric.transformer';
 
 @ObjectType({ description: 'Complejo residencial del sistema' })
 @Entity({ name: 'residential_complexes' })
@@ -131,6 +132,49 @@ export class ResidentialComplex {
   })
   @Column({ type: 'int', default: 10 })
   maxUnits: number;
+
+  // ==================== SUSCRIPCIÓN ====================
+
+  @Field(() => Date, {
+    description:
+      'Vencimiento del periodo de suscripción vigente. Vacío = sin suscripción registrada.',
+    nullable: true,
+  })
+  @Column({ name: 'subscription_ends_at', type: 'timestamptz', nullable: true })
+  subscriptionEndsAt?: Date | null;
+
+  // Cobro personalizado del conjunto. Sin @Field a propósito: el complejo lo
+  // leen residentes y portería; el precio solo viaja por el módulo de
+  // suscripciones, a la plataforma y a la propia administración.
+
+  /** PER_UNIT | PLAN | FIXED (ver SubscriptionPricingMode). */
+  @Column({
+    name: 'subscription_pricing_mode',
+    type: 'varchar',
+    length: 20,
+    default: 'PLAN',
+  })
+  subscriptionPricingMode: string;
+
+  /** Valor por unidad (PER_UNIT) o valor mensual fijo (FIXED), antes de impuestos. */
+  @Column({
+    name: 'subscription_price',
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    nullable: true,
+    transformer: moneyColumn,
+  })
+  subscriptionPrice?: number | null;
+
+  /** MONTHLY | ANNUAL: ciclo con el que se le cobra al conjunto. */
+  @Column({
+    name: 'subscription_cycle',
+    type: 'varchar',
+    length: 10,
+    default: 'MONTHLY',
+  })
+  subscriptionCycle: string;
 
   // ==================== PQRF ====================
   //

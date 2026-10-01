@@ -7,6 +7,7 @@ import {
   SendPasswordResetJobPayload,
   SendEmailVerificationJobPayload,
   SendPanicAlertJobPayload,
+  SendSubscriptionNoticeJobPayload,
 } from './constants/mail.constants';
 
 @Injectable()
@@ -64,6 +65,21 @@ export class MailService {
 
     this.logger.log(
       `Panic alert email job enqueued for alert: ${payload.alertId}`,
+    );
+  }
+
+  async queueSubscriptionNoticeEmail(
+    payload: SendSubscriptionNoticeJobPayload,
+  ): Promise<void> {
+    await this.mailQueue.add(MAIL_JOBS.SEND_SUBSCRIPTION_NOTICE, payload, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5_000 },
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 50 },
+    });
+
+    this.logger.log(
+      `Subscription notice email job enqueued for complex: ${payload.complexId}`,
     );
   }
 }

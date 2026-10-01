@@ -539,6 +539,22 @@ export enum NotificationActionErrorCode {
 /**
  * "Mi Conjunto": documentos y directorio de contactos del conjunto.
  */
+export enum SubscriptionErrorCode {
+  /** Pasó la gracia: la administración queda en solo lectura hasta renovar. */
+  SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED',
+  /** El plan FREE es solo la prueba gratis: no se renueva pagando. */
+  SUBSCRIPTION_FREE_NOT_RENEWABLE = 'SUBSCRIPTION_FREE_NOT_RENEWABLE',
+  /** La prueba gratis se otorga una sola vez por complejo. */
+  SUBSCRIPTION_TRIAL_ALREADY_USED = 'SUBSCRIPTION_TRIAL_ALREADY_USED',
+  /** No hay precio configurado para el plan y no se indicó el valor pagado. */
+  SUBSCRIPTION_PRICE_NOT_SET = 'SUBSCRIPTION_PRICE_NOT_SET',
+  /** El complejo no tiene un periodo que ajustar. */
+  SUBSCRIPTION_NOT_FOUND = 'SUBSCRIPTION_NOT_FOUND',
+  /** El vencimiento ajustado queda antes del inicio del periodo. */
+  SUBSCRIPTION_INVALID_END_DATE = 'SUBSCRIPTION_INVALID_END_DATE',
+  SUBSCRIPTION_TAX_NOT_FOUND = 'SUBSCRIPTION_TAX_NOT_FOUND',
+}
+
 export enum ComplexInfoErrorCode {
   COMPLEX_DOCUMENT_NOT_FOUND = 'COMPLEX_DOCUMENT_NOT_FOUND',
   /** Publicar sin texto ni PDF: el residente abriría una página vacía. */

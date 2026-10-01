@@ -10,6 +10,7 @@ import { JwtAccessPayload } from './interfaces/jwt-payload.interface';
 import { buildDeviceInfo } from './utils/device-info.util';
 import { Public } from '../shared/decorators/public.decorator';
 import { Auth } from '../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../shared/decorators/allow-when-suspended.decorator';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 
@@ -20,6 +21,8 @@ import { ValidRoles } from '../roles/enums/valid-roles';
  * acceso: el que pide entrar usa las operaciones públicas (no tiene sesión
  * todavía), y el que aprueba usa las autenticadas.
  */
+// Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
+@AllowWhenSuspended()
 @Resolver()
 export class DeviceApprovalResolver {
   constructor(

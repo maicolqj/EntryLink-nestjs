@@ -438,7 +438,7 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /** IDs de todos los usuarios SUPER_ADMIN activos (no scoped a complejo). */
-  private async findSuperAdminUserIds(): Promise<string[]> {
+  async findSuperAdminUserIds(): Promise<string[]> {
     const rows = await this.userRoleRepo
       .createQueryBuilder('ur')
       .innerJoin('ur.user', 'u')

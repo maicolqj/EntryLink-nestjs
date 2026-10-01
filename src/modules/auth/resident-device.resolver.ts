@@ -10,6 +10,7 @@ import { JwtAccessPayload } from './interfaces/jwt-payload.interface';
 import { buildDeviceInfo } from './utils/device-info.util';
 import { Public } from '../shared/decorators/public.decorator';
 import { Auth } from '../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../shared/decorators/allow-when-suspended.decorator';
 import { CurrentUser } from '../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { ValidPermissions } from '../permissions/enums/valid-permissions';
@@ -23,6 +24,8 @@ import { ValidPermissions } from '../permissions/enums/valid-permissions';
  *
  * Todas las operaciones exigen el header `x-device-id`.
  */
+// Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
+@AllowWhenSuspended()
 @Resolver()
 export class ResidentDeviceResolver {
   constructor(

@@ -1,6 +1,7 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 
 import { Auth } from '../../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../../shared/decorators/allow-when-suspended.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { DeviceHealthService } from '../services/device-health.service';
@@ -15,6 +16,8 @@ import {
  * Todo se resuelve por el token FCM del equipo y el usuario autenticado: nadie
  * puede disparar pruebas ni leer el estado de un equipo ajeno.
  */
+// Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
+@AllowWhenSuspended()
 @Resolver()
 export class DeviceHealthResolver {
   constructor(private readonly deviceHealthService: DeviceHealthService) {}
