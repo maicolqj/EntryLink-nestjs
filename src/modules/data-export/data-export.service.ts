@@ -21,6 +21,7 @@ import {
   toNumber,
 } from './data-export.columns';
 import { DataExportModuleInfo } from './dto/data-export-module-info.response';
+import { ComplexErrorCode } from '../shared/constans/error-codes.constants';
 import { DataExportHistoryEntry } from './dto/data-export-history-entry.response';
 import { ResidentialComplexService } from '../residential-complex/services/residential-complex.service';
 import { ResidentialComplex } from '../residential-complex/entities/residential-complex.entity';
@@ -120,12 +121,14 @@ export class DataExportService {
     currentUser: JwtAccessPayload,
   ): Promise<DataExportModuleInfo[]> {
     const complex = await this.complexService.findById(complexId, currentUser);
-    const enabled = complex.enabledModules ?? [];
-    return DATA_EXPORT_MODULES.map((spec) => ({
+    // Un módulo apagado no se ofrece: el conjunto no lo usa y su respaldo
+    // saldría vacío o con datos que ya no administra.
+    return DATA_EXPORT_MODULES.filter((spec) =>
+      this.isEnabled(complex, spec.module),
+    ).map((spec) => ({
       module: spec.module,
       label: spec.label,
-      // Lista vacía = todos habilitados, igual que en el resto de la plataforma.
-      enabled: enabled.length === 0 || enabled.includes(spec.module),
+      enabled: true,
     }));
   }
 
@@ -200,6 +203,13 @@ export class DataExportService {
   ): Promise<ExportFile> {
     const spec = this.requireModule(module);
     const complex = await this.complexService.findById(complexId, currentUser);
+    if (!this.isEnabled(complex, spec.module)) {
+      throw new CustomError({
+        message: `El módulo "${spec.label}" está apagado en este complejo`,
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
+      });
+    }
     const context = this.baseContext(complex);
 
     const buffer = await this.buildWorkbook(spec, complex, range, context);
@@ -218,10 +228,22 @@ export class DataExportService {
     range: ExportRange,
     currentUser: JwtAccessPayload,
   ): Promise<ExportFile> {
-    const specs = modules.length
+    const requested = modules.length
       ? modules.map((module) => this.requireModule(module))
       : DATA_EXPORT_MODULES;
     const complex = await this.complexService.findById(complexId, currentUser);
+    // El respaldo cubre solo los módulos encendidos; uno apagado se omite
+    // aunque venga en la lista.
+    const specs = requested.filter((spec) =>
+      this.isEnabled(complex, spec.module),
+    );
+    if (specs.length === 0) {
+      throw new CustomError({
+        message: 'Ninguno de los módulos pedidos está encendido en este complejo',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: ComplexErrorCode.COMPLEX_MODULE_DISABLED,
+      });
+    }
     const context = this.baseContext(complex);
 
     const zip = new JSZip();
@@ -830,6 +852,15 @@ export class DataExportService {
       users: new Map(),
       residents: new Map(),
     };
+  }
+
+  /** Lista vacía = todos encendidos, igual que en el resto de la plataforma. */
+  private isEnabled(
+    complex: Pick<ResidentialComplex, 'enabledModules'>,
+    module: string,
+  ): boolean {
+    const enabled = complex.enabledModules ?? [];
+    return enabled.length === 0 || enabled.includes(module);
   }
 
   private requireModule(module: string): ExportModuleSpec {

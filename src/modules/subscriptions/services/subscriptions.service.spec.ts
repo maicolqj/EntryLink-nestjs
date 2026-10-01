@@ -18,6 +18,7 @@ const build = (opts: {
   pricing?: { mode: string; price?: number | null; cycle?: string };
   units?: number;
   taxes?: { name: string; rate: number }[];
+  periods?: Record<string, any>[];
 }) => {
   const saved: Record<string, any>[] = [];
   const updates: Record<string, any>[] = [];
@@ -40,6 +41,11 @@ const build = (opts: {
       return row;
     }),
     exists: jest.fn(async () => opts.trialUsed ?? false),
+    find: jest.fn(async () => opts.periods ?? []),
+    findOne: jest.fn(async () => {
+      const all = [...(opts.periods ?? []), ...saved];
+      return all.sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime())[0];
+    }),
   };
   const complexRepoTx = {
     createQueryBuilder: () => {
@@ -196,6 +202,68 @@ describe('SubscriptionsService — renovar', () => {
         'admin',
       ),
     ).rejects.toBeInstanceOf(CustomError);
+  });
+});
+
+describe('SubscriptionsService — fecha de inicio', () => {
+  it('empieza hoy y recorta el periodo inicial que seguía corriendo', async () => {
+    const today = new Date();
+    const initial = {
+      id: 'ini',
+      kind: SubscriptionPeriodKind.INITIAL,
+      startsAt: new Date(today.getTime() - 5 * DAY),
+      endsAt: new Date(today.getTime() + 25 * DAY),
+      notes: null,
+    };
+    const { service, saved, updates } = build({
+      endsAt: initial.endsAt,
+      price: { monthlyPrice: 100_000 },
+      periods: [initial],
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.BASIC,
+        cycle: BillingCycle.MONTHLY,
+        startsAt: today,
+      },
+      'admin',
+    );
+
+    const paid = saved.find((p) => p.kind === SubscriptionPeriodKind.PAID)!;
+    expect(paid.startsAt.getTime()).toBe(today.getTime());
+    expect(initial.endsAt.getTime()).toBe(today.getTime());
+    expect(initial.notes).toContain('Recortado');
+    expect(updates[0].subscriptionEndsAt).toEqual(paid.endsAt);
+  });
+
+  it('no deja empezar dentro de un periodo ya pagado', async () => {
+    const today = new Date();
+    const { service, saved } = build({
+      price: { monthlyPrice: 100_000 },
+      periods: [
+        {
+          id: 'pag',
+          kind: SubscriptionPeriodKind.PAID,
+          startsAt: new Date(today.getTime() - 10 * DAY),
+          endsAt: new Date(today.getTime() + 20 * DAY),
+        },
+      ],
+    });
+
+    await expect(
+      service.renew(
+        {
+          complexId: COMPLEX_ID,
+          plan: ComplexPlan.BASIC,
+          cycle: BillingCycle.MONTHLY,
+          startsAt: today,
+        },
+        'admin',
+      ),
+    ).rejects.toBeInstanceOf(CustomError);
+    expect(saved).toHaveLength(0);
   });
 });
 

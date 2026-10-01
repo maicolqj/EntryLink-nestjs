@@ -278,11 +278,17 @@ export class SubscriptionsService {
       const currentEnd = complex.subscriptionEndsAt
         ? new Date(complex.subscriptionEndsAt)
         : null;
-      const startsAt = currentEnd && currentEnd > now ? currentEnd : now;
+      const startsAt =
+        input.startsAt ?? (currentEnd && currentEnd > now ? currentEnd : now);
       const endsAt = addBillingPeriod(startsAt, input.cycle);
 
-      const created = await manager.getRepository(SubscriptionPeriod).save(
-        manager.getRepository(SubscriptionPeriod).create({
+      const periodRepo = manager.getRepository(SubscriptionPeriod);
+      if (input.startsAt) {
+        await this.makeRoomFor(periodRepo, complex.id, startsAt);
+      }
+
+      const created = await periodRepo.save(
+        periodRepo.create({
           complexId: complex.id,
           kind: SubscriptionPeriodKind.PAID,
           plan: input.plan,
@@ -309,8 +315,15 @@ export class SubscriptionsService {
         }),
       );
 
+      // El vencimiento vigente es el del periodo que termina más tarde: con una
+      // fecha de inicio elegida, el pago puede quedar antes de otro periodo.
+      const latest = await periodRepo.findOne({
+        where: { complexId: complex.id },
+        order: { endsAt: 'DESC' },
+      });
       await manager.getRepository(ResidentialComplex).update(complex.id, {
-        subscriptionEndsAt: endsAt,
+        subscriptionEndsAt:
+          latest && latest.endsAt > endsAt ? latest.endsAt : endsAt,
         plan: input.plan,
         maxUnits: PLAN_UNIT_LIMITS[input.plan],
       });
@@ -341,6 +354,41 @@ export class SubscriptionsService {
       `Suscripción renovada: complejo ${input.complexId}, ${input.plan} ${input.cycle} hasta ${period.endsAt.toISOString()}`,
     );
     return this.getSummary(input.complexId);
+  }
+
+  /**
+   * Prepara el historial para un pago con fecha de inicio elegida.
+   *
+   * Un periodo ya pagado que cubra esa fecha bloquea el registro: sería
+   * cobrar dos veces el mismo tiempo. Un periodo gratuito en curso (inicial o
+   * prueba) se recorta hasta esa fecha, para que el historial no muestre dos
+   * periodos encimados.
+   */
+  private async makeRoomFor(
+    periodRepo: Repository<SubscriptionPeriod>,
+    complexId: string,
+    startsAt: Date,
+  ): Promise<void> {
+    const periods = await periodRepo.find({ where: { complexId } });
+    const covering = periods.filter(
+      (p) => p.startsAt < startsAt && p.endsAt > startsAt,
+    );
+
+    const paid = covering.find((p) => p.kind === SubscriptionPeriodKind.PAID);
+    if (paid) {
+      throw new CustomError({
+        message: `Ya hay un periodo pagado hasta el ${formatBogotaDate(paid.endsAt)}. El nuevo periodo debe empezar ese día o después.`,
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_OVERLAPS_PAID,
+      });
+    }
+
+    for (const period of covering) {
+      const stamp = `[${formatBogotaDate(new Date())}] Recortado al ${formatBogotaDate(startsAt)}: empezó un periodo pagado.`;
+      period.notes = period.notes ? `${period.notes}\n${stamp}` : stamp;
+      period.endsAt = startsAt;
+      await periodRepo.save(period);
+    }
   }
 
   // ================================================================

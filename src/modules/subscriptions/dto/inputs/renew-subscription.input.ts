@@ -41,6 +41,16 @@ export class RenewSubscriptionInput {
 
   @Field(() => Date, {
     nullable: true,
+    description:
+      'Inicio del periodo pagado. Vacío = al terminar el periodo vigente (o hoy, si ya venció).',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  startsAt?: Date;
+
+  @Field(() => Date, {
+    nullable: true,
     description: 'Fecha del pago. Vacío = ahora.',
   })
   @IsOptional()

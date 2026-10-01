@@ -520,6 +520,11 @@ type ResidentialComplex {
 
   """Días para vencer; 0 o negativo si ya venció"""
   subscriptionDaysLeft: Int
+
+  """
+  Valor de la suscripción del conjunto (subtotal, impuestos y total). Solo SUPER_ADMIN y cumplimiento; vacío para los demás.
+  """
+  subscriptionQuote: SubscriptionQuote
 }
 
 """Tipo de complejo residencial"""
@@ -9633,6 +9638,11 @@ input RenewSubscriptionInput {
 
   """Valor pagado. Vacío = el precio configurado del plan."""
   amount: Float
+
+  """
+  Inicio del periodo pagado. Vacío = al terminar el periodo vigente (o hoy, si ya venció).
+  """
+  startsAt: DateTime
 
   """Fecha del pago. Vacío = ahora."""
   paidAt: DateTime
