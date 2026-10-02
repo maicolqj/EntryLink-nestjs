@@ -23,12 +23,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const addDays = (date: Date, days: number): Date =>
   new Date(date.getTime() + days * DAY_MS);
 
+/** Colombia no tiene horario de verano: siempre UTC−5. */
+const BOGOTA_OFFSET_MS = -5 * 60 * 60 * 1000;
+
+/** Número de día de calendario en Bogotá (días desde la época). */
+const bogotaDayNumber = (date: Date): number =>
+  Math.floor((date.getTime() + BOGOTA_OFFSET_MS) / DAY_MS);
+
 /**
- * Días que faltan para el vencimiento, redondeados hacia arriba: si vence en
- * 6 horas falta "1 día", y desde que vence da 0 o negativo.
+ * Días de calendario (hora de Colombia) que faltan para el vencimiento: el día
+ * del pago de un mes da 30, al día siguiente 29, el día que vence 0 ("vence
+ * hoy") y después negativo.
+ *
+ * No se cuentan bloques de 24 horas redondeados hacia arriba: con eso la
+ * cuenta se quedaba en 30 todo el día siguiente al pago, porque 29,2 días
+ * subían a 30.
  */
 export function daysUntil(endsAt: Date, now: Date = new Date()): number {
-  return Math.ceil((endsAt.getTime() - now.getTime()) / DAY_MS);
+  return bogotaDayNumber(endsAt) - bogotaDayNumber(now);
 }
 
 export function graceEndsAt(endsAt: Date): Date {

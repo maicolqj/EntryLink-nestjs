@@ -21,6 +21,12 @@ import { hash, compare } from 'bcrypt';
 import { VisitorParkingRate } from '../../visitor-parking/entities/visitor-parking-rate.entity';
 import { generateSystemCode } from '../utils/system-code.util';
 
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+export function isBcryptHash(value: string): boolean {
+  return BCRYPT_HASH_PATTERN.test(value);
+}
+
 @ObjectType({
   description: 'CountryCode',
 })
@@ -527,8 +533,13 @@ export class User {
     this.phoneNumber = this.phoneNumber?.replace(/\s+/g, '');
   }
 
+  /**
+   * Varios caminos (registro de supervisor, altas con contraseña aleatoria)
+   * ya entregan el hash; hashearlo otra vez dejaría la contraseña imposible
+   * de verificar. Solo se hashea lo que todavía es texto plano.
+   */
   private async hashPassword() {
-    if (this.password) {
+    if (this.password && !isBcryptHash(this.password)) {
       this.password = await hash(this.password, Number(process.env.HASHSALT));
     }
   }

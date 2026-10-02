@@ -122,7 +122,7 @@ export class ResidentialComplexService {
     // Hashear password si fue enviado
     const { password, ...restInput } = input;
     const hashedPassword = password
-      ? await bcrypt.hash(password, Number(process.env.HASHSALT) || 10)
+      ? await this.hashPassword(password)
       : undefined;
 
     const complex = this.complexRepo.create({
@@ -325,7 +325,8 @@ export class ResidentialComplexService {
 
     // Extraer legalRepresentativeId para manejarlo explícitamente:
     // "" o null → limpia el campo; UUID → asigna; undefined → no modifica
-    const { legalRepresentativeId, ...restInput } = input;
+    // La contraseña nunca se copia tal cual: se hashea aparte y solo si llegó.
+    const { legalRepresentativeId, password, ...rest } = input;
     if (legalRepresentativeId !== undefined) {
       if (legalRepresentativeId) {
         await this.assertValidLegalRepresentative(legalRepresentativeId);
@@ -336,7 +337,18 @@ export class ResidentialComplexService {
       complex.legalRepresentative = undefined;
     }
 
+    // Solo lo que se envió: los campos opcionales que no llegan vienen como
+    // `undefined` en la instancia del input y no deben pisar lo guardado.
+    const restInput = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => value !== undefined),
+    ) as Partial<typeof rest>;
     Object.assign(complex, restInput);
+
+    if (password) {
+      complex.password = await this.hashPassword(password);
+      complex.passwordSet = true;
+      complex.lastPasswordChange = new Date();
+    }
 
     // Re-geocodificar si cambió algún campo de dirección y el admin no proveyó coords manuales
     const addressChanged =
@@ -360,7 +372,12 @@ export class ResidentialComplexService {
       entityType: AuditEntityType.ResidentialComplex,
       entityId: saved.id,
       action: AuditAction.UPDATE,
-      newValue: { ...restInput, plan: input.plan, legalRepresentativeId },
+      newValue: {
+        ...restInput,
+        plan: input.plan,
+        legalRepresentativeId,
+        ...(password && { passwordChanged: true }),
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
@@ -650,9 +667,7 @@ export class ResidentialComplexService {
       });
     }
 
-    if (
-      complex.subscriptionPricingMode === SubscriptionPricingMode.PER_UNIT
-    ) {
+    if (complex.subscriptionPricingMode === SubscriptionPricingMode.PER_UNIT) {
       return;
     }
 
@@ -746,6 +761,10 @@ export class ResidentialComplexService {
         err?.stack,
       );
     }
+  }
+
+  private hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, Number(process.env.HASHSALT) || 10);
   }
 
   private async assertValidLegalRepresentative(userId: string): Promise<void> {
