@@ -70,6 +70,10 @@ export const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
   [ComplexPlan.ENTERPRISE]: 99_999,
 };
 
+/** Intentos fallidos de la contraseña del conjunto antes de bloquear un rato. */
+const KIOSK_EXIT_MAX_ATTEMPTS = 5;
+const KIOSK_EXIT_WINDOW_SECONDS = 15 * 60;
+
 @Injectable()
 export class ResidentialComplexService {
   private readonly logger = new Logger(ResidentialComplexService.name);
@@ -93,6 +97,72 @@ export class ResidentialComplexService {
     private readonly notificationsService: NotificationsService,
     private readonly socketService: SocketService,
   ) {}
+
+  // ================================================================
+  // SALIDA DEL MODO KIOSCO (PORTERÍA)
+  // ================================================================
+
+  /**
+   * El equipo de portería queda fijado en EntryLink mientras haya un guarda
+   * adentro; para cerrar sesión (y soltar la pantalla) hace falta la
+   * contraseña de la cuenta del conjunto, que el guarda no conoce.
+   *
+   * Los intentos fallidos se cuentan por usuario: sin tope, el guarda podría
+   * probar contraseñas desde el mismo equipo hasta dar con ella.
+   */
+  async verifyKioskExitPassword(
+    password: string,
+    currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    const attemptsKey = { prefix: 'kiosk-exit-attempts', key: currentUser.sub };
+    const attempts =
+      (await this.cacheService.get<{ count: number }>({ key: attemptsKey }))
+        ?.count ?? 0;
+    if (attempts >= KIOSK_EXIT_MAX_ATTEMPTS) {
+      throw new CustomError({
+        message: `Demasiados intentos. Espera ${KIOSK_EXIT_WINDOW_SECONDS / 60} minutos.`,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        errorCode: ComplexErrorCode.COMPLEX_PASSWORD_TOO_MANY_ATTEMPTS,
+      });
+    }
+
+    const complex = currentUser.complexId
+      ? await this.complexRepo
+          .createQueryBuilder('complex')
+          .addSelect('complex.password')
+          .where('complex.id = :id', { id: currentUser.complexId })
+          .andWhere('complex.deleted_at IS NULL')
+          .getOne()
+      : null;
+
+    if (!complex?.password) {
+      throw new CustomError({
+        message:
+          'El conjunto no tiene contraseña configurada. Pide a la administración que la defina.',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: ComplexErrorCode.COMPLEX_PASSWORD_NOT_SET,
+      });
+    }
+
+    if (!(await bcrypt.compare(password, complex.password))) {
+      await this.cacheService.set({
+        key: attemptsKey,
+        data: { count: attempts + 1 },
+        options: { ttl: KIOSK_EXIT_WINDOW_SECONDS },
+      });
+      throw new CustomError({
+        message: 'Contraseña del conjunto incorrecta',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: ComplexErrorCode.COMPLEX_PASSWORD_INVALID,
+      });
+    }
+
+    await this.cacheService.delete({ key: attemptsKey });
+    this.logger.log(
+      `Salida del kiosco autorizada: guarda ${currentUser.sub} en complejo ${complex.id}`,
+    );
+    return true;
+  }
 
   // ================================================================
   // CREAR COMPLEJO

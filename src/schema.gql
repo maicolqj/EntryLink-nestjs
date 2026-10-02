@@ -7447,6 +7447,11 @@ type Mutation {
   createUnitAsset(input: CreateUnitAssetInput!): UnitAsset!
   updateUnitAsset(input: UpdateUnitAssetInput!): UnitAsset!
   removeUnitAsset(id: String!): Boolean!
+
+  """
+  Valida la contraseña del conjunto para que portería pueda cerrar sesión y soltar el modo kiosco
+  """
+  verifyKioskExitPassword(password: String!): Boolean!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!

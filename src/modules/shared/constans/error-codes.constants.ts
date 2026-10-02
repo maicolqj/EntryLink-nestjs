@@ -334,6 +334,12 @@ export enum ComplexErrorCode {
    * operación. El front lo usa para explicar en vez de mostrar un 403 pelado.
    */
   COMPLEX_MODULE_DISABLED = 'COMPLEX_MODULE_DISABLED',
+  /** La contraseña del conjunto no coincide (salida del modo kiosco de portería). */
+  COMPLEX_PASSWORD_INVALID = 'COMPLEX_PASSWORD_INVALID',
+  /** El conjunto no tiene contraseña: nadie puede autorizar la salida del kiosco. */
+  COMPLEX_PASSWORD_NOT_SET = 'COMPLEX_PASSWORD_NOT_SET',
+  /** Demasiados intentos fallidos de la contraseña del conjunto. */
+  COMPLEX_PASSWORD_TOO_MANY_ATTEMPTS = 'COMPLEX_PASSWORD_TOO_MANY_ATTEMPTS',
 }
 
 export enum AmenityErrorCode {

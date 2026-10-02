@@ -40,6 +40,23 @@ export class ResidentialComplexResolver {
    * Crea un nuevo complejo residencial.
    * Solo SUPER_ADMIN puede hacerlo (o el propio gestor si se otorga el permiso).
    */
+  /**
+   * Portería cierra sesión en un equipo fijado en EntryLink: se autoriza con
+   * la contraseña de la cuenta del conjunto.
+   */
+  @Mutation(() => Boolean, {
+    name: 'verifyKioskExitPassword',
+    description:
+      'Valida la contraseña del conjunto para que portería pueda cerrar sesión y soltar el modo kiosco',
+  })
+  @Auth({ roles: [ValidRoles.SECURITY_ROL] })
+  verifyKioskExitPassword(
+    @Args('password') password: string,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<boolean> {
+    return this.complexService.verifyKioskExitPassword(password, currentUser);
+  }
+
   @Mutation(() => ResidentialComplex, { name: 'createComplex' })
   @Auth({
     roles: [ValidRoles.SUPER_ADMIN_ROL],
