@@ -15,6 +15,7 @@ import { AdjustSubscriptionInput } from '../dto/inputs/adjust-subscription.input
 import { SetPlanPriceInput } from '../dto/inputs/set-plan-price.input';
 import { SetComplexPricingInput } from '../dto/inputs/set-complex-pricing.input';
 import { SaveSubscriptionTaxInput } from '../dto/inputs/save-subscription-tax.input';
+import { UpdateSubscriptionPaymentInput } from '../dto/inputs/update-subscription-payment.input';
 import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
 import { SubscriptionTax } from '../entities/subscription-tax.entity';
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
@@ -90,7 +91,8 @@ export class SubscriptionsResolver {
 
   @Mutation(() => SubscriptionSummary, {
     name: 'grantComplexTrial',
-    description: 'Otorga la prueba gratis de 30 días (una vez por complejo).',
+    description:
+      'Regala días de suscripción: la prueba gratis (una vez por complejo) o una cortesía (recomendación, promoción…), con los días que se elijan.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
   grantComplexTrial(
@@ -158,11 +160,27 @@ export class SubscriptionsResolver {
 
   @Query(() => [SubscriptionTax], {
     name: 'subscriptionTaxes',
-    description: 'Impuestos que se suman al valor de la suscripción.',
+    description:
+      'Impuestos de la suscripción. Sin complexId: los globales. Con complexId: los locales de ese conjunto.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
-  subscriptionTaxes(): Promise<SubscriptionTax[]> {
-    return this.service.listTaxes();
+  subscriptionTaxes(
+    @Args('complexId', { type: () => ID, nullable: true }) complexId?: string,
+  ): Promise<SubscriptionTax[]> {
+    return this.service.listTaxes(complexId);
+  }
+
+  @Mutation(() => SubscriptionSummary, {
+    name: 'updateSubscriptionPayment',
+    description:
+      'Corrige el valor, la fecha o la referencia de un pago registrado, con motivo.',
+  })
+  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  updateSubscriptionPayment(
+    @Args('input') input: UpdateSubscriptionPaymentInput,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<SubscriptionSummary> {
+    return this.service.updatePayment(input, user.sub);
   }
 
   @Mutation(() => SubscriptionTax, {

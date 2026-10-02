@@ -15,6 +15,7 @@ import { NotificationPriority } from '../../notifications/enums/notification-pri
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   ComplexErrorCode,
+  GeneralErrorCode,
   SubscriptionErrorCode,
 } from '../../shared/constans/error-codes.constants';
 import { round2 } from '../../finance/utils/numeric.transformer';
@@ -25,9 +26,13 @@ import { SubscriptionPricingMode } from '../enums/subscription-pricing-mode.enum
 import { SetComplexPricingInput } from '../dto/inputs/set-complex-pricing.input';
 import { SaveSubscriptionTaxInput } from '../dto/inputs/save-subscription-tax.input';
 import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
+import { SubscriptionTaxLine } from '../dto/responses/subscription-tax-line.response';
 import { SubscriptionPricing } from '../dto/responses/subscription-pricing.response';
-import { computeQuote, splitTotal } from '../utils/subscription-quote';
+import { TaxRate, computeQuote, splitTotal } from '../utils/subscription-quote';
 import { BillingCycle } from '../enums/billing-cycle.enum';
+import { SubscriptionTaxKind } from '../enums/subscription-tax-kind.enum';
+import { FreePeriodReason } from '../enums/free-period-reason.enum';
+import { UpdateSubscriptionPaymentInput } from '../dto/inputs/update-subscription-payment.input';
 import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
 import { RenewSubscriptionInput } from '../dto/inputs/renew-subscription.input';
 import { GrantTrialInput } from '../dto/inputs/grant-trial.input';
@@ -172,14 +177,25 @@ export class SubscriptionsService {
   // IMPUESTOS
   // ================================================================
 
-  listTaxes(): Promise<SubscriptionTax[]> {
-    return this.taxRepo.find({ order: { sortOrder: 'ASC', name: 'ASC' } });
+  /** Sin conjunto: los globales. Con conjunto: solo los locales de ese conjunto. */
+  listTaxes(complexId?: string): Promise<SubscriptionTax[]> {
+    return this.taxRepo.find({
+      where: { complexId: complexId ?? IsNull() },
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
   }
 
   async saveTax(input: SaveSubscriptionTaxInput): Promise<SubscriptionTax> {
-    const tax = input.id
-      ? await this.taxRepo.findOne({ where: { id: input.id } })
-      : this.taxRepo.create();
+    let tax: SubscriptionTax | null;
+    if (input.id) {
+      tax = await this.taxRepo.findOne({ where: { id: input.id } });
+    } else {
+      if (input.complexId) await this.findComplex(input.complexId);
+      tax = this.taxRepo.create({
+        complexId: input.complexId ?? null,
+        kind: input.kind ?? SubscriptionTaxKind.CHARGE,
+      });
+    }
     if (!tax) {
       throw new CustomError({
         message: 'Impuesto no encontrado',
@@ -189,6 +205,7 @@ export class SubscriptionsService {
     }
     tax.name = input.name.trim();
     tax.rate = round2(input.rate);
+    if (input.kind !== undefined) tax.kind = input.kind;
     if (input.isActive !== undefined) tax.isActive = input.isActive;
     if (input.sortOrder !== undefined) tax.sortOrder = input.sortOrder;
     return this.taxRepo.save(tax);
@@ -249,18 +266,14 @@ export class SubscriptionsService {
       });
     }
 
-    // Lo pagado incluye impuestos. Si coincide con lo calculado se guarda ese
-    // desglose; si el SUPER_ADMIN registró otro valor, se reparte hacia atrás
-    // con las tarifas vigentes.
+    // Lo pagado ya trae los impuestos sumados y las retenciones descontadas.
+    // Si coincide con lo calculado se guarda ese desglose; si el SUPER_ADMIN
+    // registró otro valor, se reparte hacia atrás con las tarifas vigentes.
     const amount = round2(input.amount ?? quote.total);
     const breakdown =
       quote.configured && amount === quote.total
-        ? {
-            subtotal: quote.subtotal,
-            taxes: quote.taxes,
-            taxAmount: quote.taxAmount,
-          }
-        : splitTotal(amount, await this.activeTaxes());
+        ? quote
+        : splitTotal(amount, await this.activeTaxes(input.complexId));
 
     const period = await this.dataSource.transaction(async (manager) => {
       // Bloqueo de la fila: dos pagos registrados a la vez no pueden arrancar
@@ -298,7 +311,8 @@ export class SubscriptionsService {
           amount,
           subtotal: breakdown.subtotal,
           taxAmount: breakdown.taxAmount,
-          taxes: breakdown.taxes,
+          withholdingAmount: breakdown.withholdingAmount,
+          taxes: this.toTaxLines(breakdown.taxes),
           pricingMode: quote.pricingMode,
           unitCount:
             quote.pricingMode === SubscriptionPricingMode.PER_UNIT
@@ -360,9 +374,9 @@ export class SubscriptionsService {
    * Prepara el historial para un pago con fecha de inicio elegida.
    *
    * Un periodo ya pagado que cubra esa fecha bloquea el registro: sería
-   * cobrar dos veces el mismo tiempo. Un periodo gratuito en curso (inicial o
-   * prueba) se recorta hasta esa fecha, para que el historial no muestre dos
-   * periodos encimados.
+   * cobrar dos veces el mismo tiempo. Un periodo gratuito en curso (inicial,
+   * prueba o cortesía) se recorta hasta esa fecha, para que el historial no
+   * muestre dos periodos encimados.
    */
   private async makeRoomFor(
     periodRepo: Repository<SubscriptionPeriod>,
@@ -392,17 +406,139 @@ export class SubscriptionsService {
   }
 
   // ================================================================
-  // PRUEBA GRATIS
+  // CORREGIR UN PAGO
   // ================================================================
 
   /**
-   * Prueba gratis de 30 días para un complejo seleccionado. Se otorga una sola
-   * vez y no cambia el plan ni el límite de unidades del complejo.
+   * Corrige el valor, la fecha o la referencia de un pago ya registrado.
+   *
+   * El desglose se rehace hacia atrás desde el valor nuevo con las tarifas
+   * guardadas al pagar, o con las vigentes del conjunto si se pide (el pago se
+   * registró antes de configurar su retención). No mueve las fechas del
+   * periodo: para eso está el ajuste del vencimiento. El motivo y los valores
+   * anteriores quedan en las notas.
+   */
+  async updatePayment(
+    input: UpdateSubscriptionPaymentInput,
+    userId: string,
+  ): Promise<SubscriptionSummary> {
+    const period = await this.periodRepo.findOne({
+      where: { id: input.periodId },
+    });
+    if (!period) {
+      throw new CustomError({
+        message: 'Pago no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_NOT_FOUND,
+      });
+    }
+    if (period.kind !== SubscriptionPeriodKind.PAID) {
+      throw new CustomError({
+        message:
+          'Solo se pueden corregir pagos. La prueba gratis y el periodo inicial no tienen valor.',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_PERIOD_NOT_PAID,
+      });
+    }
+
+    const changes: string[] = [];
+
+    if (input.amount !== undefined || input.useCurrentTaxes) {
+      const previous = period.amount ?? 0;
+      const amount = round2(input.amount ?? previous);
+      const rates: TaxRate[] = input.useCurrentTaxes
+        ? await this.activeTaxes(period.complexId)
+        : (period.taxes ?? []).map((t) => ({
+            name: t.name,
+            rate: t.rate,
+            kind: t.kind,
+          }));
+      const breakdown = splitTotal(amount, rates);
+
+      period.amount = amount;
+      period.subtotal = breakdown.subtotal;
+      period.taxAmount = breakdown.taxAmount;
+      period.withholdingAmount = breakdown.withholdingAmount;
+      period.taxes = this.toTaxLines(breakdown.taxes);
+
+      if (amount !== previous) {
+        changes.push(`valor ${formatCop(previous)} → ${formatCop(amount)}`);
+      }
+      if (input.useCurrentTaxes) {
+        changes.push('impuestos recalculados con las tarifas vigentes');
+      }
+    }
+
+    if (input.paidAt !== undefined) {
+      const previous = period.paidAt;
+      period.paidAt = input.paidAt;
+      changes.push(
+        `fecha de pago ${previous ? formatBogotaDate(previous) : '—'} → ${formatBogotaDate(input.paidAt)}`,
+      );
+    }
+
+    if (input.paymentReference !== undefined) {
+      const previous = period.paymentReference ?? '—';
+      period.paymentReference = input.paymentReference.trim() || null;
+      changes.push(
+        `referencia ${previous} → ${period.paymentReference ?? '—'}`,
+      );
+    }
+
+    if (changes.length === 0) {
+      throw new CustomError({
+        message: 'No hay cambios que guardar en el pago',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const stamp = `[${formatBogotaDate(new Date())}] Pago corregido (${changes.join('; ')}): ${input.reason.trim()}`;
+    period.notes = period.notes ? `${period.notes}\n${stamp}` : stamp;
+    period.updatedById = userId;
+    period.paymentUpdatedAt = new Date();
+
+    await this.periodRepo.save(period);
+    await this.invalidate(period.complexId);
+
+    this.logger.log(
+      `Pago ${period.id} del complejo ${period.complexId} corregido por ${userId}: ${changes.join('; ')}`,
+    );
+    return this.getSummary(period.complexId);
+  }
+
+  // ================================================================
+  // DÍAS GRATIS (prueba y cortesías)
+  // ================================================================
+
+  /**
+   * Regala días de suscripción con la duración que elija el SUPER_ADMIN.
+   *
+   * La prueba gratis (TRIAL) se otorga una sola vez por complejo. Las
+   * cortesías (por recomendar a otro conjunto, promoción, otro motivo) se
+   * pueden repetir. Si la suscripción sigue vigente, los días se suman al
+   * final: regalar días nunca recorta lo que ya tenía. No cambia el plan ni el
+   * límite de unidades.
    */
   async grantTrial(
     input: GrantTrialInput,
     userId: string,
   ): Promise<SubscriptionSummary> {
+    const reason = input.reason ?? FreePeriodReason.TRIAL;
+    const days = input.days ?? TRIAL_DAYS;
+    const kind =
+      reason === FreePeriodReason.TRIAL
+        ? SubscriptionPeriodKind.TRIAL
+        : SubscriptionPeriodKind.COURTESY;
+
+    if (reason === FreePeriodReason.OTHER && !input.notes?.trim()) {
+      throw new CustomError({
+        message: 'Explica en las notas por qué se regalan los días',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
     const period = await this.dataSource.transaction(async (manager) => {
       const complex = await manager
         .getRepository(ResidentialComplex)
@@ -413,15 +549,18 @@ export class SubscriptionsService {
         .getOne();
       if (!complex) throw this.complexNotFound(input.complexId);
 
-      const used = await manager.getRepository(SubscriptionPeriod).exists({
-        where: { complexId: complex.id, kind: SubscriptionPeriodKind.TRIAL },
-      });
-      if (used) {
-        throw new CustomError({
-          message: 'Este complejo ya usó su prueba gratis',
-          statusCode: HttpStatus.CONFLICT,
-          errorCode: SubscriptionErrorCode.SUBSCRIPTION_TRIAL_ALREADY_USED,
+      if (kind === SubscriptionPeriodKind.TRIAL) {
+        const used = await manager.getRepository(SubscriptionPeriod).exists({
+          where: { complexId: complex.id, kind: SubscriptionPeriodKind.TRIAL },
         });
+        if (used) {
+          throw new CustomError({
+            message:
+              'Este complejo ya usó su prueba gratis. Para regalarle más días usa una cortesía (recomendación, promoción u otro motivo).',
+            statusCode: HttpStatus.CONFLICT,
+            errorCode: SubscriptionErrorCode.SUBSCRIPTION_TRIAL_ALREADY_USED,
+          });
+        }
       }
 
       const now = new Date();
@@ -429,12 +568,13 @@ export class SubscriptionsService {
         ? new Date(complex.subscriptionEndsAt)
         : null;
       const startsAt = currentEnd && currentEnd > now ? currentEnd : now;
-      const endsAt = addDays(startsAt, TRIAL_DAYS);
+      const endsAt = addDays(startsAt, days);
 
       const created = await manager.getRepository(SubscriptionPeriod).save(
         manager.getRepository(SubscriptionPeriod).create({
           complexId: complex.id,
-          kind: SubscriptionPeriodKind.TRIAL,
+          kind,
+          freeReason: reason,
           plan: complex.plan,
           cycle: null,
           startsAt,
@@ -454,15 +594,37 @@ export class SubscriptionsService {
 
     await this.invalidate(input.complexId);
 
+    const until = formatBogotaDate(period.endsAt);
+    const daysLabel = days === 1 ? '1 día' : `${days} días`;
+    const message: Record<FreePeriodReason, { title: string; body: string }> = {
+      [FreePeriodReason.TRIAL]: {
+        title: 'Prueba gratis activada',
+        body: `Tienes ${daysLabel} de prueba gratis, hasta el ${until}.`,
+      },
+      [FreePeriodReason.REFERRAL]: {
+        title: 'Días gratis por recomendarnos',
+        body: `¡Gracias por recomendarnos! Te regalamos ${daysLabel}: tu suscripción queda vigente hasta el ${until}.`,
+      },
+      [FreePeriodReason.PROMOTION]: {
+        title: 'Días gratis de promoción',
+        body: `Te regalamos ${daysLabel} por promoción: tu suscripción queda vigente hasta el ${until}.`,
+      },
+      [FreePeriodReason.OTHER]: {
+        title: 'Días gratis',
+        body: `Te regalamos ${daysLabel}: tu suscripción queda vigente hasta el ${until}.`,
+      },
+    };
+
     await this.notifyComplex({
       complexId: input.complexId,
       type: NotificationType.SUBSCRIPTION_RENEWED,
       priority: NotificationPriority.NORMAL,
-      title: 'Prueba gratis activada',
-      body: `Tienes ${TRIAL_DAYS} días de prueba gratis, hasta el ${formatBogotaDate(period.endsAt)}.`,
+      ...message[reason],
       metadata: {
         periodId: period.id,
-        kind: SubscriptionPeriodKind.TRIAL,
+        kind,
+        reason,
+        days,
         endsAt: period.endsAt.toISOString(),
       },
       createdByUserId: userId,
@@ -606,7 +768,7 @@ export class SubscriptionsService {
       pricing.mode === SubscriptionPricingMode.PER_UNIT
         ? this.countUnits(complex.id, complex.totalUnits)
         : Promise.resolve({ count: 0, source: 'REGISTERED' as const }),
-      this.activeTaxes(),
+      this.activeTaxes(complex.id),
       pricing.mode === SubscriptionPricingMode.PLAN
         ? this.priceRepo.findOne({ where: { plan: effectivePlan } })
         : Promise.resolve(null),
@@ -624,6 +786,7 @@ export class SubscriptionsService {
 
     return {
       ...result,
+      taxes: this.toTaxLines(result.taxes),
       pricingMode: pricing.mode,
       plan: effectivePlan,
       cycle: effectiveCycle,
@@ -655,12 +818,30 @@ export class SubscriptionsService {
     return { count: declared, source: 'DECLARED' };
   }
 
-  private async activeTaxes(): Promise<{ name: string; rate: number }[]> {
+  /** Los globales primero y luego los locales del conjunto. */
+  private async activeTaxes(complexId: string): Promise<TaxRate[]> {
     const taxes = await this.taxRepo.find({
-      where: { isActive: true },
+      where: [
+        { isActive: true, complexId: IsNull() },
+        { isActive: true, complexId },
+      ],
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
-    return taxes.map((t) => ({ name: t.name, rate: t.rate }));
+    return [
+      ...taxes.filter((t) => !t.complexId),
+      ...taxes.filter((t) => !!t.complexId),
+    ].map((t) => ({ name: t.name, rate: t.rate, kind: t.kind }));
+  }
+
+  private toTaxLines(
+    lines: { name: string; rate: number; kind: string; amount: number }[],
+  ): SubscriptionTaxLine[] {
+    return lines.map((l) => ({
+      name: l.name,
+      rate: l.rate,
+      kind: l.kind as SubscriptionTaxKind,
+      amount: l.amount,
+    }));
   }
 
   private toPricing(

@@ -48,9 +48,19 @@ export class SubscriptionQuote {
   @Field(() => [SubscriptionTaxLine])
   taxes: SubscriptionTaxLine[];
 
-  @Field(() => Float)
+  @Field(() => Float, { description: 'Impuestos que se suman (IVA)' })
   taxAmount: number;
 
-  @Field(() => Float, { description: 'Total a pagar, impuestos incluidos' })
+  @Field(() => Float, {
+    description: 'Lo que retiene el conjunto (retención en la fuente…)',
+  })
+  withholdingAmount: number;
+
+  @Field(() => Float, { description: 'Valor facturado: subtotal + impuestos' })
+  invoiceTotal: number;
+
+  @Field(() => Float, {
+    description: 'Lo que paga el conjunto: facturado − retenciones',
+  })
   total: number;
 }

@@ -3,6 +3,7 @@ import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
 import { BillingCycle } from '../enums/billing-cycle.enum';
 import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
+import { FreePeriodReason } from '../enums/free-period-reason.enum';
 
 const COMPLEX_ID = '11111111-1111-1111-1111-111111111111';
 const DAY = 86_400_000;
@@ -17,7 +18,12 @@ const build = (opts: {
   trialUsed?: boolean;
   pricing?: { mode: string; price?: number | null; cycle?: string };
   units?: number;
-  taxes?: { name: string; rate: number }[];
+  taxes?: {
+    name: string;
+    rate: number;
+    kind?: string;
+    complexId?: string | null;
+  }[];
   periods?: Record<string, any>[];
 }) => {
   const saved: Record<string, any>[] = [];
@@ -78,10 +84,24 @@ const build = (opts: {
       ),
     },
     complexRepo: { findOne: jest.fn(async () => complex) },
+    periodRepo: {
+      findOne: jest.fn(async ({ where }: any) =>
+        (opts.periods ?? []).find((p) => p.id === where.id),
+      ),
+      save: jest.fn(async (x: any) => {
+        saved.push(x);
+        return x;
+      }),
+    },
     unitRepo: { count: jest.fn(async () => opts.units ?? 0) },
     taxRepo: {
       find: jest.fn(async () =>
-        (opts.taxes ?? []).map((t) => ({ ...t, isActive: true })),
+        (opts.taxes ?? []).map((t) => ({
+          kind: 'CHARGE',
+          complexId: null,
+          ...t,
+          isActive: true,
+        })),
       ),
     },
     cacheService: { delete: jest.fn() },
@@ -389,6 +409,196 @@ describe('SubscriptionsService — prueba gratis', () => {
 
     await expect(
       service.grantTrial({ complexId: COMPLEX_ID }, 'admin'),
+    ).rejects.toBeInstanceOf(CustomError);
+    expect(saved).toHaveLength(0);
+  });
+});
+
+describe('SubscriptionsService — impuestos locales', () => {
+  it('aplica los globales y la retención propia del conjunto', async () => {
+    const { service, saved } = build({
+      pricing: { mode: 'FIXED', price: 1_000_000 },
+      taxes: [
+        {
+          name: 'Retención en la fuente',
+          rate: 4,
+          kind: 'WITHHOLDING',
+          complexId: COMPLEX_ID,
+        },
+        { name: 'IVA', rate: 19 },
+      ],
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.PRO,
+        cycle: BillingCycle.MONTHLY,
+      },
+      'admin',
+    );
+
+    expect(saved[0]).toEqual(
+      expect.objectContaining({
+        amount: 1_150_000,
+        subtotal: 1_000_000,
+        taxAmount: 190_000,
+        withholdingAmount: 40_000,
+      }),
+    );
+    // Los globales primero, luego los del conjunto.
+    expect(saved[0].taxes.map((t: any) => t.name)).toEqual([
+      'IVA',
+      'Retención en la fuente',
+    ]);
+  });
+});
+
+describe('SubscriptionsService — corregir un pago', () => {
+  const paid = () => ({
+    id: 'p1',
+    complexId: COMPLEX_ID,
+    kind: SubscriptionPeriodKind.PAID,
+    amount: 119_000,
+    subtotal: 100_000,
+    taxAmount: 19_000,
+    taxes: [{ name: 'IVA', rate: 19, kind: 'CHARGE', amount: 19_000 }],
+    paidAt: new Date('2026-09-01T15:00:00Z'),
+    paymentReference: 'TRX-1',
+    notes: null,
+    startsAt: new Date('2026-09-01T00:00:00Z'),
+    endsAt: new Date('2026-10-01T00:00:00Z'),
+  });
+
+  it('corrige el valor y rehace el desglose con las tarifas del pago', async () => {
+    const { service, saved } = build({ periods: [paid()] });
+
+    await service.updatePayment(
+      { periodId: 'p1', amount: 238_000, reason: 'Se digitó mal el valor' },
+      'admin',
+    );
+
+    expect(saved[0]).toEqual(
+      expect.objectContaining({
+        amount: 238_000,
+        subtotal: 200_000,
+        taxAmount: 38_000,
+        withholdingAmount: 0,
+        updatedById: 'admin',
+        paymentReference: 'TRX-1',
+      }),
+    );
+    expect(saved[0].notes).toContain('Se digitó mal el valor');
+    expect(saved[0].notes).toContain('valor');
+    // Las fechas del periodo no se mueven.
+    expect(saved[0].endsAt).toEqual(new Date('2026-10-01T00:00:00Z'));
+  });
+
+  it('puede recalcular con la retención que se configuró después', async () => {
+    const { service, saved } = build({
+      periods: [paid()],
+      taxes: [
+        { name: 'IVA', rate: 19 },
+        {
+          name: 'Retención en la fuente',
+          rate: 2,
+          kind: 'WITHHOLDING',
+          complexId: COMPLEX_ID,
+        },
+      ],
+    });
+
+    await service.updatePayment(
+      {
+        periodId: 'p1',
+        amount: 117_000,
+        useCurrentTaxes: true,
+        reason: 'El conjunto practicó retención del 2 %',
+      },
+      'admin',
+    );
+
+    expect(saved[0]).toEqual(
+      expect.objectContaining({
+        amount: 117_000,
+        subtotal: 100_000,
+        taxAmount: 19_000,
+        withholdingAmount: 2_000,
+      }),
+    );
+  });
+
+  it('solo se corrigen pagos, no la prueba gratis', async () => {
+    const { service, saved } = build({
+      periods: [{ ...paid(), kind: SubscriptionPeriodKind.TRIAL }],
+    });
+
+    await expect(
+      service.updatePayment(
+        { periodId: 'p1', amount: 1, reason: 'prueba' },
+        'admin',
+      ),
+    ).rejects.toBeInstanceOf(CustomError);
+    expect(saved).toHaveLength(0);
+  });
+
+  it('sin cambios no guarda nada', async () => {
+    const { service, saved } = build({ periods: [paid()] });
+
+    await expect(
+      service.updatePayment({ periodId: 'p1', reason: 'nada' }, 'admin'),
+    ).rejects.toBeInstanceOf(CustomError);
+    expect(saved).toHaveLength(0);
+  });
+});
+
+describe('SubscriptionsService — días gratis por complejo', () => {
+  it('la prueba dura los días que se elijan', async () => {
+    const { service, saved } = build({});
+
+    await service.grantTrial({ complexId: COMPLEX_ID, days: 15 }, 'admin');
+
+    const days =
+      (saved[0].endsAt.getTime() - saved[0].startsAt.getTime()) / DAY;
+    expect(days).toBe(15);
+    expect(saved[0].kind).toBe(SubscriptionPeriodKind.TRIAL);
+    expect(saved[0].freeReason).toBe('TRIAL');
+  });
+
+  it('una cortesía se puede dar aunque ya haya usado la prueba', async () => {
+    const { service, saved } = build({ trialUsed: true });
+
+    await service.grantTrial(
+      { complexId: COMPLEX_ID, days: 30, reason: FreePeriodReason.REFERRAL },
+      'admin',
+    );
+
+    expect(saved[0].kind).toBe(SubscriptionPeriodKind.COURTESY);
+    expect(saved[0].freeReason).toBe('REFERRAL');
+  });
+
+  it('con la suscripción vigente, los días se suman al final', async () => {
+    const endsAt = new Date(Date.now() + 10 * DAY);
+    const { service, saved, updates } = build({ endsAt });
+
+    await service.grantTrial(
+      { complexId: COMPLEX_ID, days: 30, reason: FreePeriodReason.PROMOTION },
+      'admin',
+    );
+
+    expect(saved[0].startsAt).toEqual(endsAt);
+    expect(saved[0].endsAt).toEqual(new Date(endsAt.getTime() + 30 * DAY));
+    expect(updates[0]).toEqual({ subscriptionEndsAt: saved[0].endsAt });
+  });
+
+  it('otro motivo exige explicarlo en las notas', async () => {
+    const { service, saved } = build({});
+
+    await expect(
+      service.grantTrial(
+        { complexId: COMPLEX_ID, days: 10, reason: FreePeriodReason.OTHER },
+        'admin',
+      ),
     ).rejects.toBeInstanceOf(CustomError);
     expect(saved).toHaveLength(0);
   });
