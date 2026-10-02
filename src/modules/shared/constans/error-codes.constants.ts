@@ -573,3 +573,21 @@ export enum ComplexInfoErrorCode {
   /** Un contacto sin teléfono ni correo no le sirve a nadie. */
   COMPLEX_CONTACT_UNREACHABLE = 'COMPLEX_CONTACT_UNREACHABLE',
 }
+
+/**
+ * Equipos de portería administrados con Android Management API (modo kiosco).
+ */
+export enum DeviceManagementErrorCode {
+  /** Faltan las credenciales de la cuenta de servicio en el servidor. */
+  DEVICE_MANAGEMENT_NOT_CONFIGURED = 'DEVICE_MANAGEMENT_NOT_CONFIGURED',
+  /** Todavía no se vinculó la empresa de Google: no hay a quién inscribir equipos. */
+  DEVICE_MANAGEMENT_NO_ENTERPRISE = 'DEVICE_MANAGEMENT_NO_ENTERPRISE',
+  /** Ya hay una empresa vinculada: crear otra dejaría equipos huérfanos. */
+  DEVICE_MANAGEMENT_ENTERPRISE_EXISTS = 'DEVICE_MANAGEMENT_ENTERPRISE_EXISTS',
+  /** La URL de regreso del registro no es de un dominio permitido. */
+  DEVICE_MANAGEMENT_INVALID_CALLBACK = 'DEVICE_MANAGEMENT_INVALID_CALLBACK',
+  /** El equipo no pertenece a la empresa vinculada. */
+  DEVICE_MANAGEMENT_DEVICE_NOT_FOUND = 'DEVICE_MANAGEMENT_DEVICE_NOT_FOUND',
+  /** Google rechazó la operación; el mensaje trae el motivo. */
+  DEVICE_MANAGEMENT_GOOGLE_ERROR = 'DEVICE_MANAGEMENT_GOOGLE_ERROR',
+}

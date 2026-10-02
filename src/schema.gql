@@ -5579,6 +5579,72 @@ type AppVersionCheck {
   message: String
 }
 
+"""Estado de la administración de equipos de portería"""
+type DeviceManagementStatus {
+  """false = faltan las credenciales de Google en el servidor"""
+  configured: Boolean!
+
+  """Empresa vinculada (enterprises/…); vacío = falta vincularla"""
+  enterpriseName: String
+  enterpriseDisplayName: String
+  policyAppliedAt: DateTime
+
+  """false = la política de kiosco del código no es la que tiene Google"""
+  policyUpToDate: Boolean!
+}
+
+"""Enlace para vincular la cuenta de Google de la empresa"""
+type EnterpriseSignup {
+  """Guardarlo: se necesita para terminar el registro al volver"""
+  signupUrlName: String!
+
+  """Abrir en el navegador"""
+  url: String!
+}
+
+"""QR para inscribir un equipo de portería de un conjunto"""
+type DeviceEnrollmentQr {
+  """
+  Contenido del QR (JSON): se escanea en un equipo recién reseteado tocando 6 veces la pantalla de bienvenida
+  """
+  qrCode: String!
+
+  """Código para inscribir sin QR (afw#setup o el campo de código)"""
+  enrollmentCode: String!
+  expiresAt: DateTime!
+  complexId: String!
+  complexName: String!
+}
+
+"""Equipo de portería inscrito"""
+type ManagedDevice {
+  """enterprises/…/devices/…"""
+  name: String!
+
+  """ACTIVE, PROVISIONING, DISABLED, LOST…"""
+  state: String
+  brand: String
+  model: String
+  serialNumber: String
+  androidVersion: String
+
+  """Versión de EntryLink instalada"""
+  appVersionName: String
+  appVersionCode: Int
+
+  """Conjunto del QR con que se inscribió"""
+  complexId: String
+  complexName: String
+  enrollmentTime: DateTime
+
+  """Último reporte del equipo"""
+  lastStatusReportTime: DateTime
+  policyCompliant: Boolean
+
+  """Ajustes de la política que el equipo no pudo cumplir (campo: motivo)"""
+  nonCompliance: [String!]!
+}
+
 """Anotación en la bitácora de un ticket"""
 type MaintenanceTicketEvent {
   id: ID!
@@ -6792,6 +6858,10 @@ type Query {
 
   """Versión mínima obligatoria de cada app y plataforma"""
   appVersionPolicies: [AppVersionPolicy!]!
+  deviceManagementStatus: DeviceManagementStatus!
+
+  """Equipos inscritos; con complexId, solo los de ese conjunto"""
+  managedDevices(complexId: String): [ManagedDevice!]!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7756,6 +7826,26 @@ type Mutation {
   Fija la versión mínima: las instalaciones anteriores quedan bloqueadas hasta actualizar.
   """
   setAppVersionPolicy(input: SetAppVersionPolicyInput!): AppVersionPolicy!
+
+  """Paso 1: enlace de Google para vincular la cuenta de la empresa"""
+  startEnterpriseSignup(input: StartEnterpriseSignupInput!): EnterpriseSignup!
+
+  """
+  Paso 2: crea la empresa con el token que devolvió Google y aplica la política de kiosco
+  """
+  completeEnterpriseSignup(input: CompleteEnterpriseSignupInput!): DeviceManagementStatus!
+
+  """Vuelve a enviar a Google la política de kiosco de portería"""
+  applyKioskPolicy: DeviceManagementStatus!
+
+  """QR (vigente 24 h) para inscribir equipos de portería de un conjunto"""
+  createDeviceEnrollmentQr(complexId: String!): DeviceEnrollmentQr!
+
+  """Reiniciar o bloquear la pantalla de un equipo"""
+  managedDeviceCommand(input: ManagedDeviceCommandInput!): Boolean!
+
+  """Retira el equipo: lo BORRA y lo deja de fábrica (sale del modo kiosco)"""
+  releaseManagedDevice(deviceName: String!): Boolean!
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9861,6 +9951,29 @@ input SetAppVersionPolicyInput {
   """0 = no se obliga a nadie"""
   minVersionCode: Int!
   message: String
+}
+
+input StartEnterpriseSignupInput {
+  """
+  Página del panel a la que Google regresa con ?enterpriseToken=…; debe ser de un dominio permitido
+  """
+  callbackUrl: String!
+}
+
+input CompleteEnterpriseSignupInput {
+  signupUrlName: String!
+  enterpriseToken: String!
+}
+
+input ManagedDeviceCommandInput {
+  deviceName: String!
+  command: ManagedDeviceCommand!
+}
+
+"""Órdenes remotas a un equipo de portería"""
+enum ManagedDeviceCommand {
+  REBOOT
+  LOCK
 }
 
 input TriageMaintenanceTicketInput {
