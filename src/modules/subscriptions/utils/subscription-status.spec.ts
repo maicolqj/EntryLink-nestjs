@@ -3,6 +3,7 @@ import {
   addBillingPeriod,
   computeSubscriptionStatus,
   currentReminderMilestone,
+  daysUntil,
 } from './subscription-status';
 
 const NOW = new Date('2026-10-01T13:00:00.000Z');
@@ -95,5 +96,33 @@ describe('currentReminderMilestone', () => {
   it('vencida y suspendida', () => {
     expect(currentReminderMilestone(inDays(-1), NOW)).toBe('EXPIRED');
     expect(currentReminderMilestone(inDays(-6), NOW)).toBe('SUSPENDED');
+  });
+});
+
+describe('daysUntil', () => {
+  // Pago registrado el 30 de septiembre a las 3:00 p. m. (Bogotá): vence el
+  // 30 de octubre a la misma hora.
+  const paidAt = new Date('2026-09-30T20:00:00.000Z');
+  const endsAt = addBillingPeriod(paidAt, 'MONTHLY');
+
+  it('el día del pago faltan 30 días', () => {
+    expect(daysUntil(endsAt, paidAt)).toBe(30);
+  });
+
+  it('al día siguiente baja a 29, a cualquier hora', () => {
+    expect(daysUntil(endsAt, new Date('2026-10-01T13:00:00.000Z'))).toBe(29);
+    expect(daysUntil(endsAt, new Date('2026-10-02T04:30:00.000Z'))).toBe(29);
+  });
+
+  it('cuenta días de calendario de Colombia, no bloques de 24 horas', () => {
+    // 11:30 p. m. del 1 de octubre en Bogotá (ya es 2 de octubre en UTC).
+    expect(daysUntil(endsAt, new Date('2026-10-02T04:30:00.000Z'))).toBe(29);
+    // 12:30 a. m. del 2 de octubre en Bogotá.
+    expect(daysUntil(endsAt, new Date('2026-10-02T05:30:00.000Z'))).toBe(28);
+  });
+
+  it('el día del vencimiento es 0 ("vence hoy") y después es negativo', () => {
+    expect(daysUntil(endsAt, new Date('2026-10-30T14:00:00.000Z'))).toBe(0);
+    expect(daysUntil(endsAt, new Date('2026-11-01T14:00:00.000Z'))).toBe(-2);
   });
 });
