@@ -22,7 +22,12 @@ import { ClientApp, ClientPlatform } from '../enums/client-app.enum';
 @Entity({ name: 'app_version_policies' })
 @Unique('UQ_app_version_policies_app_platform', ['app', 'platform'])
 export class AppVersionPolicy {
-  @Field(() => ID)
+  // `id` y `updatedAt` son opcionales en GraphQL: `appVersionPolicies` lista
+  // también las combinaciones que nunca se configuraron, que no tienen fila.
+  @Field(() => ID, {
+    nullable: true,
+    description: 'Vacío = nunca se configuró (no se obliga a nadie)',
+  })
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -52,7 +57,10 @@ export class AppVersionPolicy {
   @Column({ name: 'updated_by_id', type: 'uuid', nullable: true })
   updatedById?: string | null;
 
-  @Field(() => Date)
+  @Field(() => Date, {
+    nullable: true,
+    description: 'Vacío = nunca se configuró',
+  })
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
