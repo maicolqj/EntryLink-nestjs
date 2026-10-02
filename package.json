@@ -79,6 +79,7 @@
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "firebase-admin": "^14.4.0",
+    "google-auth-library": "^10.5.0",
     "graphql": "^16.14.2",
     "graphql-depth-limit": "^1.1.0",
     "graphql-query-complexity": "^2.0.0",

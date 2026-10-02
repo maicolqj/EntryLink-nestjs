@@ -792,6 +792,10 @@ export class ResidentialComplexService {
     // borra aquí, apagar un módulo seguiría dejando pasar las llamadas hasta
     // que venza el TTL.
     await this.cacheService.delete({ key: BK.complexModules.one(complexId) });
+    // Las apps leen la lista con `complex(id)`, que sale de esta otra caché. Sin
+    // borrarla, la consulta que hacen al volver a primer plano devolvía la
+    // lista vieja y volvía a mostrar el módulo que el socket acababa de quitar.
+    await this.cacheService.delete({ key: BK.complex.one(complexId) });
 
     // Una sola lista para los dos frentes: la web arma su menú lateral y la app
     // sus accesos del inicio con esto mismo. Se manda la lista completa y no un
