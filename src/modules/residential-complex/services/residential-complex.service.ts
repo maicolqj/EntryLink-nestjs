@@ -152,7 +152,9 @@ export class ResidentialComplexService {
       });
       throw new CustomError({
         message: 'Contraseña del conjunto incorrecta',
-        statusCode: HttpStatus.UNAUTHORIZED,
+        // 403 y no 401: un 401 haría que la app tome la sesión del guarda por
+        // vencida y lo saque, cuando solo se equivocó de contraseña.
+        statusCode: HttpStatus.FORBIDDEN,
         errorCode: ComplexErrorCode.COMPLEX_PASSWORD_INVALID,
       });
     }
