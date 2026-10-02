@@ -5534,6 +5534,48 @@ type SubscriptionPlanPriceView {
   updatedAt: DateTime
 }
 
+"""Versión mínima obligatoria de una app"""
+type AppVersionPolicy {
+  id: ID!
+  app: ClientApp!
+  platform: ClientPlatform!
+
+  """
+  versionCode (Android) o build number (iOS) mínimo. 0 = no se obliga a nadie.
+  """
+  minVersionCode: Int!
+
+  """Mensaje para el usuario al bloquear (vacío = texto genérico)"""
+  message: String
+  updatedById: String
+  updatedAt: DateTime!
+}
+
+"""App móvil"""
+enum ClientApp {
+  """RemoteLink (residentes)"""
+  REMOTELINK
+
+  """EntryLink (portería y administración)"""
+  ENTRYLINK
+}
+
+"""Sistema operativo de la app"""
+enum ClientPlatform {
+  ANDROID
+  IOS
+}
+
+"""Resultado de revisar la versión instalada"""
+type AppVersionCheck {
+  """
+  true = la versión instalada ya no es compatible: la app debe bloquearse hasta actualizar
+  """
+  updateRequired: Boolean!
+  minVersionCode: Int!
+  message: String
+}
+
 """Anotación en la bitácora de un ticket"""
 type MaintenanceTicketEvent {
   id: ID!
@@ -6740,7 +6782,13 @@ type Query {
   """
   subscriptionTaxes(complexId: ID): [SubscriptionTax!]!
 
+  """
+  ¿La versión instalada debe actualizarse obligatoriamente? (cambios que rompen compatibilidad)
+  """
+  appVersionCheck(app: ClientApp!, platform: ClientPlatform!, versionCode: Int!): AppVersionCheck!
 
+  """Versión mínima obligatoria de cada app y plataforma"""
+  appVersionPolicies: [AppVersionPolicy!]!
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7701,6 +7749,10 @@ type Mutation {
   """Elimina un impuesto de la suscripción."""
   deleteSubscriptionTax(id: ID!): Boolean!
 
+  """
+  Fija la versión mínima: las instalaciones anteriores quedan bloqueadas hasta actualizar.
+  """
+  setAppVersionPolicy(input: SetAppVersionPolicyInput!): AppVersionPolicy!
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9796,6 +9848,16 @@ input SaveSubscriptionTaxInput {
   rate: Float!
   isActive: Boolean
   sortOrder: Int
+}
+
+"""Fijar la versión mínima obligatoria de una app"""
+input SetAppVersionPolicyInput {
+  app: ClientApp!
+  platform: ClientPlatform!
+
+  """0 = no se obliga a nadie"""
+  minVersionCode: Int!
+  message: String
 }
 
 input TriageMaintenanceTicketInput {
