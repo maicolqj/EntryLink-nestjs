@@ -27,13 +27,14 @@ export const KIOSK_POLICY_ID = 'porteria';
  *   botón de reinicio desde el panel.
  * - Se mantiene encendido conectado a la corriente y la ubicación queda forzada
  *   (el pánico manda dónde está la portería).
- * - Actualizaciones de Android y de EntryLink solo de madrugada (2:00–5:00,
- *   hora del equipo): una actualización reinicia la app, y a mitad de turno
- *   dejaría la portería unos segundos sin citofonía. Google indica que en un
- *   kiosco la ventana es la ÚNICA forma de actualizar una app que nunca sale
- *   de primer plano, y solo aplica con AUTO_UPDATE_DEFAULT: con
- *   HIGH_PRIORITY la ventana se ignora. Ojo: una versión mínima obligatoria
- *   no se instala hasta la siguiente ventana.
+ * - EntryLink se actualiza apenas Play tiene la versión
+ *   (AUTO_UPDATE_HIGH_PRIORITY), aunque esté en primer plano: si se sube la
+ *   versión mínima obligatoria de día, el equipo no puede quedar bloqueado
+ *   hasta la madrugada. Se probó con la ventana de 2:00–5:00 y se descartó
+ *   por eso. El reinicio de la app dura segundos.
+ * - Las actualizaciones de Android sí van de 2:00 a 5:00 (hora del equipo):
+ *   reinician el equipo entero. Con HIGH_PRIORITY esa ventana no aplica a
+ *   EntryLink.
  */
 export function buildKioskPolicy(): Record<string, unknown> {
   return {
@@ -42,7 +43,7 @@ export function buildKioskPolicy(): Record<string, unknown> {
         packageName: ENTRYLINK_PACKAGE,
         installType: 'KIOSK',
         defaultPermissionPolicy: 'GRANT',
-        autoUpdateMode: 'AUTO_UPDATE_DEFAULT',
+        autoUpdateMode: 'AUTO_UPDATE_HIGH_PRIORITY',
       },
     ],
     defaultApplicationSettings: [
