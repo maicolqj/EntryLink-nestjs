@@ -1,6 +1,11 @@
-import { computeQuote, splitTotal } from './subscription-quote';
+import { TaxRate, computeQuote, splitTotal } from './subscription-quote';
 
-const IVA = [{ name: 'IVA', rate: 19 }];
+const IVA: TaxRate[] = [{ name: 'IVA', rate: 19, kind: 'CHARGE' }];
+const RETEFUENTE = (rate: number): TaxRate => ({
+  name: 'Retención en la fuente',
+  rate,
+  kind: 'WITHHOLDING',
+});
 
 describe('computeQuote', () => {
   it('por unidad: valor × unidades + IVA', () => {
@@ -82,8 +87,8 @@ describe('computeQuote', () => {
       price: 500_000,
       unitCount: 900,
       taxes: [
-        { name: 'IVA', rate: 19 },
-        { name: 'Otro', rate: 1 },
+        { name: 'IVA', rate: 19, kind: 'CHARGE' },
+        { name: 'Otro', rate: 1, kind: 'CHARGE' },
       ],
     });
 
@@ -107,12 +112,79 @@ describe('computeQuote', () => {
   });
 });
 
+describe('computeQuote — retenciones', () => {
+  it('la retención se calcula sobre el subtotal y se descuenta de lo que paga', () => {
+    const q = computeQuote({
+      mode: 'FIXED',
+      cycle: 'MONTHLY',
+      price: 1_000_000,
+      unitCount: 0,
+      taxes: [...IVA, RETEFUENTE(4)],
+    });
+
+    expect(q).toEqual(
+      expect.objectContaining({
+        subtotal: 1_000_000,
+        taxAmount: 190_000,
+        withholdingAmount: 40_000,
+        invoiceTotal: 1_190_000,
+        total: 1_150_000,
+      }),
+    );
+    expect(q.taxes).toEqual([
+      { name: 'IVA', rate: 19, kind: 'CHARGE', amount: 190_000 },
+      {
+        name: 'Retención en la fuente',
+        rate: 4,
+        kind: 'WITHHOLDING',
+        amount: 40_000,
+      },
+    ]);
+  });
+
+  it('cada conjunto paga según su propia retención', () => {
+    const totals = [2, 4, 6].map(
+      (rate) =>
+        computeQuote({
+          mode: 'FIXED',
+          cycle: 'MONTHLY',
+          price: 1_000_000,
+          unitCount: 0,
+          taxes: [...IVA, RETEFUENTE(rate)],
+        }).total,
+    );
+
+    expect(totals).toEqual([1_170_000, 1_150_000, 1_130_000]);
+  });
+});
+
 describe('splitTotal', () => {
   it('saca el subtotal de un valor con IVA incluido', () => {
     expect(splitTotal(119_000, IVA)).toEqual({
       subtotal: 100_000,
-      taxes: [{ name: 'IVA', rate: 19, amount: 19_000 }],
+      taxes: [{ name: 'IVA', rate: 19, kind: 'CHARGE', amount: 19_000 }],
       taxAmount: 19_000,
+      withholdingAmount: 0,
+      invoiceTotal: 119_000,
+      total: 119_000,
     });
+  });
+
+  it('con retención: lo pagado es neto, el subtotal sale hacia atrás', () => {
+    const b = splitTotal(1_150_000, [...IVA, RETEFUENTE(4)]);
+
+    expect(b.subtotal).toBe(1_000_000);
+    expect(b.taxAmount).toBe(190_000);
+    expect(b.withholdingAmount).toBe(40_000);
+    expect(b.invoiceTotal).toBe(1_190_000);
+    expect(b.total).toBe(1_150_000);
+  });
+
+  it('el desglose siempre suma exactamente lo pagado', () => {
+    const b = splitTotal(333_333, [...IVA, RETEFUENTE(6)]);
+
+    expect(
+      Math.round((b.subtotal + b.taxAmount - b.withholdingAmount) * 100) / 100,
+    ).toBe(333_333);
   });
 });

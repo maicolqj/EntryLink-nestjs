@@ -555,6 +555,8 @@ export enum SubscriptionErrorCode {
   SUBSCRIPTION_TAX_NOT_FOUND = 'SUBSCRIPTION_TAX_NOT_FOUND',
   /** La fecha de inicio elegida cae dentro de un periodo ya pagado. */
   SUBSCRIPTION_OVERLAPS_PAID = 'SUBSCRIPTION_OVERLAPS_PAID',
+  /** Solo los periodos pagados tienen un pago que corregir. */
+  SUBSCRIPTION_PERIOD_NOT_PAID = 'SUBSCRIPTION_PERIOD_NOT_PAID',
 }
 
 export enum ComplexInfoErrorCode {

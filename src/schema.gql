@@ -5309,7 +5309,19 @@ type SubscriptionTaxLine {
 
   """Tarifa en porcentaje (19 = 19 %)"""
   rate: Float!
+
+  """CHARGE se sumó al cobro; WITHHOLDING lo retuvo el conjunto"""
+  kind: SubscriptionTaxKind!
   amount: Float!
+}
+
+"""Si el impuesto se suma al cobro o lo retiene el conjunto"""
+enum SubscriptionTaxKind {
+  """Se suma al subtotal (IVA)"""
+  CHARGE
+
+  """Lo retiene el conjunto: se descuenta de lo que paga"""
+  WITHHOLDING
 }
 
 """Periodo de suscripción de un complejo"""
@@ -5324,7 +5336,7 @@ type SubscriptionPeriod {
   startsAt: DateTime!
   endsAt: DateTime!
 
-  """Valor pagado (COP), impuestos incluidos"""
+  """Valor pagado (COP): subtotal + impuestos − retenciones del conjunto"""
   amount: Float
 
   """Modalidad con la que se calculó el cobro"""
@@ -5342,14 +5354,24 @@ type SubscriptionPeriod {
   """Total de impuestos"""
   taxAmount: Float
 
+  """Total retenido por el conjunto (retención en la fuente…)"""
+  withholdingAmount: Float
+
   """Impuestos aplicados, con la tarifa vigente al pagar"""
   taxes: [SubscriptionTaxLine!]
+
+  """Motivo de los días gratis (prueba y cortesía)"""
+  freeReason: FreePeriodReason
   paidAt: DateTime
 
   """Referencia del pago (número de transferencia, consignación…)"""
   paymentReference: String
   notes: String
   createdById: String
+
+  """Quién corrigió el pago por última vez"""
+  updatedById: String
+  paymentUpdatedAt: DateTime
   createdAt: DateTime!
 }
 
@@ -5360,6 +5382,9 @@ enum SubscriptionPeriodKind {
 
   """Prueba gratis"""
   TRIAL
+
+  """Días gratis de cortesía"""
+  COURTESY
 
   """Periodo pagado"""
   PAID
@@ -5386,6 +5411,21 @@ enum SubscriptionPricingMode {
   FIXED
 }
 
+"""Motivo de los días gratis"""
+enum FreePeriodReason {
+  """Prueba gratis (una vez por complejo)"""
+  TRIAL
+
+  """Por recomendar a otro conjunto"""
+  REFERRAL
+
+  """Promoción"""
+  PROMOTION
+
+  """Otro motivo (explicarlo en las notas)"""
+  OTHER
+}
+
 """Impuesto aplicado a la suscripción"""
 type SubscriptionTax {
   id: ID!
@@ -5393,6 +5433,10 @@ type SubscriptionTax {
 
   """Tarifa en porcentaje (19 = 19 %)"""
   rate: Float!
+  kind: SubscriptionTaxKind!
+
+  """Conjunto al que aplica. Vacío = global (todos los conjuntos)."""
+  complexId: String
   isActive: Boolean!
   sortOrder: Int!
   updatedAt: DateTime!
@@ -5435,9 +5479,17 @@ type SubscriptionQuote {
   monthsCharged: Int!
   subtotal: Float!
   taxes: [SubscriptionTaxLine!]!
+
+  """Impuestos que se suman (IVA)"""
   taxAmount: Float!
 
-  """Total a pagar, impuestos incluidos"""
+  """Lo que retiene el conjunto (retención en la fuente…)"""
+  withholdingAmount: Float!
+
+  """Valor facturado: subtotal + impuestos"""
+  invoiceTotal: Float!
+
+  """Lo que paga el conjunto: facturado − retenciones"""
   total: Float!
 }
 
@@ -6683,8 +6735,12 @@ type Query {
   """
   subscriptionQuote(complexId: ID!, plan: ComplexPlan, cycle: BillingCycle): SubscriptionQuote!
 
-  """Impuestos que se suman al valor de la suscripción."""
-  subscriptionTaxes: [SubscriptionTax!]!
+  """
+  Impuestos de la suscripción. Sin complexId: los globales. Con complexId: los locales de ese conjunto.
+  """
+  subscriptionTaxes(complexId: ID): [SubscriptionTax!]!
+
+
   maintenanceStaff(complexId: String!): [MaintenanceStaffMember!]!
   maintenanceTickets(complexId: String!, pagination: PaginationInput, filters: FilterMaintenanceTicketsInput): PaginatedMaintenanceTicketsResponse!
   maintenanceTicket(id: String!): MaintenanceTicket!
@@ -7618,7 +7674,9 @@ type Mutation {
   """
   renewComplexSubscription(input: RenewSubscriptionInput!): SubscriptionSummary!
 
-  """Otorga la prueba gratis de 30 días (una vez por complejo)."""
+  """
+  Regala días de suscripción: la prueba gratis (una vez por complejo) o una cortesía (recomendación, promoción…), con los días que se elijan.
+  """
   grantComplexTrial(input: GrantTrialInput!): SubscriptionSummary!
 
   """Corrige a mano el vencimiento vigente, con motivo."""
@@ -7632,11 +7690,17 @@ type Mutation {
   """
   setComplexSubscriptionPricing(input: SetComplexPricingInput!): SubscriptionSummary!
 
+  """
+  Corrige el valor, la fecha o la referencia de un pago registrado, con motivo.
+  """
+  updateSubscriptionPayment(input: UpdateSubscriptionPaymentInput!): SubscriptionSummary!
+
   """Crea o edita un impuesto de la suscripción."""
   saveSubscriptionTax(input: SaveSubscriptionTaxInput!): SubscriptionTax!
 
   """Elimina un impuesto de la suscripción."""
   deleteSubscriptionTax(id: ID!): Boolean!
+
   triageMaintenanceTicket(input: TriageMaintenanceTicketInput!): MaintenanceTicket!
   assignMaintenanceTicket(input: AssignMaintenanceTicketInput!): MaintenanceTicket!
   changeMaintenanceTicketStatus(input: ChangeMaintenanceStatusInput!): MaintenanceTicket!
@@ -9650,9 +9714,17 @@ input RenewSubscriptionInput {
   notes: String
 }
 
-"""Otorgar la prueba gratis de 30 días"""
+"""
+Otorgar días gratis: la prueba (una vez) o una cortesía (recomendación, promoción…)
+"""
 input GrantTrialInput {
   complexId: ID!
+
+  """Días gratis (1 a 365). Vacío = 30."""
+  days: Int
+
+  """Vacío = TRIAL (la prueba gratis)"""
+  reason: FreePeriodReason
   notes: String
 }
 
@@ -9686,10 +9758,38 @@ input SetComplexPricingInput {
   cycle: BillingCycle!
 }
 
+"""
+Corregir un pago registrado. Solo cambia lo que se envía; el motivo queda en el historial.
+"""
+input UpdateSubscriptionPaymentInput {
+  periodId: ID!
+
+  """Valor que pagó el conjunto, ya descontadas sus retenciones"""
+  amount: Float
+
+  """
+  true = desglosar con los impuestos vigentes del conjunto (globales y locales) en vez de las tarifas guardadas al pagar. Sirve cuando el pago se registró antes de configurar una retención.
+  """
+  useCurrentTaxes: Boolean
+  paidAt: DateTime
+  paymentReference: String
+
+  """Motivo de la corrección"""
+  reason: String!
+}
+
 """Crear o editar un impuesto de la suscripción"""
 input SaveSubscriptionTaxInput {
   """Vacío = crear uno nuevo"""
   id: ID
+
+  """
+  Conjunto al que aplica (impuesto local). Vacío = global. Solo al crear: un impuesto no cambia de alcance.
+  """
+  complexId: ID
+
+  """Vacío al crear = CHARGE (se suma)"""
+  kind: SubscriptionTaxKind
   name: String!
 
   """Tarifa en porcentaje (19 = 19 %)"""

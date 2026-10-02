@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   PrimaryGeneratedColumn,
+  ValueTransformer,
 } from 'typeorm';
 import { Field, Float, ID, Int, ObjectType } from '@nestjs/graphql';
 
@@ -13,12 +14,28 @@ import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
 import { SubscriptionPricingMode } from '../enums/subscription-pricing-mode.enum';
 import { SubscriptionTaxLine } from '../dto/responses/subscription-tax-line.response';
 import { moneyColumn } from '../../finance/utils/numeric.transformer';
+import { SubscriptionTaxKind } from '../enums/subscription-tax-kind.enum';
+import { FreePeriodReason } from '../enums/free-period-reason.enum';
+
+/**
+ * Los cobros registrados antes de las retenciones guardaron sus impuestos sin
+ * `kind`: todos se sumaban, así que se leen como CHARGE.
+ */
+const taxLinesColumn: ValueTransformer = {
+  to: (lines?: SubscriptionTaxLine[] | null) => lines,
+  from: (lines?: SubscriptionTaxLine[] | null) =>
+    lines?.map((line) => ({
+      ...line,
+      kind: line.kind ?? SubscriptionTaxKind.CHARGE,
+    })) ?? null,
+};
 
 /**
  * Un periodo de suscripción del complejo.
  *
- * Es un historial: cada renovación crea una fila y ninguna se sobreescribe, así
- * queda el registro de qué se pagó, cuándo y quién lo registró. El vencimiento
+ * Es un historial: cada renovación crea una fila y ninguna se borra, así
+ * queda el registro de qué se pagó, cuándo y quién lo registró. El valor de un
+ * pago se puede corregir (`updatedById`, nota con el motivo). El vencimiento
  * vigente se copia en `residential_complexes.subscription_ends_at` para que el
  * guard y el cron no tengan que recorrer el historial.
  */
@@ -69,7 +86,8 @@ export class SubscriptionPeriod {
 
   @Field(() => Float, {
     nullable: true,
-    description: 'Valor pagado (COP), impuestos incluidos',
+    description:
+      'Valor pagado (COP): subtotal + impuestos − retenciones del conjunto',
   })
   @Column({
     type: 'numeric',
@@ -129,12 +147,33 @@ export class SubscriptionPeriod {
   })
   taxAmount?: number | null;
 
+  @Field(() => Float, {
+    nullable: true,
+    description: 'Total retenido por el conjunto (retención en la fuente…)',
+  })
+  @Column({
+    name: 'withholding_amount',
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    nullable: true,
+    transformer: moneyColumn,
+  })
+  withholdingAmount?: number | null;
+
   @Field(() => [SubscriptionTaxLine], {
     nullable: true,
     description: 'Impuestos aplicados, con la tarifa vigente al pagar',
   })
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, transformer: taxLinesColumn })
   taxes?: SubscriptionTaxLine[] | null;
+
+  @Field(() => FreePeriodReason, {
+    nullable: true,
+    description: 'Motivo de los días gratis (prueba y cortesía)',
+  })
+  @Column({ name: 'free_reason', type: 'varchar', length: 20, nullable: true })
+  freeReason?: FreePeriodReason | null;
 
   @Field(() => Date, { nullable: true })
   @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
@@ -159,6 +198,17 @@ export class SubscriptionPeriod {
   @Field(() => String, { nullable: true })
   @Column({ name: 'created_by_id', type: 'uuid', nullable: true })
   createdById?: string | null;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'Quién corrigió el pago por última vez',
+  })
+  @Column({ name: 'updated_by_id', type: 'uuid', nullable: true })
+  updatedById?: string | null;
+
+  @Field(() => Date, { nullable: true })
+  @Column({ name: 'payment_updated_at', type: 'timestamptz', nullable: true })
+  paymentUpdatedAt?: Date | null;
 
   @Field(() => Date)
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
