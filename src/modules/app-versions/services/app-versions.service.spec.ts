@@ -75,4 +75,16 @@ describe('AppVersionsService', () => {
       )?.minVersionCode,
     ).toBe(21);
   });
+
+  it('las combinaciones sin configurar salen sin id ni fecha (en GraphQL son opcionales)', async () => {
+    const { service } = build([]);
+
+    const list = await service.list();
+    expect(list).toHaveLength(4);
+    for (const p of list) {
+      expect(p.minVersionCode).toBe(0);
+      expect(p.id).toBeUndefined();
+      expect(p.updatedAt).toBeUndefined();
+    }
+  });
 });

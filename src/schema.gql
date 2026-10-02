@@ -5536,7 +5536,8 @@ type SubscriptionPlanPriceView {
 
 """Versión mínima obligatoria de una app"""
 type AppVersionPolicy {
-  id: ID!
+  """Vacío = nunca se configuró (no se obliga a nadie)"""
+  id: ID
   app: ClientApp!
   platform: ClientPlatform!
 
@@ -5548,7 +5549,9 @@ type AppVersionPolicy {
   """Mensaje para el usuario al bloquear (vacío = texto genérico)"""
   message: String
   updatedById: String
-  updatedAt: DateTime!
+
+  """Vacío = nunca se configuró"""
+  updatedAt: DateTime
 }
 
 """App móvil"""
