@@ -65,3 +65,26 @@ export function endOfBogotaDay(now: Date): Date {
       1,
   );
 }
+
+/**
+ * Cuándo va a correr de verdad la rotación, para mostrarlo.
+ *
+ * La fecha guardada puede quedar en el pasado: el cron no corrió ese día (el
+ * servidor estaba caído a las 6 a. m.) o quedó del cálculo anterior a
+ * `calcNextRotation`. El cron la toma en su siguiente pasada, así que mostrarla
+ * tal cual anuncia una rotación que ya no va a pasar ese día. Corre el día que
+ * llegue primero entre la fecha guardada y la próxima pasada del cron.
+ */
+export function effectiveNextRotation(
+  next: Date | null | undefined,
+  now: Date,
+): Date | null {
+  if (!next) return null;
+  const scheduled = calcNextRotation(next, 0, RotationIntervalUnit.DAYS);
+  const todayRun = calcNextRotation(now, 0, RotationIntervalUnit.DAYS);
+  const nextCronRun =
+    now < todayRun
+      ? todayRun
+      : calcNextRotation(now, 1, RotationIntervalUnit.DAYS);
+  return scheduled > nextCronRun ? scheduled : nextCronRun;
+}

@@ -30,7 +30,7 @@ const build = (me: unknown, household: unknown[] = []) => {
   const rotationRepo = {
     findOne: jest
       .fn()
-      .mockResolvedValue({ nextExecutionAt: new Date('2026-11-01') }),
+      .mockResolvedValue({ nextExecutionAt: new Date('2026-11-01T11:00:00.000Z') }),
   };
   const assetService = {
     listForUnit: jest.fn().mockResolvedValue([{ id: 'asset-1' }]),
@@ -94,7 +94,7 @@ describe('MyUnitService', () => {
     });
     expect(result.assets).toHaveLength(1);
     expect(result.vehicles).toHaveLength(1);
-    expect(result.nextRotationAt).toEqual(new Date('2026-11-01'));
+    expect(result.nextRotationAt).toEqual(new Date('2026-11-01T11:00:00.000Z'));
   });
 
   it('marca a quien consulta y pone primero al principal', async () => {

@@ -12,6 +12,7 @@ import { CustomError } from '../shared/utils/errors.utils';
 import { ResidentErrorCode } from '../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../shared/interfaces/jwt-payload.interface';
 import { MyUnitResponse, UnitMember } from './dto/my-unit.response';
+import { effectiveNextRotation } from '../vehicles/utils/rotation-schedule';
 
 /** Vehículos que ya no están en el conjunto y no tiene sentido mostrar. */
 const HIDDEN_VEHICLE_STATUSES = [VehicleStatus.REJECTED, VehicleStatus.REMOVED];
@@ -84,7 +85,10 @@ export class MyUnitService {
       unit: me.unit,
       assets,
       vehicles,
-      nextRotationAt: rotation?.nextExecutionAt ?? null,
+      nextRotationAt: effectiveNextRotation(
+        rotation?.nextExecutionAt,
+        new Date(),
+      ),
       members: residents.map((r) => this.toMember(r, me.id)).sort(byHousehold),
     };
   }
