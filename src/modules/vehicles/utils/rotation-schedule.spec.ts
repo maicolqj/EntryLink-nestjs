@@ -1,5 +1,9 @@
 import { RotationIntervalUnit } from '../enums/rotation-interval-unit.enum';
-import { calcNextRotation, endOfBogotaDay } from './rotation-schedule';
+import {
+  calcNextRotation,
+  effectiveNextRotation,
+  endOfBogotaDay,
+} from './rotation-schedule';
 
 // 06:00 Bogotá = 11:00 UTC.
 const bogota = (isoLocal: string) => new Date(`${isoLocal}-05:00`);
@@ -68,5 +72,35 @@ describe('endOfBogotaDay + cron diario', () => {
       }
     }
     expect(runs).toHaveLength(7);
+  });
+});
+
+describe('effectiveNextRotation', () => {
+  it('fecha futura: se muestra a las 6 a. m. de ese día', () => {
+    const shown = effectiveNextRotation(
+      bogota('2026-10-08T06:00:00.239'),
+      bogota('2026-10-04T18:15:00'),
+    );
+    expect(shown?.toISOString()).toBe('2026-10-08T11:00:00.000Z');
+  });
+
+  it('fecha de hoy que el cron ya saltó: se muestra mañana', () => {
+    const shown = effectiveNextRotation(
+      bogota('2026-10-04T06:00:00.239'),
+      bogota('2026-10-04T18:15:00'),
+    );
+    expect(shown?.toISOString()).toBe('2026-10-05T11:00:00.000Z');
+  });
+
+  it('fecha vencida antes de las 6 a. m.: corre hoy', () => {
+    const shown = effectiveNextRotation(
+      bogota('2026-10-01T06:00:00'),
+      bogota('2026-10-04T05:30:00'),
+    );
+    expect(shown?.toISOString()).toBe('2026-10-04T11:00:00.000Z');
+  });
+
+  it('sin fecha: null', () => {
+    expect(effectiveNextRotation(null, new Date())).toBeNull();
   });
 });

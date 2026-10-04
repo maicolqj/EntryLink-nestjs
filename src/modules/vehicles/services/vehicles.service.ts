@@ -19,7 +19,10 @@ import {
 } from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
 import { planRotation } from '../utils/rotation-planner';
-import { calcNextRotation } from '../utils/rotation-schedule';
+import {
+  calcNextRotation,
+  effectiveNextRotation,
+} from '../utils/rotation-schedule';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
@@ -958,10 +961,17 @@ export class VehiclesService {
         `cada ${input.rotationIntervalValue} ${input.rotationIntervalUnit} — ` +
         `cupos: ${JSON.stringify(slotsByType)}`,
     );
-    return this.rotationConfigRepo.findOne({
+    const result = await this.rotationConfigRepo.findOne({
       where: { id: saved.id },
       relations: ['createdByUser', 'updatedByUser'],
     });
+    if (result) {
+      result.nextExecutionAt = effectiveNextRotation(
+        result.nextExecutionAt,
+        new Date(),
+      );
+    }
+    return result;
   }
 
   // ================================================================
@@ -1281,6 +1291,13 @@ export class VehiclesService {
         nextRotationCandidates: next?.suspend ?? [],
       });
     }
+
+    // Lo que se muestra es cuándo va a correr, no la fecha guardada: si quedó en
+    // el pasado, el cron la toma en su siguiente pasada. No se guarda.
+    config.nextExecutionAt = effectiveNextRotation(
+      config.nextExecutionAt,
+      new Date(),
+    );
 
     return { config, isConfigured: true, byType };
   }
