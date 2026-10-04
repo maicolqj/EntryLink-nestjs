@@ -82,3 +82,28 @@ registerEnumType(ComplexContactCategory, {
     OTHER: { description: 'Otros' },
   },
 });
+
+/** Para qué es un horario del conjunto; define el ícono en la app. */
+export enum ComplexScheduleCategory {
+  ADMINISTRATION = 'ADMINISTRATION',
+  SECURITY = 'SECURITY',
+  WASTE = 'WASTE',
+  RECYCLING = 'RECYCLING',
+  COMMON_AREA = 'COMMON_AREA',
+  SERVICE = 'SERVICE',
+  OTHER = 'OTHER',
+}
+
+registerEnumType(ComplexScheduleCategory, {
+  name: 'ComplexScheduleCategory',
+  description: 'Para qué es un horario del conjunto',
+  valuesMap: {
+    ADMINISTRATION: { description: 'Atención de la administración' },
+    SECURITY: { description: 'Portería y seguridad' },
+    WASTE: { description: 'Shut y cuarto de basuras' },
+    RECYCLING: { description: 'Reciclaje y recolección' },
+    COMMON_AREA: { description: 'Zonas comunes (gimnasio, piscina…)' },
+    SERVICE: { description: 'Servicios (aseo, mantenimiento…)' },
+    OTHER: { description: 'Otros' },
+  },
+});

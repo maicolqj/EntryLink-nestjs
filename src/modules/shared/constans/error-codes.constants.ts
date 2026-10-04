@@ -578,6 +578,9 @@ export enum ComplexInfoErrorCode {
   COMPLEX_CONTACT_NOT_FOUND = 'COMPLEX_CONTACT_NOT_FOUND',
   /** Un contacto sin teléfono ni correo no le sirve a nadie. */
   COMPLEX_CONTACT_UNREACHABLE = 'COMPLEX_CONTACT_UNREACHABLE',
+  COMPLEX_SCHEDULE_NOT_FOUND = 'COMPLEX_SCHEDULE_NOT_FOUND',
+  /** Franjas que se cruzan en el mismo día, o que abren y cierran a la misma hora. */
+  COMPLEX_SCHEDULE_INVALID_SLOTS = 'COMPLEX_SCHEDULE_INVALID_SLOTS',
 }
 
 /**
