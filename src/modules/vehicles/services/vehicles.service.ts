@@ -30,7 +30,10 @@ import {
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AuditService } from '../../audit/services/audit.service';
+import {
+  AuditService,
+  SYSTEM_AUDIT_ROLE,
+} from '../../audit/services/audit.service';
 import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { UnitService } from '../../residential-complex/services/unit.service';
@@ -1013,10 +1016,10 @@ export class VehiclesService {
       });
     }
 
-    await this.runRotation(
-      config,
-      currentUser.entityType === 'user' ? currentUser.sub : null,
-    );
+    await this.runRotation(config, {
+      id: currentUser.sub,
+      role: currentUser.roles?.[0] ?? '',
+    });
 
     return this.getRotationStatus(complexId, currentUser);
   }
@@ -1052,7 +1055,8 @@ export class VehiclesService {
    */
   async runRotation(
     config: ParkingRotationConfig,
-    actorUserId: string | null,
+    /** Quien la ejecuta a mano; null = el cron. */
+    actor: { id: string; role: string } | null,
   ): Promise<void> {
     const complexId = config.complexId;
     const now = new Date();
@@ -1153,9 +1157,9 @@ export class VehiclesService {
         returning: returning.map((v) => v.plate),
         nextExecutionAt,
       },
-      performedById: actorUserId ?? SYSTEM_ACTOR,
-      performedByName: actorUserId ? undefined : 'Rotación automática',
-      performedByRole: actorUserId ? '' : 'SYSTEM',
+      performedById: actor?.id ?? SYSTEM_ACTOR,
+      performedByName: actor ? undefined : 'Rotación automática',
+      performedByRole: actor?.role ?? SYSTEM_AUDIT_ROLE,
       complexId,
       description: `Rotación de parqueaderos: ${leaving.length} salen, ${returning.length} vuelven`,
     });
