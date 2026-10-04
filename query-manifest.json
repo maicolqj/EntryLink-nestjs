@@ -992,5 +992,14 @@
   "0736cc5c1481e16d3b38e3a1c604f74416d82eef96f6190e7a628745eae25c26": "query AppVersionCheck($app: ClientApp!, $platform: ClientPlatform!, $versionCode: Int!) { __typename appVersionCheck(app: $app, platform: $platform, versionCode: $versionCode) { __typename message minVersionCode updateRequired } }",
   "09f8071689178a6563bbc19cd3715b96ce012d54b8772aae76801fb8e50661bd": "query AppVersionCheck($app: ClientApp!, $platform: ClientPlatform!, $versionCode: Int!) { appVersionCheck(app: $app, platform: $platform, versionCode: $versionCode) { message minVersionCode updateRequired } }",
   "5b4cb3a952db969bec7ab38aae1a4018eb7ffc57": "query AppVersionPolicies { __typename appVersionPolicies { __typename app message minVersionCode platform updatedAt } }",
-  "b0f97b448e54cf9e7d3d72fea99bbd9bafb19269": "mutation SetAppVersionPolicy($input: SetAppVersionPolicyInput!) { __typename setAppVersionPolicy(input: $input) { __typename app message minVersionCode platform updatedAt } }"
+  "b0f97b448e54cf9e7d3d72fea99bbd9bafb19269": "mutation SetAppVersionPolicy($input: SetAppVersionPolicyInput!) { __typename setAppVersionPolicy(input: $input) { __typename app message minVersionCode platform updatedAt } }",
+  "88260f56c1205c83fa9a17ec4bc642df8234f3182fe5cab7e1c56e2818d7697c": "mutation VerifyKioskExitPassword($password: String!) { verifyKioskExitPassword(password: $password) }",
+  "d56e67f556ceda7d26c9a3d0f619112d75636943": "query DeviceManagementStatus { __typename deviceManagementStatus { __typename configured enterpriseDisplayName enterpriseName policyAppliedAt policyUpToDate } }",
+  "85daabf7bc3495d9d1b3367ea44ab8a3df506c4b": "mutation StartEnterpriseSignup($input: StartEnterpriseSignupInput!) { __typename startEnterpriseSignup(input: $input) { __typename signupUrlName url } }",
+  "fde4d16dd87350049b9d31fec5581af64f856027": "mutation CompleteEnterpriseSignup($input: CompleteEnterpriseSignupInput!) { __typename completeEnterpriseSignup(input: $input) { __typename configured enterpriseDisplayName enterpriseName policyAppliedAt policyUpToDate } }",
+  "94802128330310f10539b0e953261a2e4948c8f0": "mutation ApplyKioskPolicy { __typename applyKioskPolicy { __typename configured enterpriseDisplayName enterpriseName policyAppliedAt policyUpToDate } }",
+  "49936219c934029c2de78160a4526f063d7bc915": "mutation CreateDeviceEnrollmentQr($complexId: String!) { __typename createDeviceEnrollmentQr(complexId: $complexId) { __typename complexId complexName enrollmentCode expiresAt qrCode } }",
+  "e75036ccfffe8c2f18c8d4aca6e1090e88ca527e": "query ManagedDevices($complexId: String) { __typename managedDevices(complexId: $complexId) { __typename androidVersion appVersionCode appVersionName brand complexId complexName enrollmentTime lastStatusReportTime model name nonCompliance policyCompliant serialNumber state } }",
+  "b143529c0daf7ea44b6c64006f66a20e6abf8e4b": "mutation ManagedDeviceCommand($input: ManagedDeviceCommandInput!) { __typename managedDeviceCommand(input: $input) }",
+  "6acf2fd2aae735c468073a95ceb6b43226b0bb0e": "mutation ReleaseManagedDevice($deviceName: String!) { __typename releaseManagedDevice(deviceName: $deviceName) }"
 }
