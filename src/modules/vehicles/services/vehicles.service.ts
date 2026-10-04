@@ -7,7 +7,6 @@ import { In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
 import { VehicleStatus } from '../enums/vehicle-status.enum';
 import { VehicleType } from '../enums/vehicle-type.enum';
-import { RotationIntervalUnit } from '../enums/rotation-interval-unit.enum';
 import { RegisterVehicleInput } from '../dto/inputs/register-vehicle.input';
 import { UpdateVehicleInput } from '../dto/inputs/update-vehicle.input';
 import { FilterVehiclesInput } from '../dto/inputs/filter-vehicles.input';
@@ -20,6 +19,7 @@ import {
 } from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
 import { planRotation } from '../utils/rotation-planner';
+import { calcNextRotation } from '../utils/rotation-schedule';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
@@ -943,7 +943,7 @@ export class VehiclesService {
     }
 
     // Calcular próxima ejecución desde ahora
-    config.nextExecutionAt = this.calcNextExecution(
+    config.nextExecutionAt = calcNextRotation(
       config.lastExecutedAt ?? new Date(),
       input.rotationIntervalValue,
       input.rotationIntervalUnit,
@@ -1056,7 +1056,7 @@ export class VehiclesService {
   ): Promise<void> {
     const complexId = config.complexId;
     const now = new Date();
-    const nextExecutionAt = this.calcNextExecution(
+    const nextExecutionAt = calcNextRotation(
       now,
       config.rotationIntervalValue,
       config.rotationIntervalUnit,
@@ -1336,30 +1336,6 @@ export class VehiclesService {
         'approvedByUser',
       ],
     });
-  }
-
-  // ================================================================
-  // HELPER — calcular próxima ejecución de rotación
-  // ================================================================
-
-  private calcNextExecution(
-    from: Date,
-    value: number,
-    unit: RotationIntervalUnit,
-  ): Date {
-    const next = new Date(from);
-    switch (unit) {
-      case RotationIntervalUnit.DAYS:
-        next.setDate(next.getDate() + value);
-        break;
-      case RotationIntervalUnit.WEEKS:
-        next.setDate(next.getDate() + value * 7);
-        break;
-      case RotationIntervalUnit.MONTHS:
-        next.setMonth(next.getMonth() + value);
-        break;
-    }
-    return next;
   }
 
   // ================================================================
