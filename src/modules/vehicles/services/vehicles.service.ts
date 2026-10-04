@@ -7,7 +7,6 @@ import { In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
 import { VehicleStatus } from '../enums/vehicle-status.enum';
 import { VehicleType } from '../enums/vehicle-type.enum';
-import { RotationIntervalUnit } from '../enums/rotation-interval-unit.enum';
 import { RegisterVehicleInput } from '../dto/inputs/register-vehicle.input';
 import { UpdateVehicleInput } from '../dto/inputs/update-vehicle.input';
 import { FilterVehiclesInput } from '../dto/inputs/filter-vehicles.input';
@@ -20,6 +19,7 @@ import {
 } from '../dto/responses/rotation-status.response';
 import { ParkingRotationConfig } from '../entities/parking-rotation-config.entity';
 import { planRotation } from '../utils/rotation-planner';
+import { calcNextRotation } from '../utils/rotation-schedule';
 
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
@@ -30,7 +30,10 @@ import {
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
-import { AuditService } from '../../audit/services/audit.service';
+import {
+  AuditService,
+  SYSTEM_AUDIT_ROLE,
+} from '../../audit/services/audit.service';
 import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { UnitService } from '../../residential-complex/services/unit.service';
@@ -943,7 +946,7 @@ export class VehiclesService {
     }
 
     // Calcular próxima ejecución desde ahora
-    config.nextExecutionAt = this.calcNextExecution(
+    config.nextExecutionAt = calcNextRotation(
       config.lastExecutedAt ?? new Date(),
       input.rotationIntervalValue,
       input.rotationIntervalUnit,
@@ -1013,10 +1016,10 @@ export class VehiclesService {
       });
     }
 
-    await this.runRotation(
-      config,
-      currentUser.entityType === 'user' ? currentUser.sub : null,
-    );
+    await this.runRotation(config, {
+      id: currentUser.sub,
+      role: currentUser.roles?.[0] ?? '',
+    });
 
     return this.getRotationStatus(complexId, currentUser);
   }
@@ -1052,11 +1055,12 @@ export class VehiclesService {
    */
   async runRotation(
     config: ParkingRotationConfig,
-    actorUserId: string | null,
+    /** Quien la ejecuta a mano; null = el cron. */
+    actor: { id: string; role: string } | null,
   ): Promise<void> {
     const complexId = config.complexId;
     const now = new Date();
-    const nextExecutionAt = this.calcNextExecution(
+    const nextExecutionAt = calcNextRotation(
       now,
       config.rotationIntervalValue,
       config.rotationIntervalUnit,
@@ -1153,9 +1157,9 @@ export class VehiclesService {
         returning: returning.map((v) => v.plate),
         nextExecutionAt,
       },
-      performedById: actorUserId ?? SYSTEM_ACTOR,
-      performedByName: actorUserId ? undefined : 'Rotación automática',
-      performedByRole: actorUserId ? '' : 'SYSTEM',
+      performedById: actor?.id ?? SYSTEM_ACTOR,
+      performedByName: actor ? undefined : 'Rotación automática',
+      performedByRole: actor?.role ?? SYSTEM_AUDIT_ROLE,
       complexId,
       description: `Rotación de parqueaderos: ${leaving.length} salen, ${returning.length} vuelven`,
     });
@@ -1336,30 +1340,6 @@ export class VehiclesService {
         'approvedByUser',
       ],
     });
-  }
-
-  // ================================================================
-  // HELPER — calcular próxima ejecución de rotación
-  // ================================================================
-
-  private calcNextExecution(
-    from: Date,
-    value: number,
-    unit: RotationIntervalUnit,
-  ): Date {
-    const next = new Date(from);
-    switch (unit) {
-      case RotationIntervalUnit.DAYS:
-        next.setDate(next.getDate() + value);
-        break;
-      case RotationIntervalUnit.WEEKS:
-        next.setDate(next.getDate() + value * 7);
-        break;
-      case RotationIntervalUnit.MONTHS:
-        next.setMonth(next.getMonth() + value);
-        break;
-    }
-    return next;
   }
 
   // ================================================================

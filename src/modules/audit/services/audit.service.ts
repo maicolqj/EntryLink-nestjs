@@ -29,6 +29,9 @@ export interface LogParams {
   isBulk?: boolean;
 }
 
+/** Rol con el que se auditan las acciones de procesos automáticos. */
+export const SYSTEM_AUDIT_ROLE = 'SYSTEM';
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -52,6 +55,9 @@ export class AuditService {
     ValidRoles.SECURITY_ROL,
     ValidRoles.COMPLEX_ROL,
     ValidRoles.SUPER_ADMIN_ROL,
+    // Procesos automáticos (crons). Sin esto la rotación de parqueaderos nunca
+    // dejaba rastro y no había cómo saber si había corrido.
+    SYSTEM_AUDIT_ROLE,
   ]);
 
   async log(params: LogParams): Promise<void> {

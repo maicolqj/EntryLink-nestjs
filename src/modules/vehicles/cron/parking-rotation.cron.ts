@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 import { VehiclesService } from '../services/vehicles.service';
+import { endOfBogotaDay } from '../utils/rotation-schedule';
 
 /**
  * Cron diario a las 06:00 AM (Bogotá) que ejecuta las rotaciones de
@@ -22,7 +23,11 @@ export class ParkingRotationCron {
 
   @Cron('0 6 * * *', { timeZone: 'America/Bogota' })
   async run(): Promise<void> {
-    const due = await this.vehiclesService.findDueRotationsInternal(new Date());
+    // Vence todo lo de hoy, no solo lo anterior a este instante: ver
+    // `endOfBogotaDay`.
+    const due = await this.vehiclesService.findDueRotationsInternal(
+      endOfBogotaDay(new Date()),
+    );
     if (due.length === 0) return;
 
     this.logger.log(`Rotaciones de parqueadero pendientes: ${due.length}`);
