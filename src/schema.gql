@@ -7592,6 +7592,7 @@ type Mutation {
   verifyKioskExitPassword(password: String!): Boolean!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
+  updateMyComplexProfile(input: UpdateComplexProfileInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
   reviewSignedDpa(complexId: String!, status: DpaValidationStatus!, reason: String): ResidentialComplex!
   changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
@@ -8379,6 +8380,15 @@ input UpdateComplexInput {
 
   """ID del complejo a actualizar"""
   id: String!
+}
+
+input UpdateComplexProfileInput {
+  description: String
+  address: String
+  city: String
+  state: String
+  phoneNumber: String
+  website: String
 }
 
 input CreateBuildingInput {
