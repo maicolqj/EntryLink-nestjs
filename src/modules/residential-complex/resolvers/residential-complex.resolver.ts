@@ -114,11 +114,14 @@ export class ResidentialComplexResolver {
   }
 
   /**
-   * El SUPER_ADMIN revisa el DPA firmado de un complejo: lo aprueba o lo rechaza.
-   * Al rechazar se exige un motivo y se notifica al complejo.
+   * El SUPER_ADMIN o el oficial de cumplimiento revisa el DPA firmado de un
+   * complejo: lo aprueba o lo rechaza. Al rechazar se exige un motivo y se
+   * notifica al complejo.
    */
   @Mutation(() => ResidentialComplex, { name: 'reviewSignedDpa' })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
   reviewSignedDpa(
     @Args('complexId') complexId: string,
     @Args('status', { type: () => DpaValidationStatus })
@@ -250,6 +253,7 @@ export class ResidentialComplexResolver {
   @Auth({
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.COMPLEX_ROL,
       ValidRoles.SECURITY_ROL,
       ValidRoles.SUPERVISOR_ROL,

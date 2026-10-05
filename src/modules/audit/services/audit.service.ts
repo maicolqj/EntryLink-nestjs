@@ -55,6 +55,8 @@ export class AuditService {
     ValidRoles.SECURITY_ROL,
     ValidRoles.COMPLEX_ROL,
     ValidRoles.SUPER_ADMIN_ROL,
+    // Revisa DPA y publica documentos legales: queda registrado quién lo hizo.
+    ValidRoles.COMPILANCE_OFFICER_ROL,
     // Procesos automáticos (crons). Sin esto la rotación de parqueaderos nunca
     // dejaba rastro y no había cómo saber si había corrido.
     SYSTEM_AUDIT_ROLE,

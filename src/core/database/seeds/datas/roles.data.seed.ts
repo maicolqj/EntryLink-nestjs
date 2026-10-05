@@ -53,10 +53,11 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
     id: 'c1b2a3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
     name: ValidRoles.COMPILANCE_OFFICER_ROL,
     description: 'Encargado de validación de documentos y normativa',
+    // Revisa, no opera: registros de conjuntos, DPA, documentos legales y
+    // auditoría. Sin permisos de edición sobre los conjuntos.
     permissions: [
       ValidPermissions.VIEW_USERS,
       ValidPermissions.VIEW_RESIDENTS,
-      ValidPermissions.EDIT_RESIDENTS,
       ValidPermissions.VIEW_REPORTS,
       ValidPermissions.EXPORT_REPORTS,
       ValidPermissions.VIEW_RESIDENCES,

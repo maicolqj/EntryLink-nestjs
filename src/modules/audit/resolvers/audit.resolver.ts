@@ -13,6 +13,14 @@ import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../../auth/interfaces/jwt-payload.interface';
 
+/** SUPER_ADMIN y oficial de cumplimiento: leen la auditoría de todo el sistema. */
+const isPlatformStaff = (payload: JwtAccessPayload): boolean =>
+  !!payload.roles?.some(
+    (r) =>
+      r === ValidRoles.SUPER_ADMIN_ROL ||
+      r === ValidRoles.COMPILANCE_OFFICER_ROL,
+  );
+
 @Resolver(() => AuditLog)
 export class AuditResolver {
   private readonly logger = new Logger(AuditResolver.name);
@@ -25,17 +33,26 @@ export class AuditResolver {
     name: 'auditLogs',
     description:
       'Historial de auditoría paginado. ' +
-      'SUPER_ADMIN ve todo el sistema. ' +
+      'SUPER_ADMIN y el oficial de cumplimiento ven todo el sistema. ' +
       'COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.',
   })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL],
+    roles: [
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+      ValidRoles.COMPLEX_ROL,
+    ],
   })
   auditLogs(
     @CurrentUser() payload: JwtAccessPayload,
     @Args('filter', { nullable: true }) filter?: FilterAuditLogsInput,
   ): Promise<PaginatedAuditLogsResponse> {
-    const callerRole = payload.roles?.[0] ?? '';
+    // El oficial de cumplimiento lee como el SUPER_ADMIN (todo el sistema). Se
+    // decide por rol y no por roles[0]: con el rol base de residente sumado,
+    // el primero puede no ser el de su cargo.
+    const callerRole = isPlatformStaff(payload)
+      ? ValidRoles.SUPER_ADMIN_ROL
+      : (payload.roles?.[0] ?? '');
     return this.auditService.findAll(
       filter ?? {},
       callerRole,
@@ -60,10 +77,9 @@ export class AuditResolver {
     @Args('referenceNumber') referenceNumber: string,
     @CurrentUser() payload: JwtAccessPayload,
   ): Promise<AuditLogDetailResponse> {
-    const isSuperAdmin = payload.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
     return this.auditService.findByReference(
       referenceNumber,
-      isSuperAdmin ? undefined : payload.complexId,
+      isPlatformStaff(payload) ? undefined : payload.complexId,
     );
   }
 

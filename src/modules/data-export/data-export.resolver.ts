@@ -32,7 +32,13 @@ export class DataExportResolver {
     name: 'dataExportHistory',
     description: 'Últimas 20 descargas de datos del complejo',
   })
-  @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [
+      ValidRoles.COMPLEX_ROL,
+      ValidRoles.SUPER_ADMIN_ROL,
+      ValidRoles.COMPILANCE_OFFICER_ROL,
+    ],
+  })
   dataExportHistory(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,

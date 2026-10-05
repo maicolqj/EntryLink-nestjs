@@ -6730,7 +6730,7 @@ type Query {
   coefficientWeighting(complexId: String!): CoefficientWeighting
 
   """
-  Historial de auditoría paginado. SUPER_ADMIN ve todo el sistema. COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.
+  Historial de auditoría paginado. SUPER_ADMIN y el oficial de cumplimiento ven todo el sistema. COMPLEX_ROL solo ve las acciones de ACCOUNTANT_ROL, SUPERVISOR_ROL y SECURITY_ROL de su complejo.
   """
   auditLogs(filter: FilterAuditLogsInput): PaginatedAuditLogsResponse!
 

@@ -24,7 +24,9 @@ export class LegalDocumentResolver {
     description:
       'Todos los documentos legales (incluidos no publicados). Solo SUPER_ADMIN.',
   })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
   legalDocumentsAdmin(): Promise<LegalDocument[]> {
     return this.service.findAllAdmin();
   }
@@ -46,7 +48,9 @@ export class LegalDocumentResolver {
     name: 'createLegalDocument',
     description: 'Crea un documento legal. Solo SUPER_ADMIN.',
   })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
   createLegalDocument(
     @Args('input') input: CreateLegalDocumentInput,
     @CurrentUser() payload: JwtAccessPayload,
@@ -59,7 +63,9 @@ export class LegalDocumentResolver {
     description:
       'Actualiza metadatos/contenido/publicación de un documento legal. Solo SUPER_ADMIN.',
   })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
   updateLegalDocument(
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateLegalDocumentInput,
@@ -72,7 +78,9 @@ export class LegalDocumentResolver {
     name: 'deleteLegalDocument',
     description: 'Elimina un documento legal. Solo SUPER_ADMIN.',
   })
-  @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL] })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
   deleteLegalDocument(
     @Args('id', { type: () => ID }) id: string,
   ): Promise<boolean> {

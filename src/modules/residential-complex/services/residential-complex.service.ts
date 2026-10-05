@@ -89,6 +89,19 @@ const COMPLEX_EDITABLE_FIELDS = new Set<string>([
   'legalRepresentativeId',
 ]);
 
+/**
+ * Personal de la plataforma: el SUPER_ADMIN y el oficial de cumplimiento ven
+ * todos los conjuntos. Esto abre la LECTURA; lo que el oficial puede cambiar lo
+ * acota cada @Auth (revisar el DPA, documentos legales) y sus permisos son
+ * solo de consulta.
+ */
+function isPlatformStaff(user: JwtAccessPayload): boolean {
+  return (
+    user.roles.includes(ValidRoles.SUPER_ADMIN_ROL) ||
+    user.roles.includes(ValidRoles.COMPILANCE_OFFICER_ROL)
+  );
+}
+
 @Injectable()
 export class ResidentialComplexService {
   private readonly logger = new Logger(ResidentialComplexService.name);
@@ -713,7 +726,7 @@ export class ResidentialComplexService {
     complex: ResidentialComplex,
     user: JwtAccessPayload,
   ): Promise<void> {
-    if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
+    if (isPlatformStaff(user)) return;
 
     // COMPLEX_ROL: owner directo O complejo asignado en el perfil
     if (user.roles.includes(ValidRoles.COMPLEX_ROL)) {
@@ -753,7 +766,7 @@ export class ResidentialComplexService {
     complexId: string,
     user: JwtAccessPayload,
   ): Promise<void> {
-    if (user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)) return;
+    if (isPlatformStaff(user)) return;
 
     if (user.roles.includes(ValidRoles.COMPLEX_ROL)) {
       // Caso 1: el complejo está asignado en el JWT del usuario
