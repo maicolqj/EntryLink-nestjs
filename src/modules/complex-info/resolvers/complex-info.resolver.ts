@@ -2,11 +2,14 @@ import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 
 import { ComplexDocument } from '../entities/complex-document.entity';
 import { ComplexContact } from '../entities/complex-contact.entity';
+import { ComplexSchedule } from '../entities/complex-schedule.entity';
 import {
   CreateComplexContactInput,
   CreateComplexDocumentInput,
+  CreateComplexScheduleInput,
   UpdateComplexContactInput,
   UpdateComplexDocumentInput,
+  UpdateComplexScheduleInput,
   UpdateComplexInfoSettingsInput,
 } from '../dto/complex-info.inputs';
 import {
@@ -17,6 +20,7 @@ import {
 } from '../dto/complex-info.responses';
 import { ComplexDocumentsService } from '../services/complex-documents.service';
 import { ComplexContactsService } from '../services/complex-contacts.service';
+import { ComplexSchedulesService } from '../services/complex-schedules.service';
 import { MyComplexService } from '../services/my-complex.service';
 import { COMPLEX_INFO_ADMIN_ROLES } from '../services/complex-info-access.service';
 import { Auth } from '../../shared/decorators/auth.decorator';
@@ -37,13 +41,15 @@ export class ComplexInfoResolver {
     private readonly myComplexService: MyComplexService,
     private readonly documentsService: ComplexDocumentsService,
     private readonly contactsService: ComplexContactsService,
+    private readonly schedulesService: ComplexSchedulesService,
   ) {}
 
   // ── Residente ─────────────────────────────────────────────────────
 
   @Query(() => MyComplexInfoResponse, {
     name: 'myComplexInfo',
-    description: 'Mi Conjunto: datos, contactos y documentos para el residente',
+    description:
+      'Mi Conjunto: datos, contactos, horarios y documentos para el residente',
   })
   @Auth({ roles: RESIDENT })
   myComplexInfo(
@@ -195,5 +201,47 @@ export class ComplexInfoResolver {
     @CurrentUser() user: JwtAccessPayload,
   ): Promise<boolean> {
     return this.contactsService.remove(id, user);
+  }
+
+  // ── Administración: horarios ──────────────────────────────────────
+
+  @Query(() => [ComplexSchedule], {
+    name: 'complexSchedules',
+    description: 'Horarios del conjunto, incluidos los ocultos',
+  })
+  @Auth({ roles: ADMIN })
+  complexSchedules(
+    @Args('complexId') complexId: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<ComplexSchedule[]> {
+    return this.schedulesService.listAdmin(complexId, user);
+  }
+
+  @Mutation(() => ComplexSchedule, { name: 'createComplexSchedule' })
+  @Auth({ roles: ADMIN })
+  createComplexSchedule(
+    @Args('input') input: CreateComplexScheduleInput,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<ComplexSchedule> {
+    return this.schedulesService.create(input, user);
+  }
+
+  @Mutation(() => ComplexSchedule, { name: 'updateComplexSchedule' })
+  @Auth({ roles: ADMIN })
+  updateComplexSchedule(
+    @Args('id', { type: () => ID }) id: string,
+    @Args('input') input: UpdateComplexScheduleInput,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<ComplexSchedule> {
+    return this.schedulesService.update(id, input, user);
+  }
+
+  @Mutation(() => Boolean, { name: 'deleteComplexSchedule' })
+  @Auth({ roles: ADMIN })
+  deleteComplexSchedule(
+    @Args('id', { type: () => ID }) id: string,
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<boolean> {
+    return this.schedulesService.remove(id, user);
   }
 }

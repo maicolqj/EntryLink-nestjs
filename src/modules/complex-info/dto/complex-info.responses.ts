@@ -2,6 +2,7 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 
 import { ComplexDocument } from '../entities/complex-document.entity';
 import { ComplexContact } from '../entities/complex-contact.entity';
+import { ComplexSchedule } from '../entities/complex-schedule.entity';
 
 /** Lo que el residente ve del conjunto: sus datos de contacto públicos. */
 @ObjectType({ description: 'Datos generales del conjunto para el residente' })
@@ -78,7 +79,9 @@ export class MyComplexDocument {
   hasFile: boolean;
 }
 
-@ObjectType({ description: 'Mi Conjunto: datos, contactos y documentos' })
+@ObjectType({
+  description: 'Mi Conjunto: datos, contactos, horarios y documentos',
+})
 export class MyComplexInfoResponse {
   @Field(() => ComplexPublicInfo)
   complex: ComplexPublicInfo;
@@ -88,6 +91,11 @@ export class MyComplexInfoResponse {
 
   @Field(() => [ComplexContact])
   contacts: ComplexContact[];
+
+  @Field(() => [ComplexSchedule], {
+    description: 'Horarios: atención, shut de basuras, reciclaje…',
+  })
+  schedules: ComplexSchedule[];
 
   @Field(() => [MyComplexDocument], {
     description:

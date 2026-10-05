@@ -5226,6 +5226,68 @@ enum ComplexContactCategory {
   OTHER
 }
 
+"""Franja de un día en un horario del conjunto"""
+type ComplexScheduleSlot {
+  """0=domingo, 1=lunes … 6=sábado"""
+  dayOfWeek: Int!
+
+  """Hora de apertura HH:mm"""
+  openTime: String!
+
+  """Hora de cierre HH:mm"""
+  closeTime: String!
+}
+
+"""Horario del conjunto (atención, basuras, etc.)"""
+type ComplexSchedule {
+  id: ID!
+  complexId: String!
+  category: ComplexScheduleCategory!
+
+  """
+  Nombre. Ej: "Atención de la administración"
+  """
+  name: String!
+  slots: [ComplexScheduleSlot!]!
+
+  """
+  Ej: "Festivos cerrado", "Bolsas bien cerradas"
+  """
+  note: String
+
+  """Orden en la lista"""
+  sortOrder: Int!
+
+  """Visible para los residentes"""
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Para qué es un horario del conjunto"""
+enum ComplexScheduleCategory {
+  """Atención de la administración"""
+  ADMINISTRATION
+
+  """Portería y seguridad"""
+  SECURITY
+
+  """Shut y cuarto de basuras"""
+  WASTE
+
+  """Reciclaje y recolección"""
+  RECYCLING
+
+  """Zonas comunes (gimnasio, piscina…)"""
+  COMMON_AREA
+
+  """Servicios (aseo, mantenimiento…)"""
+  SERVICE
+
+  """Otros"""
+  OTHER
+}
+
 """Datos generales del conjunto para el residente"""
 type ComplexPublicInfo {
   id: String!
@@ -5264,11 +5326,14 @@ type MyComplexDocument {
   hasFile: Boolean!
 }
 
-"""Mi Conjunto: datos, contactos y documentos"""
+"""Mi Conjunto: datos, contactos, horarios y documentos"""
 type MyComplexInfoResponse {
   complex: ComplexPublicInfo!
   settings: ComplexInfoSettings!
   contacts: [ComplexContact!]!
+
+  """Horarios: atención, shut de basuras, reciclaje…"""
+  schedules: [ComplexSchedule!]!
 
   """Publicados y dirigidos a él; sin el texto (usar myComplexDocument)"""
   documents: [MyComplexDocument!]!
@@ -6814,7 +6879,7 @@ type Query {
   petIncidentsByPet(petId: String!): [PetIncident!]!
   myUnit(complexId: String!): MyUnitResponse!
 
-  """Mi Conjunto: datos, contactos y documentos para el residente"""
+  """Mi Conjunto: datos, contactos, horarios y documentos para el residente"""
   myComplexInfo(complexId: String!): MyComplexInfoResponse!
 
   """Un documento publicado, con su texto completo"""
@@ -6831,6 +6896,9 @@ type Query {
 
   """Directorio de contactos, incluidos los ocultos"""
   complexContacts(complexId: String!): [ComplexContact!]!
+
+  """Horarios del conjunto, incluidos los ocultos"""
+  complexSchedules(complexId: String!): [ComplexSchedule!]!
 
   """Suscripción del complejo de la sesión (administración)."""
   mySubscription: SubscriptionSummary!
@@ -7524,6 +7592,7 @@ type Mutation {
   verifyKioskExitPassword(password: String!): Boolean!
   createComplex(input: CreateComplexInput!): ResidentialComplex!
   updateComplex(input: UpdateComplexInput!): ResidentialComplex!
+  updateMyComplexProfile(input: UpdateComplexProfileInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
   reviewSignedDpa(complexId: String!, status: DpaValidationStatus!, reason: String): ResidentialComplex!
   changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
@@ -7794,6 +7863,9 @@ type Mutation {
   createComplexContact(input: CreateComplexContactInput!): ComplexContact!
   updateComplexContact(id: ID!, input: UpdateComplexContactInput!): ComplexContact!
   deleteComplexContact(id: ID!): Boolean!
+  createComplexSchedule(input: CreateComplexScheduleInput!): ComplexSchedule!
+  updateComplexSchedule(id: ID!, input: UpdateComplexScheduleInput!): ComplexSchedule!
+  deleteComplexSchedule(id: ID!): Boolean!
 
   """
   Registra el pago de un periodo mensual o anual. Si aún no vence, el periodo nuevo arranca al terminar el actual.
@@ -8308,6 +8380,11 @@ input UpdateComplexInput {
 
   """ID del complejo a actualizar"""
   id: String!
+}
+
+input UpdateComplexProfileInput {
+  phoneNumber: String
+  website: String
 }
 
 input CreateBuildingInput {
@@ -9838,6 +9915,40 @@ input UpdateComplexContactInput {
   email: String
   schedule: String
   notes: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
+input CreateComplexScheduleInput {
+  complexId: String!
+  category: ComplexScheduleCategory!
+  name: String!
+
+  """Reemplaza todas las franjas. Un día sin franjas = cerrado"""
+  slots: [ComplexScheduleSlotInput!]!
+  note: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
+input ComplexScheduleSlotInput {
+  """0=domingo, 1=lunes … 6=sábado"""
+  dayOfWeek: Int!
+
+  """Hora de apertura HH:mm"""
+  openTime: String!
+
+  """Hora de cierre HH:mm"""
+  closeTime: String!
+}
+
+input UpdateComplexScheduleInput {
+  category: ComplexScheduleCategory
+  name: String
+
+  """Reemplaza todas las franjas. Un día sin franjas = cerrado"""
+  slots: [ComplexScheduleSlotInput!]
+  note: String
   sortOrder: Int
   isActive: Boolean
 }

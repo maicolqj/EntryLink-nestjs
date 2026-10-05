@@ -1,5 +1,8 @@
 import { InputType, Field, Int, PartialType, OmitType } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEmail,
@@ -10,15 +13,18 @@ import {
   IsUUID,
   Matches,
   MaxLength,
+  Max,
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 import {
   ComplexContactCategory,
   ComplexDocumentAudience,
   ComplexDocumentCategory,
+  ComplexScheduleCategory,
 } from '../enums/complex-info.enums';
 
 @InputType()
@@ -206,4 +212,72 @@ export class CreateComplexContactInput {
 @InputType()
 export class UpdateComplexContactInput extends PartialType(
   OmitType(CreateComplexContactInput, ['complexId'] as const),
+) {}
+
+/** HH:mm en 24 h (00:00 – 23:59). */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+@InputType()
+export class ComplexScheduleSlotInput {
+  @Field(() => Int, { description: '0=domingo, 1=lunes … 6=sábado' })
+  @IsInt()
+  @Min(0)
+  @Max(6)
+  dayOfWeek: number;
+
+  @Field({ description: 'Hora de apertura HH:mm' })
+  @Matches(HHMM, { message: 'La hora de apertura debe tener formato HH:mm' })
+  openTime: string;
+
+  @Field({ description: 'Hora de cierre HH:mm' })
+  @Matches(HHMM, { message: 'La hora de cierre debe tener formato HH:mm' })
+  closeTime: string;
+}
+
+@InputType()
+export class CreateComplexScheduleInput {
+  @Field(() => String)
+  @IsUUID()
+  complexId: string;
+
+  @Field(() => ComplexScheduleCategory)
+  @IsEnum(ComplexScheduleCategory)
+  category: ComplexScheduleCategory;
+
+  @Field(() => String)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name: string;
+
+  @Field(() => [ComplexScheduleSlotInput], {
+    description: 'Reemplaza todas las franjas. Un día sin franjas = cerrado',
+  })
+  @IsArray()
+  @ArrayMaxSize(28)
+  @ValidateNested({ each: true })
+  @Type(() => ComplexScheduleSlotInput)
+  slots: ComplexScheduleSlotInput[];
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+@InputType()
+export class UpdateComplexScheduleInput extends PartialType(
+  OmitType(CreateComplexScheduleInput, ['complexId'] as const),
 ) {}

@@ -4,9 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ComplexDocument } from './entities/complex-document.entity';
 import { ComplexDocumentAck } from './entities/complex-document-ack.entity';
 import { ComplexContact } from './entities/complex-contact.entity';
+import { ComplexSchedule } from './entities/complex-schedule.entity';
 import { ComplexInfoAccessService } from './services/complex-info-access.service';
 import { ComplexDocumentsService } from './services/complex-documents.service';
 import { ComplexContactsService } from './services/complex-contacts.service';
+import { ComplexSchedulesService } from './services/complex-schedules.service';
 import { MyComplexService } from './services/my-complex.service';
 import { ComplexInfoResolver } from './resolvers/complex-info.resolver';
 import { ComplexDocumentsController } from './controllers/complex-documents.controller';
@@ -27,6 +29,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       ComplexDocument,
       ComplexDocumentAck,
       ComplexContact,
+      ComplexSchedule,
       Resident, // ficha del residente y audiencia de cada documento
       ResidentialComplex, // datos generales del conjunto
     ]),
@@ -38,6 +41,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ComplexInfoAccessService,
     ComplexDocumentsService,
     ComplexContactsService,
+    ComplexSchedulesService,
     MyComplexService,
     ComplexInfoResolver,
   ],
