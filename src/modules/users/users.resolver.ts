@@ -27,6 +27,7 @@ import {
 } from '../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../auth/interfaces/jwt-payload.interface';
+import { CompleteRequiredPasswordChangeInput } from './dto/inputs/complete-required-password-change.input';
 
 @Resolver(() => User)
 export class UsersResolver {
@@ -160,11 +161,30 @@ export class UsersResolver {
     return this.usersService.changePassword(userId, input, payload.sessionId);
   }
 
+  @Mutation(() => ChangePasswordResponse, {
+    name: 'completeRequiredPasswordChange',
+    description:
+      'Reemplaza la contraseña inicial que asignó un administrador (solo si la cuenta está marcada para cambiarla)',
+  })
+  @Auth()
+  completeRequiredPasswordChange(
+    @CurrentUserId() userId: string,
+    @Args('input') input: CompleteRequiredPasswordChangeInput,
+    @CurrentUser() payload: JwtAccessPayload,
+  ): Promise<ChangePasswordResponse> {
+    return this.usersService.completeRequiredPasswordChange(
+      userId,
+      input.newPassword,
+      payload.sessionId,
+    );
+  }
+
   @Mutation(() => SetPasswordResponse, {
     name: 'adminResetUserPassword',
     description:
-      'Permite al administrador del complejo (o SUPER_ADMIN) restablecer directamente la contraseña ' +
-      'de un miembro de su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). ' +
+      'Asigna una contraseña inicial que el usuario debe cambiar al entrar. El SUPER_ADMIN puede ' +
+      'hacerlo con cualquier cargo que entra con contraseña (incluido el oficial de cumplimiento); ' +
+      'el administrador del complejo, con su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). ' +
       'Uso: el empleado olvidó su contraseña y no tiene forma de solicitar el reset por email/OTP.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })

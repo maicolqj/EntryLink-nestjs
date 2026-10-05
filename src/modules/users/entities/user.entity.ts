@@ -428,6 +428,16 @@ export class User {
   @Column({ type: 'int', default: 0 })
   tokenVersion: number;
 
+  /**
+   * La contraseña la asignó un administrador: el usuario debe cambiarla al
+   * entrar. La apagan completeRequiredPasswordChange y changePassword.
+   */
+  @Column({ name: 'must_change_password', type: 'boolean', default: false })
+  @Field(() => Boolean, {
+    description: 'Debe cambiar la contraseña asignada por el administrador',
+  })
+  mustChangePassword: boolean;
+
   //**************************************************************************************************************************
   //**************************************************************************************************************************
   //*************************************************************RELACIONES***************************************************

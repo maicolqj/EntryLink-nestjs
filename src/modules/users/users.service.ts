@@ -86,6 +86,31 @@ const STAFF_RESETTABLE_ROLES = [
   ValidRoles.ACCOUNTANT_ROL,
 ];
 
+/**
+ * Roles que no son un cargo: se conservan siempre al cambiar el cargo de
+ * alguien. RESIDENT_ROL es el rol base de la plataforma y COUNCIL_ROL es un
+ * rol adicional del residente.
+ */
+const NON_JOB_ROLES: string[] = [
+  ValidRoles.RESIDENT_ROL,
+  ValidRoles.COUNCIL_ROL,
+];
+
+/** Cargos de la plataforma: solo los asigna el SUPER_ADMIN. */
+const PLATFORM_ROLES: string[] = [
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.COMPILANCE_OFFICER_ROL,
+];
+
+/** Cargos que la cuenta de un complejo puede dar a gente de su conjunto. */
+const COMPLEX_ASSIGNABLE_ROLES: string[] = [
+  ValidRoles.SECURITY_ROL,
+  ValidRoles.SUPERVISOR_ROL,
+  ValidRoles.ACCOUNTANT_ROL,
+  ValidRoles.MAINTENANCE_ROL,
+  ValidRoles.RESIDENT_ROL,
+];
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -927,31 +952,15 @@ export class UsersService {
     }
 
     if (input.role !== undefined) {
-      const role = await this.roleRepo.findOne({
-        where: { name: input.role as any },
-      });
-
-      if (!role) {
-        throw new CustomError({
-          message: `Rol "${input.role}" no encontrado`,
-          statusCode: HttpStatus.NOT_FOUND,
-          errorCode: GeneralErrorCode.BAD_REQUEST,
-        });
-      }
-
-      const existing = user.userRoles?.find((ur) => ur.isPrimary);
-      if (existing && existing.role?.name !== role.name) {
-        await this.userRoleRepo.update(existing.id, { role });
+      const changed = await this.assignJobRole(user, input.role, currentUser);
+      if (changed) {
         changedFields.push('rol');
-      } else if (!existing) {
-        await this.userRoleRepo.save(
-          this.userRoleRepo.create({
-            user: { id: user.id },
-            role,
-            isPrimary: true,
-          }),
+        // Los roles viajan en el JWT: las sesiones abiertas se cierran para
+        // que el próximo ingreso traiga los nuevos.
+        await this.tokenService.invalidateUserSessions(
+          user.id,
+          'roles_changed',
         );
-        changedFields.push('rol');
       }
     }
 
@@ -1374,6 +1383,7 @@ export class UsersService {
     await this.userRepo.update(id, {
       password: hashed,
       lastPasswordChange: new Date(),
+      mustChangePassword: false,
       tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
     });
 
@@ -1423,14 +1433,25 @@ export class UsersService {
       });
     }
 
-    const isResettableStaff = (user.userRoles ?? []).some((ur) =>
-      STAFF_RESETTABLE_ROLES.includes(ur.role?.name),
+    // El SUPER_ADMIN asigna contraseña a cualquier cargo que entra con correo y
+    // contraseña (también al oficial de cumplimiento). La cuenta de un complejo
+    // solo a su personal. Un residente sin cargo no usa contraseña: entra con
+    // su clave o por WhatsApp.
+    const callerIsSuperAdmin = !!currentUser?.roles?.includes(
+      ValidRoles.SUPER_ADMIN_ROL,
+    );
+    const allowedTargets: string[] = callerIsSuperAdmin
+      ? PASSWORD_BASED_ROLES
+      : STAFF_RESETTABLE_ROLES;
+    const canSet = (user.userRoles ?? []).some((ur) =>
+      allowedTargets.includes(ur.role?.name),
     );
 
-    if (!isResettableStaff) {
+    if (!canSet) {
       throw new CustomError({
-        message:
-          'Solo se puede restablecer la contraseña de personal del complejo (guardia, supervisor o contador)',
+        message: callerIsSuperAdmin
+          ? 'Este usuario no tiene un cargo que entre con contraseña. Asígnale primero el cargo.'
+          : 'Solo se puede restablecer la contraseña de personal del complejo (guardia, supervisor o contador)',
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: GeneralErrorCode.FORBIDDEN,
       });
@@ -1442,6 +1463,9 @@ export class UsersService {
     await this.userRepo.update(user.id, {
       password: hashedPassword,
       lastPasswordChange: new Date(),
+      passwordSet: true,
+      // La asignó otra persona: la debe cambiar al entrar.
+      mustChangePassword: true,
       tokenVersion: () => '"tokenVersion" + 1', // Invalida todos los tokens activos
     });
 
@@ -1562,5 +1586,155 @@ export class UsersService {
     }
 
     return role;
+  }
+
+  // ── Cargo del usuario ────────────────────────────────────────────────────
+
+  /**
+   * Cambia el cargo de un usuario sin tocar su rol base. RESIDENT_ROL (y
+   * COUNCIL_ROL) no son cargos: se conservan siempre. Antes se reemplazaba el
+   * rol "principal", y si el principal era el de residente, quien recibía un
+   * cargo dejaba de ser residente.
+   *
+   * Pedir RESIDENT_ROL quita el cargo y deja solo los roles de residente.
+   * Devuelve si hubo cambio.
+   */
+  private async assignJobRole(
+    user: User,
+    roleName: string,
+    currentUser?: JwtAccessPayload,
+  ): Promise<boolean> {
+    const callerIsSuperAdmin = !!currentUser?.roles?.includes(
+      ValidRoles.SUPER_ADMIN_ROL,
+    );
+
+    // La cuenta del complejo no es un usuario: ese rol no se asigna aquí.
+    const forbidden =
+      roleName === ValidRoles.COMPLEX_ROL ||
+      (PLATFORM_ROLES.includes(roleName) && !callerIsSuperAdmin) ||
+      (!callerIsSuperAdmin && !COMPLEX_ASSIGNABLE_ROLES.includes(roleName));
+    if (forbidden) {
+      throw new CustomError({
+        message: 'No puedes asignar ese rol',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
+
+    const role = await this.roleRepo.findOne({
+      where: { name: roleName as ValidRoles },
+    });
+    if (!role) {
+      throw new CustomError({
+        message: `Rol "${roleName}" no encontrado`,
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const current = user.userRoles ?? [];
+    const jobRoles = current.filter(
+      (ur) => !NON_JOB_ROLES.includes(ur.role?.name),
+    );
+    const toResidentOnly = roleName === ValidRoles.RESIDENT_ROL;
+    const unchanged = toResidentOnly
+      ? jobRoles.length === 0 &&
+        current.some((ur) => ur.role?.name === ValidRoles.RESIDENT_ROL)
+      : jobRoles.length === 1 && jobRoles[0].role?.name === roleName;
+    if (unchanged) return false;
+
+    await this.dataSource.transaction(async (manager) => {
+      if (jobRoles.length) {
+        await manager.delete(
+          UserRole,
+          jobRoles.map((ur) => ur.id),
+        );
+      }
+
+      if (toResidentOnly) {
+        await ensureResidentRole(manager, user.id);
+        // Sin cargo, entra como residente.
+        await manager
+          .createQueryBuilder()
+          .update(UserRole)
+          .set({ isPrimary: true })
+          .where('user_id = :userId', { userId: user.id })
+          .andWhere('role_id = (SELECT id FROM roles WHERE name = :resident)', {
+            resident: ValidRoles.RESIDENT_ROL,
+          })
+          .execute();
+        return;
+      }
+
+      // El cargo manda a dónde entra con correo y contraseña: es el principal.
+      await manager
+        .createQueryBuilder()
+        .update(UserRole)
+        .set({ isPrimary: false })
+        .where('user_id = :userId', { userId: user.id })
+        .execute();
+      await manager.save(
+        manager.create(UserRole, {
+          user: { id: user.id },
+          role: { id: role.id },
+          isPrimary: true,
+        }),
+      );
+      if (roleNeedsResidentBase(role.name)) {
+        await ensureResidentRole(manager, user.id);
+      }
+    });
+
+    return true;
+  }
+
+  // ── Contraseña inicial ───────────────────────────────────────────────────
+
+  /**
+   * El usuario reemplaza la contraseña inicial que le asignó un administrador.
+   * No pide la actual porque acaba de entrar con ella, y solo procede si la
+   * cuenta está marcada para cambiarla: no sirve para saltarse la contraseña
+   * actual en un cambio normal.
+   */
+  async completeRequiredPasswordChange(
+    userId: string,
+    newPassword: string,
+    currentSessionId?: string,
+  ): Promise<ChangePasswordResponse> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'mustChangePassword'],
+    });
+
+    if (!user?.mustChangePassword) {
+      throw new CustomError({
+        message: 'Tu contraseña no requiere cambio. Usa "Cambiar contraseña".',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.BAD_REQUEST,
+      });
+    }
+
+    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 12);
+    await this.userRepo.update(userId, {
+      password: await hash(newPassword, saltRounds),
+      lastPasswordChange: new Date(),
+      passwordSet: true,
+      mustChangePassword: false,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+
+    // La sesión de este equipo sigue; cualquier otra abierta con la
+    // contraseña inicial se cierra.
+    await this.tokenService.invalidateUserSessions(
+      userId,
+      'initial_password_replaced',
+      currentSessionId,
+    );
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada',
+      changedAt: new Date(),
+    };
   }
 }
