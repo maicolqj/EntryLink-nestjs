@@ -832,6 +832,9 @@ type User {
   """token version"""
   tokenVersion: String
 
+  """Debe cambiar la contraseña asignada por el administrador"""
+  mustChangePassword: Boolean!
+
   """Permissions created by this user"""
   createdPermissions: [Permission!]
 
@@ -6882,7 +6885,9 @@ type Query {
   """Mi Conjunto: datos, contactos, horarios y documentos para el residente"""
   myComplexInfo(complexId: String!): MyComplexInfoResponse!
 
-  """Un documento publicado, con su texto completo"""
+  """
+  Un documento publicado, con su texto completo. Abrirlo cuenta como leído si pide acuse
+  """
   myComplexDocument(id: ID!): MyComplexDocument!
 
   """Todos los documentos del conjunto, incluidos los borradores"""
@@ -7664,7 +7669,12 @@ type Mutation {
   changePassword(input: ChangePasswordInput!): ChangePasswordResponse!
 
   """
-  Permite al administrador del complejo (o SUPER_ADMIN) restablecer directamente la contraseña de un miembro de su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). Uso: el empleado olvidó su contraseña y no tiene forma de solicitar el reset por email/OTP.
+  Reemplaza la contraseña inicial que asignó un administrador (solo si la cuenta está marcada para cambiarla)
+  """
+  completeRequiredPasswordChange(input: CompleteRequiredPasswordChangeInput!): ChangePasswordResponse!
+
+  """
+  Asigna una contraseña inicial que el usuario debe cambiar al entrar. El SUPER_ADMIN puede hacerlo con cualquier cargo que entra con contraseña (incluido el oficial de cumplimiento); el administrador del complejo, con su personal (SECURITY_ROL, SUPERVISOR_ROL, ACCOUNTANT_ROL). Uso: el empleado olvidó su contraseña y no tiene forma de solicitar el reset por email/OTP.
   """
   adminResetUserPassword(input: AdminResetUserPasswordInput!): SetPasswordResponse!
   updateUser(updateUserInput: UpdateUserInput!): User!
@@ -7854,7 +7864,9 @@ type Mutation {
   sanctionPetIncident(input: SanctionPetIncidentInput!): PetIncident!
   addPetIncidentStatement(input: CreatePetIncidentStatementInput!): PetIncident!
 
-  """El residente confirma que leyó la versión vigente"""
+  """
+  El residente confirma que leyó la versión vigente. Ya no hace falta: abrir el documento lo registra (se mantiene para versiones viejas de la app)
+  """
   acknowledgeComplexDocument(id: ID!): MyComplexDocument!
   createComplexDocument(input: CreateComplexDocumentInput!): ComplexDocument!
   updateComplexDocument(id: ID!, input: UpdateComplexDocumentInput!): ComplexDocument!
@@ -8733,6 +8745,11 @@ input ChangePasswordInput {
 
   """Confirmación de la nueva contraseña"""
   confirmPassword: String!
+}
+
+input CompleteRequiredPasswordChangeInput {
+  """Nueva contraseña"""
+  newPassword: String!
 }
 
 """
