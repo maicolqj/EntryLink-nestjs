@@ -303,6 +303,8 @@ export class ResidentsResolver {
   @Auth({
     roles: [
       ValidRoles.SUPER_ADMIN_ROL,
+      // Consulta, sin aprobar ni editar: el menú de la web le muestra Residentes.
+      ValidRoles.COMPILANCE_OFFICER_ROL,
       ValidRoles.COMPLEX_ROL,
       // ValidRoles.SUPERVISOR_ROL,
       ValidRoles.ACCOUNTANT_ROL,
