@@ -86,9 +86,8 @@ export class ResidentialComplexResolver {
   }
 
   /**
-   * La administración del conjunto actualiza sus datos de contacto y
-   * presentación: teléfono, sitio web, descripción y dirección. El conjunto es
-   * el de la sesión.
+   * La administración del conjunto cambia su teléfono y su sitio web. El
+   * conjunto es el de la sesión.
    */
   @Mutation(() => ResidentialComplex, { name: 'updateMyComplexProfile' })
   @Auth({ roles: [ValidRoles.COMPLEX_ROL] })

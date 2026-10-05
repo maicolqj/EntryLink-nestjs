@@ -1,54 +1,21 @@
 import { InputType, Field } from '@nestjs/graphql';
-import {
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 /**
- * Lo que la administración del conjunto (COMPLEX_ROL) puede cambiar de su
- * propio conjunto: los datos de contacto y presentación que ven los
- * residentes en Mi Conjunto.
+ * Lo único que la administración del conjunto (COMPLEX_ROL) puede cambiar de
+ * su propio conjunto: el teléfono y el sitio web, que ven los residentes en Mi
+ * Conjunto y usan sus botones Llamar y Sitio web.
  *
- * Quedan fuera a propósito:
- *  - el correo, porque es el usuario con el que la cuenta del complejo inicia
- *    sesión: cambiarlo aquí le cambiaría el acceso sin verificar el nuevo;
- *  - nombre, NIT, tipo, plan y módulos, que son del contrato y los maneja el
- *    SUPER_ADMIN.
+ * Todo lo demás lo corrige el SUPER_ADMIN:
+ *  - dirección, ciudad, departamento y descripción no cambian en la vida de un
+ *    conjunto, y la dirección además ubica el conjunto en el mapa;
+ *  - el correo es el usuario con el que la cuenta del complejo inicia sesión;
+ *  - nombre, NIT, tipo, plan y módulos son del contrato.
  *
- * Cadena vacía = quitar el dato (teléfono, sitio web, descripción).
+ * Cadena vacía = quitar el dato.
  */
 @InputType()
 export class UpdateComplexProfileInput {
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  description?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
-  @MinLength(3)
-  @MaxLength(255)
-  address?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  city?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsOptional()
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  state?: string;
-
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()

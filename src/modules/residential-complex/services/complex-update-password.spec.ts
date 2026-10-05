@@ -27,7 +27,11 @@ const build = (stored: Record<string, unknown>) => {
 const input = (fields: Partial<UpdateComplexInput>) =>
   Object.assign(new UpdateComplexInput(), fields);
 
-const currentUser = { sub: 'admin', email: 'a@b.co', roles: ['SUPER'] };
+const currentUser = {
+  sub: 'admin',
+  email: 'a@b.co',
+  roles: ['SUPER_ADMIN_ROL'],
+};
 
 describe('ResidentialComplexService.update — contraseña y campos parciales', () => {
   it('hashea la contraseña y no la deja en la auditoría', async () => {

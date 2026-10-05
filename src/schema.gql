@@ -8383,10 +8383,6 @@ input UpdateComplexInput {
 }
 
 input UpdateComplexProfileInput {
-  description: String
-  address: String
-  city: String
-  state: String
   phoneNumber: String
   website: String
 }

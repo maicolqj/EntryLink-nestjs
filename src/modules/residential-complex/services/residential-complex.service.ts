@@ -75,6 +75,20 @@ export const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
 const KIOSK_EXIT_MAX_ATTEMPTS = 5;
 const KIOSK_EXIT_WINDOW_SECONDS = 15 * 60;
 
+/**
+ * Lo que la cuenta del complejo (no SUPER_ADMIN) puede mandar a updateComplex:
+ * sus ajustes de operación. Lo demás es del contrato o de la identidad del
+ * conjunto y lo corrige el SUPER_ADMIN.
+ */
+const COMPLEX_EDITABLE_FIELDS = new Set<string>([
+  'id',
+  'pqrfResolutionDays',
+  'pqrfReminderLeadDays',
+  'pqrfReminderIntervalHours',
+  'supervisorInactivityDays',
+  'legalRepresentativeId',
+]);
+
 @Injectable()
 export class ResidentialComplexService {
   private readonly logger = new Logger(ResidentialComplexService.name);
@@ -386,30 +400,38 @@ export class ResidentialComplexService {
   // ================================================================
 
   /**
-   * La administración del conjunto edita sus propios datos de contacto y
-   * presentación (ver UpdateComplexProfileInput). El conjunto sale de la
-   * sesión, nunca del input: no puede tocar otro.
+   * La administración del conjunto cambia su teléfono y su sitio web (ver
+   * UpdateComplexProfileInput). El conjunto sale de la sesión, nunca del
+   * input: no puede tocar otro. Cadena vacía = quitar el dato.
    */
   async updateOwnProfile(
     input: UpdateComplexProfileInput,
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     const complexId = currentUser.complexId ?? currentUser.sub;
-    // Cadena vacía = quitar el dato; los obligatorios (dirección, ciudad,
-    // departamento) solo se reemplazan, nunca se vacían.
-    const clearable = ['description', 'phoneNumber', 'website'] as const;
-    const patch: Record<string, string | null | undefined> = {};
-    for (const [key, value] of Object.entries(input) as [
-      keyof UpdateComplexProfileInput,
-      string | undefined,
-    ][]) {
-      if (value === undefined || value === null) continue;
-      const trimmed = value.trim();
-      if (trimmed) patch[key] = trimmed;
-      else if ((clearable as readonly string[]).includes(key))
-        patch[key] = null;
-    }
-    return this.update({ id: complexId, ...patch }, currentUser);
+    const complex = await this.findById(complexId, currentUser);
+
+    const clean = (v?: string | null) =>
+      v == null ? undefined : v.trim() || null;
+    const phoneNumber = clean(input.phoneNumber);
+    const website = clean(input.website);
+    if (phoneNumber !== undefined) complex.phoneNumber = phoneNumber;
+    if (website !== undefined) complex.website = website;
+
+    const saved = await this.complexRepo.save(complex);
+    await this.cacheService.delete({ key: BK.complex.one(saved.id) });
+    void this.auditService.log({
+      entityType: AuditEntityType.ResidentialComplex,
+      entityId: saved.id,
+      action: AuditAction.UPDATE,
+      newValue: { phoneNumber: saved.phoneNumber, website: saved.website },
+      performedById: currentUser.sub,
+      performedByRole: currentUser.roles?.[0] ?? '',
+      complexId: saved.id,
+      description:
+        'La administración actualizó el teléfono o el sitio web del conjunto',
+    });
+    return saved;
   }
 
   async update(
@@ -418,19 +440,26 @@ export class ResidentialComplexService {
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(input.id, currentUser);
 
-    // La cuenta del complejo también llega aquí (ajustes de PQRF, del personal…),
-    // pero el plan define su cupo de unidades y lo que paga: solo lo cambia el
-    // SUPER_ADMIN.
-    if (
-      input.plan &&
-      input.plan !== complex.plan &&
-      !currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)
-    ) {
-      throw new CustomError({
-        message: 'Solo el administrador de la plataforma puede cambiar el plan',
-        statusCode: HttpStatus.FORBIDDEN,
-        errorCode: ComplexErrorCode.COMPLEX_PLAN_CHANGE_FORBIDDEN,
-      });
+    // La cuenta del complejo también llega aquí, pero solo para sus ajustes de
+    // operación. Los datos del conjunto (nombre, NIT, dirección, plan, correo…)
+    // los corrige el SUPER_ADMIN; el teléfono y el sitio web van por
+    // updateOwnProfile.
+    if (!currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+      const forbidden = Object.entries(input)
+        .filter(
+          ([key, value]) =>
+            value !== undefined && !COMPLEX_EDITABLE_FIELDS.has(key),
+        )
+        .map(([key]) => key);
+      if (forbidden.length) {
+        throw new CustomError({
+          message:
+            'Estos datos del conjunto solo los puede cambiar el administrador de la plataforma',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: ComplexErrorCode.COMPLEX_FIELD_CHANGE_FORBIDDEN,
+          details: forbidden.join(', '),
+        });
+      }
     }
 
     // Si cambia el plan, actualizar el límite de unidades
