@@ -340,6 +340,8 @@ export enum ComplexErrorCode {
   COMPLEX_PASSWORD_NOT_SET = 'COMPLEX_PASSWORD_NOT_SET',
   /** Demasiados intentos fallidos de la contraseña del conjunto. */
   COMPLEX_PASSWORD_TOO_MANY_ATTEMPTS = 'COMPLEX_PASSWORD_TOO_MANY_ATTEMPTS',
+  /** Solo el SUPER_ADMIN cambia el plan: define el cupo de unidades y el cobro. */
+  COMPLEX_PLAN_CHANGE_FORBIDDEN = 'COMPLEX_PLAN_CHANGE_FORBIDDEN',
 }
 
 export enum AmenityErrorCode {

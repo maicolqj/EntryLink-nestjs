@@ -13,6 +13,7 @@ import { User } from '../../users/entities/user.entity';
 import { ResidentialComplexService } from '../services/residential-complex.service';
 import { CreateComplexInput } from '../dto/inputs/create-complex.input';
 import { UpdateComplexInput } from '../dto/inputs/update-complex.input';
+import { UpdateComplexProfileInput } from '../dto/inputs/update-complex-profile.input';
 import { FilterComplexInput } from '../dto/inputs/filter-complex.input';
 import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes.response';
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
@@ -82,6 +83,20 @@ export class ResidentialComplexResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     return this.complexService.update(input, currentUser);
+  }
+
+  /**
+   * La administración del conjunto actualiza sus datos de contacto y
+   * presentación: teléfono, sitio web, descripción y dirección. El conjunto es
+   * el de la sesión.
+   */
+  @Mutation(() => ResidentialComplex, { name: 'updateMyComplexProfile' })
+  @Auth({ roles: [ValidRoles.COMPLEX_ROL] })
+  updateMyComplexProfile(
+    @Args('input') input: UpdateComplexProfileInput,
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ResidentialComplex> {
+    return this.complexService.updateOwnProfile(input, currentUser);
   }
 
   /**

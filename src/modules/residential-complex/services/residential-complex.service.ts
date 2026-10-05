@@ -16,6 +16,7 @@ import { DataSource, EntityManager, ILike, IsNull, Repository } from 'typeorm';
 import { ResidentialComplex } from '../entities/residential-complex.entity';
 import { CreateComplexInput } from '../dto/inputs/create-complex.input';
 import { UpdateComplexInput } from '../dto/inputs/update-complex.input';
+import { UpdateComplexProfileInput } from '../dto/inputs/update-complex-profile.input';
 import { FilterComplexInput } from '../dto/inputs/filter-complex.input';
 import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
@@ -384,11 +385,53 @@ export class ResidentialComplexService {
   // ACTUALIZAR
   // ================================================================
 
+  /**
+   * La administración del conjunto edita sus propios datos de contacto y
+   * presentación (ver UpdateComplexProfileInput). El conjunto sale de la
+   * sesión, nunca del input: no puede tocar otro.
+   */
+  async updateOwnProfile(
+    input: UpdateComplexProfileInput,
+    currentUser: JwtAccessPayload,
+  ): Promise<ResidentialComplex> {
+    const complexId = currentUser.complexId ?? currentUser.sub;
+    // Cadena vacía = quitar el dato; los obligatorios (dirección, ciudad,
+    // departamento) solo se reemplazan, nunca se vacían.
+    const clearable = ['description', 'phoneNumber', 'website'] as const;
+    const patch: Record<string, string | null | undefined> = {};
+    for (const [key, value] of Object.entries(input) as [
+      keyof UpdateComplexProfileInput,
+      string | undefined,
+    ][]) {
+      if (value === undefined || value === null) continue;
+      const trimmed = value.trim();
+      if (trimmed) patch[key] = trimmed;
+      else if ((clearable as readonly string[]).includes(key))
+        patch[key] = null;
+    }
+    return this.update({ id: complexId, ...patch }, currentUser);
+  }
+
   async update(
     input: UpdateComplexInput,
     currentUser: JwtAccessPayload,
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(input.id, currentUser);
+
+    // La cuenta del complejo también llega aquí (ajustes de PQRF, del personal…),
+    // pero el plan define su cupo de unidades y lo que paga: solo lo cambia el
+    // SUPER_ADMIN.
+    if (
+      input.plan &&
+      input.plan !== complex.plan &&
+      !currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)
+    ) {
+      throw new CustomError({
+        message: 'Solo el administrador de la plataforma puede cambiar el plan',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: ComplexErrorCode.COMPLEX_PLAN_CHANGE_FORBIDDEN,
+      });
+    }
 
     // Si cambia el plan, actualizar el límite de unidades
     if (input.plan && input.plan !== complex.plan) {
