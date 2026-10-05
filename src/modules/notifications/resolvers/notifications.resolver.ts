@@ -176,7 +176,6 @@ export class NotificationsResolver {
       ValidRoles.COMPLEX_ROL,
       ValidRoles.ACCOUNTANT_ROL,
       // ValidRoles.SUPERVISOR_ROL,
-      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
   })
   triggerPanicAlert(
@@ -198,7 +197,6 @@ export class NotificationsResolver {
       ValidRoles.SECURITY_ROL,
       ValidRoles.COMPLEX_ROL,
       ValidRoles.ACCOUNTANT_ROL,
-      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
   })
   reportPanicLocation(
@@ -221,7 +219,6 @@ export class NotificationsResolver {
       ValidRoles.SECURITY_ROL,
       ValidRoles.RESIDENT_ROL,
       ValidRoles.ACCOUNTANT_ROL,
-      ValidRoles.COMPILANCE_OFFICER_ROL,
     ],
   })
   panicAlertLocation(

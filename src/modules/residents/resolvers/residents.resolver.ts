@@ -206,7 +206,7 @@ export class ResidentsResolver {
    */
   @Mutation(() => Resident, { name: 'approveResident' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL],
     permissions: [ValidPermissions.APPROVE_RESIDENT],
   })
   approve(
@@ -221,7 +221,7 @@ export class ResidentsResolver {
    */
   @Mutation(() => Resident, { name: 'rejectResident' })
   @Auth({
-    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+    roles: [ValidRoles.SUPER_ADMIN_ROL],
     permissions: [ValidPermissions.REJECT_RESIDENT],
   })
   reject(

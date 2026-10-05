@@ -81,7 +81,10 @@ import { NotificationEntitySnapshot } from '../dto/responses/notification-snapsh
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { PEM_HEADER, normalizePem } from '../../shared/utils/pem.utils';
-import { GeneralErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  GeneralErrorCode,
+  NotificationActionErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 
 import { User } from '../../users/entities/user.entity';
@@ -136,6 +139,14 @@ export interface NotifyParams {
    */
   androidTag?: string;
 }
+
+/** SUPER_ADMIN y oficial de cumplimiento: su bandeja no depende de un conjunto. */
+const isPlatformStaff = (user: JwtAccessPayload): boolean =>
+  !!user.roles?.some(
+    (r) =>
+      r === ValidRoles.SUPER_ADMIN_ROL ||
+      r === ValidRoles.COMPILANCE_OFFICER_ROL,
+  );
 
 @Injectable()
 export class NotificationsService implements OnModuleInit {
@@ -373,7 +384,10 @@ export class NotificationsService implements OnModuleInit {
   private async withoutPanicExcluded(
     params: NotifyParams,
   ): Promise<NotifyParams> {
-    if (params.type !== NotificationType.PANIC_ALERT || params.userIds.length === 0) {
+    if (
+      params.type !== NotificationType.PANIC_ALERT ||
+      params.userIds.length === 0
+    ) {
       return params;
     }
     const excluded = new Set(await this.findPanicExcludedUserIds());
@@ -437,6 +451,25 @@ export class NotificationsService implements OnModuleInit {
     return rows.map((x) => x.userId);
   }
 
+  /**
+   * Quienes revisan los registros de conjuntos y sus DPA: el SUPER_ADMIN y el
+   * oficial de cumplimiento.
+   */
+  private async findRegistrationReviewerIds(): Promise<string[]> {
+    const rows = await this.userRoleRepo
+      .createQueryBuilder('ur')
+      .innerJoin('ur.user', 'u')
+      .innerJoin('ur.role', 'r')
+      .where('r.name IN (:...roles)', {
+        roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+      })
+      .andWhere('u.deleted_at IS NULL')
+      .select('u.id', 'userId')
+      .distinct(true)
+      .getRawMany<{ userId: string }>();
+    return rows.map((x) => x.userId);
+  }
+
   /** IDs de todos los usuarios SUPER_ADMIN activos (no scoped a complejo). */
   async findSuperAdminUserIds(): Promise<string[]> {
     const rows = await this.userRoleRepo
@@ -452,8 +485,9 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
-   * Avisa a los SUPER_ADMIN que un complejo se registró desde el formulario
-   * público y espera revisión. Best-effort: el registro nunca falla por esto.
+   * Avisa a los SUPER_ADMIN y oficiales de cumplimiento que un complejo se
+   * registró desde el formulario público y espera revisión. Best-effort: el
+   * registro nunca falla por esto.
    */
   async notifyComplexRegistered(complex: {
     id: string;
@@ -462,12 +496,12 @@ export class NotificationsService implements OnModuleInit {
     legalRepresentativeName?: string | null;
   }): Promise<void> {
     try {
-      const superAdminIds = await this.findSuperAdminUserIds();
-      if (superAdminIds.length === 0) return;
+      const reviewerIds = await this.findRegistrationReviewerIds();
+      if (reviewerIds.length === 0) return;
 
       await this.notify({
         complexId: complex.id,
-        userIds: superAdminIds,
+        userIds: reviewerIds,
         type: NotificationType.COMPLEX_REGISTERED,
         priority: NotificationPriority.HIGH,
         title: 'Nuevo complejo por revisar',
@@ -489,7 +523,8 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
-   * Avisa a los SUPER_ADMIN que un complejo subió su DPA (Anexo B2B) firmado.
+   * Avisa a los SUPER_ADMIN y oficiales de cumplimiento que un complejo subió
+   * su DPA (Anexo B2B) firmado.
    * Best-effort: nunca interrumpe el flujo que la origina.
    */
   async notifyDpaSigned(complex: {
@@ -499,12 +534,12 @@ export class NotificationsService implements OnModuleInit {
     fileUrl?: string | null;
   }): Promise<void> {
     try {
-      const superAdminIds = await this.findSuperAdminUserIds();
-      if (superAdminIds.length === 0) return;
+      const reviewerIds = await this.findRegistrationReviewerIds();
+      if (reviewerIds.length === 0) return;
 
       await this.notify({
         complexId: complex.id,
-        userIds: superAdminIds,
+        userIds: reviewerIds,
         type: NotificationType.DPA_SIGNED,
         priority: NotificationPriority.NORMAL,
         title: 'DPA firmado recibido',
@@ -624,7 +659,8 @@ export class NotificationsService implements OnModuleInit {
     params: NotifyParams,
   ): Promise<void> {
     if (params.type === NotificationType.PANIC_ALERT) {
-      userIds = (await this.withoutPanicExcluded({ ...params, userIds })).userIds;
+      userIds = (await this.withoutPanicExcluded({ ...params, userIds }))
+        .userIds;
     }
     if (userIds.length === 0) return;
     const subscriptions = await this.pushSubRepo.find({
@@ -1236,9 +1272,10 @@ export class NotificationsService implements OnModuleInit {
 
     const qb = this.notifRepo.createQueryBuilder('n');
 
-    // SUPER_ADMIN ve TODAS sus notificaciones (dirigidas a él) de cualquier
-    // complejo, sin depender del complejo activo. El resto queda acotado al complejo.
-    if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+    // SUPER_ADMIN y oficial de cumplimiento ven TODAS sus notificaciones
+    // (dirigidas a ellos) de cualquier complejo, sin depender del complejo
+    // activo. El resto queda acotado al complejo.
+    if (isPlatformStaff(currentUser)) {
       qb.where('n.recipientUserId = :userId', { userId: currentUser.sub });
     } else {
       qb.where('n.complexId = :complexId', {
@@ -1442,6 +1479,21 @@ export class NotificationsService implements OnModuleInit {
     input: ExecuteNotificationActionInput,
     currentUser: JwtAccessPayload,
   ): Promise<NotificationEntitySnapshot> {
+    // El oficial de cumplimiento ve todos los conjuntos para revisarlos, no
+    // para operarlos: no aprueba visitas, residentes ni sanciones desde un
+    // aviso. Sin esto, su acceso de lectura a cualquier conjunto bastaba para
+    // que los módulos le ofrecieran esas acciones.
+    if (
+      currentUser.roles?.includes(ValidRoles.COMPILANCE_OFFICER_ROL) &&
+      !currentUser.roles.includes(ValidRoles.SUPER_ADMIN_ROL)
+    ) {
+      throw new CustomError({
+        message: 'El oficial de cumplimiento no ejecuta acciones de los avisos',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: NotificationActionErrorCode.NOTIFICATION_ACTION_UNAVAILABLE,
+      });
+    }
+
     const notif = await this.findOneForUser(
       input.notificationId,
       input.complexId ?? null,
@@ -1567,10 +1619,11 @@ export class NotificationsService implements OnModuleInit {
     channel?: NotificationChannel | null,
   ): Promise<UnreadCountResponse> {
     // Siempre acotado al destinatario: cada cuenta cuenta solo sus propias
-    // notificaciones. SUPER_ADMIN cuenta las de todos los complejos.
+    // notificaciones. SUPER_ADMIN y oficial de cumplimiento cuentan las de
+    // todos los complejos.
     const qb = this.notifRepo.createQueryBuilder('n').where('n.isRead = false');
 
-    if (currentUser.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+    if (isPlatformStaff(currentUser)) {
       qb.andWhere('n.recipientUserId = :userId', { userId: currentUser.sub });
     } else {
       qb.andWhere('n.complexId = :complexId', {
@@ -2128,16 +2181,13 @@ export class NotificationsService implements OnModuleInit {
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (torre) OK`);
-        void this.emitPanicNew(
+        void this.emitPanicNew(complexId, {
           complexId,
-          {
-            complexId,
-            alertId: alert.id,
-            unitId: unit.id,
-            triggeredBy: currentUser.sub,
-            triggeredByLabel,
-          },
-        );
+          alertId: alert.id,
+          unitId: unit.id,
+          triggeredBy: currentUser.sub,
+          triggeredByLabel,
+        });
         void Promise.allSettled([
           this.dispatchPushOnly(buildingIds, {
             ...residentPanicBase,
@@ -2218,16 +2268,13 @@ export class NotificationsService implements OnModuleInit {
           });
         }
         this.logger.warn(`[PANIC][resident] persistBulk (casa) OK`);
-        void this.emitPanicNew(
+        void this.emitPanicNew(complexId, {
           complexId,
-          {
-            complexId,
-            alertId: alert.id,
-            unitId: unit.id,
-            triggeredBy: currentUser.sub,
-            triggeredByLabel,
-          },
-        );
+          alertId: alert.id,
+          unitId: unit.id,
+          triggeredBy: currentUser.sub,
+          triggeredByLabel,
+        });
         void Promise.allSettled([
           this.dispatchPushOnly(residentIds, {
             ...residentPanicBase,
