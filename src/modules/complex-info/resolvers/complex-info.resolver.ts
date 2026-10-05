@@ -61,7 +61,8 @@ export class ComplexInfoResolver {
 
   @Query(() => MyComplexDocument, {
     name: 'myComplexDocument',
-    description: 'Un documento publicado, con su texto completo',
+    description:
+      'Un documento publicado, con su texto completo. Abrirlo cuenta como leído si pide acuse',
   })
   @Auth({ roles: RESIDENT })
   myComplexDocument(
@@ -73,7 +74,8 @@ export class ComplexInfoResolver {
 
   @Mutation(() => MyComplexDocument, {
     name: 'acknowledgeComplexDocument',
-    description: 'El residente confirma que leyó la versión vigente',
+    description:
+      'El residente confirma que leyó la versión vigente. Ya no hace falta: abrir el documento lo registra (se mantiene para versiones viejas de la app)',
   })
   @Auth({ roles: RESIDENT })
   acknowledgeComplexDocument(
