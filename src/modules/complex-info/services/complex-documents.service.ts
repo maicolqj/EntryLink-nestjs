@@ -402,12 +402,24 @@ export class ComplexDocumentsService {
     return { documents, pending };
   }
 
+  /**
+   * El documento para el residente. Abrirlo cuenta como leído: si la
+   * administración pide acuse, queda registrado en ese momento.
+   *
+   * Antes el residente debía tocar "He leído y acepto", y la mayoría abría el
+   * documento sin hacerlo: la administración se quedaba esperando acuses que
+   * no llegaban aunque el documento sí se hubiera visto.
+   */
   async getForResident(
     id: string,
     user: JwtAccessPayload,
   ): Promise<MyComplexDocument> {
     const doc = await this.findOrFail(id);
-    await this.assertResidentCanRead(doc, user);
+    const residences = await this.assertResidentCanRead(doc, user);
+
+    if (doc.requiresAcknowledgement) {
+      await this.recordAck(doc, user, residences[0].unitId);
+    }
 
     const ack = await this.ackRepo.findOne({
       where: { documentId: doc.id, version: doc.version, userId: user.sub },
@@ -435,7 +447,16 @@ export class ComplexDocumentsService {
       });
     }
 
-    // Idempotente: confirmar dos veces la misma versión no duplica nada.
+    await this.recordAck(doc, user, residences[0].unitId);
+    return this.getForResident(id, user);
+  }
+
+  /** Idempotente: abrir o confirmar dos veces la misma versión no duplica nada. */
+  private async recordAck(
+    doc: ComplexDocument,
+    user: JwtAccessPayload,
+    unitId: string,
+  ): Promise<void> {
     await this.ackRepo
       .createQueryBuilder()
       .insert()
@@ -443,12 +464,10 @@ export class ComplexDocumentsService {
         documentId: doc.id,
         version: doc.version,
         userId: user.sub,
-        unitId: residences[0].unitId,
+        unitId,
       })
       .orIgnore()
       .execute();
-
-    return this.getForResident(id, user);
   }
 
   /**

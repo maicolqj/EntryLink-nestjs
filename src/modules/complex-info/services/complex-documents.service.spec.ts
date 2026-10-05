@@ -20,6 +20,7 @@ jest.mock('../../shared/utils/docx-html.utils', () => ({
  *   no cuenta); en borrador no;
  * - el residente no ve borradores ni lo que es solo para propietarios, y para
  *   él eso "no existe";
+ * - abrir un documento que pide acuse cuenta como leído;
  * - el informe de lecturas cuenta unidades, no personas.
  */
 
@@ -67,9 +68,20 @@ const build = (opts: {
     save: jest.fn((d: unknown) => Promise.resolve(d)),
     create: jest.fn((d: unknown) => d),
   };
+  const ackInsert = { values: jest.fn() };
+  const ackQuery = {
+    insert: jest.fn(() => ackQuery),
+    values: jest.fn((v: unknown) => {
+      ackInsert.values(v);
+      return ackQuery;
+    }),
+    orIgnore: jest.fn(() => ackQuery),
+    execute: jest.fn().mockResolvedValue(undefined),
+  };
   const ackRepo = {
     find: jest.fn().mockResolvedValue(opts.acks ?? []),
     findOne: jest.fn().mockResolvedValue(null),
+    createQueryBuilder: jest.fn(() => ackQuery),
   };
   const residentRepo = {
     find: jest
@@ -99,7 +111,7 @@ const build = (opts: {
     storage as never,
     notificationsService as never,
   );
-  return { service, docRepo, notificationsService, residentRepo };
+  return { service, docRepo, notificationsService, residentRepo, ackInsert };
 };
 
 const flush = () => new Promise((r) => setImmediate(r));
@@ -241,6 +253,33 @@ describe('ComplexDocumentsService', () => {
       });
       const result = await h.service.getForResident('doc-1', resident);
       expect(result.hasContent).toBe(true);
+    });
+
+    it('abrir un documento que pide acuse lo deja leído para esa versión y unidad', async () => {
+      const h = build({
+        found: doc({
+          isPublished: true,
+          requiresAcknowledgement: true,
+          version: 2,
+        }),
+        myResidences: [residence()],
+      });
+      await h.service.getForResident('doc-1', resident);
+      expect(h.ackInsert.values).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        version: 2,
+        userId: 'user-me',
+        unitId: 'unit-1',
+      });
+    });
+
+    it('abrir uno que no pide acuse no registra nada', async () => {
+      const h = build({
+        found: doc({ isPublished: true }),
+        myResidences: [residence()],
+      });
+      await h.service.getForResident('doc-1', resident);
+      expect(h.ackInsert.values).not.toHaveBeenCalled();
     });
 
     it('confirmar lectura exige que el documento lo pida', async () => {
