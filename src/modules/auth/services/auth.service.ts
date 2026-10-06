@@ -1416,7 +1416,13 @@ export class AuthService {
     };
   }
 
-  /** Valida que el complejo esté activo. Bloquea INACTIVE y SUSPENDED. */
+  /**
+   * Valida que el complejo pueda iniciar sesión. Bloquea INACTIVE.
+   *
+   * SUSPENDED sí entra: la web lo lleva a la pantalla de suspensión con el
+   * motivo, y el SubscriptionGuard le rechaza todo lo demás. Rechazarlo aquí
+   * dejaría a la administración sin saber por qué.
+   */
   private assertComplexAccountActive(complex: ResidentialComplex): void {
     if (complex.status === ComplexStatus.INACTIVE) {
       throw new CustomError({
@@ -1424,14 +1430,6 @@ export class AuthService {
           'El complejo residencial está inactivo. Contacta al administrador',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.COMPLEX_INACTIVE,
-      });
-    }
-    if (complex.status === ComplexStatus.SUSPENDED) {
-      throw new CustomError({
-        message:
-          'El complejo residencial está suspendido. Contacta al administrador',
-        statusCode: HttpStatus.UNAUTHORIZED,
-        errorCode: AuthErrorCode.COMPLEX_SUSPENDED,
       });
     }
   }

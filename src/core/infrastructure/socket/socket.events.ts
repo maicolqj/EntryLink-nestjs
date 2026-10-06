@@ -51,6 +51,16 @@ export enum SocketEvent {
    */
   COMPLEX_MODULES_UPDATED = 'complex:modules:updated',
 
+  /**
+   * El SUPER_ADMIN suspendió o reactivó un complejo.
+   *
+   * Va a la sala del complejo con `{ complexId, status, reason, suspendedAt }`.
+   * Solo la web de la administración actúa: con SUSPENDED se va a la pantalla
+   * de suspensión, y al reactivarse sale de ella. Residentes y portería lo
+   * ignoran, la suspensión no los toca.
+   */
+  COMPLEX_STATUS_CHANGED = 'complex:status:changed',
+
   /** Cambió algo en un ticket de mantenimiento: el tablero y el mapa se repintan. */
   MAINTENANCE_TICKET_UPDATED = 'maintenance:ticket:updated',
 

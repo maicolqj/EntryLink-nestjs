@@ -4,6 +4,8 @@ import { Reflector } from '@nestjs/core';
 import { SubscriptionGuard } from './subscription.guard';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../utils/errors.utils';
+import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
+import { AuthErrorCode } from '../constans/error-codes.constants';
 
 /**
  * Con la suscripción suspendida, la administración queda en solo lectura. Lo
@@ -19,13 +21,20 @@ const build = (opts: {
   endsAt?: string | null;
   allowed?: boolean;
   dbFails?: boolean;
+  status?: ComplexStatus;
+  reason?: string | null;
 }) => {
   const reflector = {
     getAllAndOverride: jest.fn(() => opts.allowed ?? false),
   } as unknown as Reflector;
   const findOne = jest.fn(async () => {
     if (opts.dbFails) throw new Error('base caída');
-    return { id: COMPLEX_ID, subscriptionEndsAt: opts.endsAt ?? null };
+    return {
+      id: COMPLEX_ID,
+      subscriptionEndsAt: opts.endsAt ?? null,
+      status: opts.status ?? ComplexStatus.ACTIVE,
+      suspensionReason: opts.reason ?? null,
+    };
   });
   const dataSource = { getRepository: () => ({ findOne }) } as never;
   const cache = { get: jest.fn(async () => null), set: jest.fn() } as never;
@@ -148,5 +157,52 @@ describe('SubscriptionGuard', () => {
     await expect(
       guard.canActivate(gqlContext(complexAccount, 'mutation')),
     ).resolves.toBe(true);
+  });
+
+  describe('suspensión manual del SUPER_ADMIN', () => {
+    it('bloquea también las consultas de la administración y lleva el motivo', async () => {
+      const { guard } = build({
+        status: ComplexStatus.SUSPENDED,
+        reason: 'Uso indebido de la plataforma',
+      });
+
+      const error = await guard
+        .canActivate(gqlContext(complexAccount, 'query'))
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CustomError);
+      expect((error as CustomError).errorCode).toBe(
+        AuthErrorCode.COMPLEX_SUSPENDED,
+      );
+      expect((error as CustomError).message).toContain(
+        'Uso indebido de la plataforma',
+      );
+    });
+
+    it('deja pasar lo marcado con @AllowWhenSuspended (sesión, motivo, pánico)', async () => {
+      const { guard } = build({
+        status: ComplexStatus.SUSPENDED,
+        allowed: true,
+      });
+
+      await expect(
+        guard.canActivate(gqlContext(complexAccount, 'query')),
+      ).resolves.toBe(true);
+    });
+
+    it('no toca a residentes ni a portería', async () => {
+      const { guard } = build({ status: ComplexStatus.SUSPENDED });
+
+      for (const role of [ValidRoles.RESIDENT_ROL, ValidRoles.SECURITY_ROL]) {
+        await expect(
+          guard.canActivate(
+            gqlContext(
+              { sub: 'u', complexId: COMPLEX_ID, roles: [role] },
+              'query',
+            ),
+          ),
+        ).resolves.toBe(true);
+      }
+    });
   });
 });

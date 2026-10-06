@@ -121,6 +121,15 @@ export class ResidentialComplex {
   })
   status: ComplexStatus;
 
+  // Motivo de la suspensión manual. Sin @Field a propósito: el complejo lo leen
+  // residentes y portería, y el motivo es entre la plataforma y la
+  // administración. Viaja solo por `myComplexSuspension` y `complexSuspension`.
+  @Column({ name: 'suspension_reason', type: 'text', nullable: true })
+  suspensionReason?: string | null;
+
+  @Column({ name: 'suspended_at', type: 'timestamptz', nullable: true })
+  suspendedAt?: Date | null;
+
   @Field(() => String, { description: 'token version', nullable: true })
   @Column({ type: 'int', default: 0 })
   tokenVersion: number;

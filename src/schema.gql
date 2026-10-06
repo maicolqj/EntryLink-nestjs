@@ -2397,6 +2397,20 @@ type NearbyComplexResponse {
   gpsRadius: Int
 }
 
+"""Estado de suspensión manual de un complejo"""
+type ComplexSuspensionInfo {
+  complexId: String!
+  complexName: String!
+  status: ComplexStatus!
+
+  """true si la plataforma suspendió la cuenta del conjunto"""
+  suspended: Boolean!
+
+  """Motivo que escribió la plataforma al suspender"""
+  reason: String
+  suspendedAt: DateTime
+}
+
 type PaginatedBuildingsResponse {
   items: [Building!]!
   pagination: PaginationReponse!
@@ -6725,6 +6739,8 @@ type Query {
   availableModules: [ComplexModule!]!
   complexes(pagination: PaginationInput, filters: FilterComplexInput): PaginatedComplexesResponse!
   complex(id: String!): ResidentialComplex!
+  myComplexSuspension: ComplexSuspensionInfo!
+  complexSuspension(complexId: String!): ComplexSuspensionInfo!
   nearbyComplexes(lat: Float!, lng: Float!, radiusMeters: Float = 200): [NearbyComplexResponse!]!
   buildings(complexId: String!, pagination: PaginationInput): PaginatedBuildingsResponse!
   building(id: String!): Building!
@@ -7600,7 +7616,13 @@ type Mutation {
   updateMyComplexProfile(input: UpdateComplexProfileInput!): ResidentialComplex!
   uploadSignedDpa(pdfBase64: String!, fileName: String): ResidentialComplex!
   reviewSignedDpa(complexId: String!, status: DpaValidationStatus!, reason: String): ResidentialComplex!
-  changeComplexStatus(id: String!, status: ComplexStatus!): ResidentialComplex!
+  changeComplexStatus(
+    id: String!
+    status: ComplexStatus!
+
+    """Motivo de la suspensión (obligatorio con SUSPENDED)"""
+    reason: String
+  ): ResidentialComplex!
   removeComplex(id: String!): Boolean!
   restoreComplex(id: String!): ResidentialComplex!
   updateComplexModules(complexId: String!, modules: [ComplexModule!]!): ResidentialComplex!

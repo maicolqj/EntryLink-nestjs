@@ -71,13 +71,8 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
           });
         }
 
-        if (complex.status === ComplexStatus.SUSPENDED) {
-          throw new CustomError({
-            message: 'El complejo residencial está suspendido',
-            statusCode: HttpStatus.UNAUTHORIZED,
-            errorCode: AuthErrorCode.COMPLEX_SUSPENDED,
-          });
-        }
+        // SUSPENDED no se corta aquí: la sesión sigue viva para mostrar la
+        // pantalla de suspensión, y el SubscriptionGuard bloquea lo demás.
 
         version = complex.tokenVersion ?? 0;
       } else {
