@@ -33,6 +33,7 @@ import {
 import { ComplexModule } from '../enums/complex-module.enum';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
+import { ComplexSuspensionInfo } from '../dto/responses/complex-suspension.response';
 import { calculateHaversineDistance } from '../../shared/utils/gps.utils';
 import { decodeBase64File } from '../../shared/utils/base64-file.utils';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -556,13 +557,45 @@ export class ResidentialComplexService {
     id: string,
     status: ComplexStatus,
     currentUser: JwtAccessPayload,
+    reason?: string | null,
   ): Promise<ResidentialComplex> {
     const complex = await this.findById(id, currentUser);
 
     const previousStatus = complex.status;
+    const previousReason = complex.suspensionReason ?? null;
 
-    return this.dataSource.transaction(async (manager) => {
+    // El motivo es lo que la administración lee al entrar: suspender sin él la
+    // deja frente a una pantalla que no explica nada.
+    const trimmedReason = reason?.trim() || null;
+    if (status === ComplexStatus.SUSPENDED && !trimmedReason) {
+      throw new CustomError({
+        message: 'Escribe el motivo de la suspensión',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: ComplexErrorCode.COMPLEX_SUSPENSION_REASON_REQUIRED,
+      });
+    }
+
+    if (trimmedReason && trimmedReason.length > 1000) {
+      throw new CustomError({
+        message: 'El motivo no puede superar 1000 caracteres',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GeneralErrorCode.VALIDATION_ERROR,
+      });
+    }
+
+    const saved = await this.dataSource.transaction(async (manager) => {
       complex.status = status;
+      if (status === ComplexStatus.SUSPENDED) {
+        complex.suspensionReason = trimmedReason;
+        // Cambiar solo el motivo de una suspensión vigente no reinicia la fecha.
+        complex.suspendedAt =
+          previousStatus === ComplexStatus.SUSPENDED && complex.suspendedAt
+            ? complex.suspendedAt
+            : new Date();
+      } else {
+        complex.suspensionReason = null;
+        complex.suspendedAt = null;
+      }
       const saved = await manager.save(ResidentialComplex, complex);
 
       // Al desactivar el complejo, marcar todas sus unidades como DISABLED.
@@ -587,14 +620,12 @@ export class ResidentialComplexService {
         await this.seedPucSafe(id);
       }
 
-      await this.cacheService.delete({ key: BK.complex.one(id) });
-
       void this.auditService.log({
         entityType: AuditEntityType.ResidentialComplex,
         entityId: id,
         action: AuditAction.UPDATE,
-        previousValue: { status: previousStatus },
-        newValue: { status },
+        previousValue: { status: previousStatus, reason: previousReason },
+        newValue: { status, reason: saved.suspensionReason ?? null },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -604,6 +635,58 @@ export class ResidentialComplexService {
 
       return saved;
     });
+
+    // Fuera de la transacción: borrar la caché o avisar antes del commit deja
+    // que alguien relea el estado viejo y lo vuelva a cachear.
+    await this.cacheService.delete({ key: BK.complex.one(id) });
+    // El SubscriptionGuard lee el estado de esta llave en cada petición de la
+    // administración; sin borrarla, suspender no cortaría nada hasta el TTL.
+    await this.cacheService.delete({ key: BK.complexSubscription.one(id) });
+
+    // La web de la administración abierta pasa a la pantalla de suspensión (o
+    // sale de ella) sin recargar. Residentes y portería lo ignoran.
+    this.socketService.emitToComplex(id, SocketEvent.COMPLEX_STATUS_CHANGED, {
+      complexId: id,
+      status,
+      reason: saved.suspensionReason ?? null,
+      suspendedAt: saved.suspendedAt ?? null,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Estado de suspensión de un complejo. La administración consulta el suyo
+   * (`complexId` sale de la sesión); la plataforma, el de cualquiera.
+   */
+  async getSuspensionInfo(complexId: string): Promise<ComplexSuspensionInfo> {
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId, deletedAt: IsNull() },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        suspensionReason: true,
+        suspendedAt: true,
+      },
+    });
+    if (!complex) {
+      throw new CustomError({
+        message: 'Complejo no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+      });
+    }
+
+    const suspended = complex.status === ComplexStatus.SUSPENDED;
+    return {
+      complexId: complex.id,
+      complexName: complex.name,
+      status: complex.status,
+      suspended,
+      reason: suspended ? (complex.suspensionReason ?? null) : null,
+      suspendedAt: suspended ? (complex.suspendedAt ?? null) : null,
+    };
   }
 
   /**

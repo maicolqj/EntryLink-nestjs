@@ -17,10 +17,15 @@ import { UpdateComplexProfileInput } from '../dto/inputs/update-complex-profile.
 import { FilterComplexInput } from '../dto/inputs/filter-complex.input';
 import { PaginatedComplexesResponse } from '../dto/responses/paginated-complexes.response';
 import { NearbyComplexResponse } from '../dto/responses/nearby-complex.response';
+import { ComplexSuspensionInfo } from '../dto/responses/complex-suspension.response';
 import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
+import { HttpStatus } from '@nestjs/common';
 import { Auth } from '../../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../../shared/decorators/allow-when-suspended.decorator';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { ComplexErrorCode } from '../../shared/constans/error-codes.constants';
 import {
   CurrentUser,
   CurrentUserId,
@@ -138,7 +143,8 @@ export class ResidentialComplexResolver {
   }
 
   /**
-   * Cambia el estado operativo de un complejo.
+   * Cambia el estado operativo de un complejo. SUSPENDED exige `reason`: es
+   * lo que la administración lee en la pantalla de suspensión.
    */
   @Mutation(() => ResidentialComplex, { name: 'changeComplexStatus' })
   @Auth({
@@ -149,8 +155,13 @@ export class ResidentialComplexResolver {
     @Args('id') id: string,
     @Args('status', { type: () => ComplexStatus }) status: ComplexStatus,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('reason', {
+      nullable: true,
+      description: 'Motivo de la suspensión (obligatorio con SUSPENDED)',
+    })
+    reason?: string,
   ): Promise<ResidentialComplex> {
-    return this.complexService.changeStatus(id, status, currentUser);
+    return this.complexService.changeStatus(id, status, currentUser, reason);
   }
 
   /**
@@ -271,6 +282,40 @@ export class ResidentialComplexResolver {
    * Devuelve los complejos activos dentro del radio GPS indicado (por defecto 200 m).
    * Uso principal: el supervisor descubre complejos cercanos para solicitar acceso.
    */
+  /**
+   * La administración pregunta si su cuenta está suspendida y por qué. Pasa
+   * aunque esté suspendida: es justo lo que pinta la pantalla de suspensión.
+   */
+  @Query(() => ComplexSuspensionInfo, { name: 'myComplexSuspension' })
+  @Auth({ roles: [ValidRoles.COMPLEX_ROL, ValidRoles.ACCOUNTANT_ROL] })
+  @AllowWhenSuspended()
+  myComplexSuspension(
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<ComplexSuspensionInfo> {
+    const complexId =
+      currentUser.complexId ??
+      (currentUser.entityType === 'complex' ? currentUser.sub : undefined);
+    if (!complexId) {
+      throw new CustomError({
+        message: 'La sesión no está asociada a un conjunto',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: ComplexErrorCode.COMPLEX_NOT_FOUND,
+      });
+    }
+    return this.complexService.getSuspensionInfo(complexId);
+  }
+
+  /** La plataforma consulta el motivo de suspensión de cualquier complejo. */
+  @Query(() => ComplexSuspensionInfo, { name: 'complexSuspension' })
+  @Auth({
+    roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPILANCE_OFFICER_ROL],
+  })
+  complexSuspension(
+    @Args('complexId') complexId: string,
+  ): Promise<ComplexSuspensionInfo> {
+    return this.complexService.getSuspensionInfo(complexId);
+  }
+
   @Query(() => [NearbyComplexResponse], { name: 'nearbyComplexes' })
   @Auth({ roles: [ValidRoles.SUPERVISOR_ROL] })
   findNearby(
