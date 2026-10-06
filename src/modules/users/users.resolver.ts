@@ -21,6 +21,7 @@ import { RemoveStaffMemberResponse } from './dto/responses/remove-staff-member.r
 import { CreateStaffMemberResponse } from './dto/responses/create-staff-member.response';
 
 import { Auth } from '../shared/decorators/auth.decorator';
+import { AllowWhenSuspended } from '../shared/decorators/allow-when-suspended.decorator';
 import {
   CurrentUser,
   CurrentUserId,
@@ -81,6 +82,9 @@ export class UsersResolver {
       'Perfil completo del usuario autenticado (usuario o complejo residencial)',
   })
   @Auth()
+  // El panel lo pide al iniciar sesión: con la cuenta suspendida tiene que
+  // responder para poder llegar a la pantalla de suspensión.
+  @AllowWhenSuspended()
   async me(@CurrentUser() payload: JwtAccessPayload) {
     return this.usersService.getMyProfile(payload);
   }
