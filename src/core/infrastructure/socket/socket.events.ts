@@ -77,6 +77,15 @@ export enum SocketEvent {
   /** El otro leyó la conversación: para el "visto". */
   MARKETPLACE_CHAT_READ = 'marketplace:chat:read',
 
+  /**
+   * Un vigilante sacó la app de portería a segundo plano o volvió a ella.
+   *
+   * Va a la sala del complejo solo con `{ complexId }`: ahí también están los
+   * residentes, y quién salió de la app lo lee la administración con la query
+   * protegida. La web vuelve a pedir el listado.
+   */
+  SECURITY_APP_EXIT_UPDATED = 'security:app-exit:updated',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
   RESIDENT_IMPORT_DONE = 'resident:import:done',

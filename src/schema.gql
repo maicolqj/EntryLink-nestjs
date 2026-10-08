@@ -525,6 +525,16 @@ type ResidentialComplex {
   Valor de la suscripción del conjunto (subtotal, impuestos y total). Solo SUPER_ADMIN y cumplimiento; vacío para los demás.
   """
   subscriptionQuote: SubscriptionQuote
+
+  """
+  Avisar a la administración cuando un vigilante sale de la app de portería
+  """
+  guardExitAlertEnabled: Boolean!
+
+  """
+  Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
+  """
+  guardExitAlertMinutes: Int!
 }
 
 """Tipo de complejo residencial"""
@@ -1888,6 +1898,7 @@ enum NotificationType {
   SUBSCRIPTION_EXPIRED
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_RENEWED
+  SECURITY_APP_EXIT
 }
 
 """Prioridad de entrega de la notificación"""
@@ -7035,6 +7046,11 @@ type Query {
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
+
+  """
+  Salidas de los vigilantes de la app de portería, de la más reciente a la más antigua. Las que no tienen returnedAt siguen abiertas.
+  """
+  securityAppExits(complexId: String!, pagination: PaginationInput, filters: FilterSecurityAppExitsInput): PaginatedSecurityAppExitsResponse!
 }
 
 input PaginationInput {
@@ -8012,6 +8028,16 @@ type Mutation {
   reportMarketplaceConversation(input: ReportConversationInput!): Boolean!
   resolveMarketplaceConversationReport(input: ResolveConversationReportInput!): ConversationReportView!
   unblockConversationCounterpart(conversationId: String!): MarketplaceConversationView!
+
+  """
+  EntryLink pasó a segundo plano. Abre la salida del vigilante; si ya hay una abierta la devuelve sin duplicarla.
+  """
+  reportAppBackground(input: ReportAppStateInput): SecurityAppExit!
+
+  """
+  EntryLink volvió a primer plano (o arrancó). Cierra la salida abierta del vigilante; null si no había ninguna.
+  """
+  reportAppForeground(input: ReportAppStateInput): SecurityAppExit
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -8352,6 +8378,16 @@ input CreateComplexInput {
   Días sin visita tras los cuales el sistema le retira el acceso a un supervisor
   """
   supervisorInactivityDays: Int
+
+  """
+  Avisar a la administración cuando un vigilante sale de la app de portería
+  """
+  guardExitAlertEnabled: Boolean
+
+  """
+  Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
+  """
+  guardExitAlertMinutes: Int
 }
 
 """Código de país para el número de teléfono"""
@@ -8414,6 +8450,16 @@ input UpdateComplexInput {
 
   """ID del complejo a actualizar"""
   id: String!
+
+  """
+  Avisar a la administración cuando un vigilante sale de la app de portería
+  """
+  guardExitAlertEnabled: Boolean
+
+  """
+  Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
+  """
+  guardExitAlertMinutes: Int
 }
 
 input UpdateComplexProfileInput {
@@ -10339,4 +10385,52 @@ enum MarketplaceChatReportAction {
 
   """Procede: la conversación queda cerrada para los dos"""
   CLOSE_CONVERSATION
+}
+
+"""Salida de un vigilante de la app de portería (segundo plano)"""
+type SecurityAppExit {
+  id: String!
+  complexId: String!
+  guardId: String!
+
+  """Cuándo sacó la app a segundo plano"""
+  leftAt: DateTime!
+
+  """Cuándo volvió a la app. null = sigue fuera"""
+  returnedAt: DateTime
+
+  """Segundos fuera de la app. null mientras siga fuera"""
+  durationSeconds: Int
+
+  """Cuándo se avisó a la administración. null = no se avisó"""
+  alertSentAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  guard: User
+}
+
+type PaginatedSecurityAppExitsResponse {
+  items: [SecurityAppExit!]!
+  pagination: PaginationReponse!
+}
+
+input FilterSecurityAppExitsInput {
+  """Solo este vigilante"""
+  guardId: String
+
+  """Salidas desde esta hora"""
+  from: DateTime
+
+  """Salidas hasta esta hora"""
+  to: DateTime
+
+  """true = solo los vigilantes que siguen fuera de la app"""
+  onlyOpen: Boolean
+}
+
+input ReportAppStateInput {
+  """
+  Hora del cambio en el equipo. Solo para eventos que quedaron en cola sin conexión; si no se envía se usa la hora del servidor
+  """
+  occurredAt: DateTime
 }

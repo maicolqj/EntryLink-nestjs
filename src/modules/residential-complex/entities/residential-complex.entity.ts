@@ -225,6 +225,30 @@ export class ResidentialComplex {
   supervisorInactivityDays: number;
 
   /**
+   * Avisar a la administración cuando un vigilante saca EntryLink a segundo
+   * plano. La salida se registra siempre; esto solo decide si además llega un
+   * aviso.
+   */
+  @Field(() => Boolean, {
+    description:
+      'Avisar a la administración cuando un vigilante sale de la app de portería',
+  })
+  @Column({ name: 'guard_exit_alert_enabled', type: 'boolean', default: false })
+  guardExitAlertEnabled: boolean;
+
+  /**
+   * Minutos fuera de la app antes de avisar. 0 = apenas sale. Con un margen se
+   * evita avisar por una salida de segundos (una llamada que entró, un toque
+   * por error).
+   */
+  @Field(() => Int, {
+    description:
+      'Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato',
+  })
+  @Column({ name: 'guard_exit_alert_minutes', type: 'int', default: 0 })
+  guardExitAlertMinutes: number;
+
+  /**
    * Consejeros que responden los PQRF dirigidos al consejo. Vacío = todo el
    * consejo. Se cruza con los miembros de HOY: quien deja el consejo deja de
    * contar aunque siga en la lista.

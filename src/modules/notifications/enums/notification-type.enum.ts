@@ -127,6 +127,9 @@ export enum NotificationType {
   ACCESS_REQUEST_REJECTED = 'ACCESS_REQUEST_REJECTED', // Solicitud de acceso rechazada por el admin
   ACCESS_REVOKED_INACTIVITY = 'ACCESS_REVOKED_INACTIVITY', // Acceso revocado por 30 días sin check-in
 
+  // ── Portería ───────────────────────────────────────────────────
+  SECURITY_APP_EXIT = 'SECURITY_APP_EXIT', // Un vigilante sacó EntryLink a segundo plano (aviso a la administración)
+
   // ── Legal / Documentos ─────────────────────────────────────────
   COMPLEX_REGISTERED = 'COMPLEX_REGISTERED', // Un complejo se registró y espera revisión (aviso a SUPER_ADMIN)
   DPA_SIGNED = 'DPA_SIGNED', // Un complejo subió su DPA (Anexo B2B) firmado (aviso a SUPER_ADMIN)
