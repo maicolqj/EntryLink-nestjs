@@ -607,3 +607,13 @@ export enum DeviceManagementErrorCode {
   /** Google rechazó la operación; el mensaje trae el motivo. */
   DEVICE_MANAGEMENT_GOOGLE_ERROR = 'DEVICE_MANAGEMENT_GOOGLE_ERROR',
 }
+
+/**
+ * Salidas de la app de portería (segundo plano).
+ */
+export enum SecurityAppExitErrorCode {
+  /** El token del vigilante no trae conjunto: no hay a quién registrarle la salida. */
+  SECURITY_APP_EXIT_NO_COMPLEX = 'SECURITY_APP_EXIT_NO_COMPLEX',
+  /** La hora enviada por el equipo está en el futuro o es de hace más de un día. */
+  SECURITY_APP_EXIT_INVALID_TIME = 'SECURITY_APP_EXIT_INVALID_TIME',
+}

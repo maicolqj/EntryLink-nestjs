@@ -12,6 +12,7 @@ import {
   ValidateNested,
   IsNumber,
   IsInt,
+  IsBoolean,
   Min,
   Max,
 } from 'class-validator';
@@ -217,4 +218,24 @@ export class CreateComplexInput {
   @Min(1)
   @Max(365)
   supervisorInactivityDays?: number;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Avisar a la administración cuando un vigilante sale de la app de portería',
+  })
+  @IsOptional()
+  @IsBoolean()
+  guardExitAlertEnabled?: boolean;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  guardExitAlertMinutes?: number;
 }

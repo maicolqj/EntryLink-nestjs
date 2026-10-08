@@ -182,6 +182,10 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.ACCESS_REQUEST_REJECTED]: NotificationAudience.STAFF,
   [NotificationType.ACCESS_REVOKED_INACTIVITY]: NotificationAudience.STAFF,
 
+  // ── Portería ────────────────────────────────────────────────────────────
+  // Es control del personal: solo lo lee la administración.
+  [NotificationType.SECURITY_APP_EXIT]: NotificationAudience.STAFF,
+
   // ── Legal ───────────────────────────────────────────────────────────────
   [NotificationType.COMPLEX_REGISTERED]: NotificationAudience.STAFF,
   [NotificationType.DPA_SIGNED]: NotificationAudience.STAFF,

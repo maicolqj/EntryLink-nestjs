@@ -87,6 +87,8 @@ const COMPLEX_EDITABLE_FIELDS = new Set<string>([
   'pqrfReminderLeadDays',
   'pqrfReminderIntervalHours',
   'supervisorInactivityDays',
+  'guardExitAlertEnabled',
+  'guardExitAlertMinutes',
   'legalRepresentativeId',
 ]);
 
