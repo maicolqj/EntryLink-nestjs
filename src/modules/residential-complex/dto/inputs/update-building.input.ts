@@ -3,7 +3,9 @@ import { IsUUID } from 'class-validator';
 import { CreateBuildingInput } from './create-building.input';
 
 @InputType()
-export class UpdateBuildingInput extends PartialType(CreateBuildingInput) {
+export class UpdateBuildingInput extends PartialType(CreateBuildingInput, {
+  omitDefaultValues: true,
+}) {
   @Field(() => String, { description: 'ID de la torre a actualizar' })
   @IsUUID()
   id: string;

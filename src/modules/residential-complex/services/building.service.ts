@@ -187,7 +187,14 @@ export class BuildingService {
       }
     }
 
-    Object.assign(building, input);
+    // Solo lo que se envió: lo que no llega viene como `undefined` en la
+    // instancia del input y no debe pisar lo guardado.
+    Object.assign(
+      building,
+      Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value !== undefined),
+      ),
+    );
     const saved = await this.buildingRepo.save(building);
     await this.cacheService.deleteByPrefix(BK.building.prefix(saved.complexId));
     return saved;

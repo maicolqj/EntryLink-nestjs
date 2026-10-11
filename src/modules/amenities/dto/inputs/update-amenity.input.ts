@@ -10,6 +10,7 @@ import { CreateAmenityInput } from './create-amenity.input';
 @InputType()
 export class UpdateAmenityInput extends PartialType(
   OmitType(CreateAmenityInput, ['complexId', 'schedules'] as const),
+  { omitDefaultValues: true },
 ) {
   @Field(() => String, { description: 'ID de la zona común a actualizar' })
   @IsUUID()
