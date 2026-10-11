@@ -8404,10 +8404,10 @@ input UpdateComplexInput {
   address: String
   city: String
   state: String
-  country: String = "Colombia"
+  country: String
   zipCode: String
-  type: ComplexType = APARTMENT_COMPLEX
-  plan: ComplexPlan = FREE
+  type: ComplexType
+  plan: ComplexPlan
   countryCode: CountryCode
   phoneNumber: String
   email: String
@@ -8488,7 +8488,7 @@ input UpdateBuildingInput {
   name: String
 
   """Número de pisos"""
-  floors: Int = 1
+  floors: Int
   description: String
 
   """ID del complejo"""
@@ -8549,10 +8549,10 @@ input UpdateUnitInput {
   number: String
 
   """Piso donde se ubica la unidad"""
-  floor: Int = 1
+  floor: Int
 
   """Tipo de unidad"""
-  type: UnitType = APARTMENT
+  type: UnitType
 
   """Área en m²"""
   area: Float
@@ -8564,10 +8564,10 @@ input UpdateUnitInput {
   bathrooms: Int
 
   """Cupos de parqueadero"""
-  parkingSpots: Int = 0
+  parkingSpots: Int
 
   """Cuartos de bodega"""
-  storageRooms: Int = 0
+  storageRooms: Int
 
   """Si la unidad usa/paga ascensor"""
   hasElevator: Boolean
@@ -8671,10 +8671,10 @@ input UpdatePermissionInput {
   dependsOn: [PermissionDependencyInput!]
 
   """Estado inicial del permiso"""
-  status: Boolean = true
+  status: Boolean
 
   """Si es true, no podrá borrarse por API"""
-  isSystem: Boolean = false
+  isSystem: Boolean
   id: Int!
 }
 
@@ -8969,7 +8969,7 @@ input RegisterVehicleInput {
 
 input UpdateVehicleInput {
   """Tipo de vehículo"""
-  type: VehicleType = CAR
+  type: VehicleType
 
   """Marca. Ej: Toyota, Renault"""
   brand: String
@@ -9607,78 +9607,78 @@ input AmenityScheduleInput {
 input UpdateAmenityInput {
   name: String
   description: String
-  type: AmenityType = OTRO
-  status: AmenityStatus = ACTIVE
+  type: AmenityType
+  status: AmenityStatus
   location: String
 
   """Reglamento de uso que ve el residente al reservar"""
   rules: String
   imageUrls: [String!]
-  bookingMode: AmenityBookingMode = SLOT
-  durationUnit: AmenityDurationUnit = HOURS
+  bookingMode: AmenityBookingMode
+  durationUnit: AmenityDurationUnit
 
   """
   Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit
   """
-  slotDurationMinutes: Int = 120
+  slotDurationMinutes: Int
 
   """
   Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit
   """
-  minDurationMinutes: Int = 60
+  minDurationMinutes: Int
 
   """
   Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit
   """
-  maxDurationMinutes: Int = 480
+  maxDurationMinutes: Int
 
   """Aforo por reserva. 0 = sin control"""
-  capacity: Int = 0
+  capacity: Int
 
   """Reservas que caben a la misma hora (ej. 4 asadores)"""
-  maxSimultaneousBookings: Int = 1
-  advanceBookingDays: Int = 30
+  maxSimultaneousBookings: Int
+  advanceBookingDays: Int
 
   """Anticipación mínima en días. 0 = se puede reservar para hoy"""
-  minAdvanceDays: Int = 1
+  minAdvanceDays: Int
 
   """
   Días antes del inicio en que aún se puede cancelar sin quedar con el cobro
   """
-  cancellationDeadlineDays: Int = 1
+  cancellationDeadlineDays: Int
 
   """Horas que se suman al plazo de cancelación en días"""
-  cancellationDeadlineHours: Int = 0
+  cancellationDeadlineHours: Int
 
   """% de la tarifa que se retiene al cancelar fuera de plazo"""
-  lateCancellationFeePercent: Int = 100
+  lateCancellationFeePercent: Int
 
   """Reservas gratis al año por miembro del consejo. 0 = sin beneficio"""
-  councilFreeBookingsPerYear: Int = 0
+  councilFreeBookingsPerYear: Int
 
   """0 = sin límite"""
-  maxActiveBookingsPerUnit: Int = 2
+  maxActiveBookingsPerUnit: Int
 
   """0 = sin límite"""
-  maxBookingsPerUnitPerMonth: Int = 0
-  requiresApproval: Boolean = true
-  blockBookingsOnDebt: Boolean = true
+  maxBookingsPerUnitPerMonth: Int
+  requiresApproval: Boolean
+  blockBookingsOnDebt: Boolean
 
   """La administración ofrece el servicio de aseo en esta zona"""
-  cleaningServiceAvailable: Boolean = false
+  cleaningServiceAvailable: Boolean
 
   """
   Franja de aseo sugerida en minutos. La definitiva la fija el administrador en cada reserva
   """
-  defaultCleaningMinutes: Int = 0
+  defaultCleaningMinutes: Int
 
   """Costo del aseo por parte del conjunto. 0 = sin costo"""
-  cleaningFeeAmount: Float = 0
+  cleaningFeeAmount: Float
 
   """El cupo del consejo cubre también el costo del aseo"""
-  councilQuotaCoversCleaning: Boolean = false
-  feeType: AmenityFeeType = FREE
-  feeAmount: Float = 0
+  councilQuotaCoversCleaning: Boolean
+  feeType: AmenityFeeType
+  feeAmount: Float
 
   """ID de la zona común a actualizar"""
   id: String!

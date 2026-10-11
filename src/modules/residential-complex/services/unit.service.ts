@@ -258,7 +258,14 @@ export class UnitService {
       });
     }
 
-    Object.assign(unit, input);
+    // Solo lo que se envió: lo que no llega viene como `undefined` en la
+    // instancia del input y no debe pisar lo guardado.
+    Object.assign(
+      unit,
+      Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value !== undefined),
+      ),
+    );
     const saved = await this.unitRepo.save(unit);
     await this.cacheService.deleteByPrefix(BK.unit.prefix(saved.complexId));
     return saved;

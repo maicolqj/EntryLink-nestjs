@@ -5,6 +5,7 @@ import { RegisterVehicleInput } from './register-vehicle.input';
 @InputType()
 export class UpdateVehicleInput extends PartialType(
   OmitType(RegisterVehicleInput, ['unitId', 'complexId', 'plate'] as const),
+  { omitDefaultValues: true },
 ) {
   @Field(() => String, { description: 'ID del vehículo a actualizar' })
   @IsUUID()

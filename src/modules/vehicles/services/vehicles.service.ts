@@ -619,7 +619,14 @@ export class VehiclesService {
       });
     }
 
-    Object.assign(vehicle, input);
+    // Solo lo que se envió: lo que no llega viene como `undefined` en la
+    // instancia del input y no debe pisar lo guardado.
+    Object.assign(
+      vehicle,
+      Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value !== undefined),
+      ),
+    );
     const savedVehicle = await this.vehicleRepo.save(vehicle);
     await this.cacheService.deleteByPrefix(
       BK.vehicle.prefix(vehicle.complexId),

@@ -6,6 +6,7 @@ import { UnitStatus } from '../../enums/unit-status.enum';
 @InputType()
 export class UpdateUnitInput extends PartialType(
   OmitType(CreateUnitInput, ['complexId', 'buildingId'] as const),
+  { omitDefaultValues: true },
 ) {
   @Field(() => String, { description: 'ID de la unidad a actualizar' })
   @IsUUID()
