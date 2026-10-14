@@ -82,6 +82,7 @@ describe('TokenService — alcance de roles de la sesión', () => {
     }),
     findOne: jest.fn(async () => null),
     update: jest.fn(async () => ({ affected: 1 })),
+    delete: jest.fn(async () => ({ affected: 2 })),
   };
 
   const cacheService = {
@@ -311,6 +312,26 @@ describe('TokenService — alcance de roles de la sesión', () => {
         { key: { key: string } },
       ];
       expect(arg.key.key).toBe('user-1');
+    });
+  });
+
+  describe('limpieza de refresh tokens', () => {
+    it('borra los vencidos y los revocados de más de 7 días, nunca los vivos', async () => {
+      refreshTokenRepo.delete.mockClear();
+      const before = Date.now();
+
+      const deleted = await service.cleanupExpiredTokens();
+
+      expect(deleted).toBe(4);
+      const [[expired], [revoked]] = refreshTokenRepo.delete.mock
+        .calls as unknown as [[{ expiresAt: any }], [Record<string, any>]];
+      expect(expired.expiresAt._type).toBe('lessThan');
+      expect(Object.keys(expired)).toEqual(['expiresAt']);
+      expect(revoked.isRevoked).toBe(true);
+      expect(revoked.createdAt._type).toBe('lessThan');
+      const cutoff = (revoked.createdAt._value as Date).getTime();
+      expect(before - cutoff).toBeGreaterThanOrEqual(7 * 86_400_000 - 1_000);
+      expect(before - cutoff).toBeLessThanOrEqual(7 * 86_400_000 + 1_000);
     });
   });
 });
