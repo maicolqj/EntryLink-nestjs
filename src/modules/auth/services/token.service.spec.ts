@@ -8,6 +8,8 @@ import { RefreshToken } from '../entities/refresh-token.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Role } from '../../roles/entities/role.entity';
 import { User } from '../../users/entities/user.entity';
+import { UserPermissionOverride } from '../../users/entities/user-permission-override.entity';
+import { PermissionOverrideEffect } from '../../users/enums/permission-override-effect.enum';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -93,6 +95,10 @@ describe('TokenService — alcance de roles de la sesión', () => {
 
   const emptyRepo = { findOne: jest.fn(async () => null) };
 
+  const overrideRepo = {
+    find: jest.fn(async (): Promise<Partial<UserPermissionOverride>[]> => []),
+  };
+
   beforeEach(async () => {
     signed = [];
     rows = [];
@@ -120,6 +126,10 @@ describe('TokenService — alcance de roles de la sesión', () => {
           useValue: emptyRepo,
         },
         { provide: getRepositoryToken(Role), useValue: emptyRepo },
+        {
+          provide: getRepositoryToken(UserPermissionOverride),
+          useValue: overrideRepo,
+        },
       ],
     }).compile();
 
@@ -332,6 +342,54 @@ describe('TokenService — alcance de roles de la sesión', () => {
       const cutoff = (revoked.createdAt._value as Date).getTime();
       expect(before - cutoff).toBeGreaterThanOrEqual(7 * 86_400_000 - 1_000);
       expect(before - cutoff).toBeLessThanOrEqual(7 * 86_400_000 + 1_000);
+    });
+  });
+
+  describe('excepciones de permisos por usuario', () => {
+    const override = (
+      name: ValidPermissions,
+      effect: PermissionOverrideEffect,
+    ): Partial<UserPermissionOverride> =>
+      ({ effect, permission: { name } }) as Partial<UserPermissionOverride>;
+
+    it('un DENY quita el permiso aunque el rol lo tenga', async () => {
+      overrideRepo.find.mockResolvedValueOnce([
+        override(ValidPermissions.VIEW_PACKAGES, PermissionOverrideEffect.DENY),
+      ]);
+
+      await service.generateTokenPair(user, device);
+
+      expect(accessPayload().permissions).toEqual([ValidPermissions.SUPERADMIN]);
+    });
+
+    it('un GRANT suma un permiso que ningún rol le da', async () => {
+      overrideRepo.find.mockResolvedValueOnce([
+        override(ValidPermissions.EDIT_RESIDENTS, PermissionOverrideEffect.GRANT),
+      ]);
+
+      await service.generateTokenPair(user, device);
+
+      expect(accessPayload().permissions).toContain(
+        ValidPermissions.EDIT_RESIDENTS,
+      );
+    });
+
+    it('un GRANT no aplica en una sesión acotada a residente; un DENY sí', async () => {
+      overrideRepo.find.mockResolvedValueOnce([
+        override(ValidPermissions.EDIT_RESIDENTS, PermissionOverrideEffect.GRANT),
+        override(ValidPermissions.VIEW_PACKAGES, PermissionOverrideEffect.DENY),
+      ]);
+
+      await service.generateTokenPair(
+        user,
+        device,
+        false,
+        'user',
+        undefined,
+        RESIDENT_SESSION_ROLES,
+      );
+
+      expect(accessPayload().permissions).toEqual([]);
     });
   });
 });
