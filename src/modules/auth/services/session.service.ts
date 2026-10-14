@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, In } from 'typeorm';
 import { UserSession, SessionStatus } from '../entities/user-session.entity';
+import { RefreshToken } from '../entities/refresh-token.entity';
 import { DeviceInfo } from '../interfaces/jwt-payload.interface';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../constants/auth.constants';
@@ -14,8 +15,24 @@ export class SessionService {
   constructor(
     @InjectRepository(UserSession)
     private readonly sessionRepo: Repository<UserSession>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepo: Repository<RefreshToken>,
     private readonly cacheService: CacheService,
   ) {}
+
+  /**
+   * Una sesión cerrada no puede dejar vivo su refresh token. Si queda vivo, el
+   * equipo sigue renovando sin error pero cada access token nuevo choca con
+   * SESSION_TERMINATED: la app no sale al login y se queda en blanco hasta que
+   * alguien cierra sesión a mano.
+   */
+  private async revokeRefreshTokens(sessionIds: string[]): Promise<void> {
+    if (!sessionIds.length) return;
+    await this.refreshTokenRepo.update(
+      { sessionId: In(sessionIds), isRevoked: false },
+      { isRevoked: true, revokedReason: 'session_terminated' },
+    );
+  }
 
   async createOrUpdateSession(
     userId: string,
@@ -44,6 +61,7 @@ export class SessionService {
         { id: existingSession.id },
         { status: SessionStatus.LOGGED_OUT },
       );
+      await this.revokeRefreshTokens([existingSession.id]);
 
       await this.cacheService.delete({
         key: {
@@ -104,6 +122,7 @@ export class SessionService {
     const result = await this.sessionRepo.update(sessionId, {
       status: SessionStatus.LOGGED_OUT,
     });
+    await this.revokeRefreshTokens([sessionId]);
     await this.cacheService.delete({
       key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: sessionId },
     });
@@ -119,6 +138,7 @@ export class SessionService {
       { userId, status: SessionStatus.ACTIVE },
       { status: SessionStatus.LOGGED_OUT },
     );
+    await this.revokeRefreshTokens(sessions.map((s) => s.id));
     for (const s of sessions) {
       await this.cacheService.delete({
         key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id },
@@ -144,6 +164,7 @@ export class SessionService {
       { id: In(sessions.map((s) => s.id)) },
       { status: SessionStatus.LOGGED_OUT },
     );
+    await this.revokeRefreshTokens(sessions.map((s) => s.id));
     for (const s of sessions) {
       await this.cacheService.delete({
         key: { prefix: AUTH_CONSTANTS.CACHE_PREFIX.SESSION, key: s.id },
