@@ -964,6 +964,11 @@ export class UsersService {
       }
     }
 
+    // `userRoles` se cargó ANTES de cambiar el cargo. Guardar el usuario con esa
+    // lista vieja hace que TypeORM trate como huérfanas las filas que
+    // assignJobRole acaba de crear y les ponga user_id = NULL: el cargo se
+    // "guardaba" sin error y desaparecía. Sin la relación, save no la toca.
+    delete (user as Partial<User>).userRoles;
     const updated = await this.userRepo.save(user);
     this.logger.log(`Usuario actualizado: ${user.id}`);
 
