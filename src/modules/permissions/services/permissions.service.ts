@@ -167,9 +167,19 @@ export class PermissionsService {
     input: SearchPermissionsInput,
   ): Promise<PaginatedPermissionsResponse> {
     try {
-      const { filters, pagination, sort } = input;
-      const { page = 1, limit = 20 } = pagination;
-      const { field = 'createdAt', direction = 'DESC' } = sort;
+      // Los tres son opcionales en el input: la web pide solo la página, y
+      // desestructurar `sort` o `filters` sin valor tumbaba la consulta.
+      const { filters, pagination, sort } = input ?? {};
+      const page = pagination?.page ?? 1;
+      const limit = pagination?.limit ?? 20;
+      const direction = sort?.direction ?? 'DESC';
+      // Solo propiedades reales de la entidad: `field` llega del cliente y
+      // va directo al ORDER BY.
+      const field =
+        sort?.field &&
+        this.permissionsRepository.metadata.findColumnWithPropertyName(sort.field)
+          ? sort.field
+          : 'createdAt';
 
       const queryBuilder = await this.permissionsRepository
         .createQueryBuilder('permission')
@@ -179,7 +189,7 @@ export class PermissionsService {
           'dependentPermissions',
         );
 
-      this.applyFilters(queryBuilder, filters);
+      this.applyFilters(queryBuilder, filters ?? {});
 
       queryBuilder.orderBy(`permission.${field}`, direction);
 
@@ -249,9 +259,9 @@ export class PermissionsService {
       queryBuilder.andWhere('permission.isSystem = :isSystem', { isSystem });
     }
 
-    // Filtro por category
+    // `category` filtra por el grupo: la entidad no tiene columna `category`
     if (category) {
-      queryBuilder.andWhere('permission.category = :category', { category });
+      queryBuilder.andWhere('permission.group = :category', { category });
     }
 
     // Filtro por dependentPermissions
