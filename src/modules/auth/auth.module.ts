@@ -15,6 +15,7 @@ import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.contro
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
+import { RefreshTokensCleanupCron } from './cron/refresh-tokens-cleanup.cron';
 import { OtpService } from './services/otp.service';
 import { ResidentDeviceService } from './services/resident-device.service';
 import { WhatsAppService } from './services/whatsapp.service';
@@ -99,6 +100,9 @@ import { AuditModule } from '../audit/audit.module';
     // Strategies (Passport)
     JwtAccessStrategy,
     JwtRefreshStrategy,
+
+    // Cron
+    RefreshTokensCleanupCron,
 
     // Queue
     OtpProducer,

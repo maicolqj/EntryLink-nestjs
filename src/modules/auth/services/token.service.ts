@@ -629,11 +629,27 @@ export class TokenService {
     );
   }
 
-  async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.refreshTokenRepo.delete({
+  /**
+   * Borra los refresh tokens que ya no pueden usarse: los vencidos y los
+   * revocados con más de `revokedRetentionDays` días.
+   *
+   * Cada rotación (cada ~15 min por equipo activo) deja una fila revocada, así
+   * que la tabla crece sola. Ninguna lectura depende de esas filas: la
+   * detección de reuso sale de la familia del JWT y de la ventana de gracia en
+   * caché. Se conservan unos días solo para poder investigar una sesión.
+   */
+  async cleanupExpiredTokens(revokedRetentionDays = 7): Promise<number> {
+    const revokedBefore = new Date(
+      Date.now() - revokedRetentionDays * 86_400_000,
+    );
+    const expired = await this.refreshTokenRepo.delete({
       expiresAt: LessThan(new Date()),
     });
-    return result.affected || 0;
+    const revoked = await this.refreshTokenRepo.delete({
+      isRevoked: true,
+      createdAt: LessThan(revokedBefore),
+    });
+    return (expired.affected || 0) + (revoked.affected || 0);
   }
 
   private hashToken(token: string): string {
