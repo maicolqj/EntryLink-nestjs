@@ -19,7 +19,6 @@ import { AccountingHeader } from './entities/accounting-header.entity';
 import { AccountingLine } from './entities/accounting-line.entity';
 import { PropertyAccountStatus } from './entities/property-account-status.entity';
 import { RecurringCharge } from './entities/recurring-charge.entity';
-import { TenantFinancialConfig } from './entities/tenant-financial-config.entity';
 import { DocumentSequence } from './entities/document-sequence.entity';
 
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
@@ -74,7 +73,6 @@ try {
       AccountingLine,
       PropertyAccountStatus,
       RecurringCharge,
-      TenantFinancialConfig,
       DocumentSequence,
     ]),
     ResidentialComplexModule, // ResidentialComplexService + UnitService
