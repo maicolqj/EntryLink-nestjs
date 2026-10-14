@@ -576,9 +576,19 @@ export class RolesService {
 
   async findAll(input: SearchRolesInput): Promise<PaginatedRolesResponse> {
     try {
-      const { filters, pagination, sort } = input;
-      const { page = 1, limit = 20 } = pagination;
-      const { field = 'createdAt', direction = 'DESC' } = sort;
+      // Los tres son opcionales en el input: la web pide solo la página, y
+      // desestructurar `sort` o `filters` sin valor tumbaba la consulta.
+      const { filters, pagination, sort } = input ?? {};
+      const page = pagination?.page ?? 1;
+      const limit = pagination?.limit ?? 20;
+      const direction = sort?.direction ?? 'DESC';
+      // Solo propiedades reales de la entidad: `field` llega del cliente y
+      // va directo al ORDER BY.
+      const field =
+        sort?.field &&
+        this.rolesRepository.metadata.findColumnWithPropertyName(sort.field)
+          ? sort.field
+          : 'createdAt';
 
       const queryBuilder = await this.rolesRepository
         .createQueryBuilder('role')
@@ -590,7 +600,7 @@ export class RolesService {
         .leftJoinAndSelect('role.userRoles', 'userRoles')
         .leftJoinAndSelect('userRoles.user', 'user');
 
-      this.applyFilters(queryBuilder, filters);
+      this.applyFilters(queryBuilder, filters ?? {});
 
       queryBuilder.orderBy(`role.${field}`, direction);
 
