@@ -669,6 +669,29 @@ export class AuthService {
       currentRefreshToken,
       deviceInfo,
     );
+
+    // El access token nuevo saldría rechazado por JwtAccessStrategy con la
+    // sesión cerrada. Hay que fallar aquí: la app sale al login en vez de
+    // renovar sin error y quedarse sin datos. Cubre además las sesiones que se
+    // cerraron antes de revocar sus refresh tokens al terminarlas.
+    if (!(await this.sessionService.isSessionActive(tokenPair.sessionId))) {
+      await this.tokenService.revokeSession(
+        tokenPair.sessionId,
+        'session_terminated',
+      );
+      throw new CustomError({
+        message: 'Sesión terminada',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_TERMINATED,
+      });
+    }
+
+    // Sin esto lastActivityAt solo marcaba el login, y enforceSessionLimit
+    // cerraba la sesión más antigua aunque fuera la del equipo que más se usa.
+    await this.sessionService
+      .updateSessionActivity(tokenPair.sessionId, deviceInfo.ip)
+      .catch(() => undefined);
+
     return this.toAuthResponse(tokenPair);
   }
 
