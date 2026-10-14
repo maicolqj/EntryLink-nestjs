@@ -11,6 +11,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, Not } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import { UserPermissionOverride } from '../../users/entities/user-permission-override.entity';
+import { PermissionOverrideEffect } from '../../users/enums/permission-override-effect.enum';
 import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { Role } from '../../roles/entities/role.entity';
@@ -40,6 +42,8 @@ export class TokenService {
     private readonly complexRepo: Repository<ResidentialComplex>,
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
+    @InjectRepository(UserPermissionOverride)
+    private readonly permissionOverrideRepo: Repository<UserPermissionOverride>,
   ) {}
 
   /**
@@ -179,9 +183,16 @@ export class TokenService {
       );
   }
 
+  /**
+   * Permisos de sus roles, más los GRANT, menos los DENY de sus excepciones.
+   *
+   * Un GRANT no aplica en una sesión acotada (`roleScope`): quien entró como
+   * residente no gana privilegios por la excepción. Un DENY aplica siempre.
+   */
   private extractPermissions(
     user: User,
     roleScope?: readonly ValidRoles[],
+    overrides: readonly UserPermissionOverride[] = [],
   ): ValidPermissions[] {
     const perms = new Set<ValidPermissions>();
     this.scopedUserRoles(user, roleScope).forEach((ur) => {
@@ -191,6 +202,13 @@ export class TokenService {
         }
       });
     });
+
+    for (const o of overrides) {
+      const name = o.permission?.name;
+      if (!name || !Object.values(ValidPermissions).includes(name)) continue;
+      if (o.effect === PermissionOverrideEffect.DENY) perms.delete(name);
+      else if (!roleScope) perms.add(name);
+    }
     return Array.from(perms);
   }
 
@@ -220,7 +238,14 @@ export class TokenService {
       tokenVersion: user.tokenVersion ?? 0,
       sessionId,
       roles: this.extractRoles(user, roleScope),
-      permissions: this.extractPermissions(user, roleScope),
+      permissions: this.extractPermissions(
+        user,
+        roleScope,
+        await this.permissionOverrideRepo.find({
+          where: { userId: user.id },
+          relations: ['permission'],
+        }),
+      ),
       // El del canal manda sobre el de la cuenta: quien entra como residente lo
       // hace al conjunto donde vive, que no es el de `users.complex_id`.
       complexId: complexIdOverride ?? user.complexId ?? undefined,

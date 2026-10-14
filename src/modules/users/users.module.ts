@@ -25,6 +25,9 @@ import { RolesService } from '../roles/roles.service';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
+import { UserPermissionOverride } from './entities/user-permission-override.entity';
+import { UserPermissionOverridesService } from './services/user-permission-overrides.service';
+import { UserPermissionOverridesResolver } from './user-permission-overrides.resolver';
 
 // Crear directorio temporal si no existe
 const tmpDir = join(process.cwd(), 'tmp', 'excel-imports');
@@ -40,6 +43,7 @@ try {
       User,
       UserRole,
       UserComplexAssignment,
+      UserPermissionOverride,
       Role,
       Permission,
       Unit,
@@ -56,6 +60,8 @@ try {
   providers: [
     UsersResolver,
     UsersService,
+    UserPermissionOverridesResolver,
+    UserPermissionOverridesService,
     RolesService,
     ExcelImportService,
     ExcelImportProducer,

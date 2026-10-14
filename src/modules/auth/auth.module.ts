@@ -33,6 +33,7 @@ import { OTP_QUEUE_NAME } from './queues/otp.queue.constants';
 
 import { OtpCode } from './entities/otp-code.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { UserPermissionOverride } from '../users/entities/user-permission-override.entity';
 import { ResidentDevice } from './entities/resident-device.entity';
 import { WhatsAppLoginChallenge } from './entities/whatsapp-login-challenge.entity';
 import { Resident } from '../residents/entities/resident.entity';
@@ -65,6 +66,7 @@ import { AuditModule } from '../audit/audit.module';
       UserSession,
       Role,
       UserRole,
+      UserPermissionOverride,
       // Solo para resolver en qué conjunto vive quien entra como residente.
       Resident,
     ]),
