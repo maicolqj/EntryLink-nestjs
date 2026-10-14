@@ -349,6 +349,16 @@ type ResidentialComplex {
   """
   supervisorInactivityDays: Int!
 
+  """
+  Avisar a la administración cuando un vigilante sale de la app de portería
+  """
+  guardExitAlertEnabled: Boolean!
+
+  """
+  Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
+  """
+  guardExitAlertMinutes: Int!
+
   """Consejeros que responden los PQRF. Vacío = todo el consejo"""
   pqrfCouncilResolverUserIds: [String!]!
 
@@ -525,16 +535,6 @@ type ResidentialComplex {
   Valor de la suscripción del conjunto (subtotal, impuestos y total). Solo SUPER_ADMIN y cumplimiento; vacío para los demás.
   """
   subscriptionQuote: SubscriptionQuote
-
-  """
-  Avisar a la administración cuando un vigilante sale de la app de portería
-  """
-  guardExitAlertEnabled: Boolean!
-
-  """
-  Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
-  """
-  guardExitAlertMinutes: Int!
 }
 
 """Tipo de complejo residencial"""
@@ -1890,6 +1890,7 @@ enum NotificationType {
   ACCESS_REQUEST_APPROVED
   ACCESS_REQUEST_REJECTED
   ACCESS_REVOKED_INACTIVITY
+  SECURITY_APP_EXIT
   COMPLEX_REGISTERED
   DPA_SIGNED
   DPA_APPROVED
@@ -1898,7 +1899,6 @@ enum NotificationType {
   SUBSCRIPTION_EXPIRED
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_RENEWED
-  SECURITY_APP_EXIT
 }
 
 """Prioridad de entrega de la notificación"""
@@ -2154,6 +2154,27 @@ type DeviceInfo {
   platform: String!
   deviceId: String
   appVersion: String
+}
+
+"""Permiso dado o quitado a un usuario por encima de sus roles"""
+type UserPermissionOverride {
+  id: String!
+  userId: String!
+  permissionId: String!
+  effect: PermissionOverrideEffect!
+
+  """Por qué se dio o se quitó, para quien lo revise después"""
+  reason: String
+  createdById: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  permission: Permission!
+}
+
+"""GRANT da un permiso extra; DENY quita uno de los de sus roles"""
+enum PermissionOverrideEffect {
+  GRANT
+  DENY
 }
 
 type ChangePasswordResponse {
@@ -2712,6 +2733,31 @@ type PendingDeviceApproval {
   requestedFromIp: String
   expiresAt: DateTime!
   createdAt: DateTime!
+}
+
+"""Permiso que el usuario recibe de sus roles"""
+type RolePermissionSource {
+  permission: Permission!
+
+  """Roles que le dan este permiso"""
+  roles: [String!]!
+}
+
+"""
+Permisos de un usuario: los de sus roles, sus excepciones y el resultado
+"""
+type UserPermissionsSummary {
+  userId: String!
+  rolePermissions: [RolePermissionSource!]!
+  overrides: [UserPermissionOverride!]!
+
+  """Nombres de los permisos con que sale su sesión: roles + GRANT − DENY"""
+  effectivePermissions: [String!]!
+
+  """
+  true si es SUPER_ADMIN: pasa todos los controles y las excepciones no lo afectan
+  """
+  isSuperAdmin: Boolean!
 }
 
 """Evento de visita: entrada, salida, estado y QR de acceso"""
@@ -6690,6 +6736,33 @@ type DataExportHistoryEntry {
   to: String
 }
 
+"""Salida de un vigilante de la app de portería (segundo plano)"""
+type SecurityAppExit {
+  id: String!
+  complexId: String!
+  guardId: String!
+
+  """Cuándo sacó la app a segundo plano"""
+  leftAt: DateTime!
+
+  """Cuándo volvió a la app. null = sigue fuera"""
+  returnedAt: DateTime
+
+  """Segundos fuera de la app. null mientras siga fuera"""
+  durationSeconds: Int
+
+  """Cuándo se avisó a la administración. null = no se avisó"""
+  alertSentAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  guard: User
+}
+
+type PaginatedSecurityAppExitsResponse {
+  items: [SecurityAppExit!]!
+  pagination: PaginationReponse!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -6782,6 +6855,11 @@ type Query {
   Perfil completo del usuario autenticado (usuario o complejo residencial)
   """
   me: MeResponse!
+
+  """
+  Permisos de un usuario: los de sus roles, sus excepciones y con cuáles sale su sesión
+  """
+  userPermissions(userId: String!): UserPermissionsSummary!
   visitors(complexId: String!, pagination: PaginationInput, search: String, onlyBlacklisted: Boolean): PaginatedVisitorsResponse!
   visitor(id: String!): Visitor!
   myVisits(pagination: PaginationInput, filters: FilterVisitsInput): PaginatedVisitsResponse!
@@ -7044,13 +7122,13 @@ type Query {
   """Últimas 20 descargas de datos del complejo"""
   dataExportHistory(complexId: String!): [DataExportHistoryEntry!]!
 
-  """Verifica conectividad con el backend. Siempre retorna "pong"."""
-  ping: String!
-
   """
   Salidas de los vigilantes de la app de portería, de la más reciente a la más antigua. Las que no tienen returnedAt siguen abiertas.
   """
   securityAppExits(complexId: String!, pagination: PaginationInput, filters: FilterSecurityAppExitsInput): PaginatedSecurityAppExitsResponse!
+
+  """Verifica conectividad con el backend. Siempre retorna "pong"."""
+  ping: String!
 }
 
 input PaginationInput {
@@ -7458,6 +7536,20 @@ enum MarketplaceAudienceKind {
   INTERESTED
 }
 
+input FilterSecurityAppExitsInput {
+  """Solo este vigilante"""
+  guardId: String
+
+  """Salidas desde esta hora"""
+  from: DateTime
+
+  """Salidas hasta esta hora"""
+  to: DateTime
+
+  """true = solo los vigilantes que siguen fuera de la app"""
+  onlyOpen: Boolean
+}
+
 type Mutation {
   """
   Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL
@@ -7733,6 +7825,16 @@ type Mutation {
   Restaura un usuario previamente eliminado (soft delete), dejándolo activo
   """
   restoreUser(userId: String!): User!
+
+  """
+  Da (GRANT) o quita (DENY) un permiso a un usuario por encima de sus roles. Aplica en su próxima renovación de sesión, sin cerrarla
+  """
+  setUserPermissionOverride(input: SetUserPermissionOverrideInput!): UserPermissionOverride!
+
+  """
+  Quita la excepción: el usuario vuelve a tener exactamente los permisos de sus roles
+  """
+  removeUserPermissionOverride(userId: String!, permissionId: String!): Boolean!
   blacklistVisitor(input: BlacklistVisitorInput!): Visitor!
   removeVisitorFromBlacklist(visitorId: String!): Visitor!
   registerWalkIn(input: RegisterWalkInInput!): Visit!
@@ -8448,9 +8550,6 @@ input UpdateComplexInput {
   """
   supervisorInactivityDays: Int
 
-  """ID del complejo a actualizar"""
-  id: String!
-
   """
   Avisar a la administración cuando un vigilante sale de la app de portería
   """
@@ -8460,6 +8559,9 @@ input UpdateComplexInput {
   Minutos que el vigilante debe llevar fuera de la app para avisar. 0 = de inmediato
   """
   guardExitAlertMinutes: Int
+
+  """ID del complejo a actualizar"""
+  id: String!
 }
 
 input UpdateComplexProfileInput {
@@ -8851,6 +8953,16 @@ input UpdateUserIdentityInput {
 
   """Número de documento de identidad"""
   identity: String!
+}
+
+"""Da o quita un permiso a un usuario por encima de sus roles"""
+input SetUserPermissionOverrideInput {
+  userId: String!
+  permissionId: String!
+  effect: PermissionOverrideEffect!
+
+  """Por qué se dio o se quitó"""
+  reason: String
 }
 
 input BlacklistVisitorInput {
@@ -9607,78 +9719,78 @@ input AmenityScheduleInput {
 input UpdateAmenityInput {
   name: String
   description: String
-  type: AmenityType
-  status: AmenityStatus
+  type: AmenityType = OTRO
+  status: AmenityStatus = ACTIVE
   location: String
 
   """Reglamento de uso que ve el residente al reservar"""
   rules: String
   imageUrls: [String!]
-  bookingMode: AmenityBookingMode
-  durationUnit: AmenityDurationUnit
+  bookingMode: AmenityBookingMode = SLOT
+  durationUnit: AmenityDurationUnit = HOURS
 
   """
   Solo SLOT: minutos de cada bloque. El rango válido depende de durationUnit
   """
-  slotDurationMinutes: Int
+  slotDurationMinutes: Int = 120
 
   """
   Solo RANGE: duración mínima en minutos. El rango válido depende de durationUnit
   """
-  minDurationMinutes: Int
+  minDurationMinutes: Int = 60
 
   """
   Solo RANGE: duración máxima en minutos. El rango válido depende de durationUnit
   """
-  maxDurationMinutes: Int
+  maxDurationMinutes: Int = 480
 
   """Aforo por reserva. 0 = sin control"""
-  capacity: Int
+  capacity: Int = 0
 
   """Reservas que caben a la misma hora (ej. 4 asadores)"""
-  maxSimultaneousBookings: Int
-  advanceBookingDays: Int
+  maxSimultaneousBookings: Int = 1
+  advanceBookingDays: Int = 30
 
   """Anticipación mínima en días. 0 = se puede reservar para hoy"""
-  minAdvanceDays: Int
+  minAdvanceDays: Int = 1
 
   """
   Días antes del inicio en que aún se puede cancelar sin quedar con el cobro
   """
-  cancellationDeadlineDays: Int
+  cancellationDeadlineDays: Int = 1
 
   """Horas que se suman al plazo de cancelación en días"""
-  cancellationDeadlineHours: Int
+  cancellationDeadlineHours: Int = 0
 
   """% de la tarifa que se retiene al cancelar fuera de plazo"""
-  lateCancellationFeePercent: Int
+  lateCancellationFeePercent: Int = 100
 
   """Reservas gratis al año por miembro del consejo. 0 = sin beneficio"""
-  councilFreeBookingsPerYear: Int
+  councilFreeBookingsPerYear: Int = 0
 
   """0 = sin límite"""
-  maxActiveBookingsPerUnit: Int
+  maxActiveBookingsPerUnit: Int = 2
 
   """0 = sin límite"""
-  maxBookingsPerUnitPerMonth: Int
-  requiresApproval: Boolean
-  blockBookingsOnDebt: Boolean
+  maxBookingsPerUnitPerMonth: Int = 0
+  requiresApproval: Boolean = true
+  blockBookingsOnDebt: Boolean = true
 
   """La administración ofrece el servicio de aseo en esta zona"""
-  cleaningServiceAvailable: Boolean
+  cleaningServiceAvailable: Boolean = false
 
   """
   Franja de aseo sugerida en minutos. La definitiva la fija el administrador en cada reserva
   """
-  defaultCleaningMinutes: Int
+  defaultCleaningMinutes: Int = 0
 
   """Costo del aseo por parte del conjunto. 0 = sin costo"""
-  cleaningFeeAmount: Float
+  cleaningFeeAmount: Float = 0
 
   """El cupo del consejo cubre también el costo del aseo"""
-  councilQuotaCoversCleaning: Boolean
-  feeType: AmenityFeeType
-  feeAmount: Float
+  councilQuotaCoversCleaning: Boolean = false
+  feeType: AmenityFeeType = FREE
+  feeAmount: Float = 0
 
   """ID de la zona común a actualizar"""
   id: String!
@@ -10385,47 +10497,6 @@ enum MarketplaceChatReportAction {
 
   """Procede: la conversación queda cerrada para los dos"""
   CLOSE_CONVERSATION
-}
-
-"""Salida de un vigilante de la app de portería (segundo plano)"""
-type SecurityAppExit {
-  id: String!
-  complexId: String!
-  guardId: String!
-
-  """Cuándo sacó la app a segundo plano"""
-  leftAt: DateTime!
-
-  """Cuándo volvió a la app. null = sigue fuera"""
-  returnedAt: DateTime
-
-  """Segundos fuera de la app. null mientras siga fuera"""
-  durationSeconds: Int
-
-  """Cuándo se avisó a la administración. null = no se avisó"""
-  alertSentAt: DateTime
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  guard: User
-}
-
-type PaginatedSecurityAppExitsResponse {
-  items: [SecurityAppExit!]!
-  pagination: PaginationReponse!
-}
-
-input FilterSecurityAppExitsInput {
-  """Solo este vigilante"""
-  guardId: String
-
-  """Salidas desde esta hora"""
-  from: DateTime
-
-  """Salidas hasta esta hora"""
-  to: DateTime
-
-  """true = solo los vigilantes que siguen fuera de la app"""
-  onlyOpen: Boolean
 }
 
 input ReportAppStateInput {
