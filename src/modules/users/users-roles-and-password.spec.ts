@@ -64,12 +64,13 @@ const build = (userRoles: ReturnType<typeof userRole>[]) => {
   };
 
   const userUpdate = jest.fn();
+  const userSave = jest.fn(async (u: unknown) => u);
   const service = Object.create(UsersService.prototype) as UsersService;
   Object.assign(service, {
     logger: { log: jest.fn(), warn: jest.fn() },
     userRepo: {
       findOne: jest.fn(async () => ({ ...user, mustChangePassword: true })),
-      save: jest.fn(async (u: unknown) => u),
+      save: userSave,
       update: userUpdate,
     },
     roleRepo: {
@@ -87,10 +88,25 @@ const build = (userRoles: ReturnType<typeof userRole>[]) => {
     configService: { get: jest.fn(() => 4) },
   });
 
-  return { service, saved, deleted, userUpdate };
+  return { service, saved, deleted, userUpdate, userSave };
 };
 
 describe('cargo del usuario (updateUser.role)', () => {
+  it('guarda el usuario sin la lista vieja de roles, para no huerfanizar el cargo nuevo', async () => {
+    // Regresión: save(user) con los userRoles cargados antes del cambio hacía
+    // que TypeORM pusiera user_id = NULL en la fila del cargo recién creada.
+    const h = build([userRole('ur-res', 'RESIDENT_ROL', true)]);
+
+    await h.service.updateUser(
+      { userId: 'user-1', role: 'SECURITY_ROL' },
+      undefined,
+      superAdmin as never,
+    );
+
+    expect(h.userSave).toHaveBeenCalledTimes(1);
+    expect(h.userSave.mock.calls[0][0]).not.toHaveProperty('userRoles');
+  });
+
   it('un residente que recibe el cargo de oficial de cumplimiento sigue siendo residente', async () => {
     const h = build([userRole('ur-res', 'RESIDENT_ROL', true)]);
 
