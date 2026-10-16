@@ -50,4 +50,10 @@ export class RegisterComplexDto {
   @Transform(({ value }) => value === true || value === 'true' || value === '1')
   @IsBoolean()
   acceptedTerms: boolean;
+
+  /** Código de recomendación de otro conjunto (opcional). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  referralCode?: string;
 }

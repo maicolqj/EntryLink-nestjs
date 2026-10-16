@@ -755,6 +755,40 @@ export class ResidentialComplex {
   })
   convertedToCommercialAt?: Date | null;
 
+  // ==================== RECOMENDACIONES ====================
+  //
+  // Un conjunto comparte su código; el que se registra con él queda
+  // `referredByComplexId`. Con el primer pago del recomendado, el que
+  // recomendó recibe sola una cortesía REFERRAL (`referralRewardedAt`).
+
+  /** Se genera al consultarlo por primera vez. Sin @Field: residentes y portería leen el complejo. */
+  @Column({
+    name: 'referral_code',
+    type: 'varchar',
+    length: 12,
+    nullable: true,
+  })
+  referralCode?: string | null;
+
+  @Field(() => String, {
+    description: 'Conjunto que recomendó a este',
+    nullable: true,
+  })
+  @Column({ name: 'referred_by_complex_id', type: 'uuid', nullable: true })
+  referredByComplexId?: string | null;
+
+  @Field(() => Date, {
+    description:
+      'Cuándo se otorgó la cortesía al conjunto que lo recomendó (primer pago)',
+    nullable: true,
+  })
+  @Column({
+    name: 'referral_rewarded_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  referralRewardedAt?: Date | null;
+
   // ==================== IMÁGENES ====================
 
   @Field(() => String, {

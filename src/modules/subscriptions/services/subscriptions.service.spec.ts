@@ -25,9 +25,29 @@ const build = (opts: {
     complexId?: string | null;
   }[];
   periods?: Record<string, any>[];
+  /** El complejo llegó recomendado por `referrerId` y aún no se premia. */
+  referral?: { referrerId: string; referrerExists?: boolean };
 }) => {
   const saved: Record<string, any>[] = [];
   const updates: Record<string, any>[] = [];
+  // Imita el UPDATE condicionado: solo el primer pago reclama el premio.
+  let referralClaimed = false;
+  const claimQb: any = {
+    update: () => claimQb,
+    set: () => claimQb,
+    where: () => claimQb,
+    andWhere: () => claimQb,
+    returning: () => claimQb,
+    execute: jest.fn(async () => {
+      if (!opts.referral || referralClaimed) return { raw: [] };
+      referralClaimed = true;
+      return {
+        raw: [
+          { referred_by_complex_id: opts.referral.referrerId, name: 'Torres' },
+        ],
+      };
+    }),
+  };
   const complex = {
     id: COMPLEX_ID,
     name: 'Torres',
@@ -83,7 +103,14 @@ const build = (opts: {
           : { plan: ComplexPlan.BASIC, ...opts.price },
       ),
     },
-    complexRepo: { findOne: jest.fn(async () => complex) },
+    complexRepo: {
+      findOne: jest.fn(async () => complex),
+      createQueryBuilder: () => claimQb,
+      exists: jest.fn(async () => opts.referral?.referrerExists ?? true),
+      update: jest.fn(async () => {
+        referralClaimed = false;
+      }),
+    },
     periodRepo: {
       findOne: jest.fn(async ({ where }: any) =>
         (opts.periods ?? []).find((p) => p.id === where.id),
@@ -111,7 +138,7 @@ const build = (opts: {
     },
   });
   jest.spyOn(service, 'getSummary').mockResolvedValue({} as never);
-  return { service, saved, updates };
+  return { service, saved, updates, complexRepo: (service as any).complexRepo };
 };
 
 describe('SubscriptionsService — renovar', () => {
@@ -601,5 +628,93 @@ describe('SubscriptionsService — días gratis por complejo', () => {
       ),
     ).rejects.toBeInstanceOf(CustomError);
     expect(saved).toHaveLength(0);
+  });
+});
+
+describe('SubscriptionsService — cortesía por recomendación', () => {
+  const REFERRER_ID = '22222222-2222-2222-2222-222222222222';
+  const renewInput = {
+    complexId: COMPLEX_ID,
+    plan: ComplexPlan.BASIC,
+    cycle: BillingCycle.MONTHLY,
+  };
+
+  it('el primer pago del recomendado le regala los días al que recomendó', async () => {
+    const { service } = build({
+      price: { monthlyPrice: 100_000 },
+      referral: { referrerId: REFERRER_ID },
+    });
+    const grant = jest
+      .spyOn(service, 'grantTrial')
+      .mockResolvedValue({} as never);
+
+    await service.renew(renewInput, 'admin');
+
+    expect(grant).toHaveBeenCalledTimes(1);
+    expect(grant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        complexId: REFERRER_ID,
+        days: 30,
+        reason: FreePeriodReason.REFERRAL,
+      }),
+      'admin',
+    );
+  });
+
+  it('los pagos siguientes no vuelven a premiar', async () => {
+    const { service } = build({
+      price: { monthlyPrice: 100_000 },
+      referral: { referrerId: REFERRER_ID },
+    });
+    const grant = jest
+      .spyOn(service, 'grantTrial')
+      .mockResolvedValue({} as never);
+
+    await service.renew(renewInput, 'admin');
+    await service.renew(renewInput, 'admin');
+
+    expect(grant).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin recomendación no regala nada', async () => {
+    const { service } = build({ price: { monthlyPrice: 100_000 } });
+    const grant = jest.spyOn(service, 'grantTrial');
+
+    await service.renew(renewInput, 'admin');
+
+    expect(grant).not.toHaveBeenCalled();
+  });
+
+  it('si el que recomendó ya no existe, no regala y el pago queda', async () => {
+    const { service, saved } = build({
+      price: { monthlyPrice: 100_000 },
+      referral: { referrerId: REFERRER_ID, referrerExists: false },
+    });
+    const grant = jest.spyOn(service, 'grantTrial');
+
+    await service.renew(renewInput, 'admin');
+
+    expect(grant).not.toHaveBeenCalled();
+    expect(saved[0].kind).toBe(SubscriptionPeriodKind.PAID);
+  });
+
+  it('si regalar falla, el pago queda y la marca se suelta para reintentar', async () => {
+    const { service, saved, complexRepo } = build({
+      price: { monthlyPrice: 100_000 },
+      referral: { referrerId: REFERRER_ID },
+    });
+    const grant = jest
+      .spyOn(service, 'grantTrial')
+      .mockRejectedValueOnce(new Error('caído'))
+      .mockResolvedValue({} as never);
+
+    await service.renew(renewInput, 'admin');
+    expect(saved[0].kind).toBe(SubscriptionPeriodKind.PAID);
+    expect(complexRepo.update).toHaveBeenCalledWith(COMPLEX_ID, {
+      referralRewardedAt: null,
+    });
+
+    await service.renew(renewInput, 'admin');
+    expect(grant).toHaveBeenCalledTimes(2);
   });
 });
