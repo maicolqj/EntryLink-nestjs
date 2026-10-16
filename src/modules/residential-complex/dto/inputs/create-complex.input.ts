@@ -19,6 +19,7 @@ import {
 import GraphQLJSON from 'graphql-type-json';
 import { ComplexType } from '../../enums/complex-type.enum';
 import { ComplexPlan } from '../../enums/complex-plan.enum';
+import { ComplexEngagement } from '../../enums/complex-engagement.enum';
 import { CountryCode } from '../../../users/dto/inputs/create-admin-user.input';
 import { Type } from 'class-transformer';
 
@@ -72,6 +73,47 @@ export class CreateComplexInput {
   @IsOptional()
   @IsEnum(ComplexPlan)
   plan?: ComplexPlan;
+
+  @Field(() => ComplexEngagement, {
+    nullable: true,
+    description:
+      'Prueba piloto o comercial. Vacío = COMMERCIAL. Define qué documento firma el conjunto.',
+  })
+  @IsOptional()
+  @IsEnum(ComplexEngagement)
+  engagement?: ComplexEngagement;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'Días de prueba que se otorgan solos al activar el piloto (1 a 365). Vacío = 30.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  pilotTrialDays?: number;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'Unidades que declara el conjunto. En un piloto es el tope de unidades que puede cargar.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(99_999)
+  totalUnits?: number;
+
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(500)
+  numberOfTowers?: number;
 
   @Field(() => CountryCode, { nullable: true })
   @IsOptional()

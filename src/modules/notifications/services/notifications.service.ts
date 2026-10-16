@@ -532,7 +532,10 @@ export class NotificationsService implements OnModuleInit {
     name: string;
     ownerId?: string | null;
     fileUrl?: string | null;
+    /** Anexo B2B (DPA) o acuerdo de prueba piloto. */
+    documentLabel?: string;
   }): Promise<void> {
+    const label = complex.documentLabel ?? 'Anexo B2B (DPA)';
     try {
       const reviewerIds = await this.findRegistrationReviewerIds();
       if (reviewerIds.length === 0) return;
@@ -542,8 +545,8 @@ export class NotificationsService implements OnModuleInit {
         userIds: reviewerIds,
         type: NotificationType.DPA_SIGNED,
         priority: NotificationPriority.NORMAL,
-        title: 'DPA firmado recibido',
-        body: `El complejo "${complex.name}" subió su Anexo B2B (DPA) firmado.`,
+        title: 'Documento firmado recibido',
+        body: `El complejo "${complex.name}" subió su ${label} firmado.`,
         entityId: complex.id,
         entityType: 'ResidentialComplex',
         metadata: {
@@ -571,8 +574,11 @@ export class NotificationsService implements OnModuleInit {
     status: 'APPROVED' | 'REJECTED' | string;
     reason?: string | null;
     reviewerId?: string | null;
+    /** Anexo B2B (DPA) o acuerdo de prueba piloto. */
+    documentLabel?: string;
   }): Promise<void> {
     const isRejected = params.status === 'REJECTED';
+    const label = params.documentLabel ?? 'Anexo B2B (DPA)';
     try {
       await this.notify({
         complexId: params.id,
@@ -583,10 +589,12 @@ export class NotificationsService implements OnModuleInit {
         priority: isRejected
           ? NotificationPriority.HIGH
           : NotificationPriority.NORMAL,
-        title: isRejected ? 'DPA firmado rechazado' : 'DPA firmado validado',
+        title: isRejected
+          ? 'Documento firmado rechazado'
+          : 'Documento firmado validado',
         body: isRejected
-          ? `Tu Anexo B2B (DPA) firmado fue rechazado. Motivo: ${params.reason ?? 'sin especificar'}. Por favor sube uno nuevo corregido.`
-          : 'Tu Anexo B2B (DPA) firmado fue validado. No necesitas hacer nada más.',
+          ? `Tu ${label} firmado fue rechazado. Motivo: ${params.reason ?? 'sin especificar'}. Por favor sube uno nuevo corregido.`
+          : `Tu ${label} firmado fue validado. No necesitas hacer nada más.`,
         entityId: params.id,
         entityType: 'ResidentialComplex',
         metadata: {

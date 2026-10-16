@@ -10,6 +10,7 @@ import { Auth } from '../../shared/decorators/auth.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { ComplexEngagement } from '../../residential-complex/enums/complex-engagement.enum';
 
 @Resolver(() => LegalDocument)
 export class LegalDocumentResolver {
@@ -35,11 +36,27 @@ export class LegalDocumentResolver {
     name: 'complexLegalDocuments',
     description:
       'Documentos legales dirigidos a complejos registrados (audience COMPLEX, publicados). ' +
-      'Ej: Anexo B2B / DPA a firmar. Disponible para complejos autenticados.',
+      'El complejo recibe los de su vinculación (piloto: acuerdo de piloto; comercial: Anexo B2B) ' +
+      'más los que van a todos. La plataforma puede filtrar con `engagement`.',
   })
   @Auth({ roles: [ValidRoles.SUPER_ADMIN_ROL, ValidRoles.COMPLEX_ROL] })
-  complexLegalDocuments(): Promise<LegalDocument[]> {
-    return this.service.findComplexDocuments();
+  complexLegalDocuments(
+    @CurrentUser() payload: JwtAccessPayload,
+    @Args('engagement', { type: () => ComplexEngagement, nullable: true })
+    engagement?: ComplexEngagement,
+  ): Promise<LegalDocument[]> {
+    // La cuenta del complejo inicia sesión con sub = complex.id.
+    if (payload.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) {
+      return this.service.findComplexDocuments({ engagement });
+    }
+    const complexId =
+      payload.complexId ??
+      (payload.entityType === 'complex' ? payload.sub : undefined);
+    // Sin conjunto identificable se tratan como comerciales: nunca se le
+    // entrega a nadie el documento equivocado por no saber quién es.
+    return this.service.findComplexDocuments(
+      complexId ? { complexId } : { engagement: ComplexEngagement.COMMERCIAL },
+    );
   }
 
   // ── Mutaciones (SUPER_ADMIN) ─────────────────────────────────────

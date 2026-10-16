@@ -351,6 +351,7 @@ export enum ComplexErrorCode {
    * SUPER_ADMIN (nombre, NIT, dirección, plan, correo…).
    */
   COMPLEX_FIELD_CHANGE_FORBIDDEN = 'COMPLEX_FIELD_CHANGE_FORBIDDEN',
+  COMPLEX_ENGAGEMENT_CHANGE_FORBIDDEN = 'COMPLEX_ENGAGEMENT_CHANGE_FORBIDDEN',
 }
 
 export enum AmenityErrorCode {

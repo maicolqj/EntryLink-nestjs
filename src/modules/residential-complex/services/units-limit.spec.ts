@@ -52,4 +52,34 @@ describe('ResidentialComplexService — límite de unidades', () => {
 
     await expect(service.assertUnitsLimit('c1', 800)).resolves.toBeUndefined();
   });
+  it('piloto: el tope son las unidades declaradas, no las 10 de FREE', async () => {
+    const service = build({
+      id: 'c1',
+      plan: 'FREE',
+      maxUnits: 10,
+      subscriptionPricingMode: 'PLAN',
+      engagement: 'PILOT',
+      totalUnits: 140,
+    });
+
+    await expect(service.assertUnitsLimit('c1', 139)).resolves.toBeUndefined();
+    await expect(service.assertUnitsLimit('c1', 140)).rejects.toBeInstanceOf(
+      CustomError,
+    );
+  });
+
+  it('piloto sin unidades declaradas: vuelve al límite del plan', async () => {
+    const service = build({
+      id: 'c1',
+      plan: 'FREE',
+      maxUnits: 10,
+      subscriptionPricingMode: 'PLAN',
+      engagement: 'PILOT',
+      totalUnits: null,
+    });
+
+    await expect(service.assertUnitsLimit('c1', 10)).rejects.toBeInstanceOf(
+      CustomError,
+    );
+  });
 });

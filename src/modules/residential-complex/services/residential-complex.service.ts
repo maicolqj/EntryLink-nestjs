@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ModuleRef } from '@nestjs/core';
 import { DataSource, EntityManager, ILike, IsNull, Repository } from 'typeorm';
 
 import { ResidentialComplex } from '../entities/residential-complex.entity';
@@ -24,6 +25,11 @@ import { ComplexStatus } from '../enums/complex-status.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexType } from '../enums/complex-type.enum';
 import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
+import {
+  ComplexEngagement,
+  DEFAULT_PILOT_TRIAL_DAYS,
+  signedDocumentLabel,
+} from '../enums/complex-engagement.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   ComplexErrorCode,
@@ -57,12 +63,16 @@ import { BK } from '../../../core/infrastructure/cache/business-cache.constants'
 import { seedPucForComplex } from '../../../core/database/seeds/puc.seed';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { SubscriptionPricingMode } from '../../subscriptions/enums/subscription-pricing-mode.enum';
+import { SubscriptionPeriodKind } from '../../subscriptions/enums/subscription-period-kind.enum';
+import { FreePeriodReason } from '../../subscriptions/enums/free-period-reason.enum';
+import { SubscriptionPeriod } from '../../subscriptions/entities/subscription-period.entity';
 
 /**
  * Documentos privados del complejo: el RUT y el documento del representante
  * legal que adjunta al registrarse, y el DPA (Anexo B2B) que firma después.
  */
-export type RegistrationDocumentKind = 'rut' | 'legal-rep' | 'signed-dpa';
+export type RegistrationDocumentKind =
+  'rut' | 'legal-rep' | 'signed-dpa' | 'pilot-agreement';
 
 // Límite de unidades por plan
 export const PLAN_UNIT_LIMITS: Record<ComplexPlan, number> = {
@@ -127,6 +137,8 @@ export class ResidentialComplexService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly socketService: SocketService,
+    // SubscriptionsService se resuelve al vuelo (ver grantPilotTrial).
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   // ================================================================
@@ -232,6 +244,7 @@ export class ResidentialComplexService {
       ...restInput,
       plan,
       maxUnits,
+      engagement: input.engagement ?? ComplexEngagement.COMMERCIAL,
       status: ComplexStatus.PENDING_SETUP,
       ownerId: currentUser.sub,
       ...(hashedPassword && { password: hashedPassword, passwordSet: true }),
@@ -265,6 +278,7 @@ export class ResidentialComplexService {
         id: saved.id,
         name: saved.name,
         plan: saved.plan,
+        engagement: saved.engagement,
         status: saved.status,
       },
       performedById: currentUser.sub,
@@ -483,6 +497,11 @@ export class ResidentialComplexService {
       complex.maxUnits = PLAN_UNIT_LIMITS[input.plan];
     }
 
+    const previousEngagement = complex.engagement;
+    if (input.engagement && input.engagement !== previousEngagement) {
+      this.applyEngagementChange(complex, input.engagement);
+    }
+
     // Extraer legalRepresentativeId para manejarlo explícitamente:
     // "" o null → limpia el campo; UUID → asigna; undefined → no modifica
     // La contraseña nunca se copia tal cual: se hashea aparte y solo si llegó.
@@ -535,6 +554,11 @@ export class ResidentialComplexService {
       newValue: {
         ...restInput,
         plan: input.plan,
+        ...(input.engagement &&
+          input.engagement !== previousEngagement && {
+            engagement: input.engagement,
+            previousEngagement,
+          }),
         legalRepresentativeId,
         ...(password && { passwordChanged: true }),
       },
@@ -549,6 +573,104 @@ export class ResidentialComplexService {
     return this.complexRepo.findOne({
       where: { id: saved.id, deletedAt: IsNull() },
     });
+  }
+
+  /**
+   * Cambia la vinculación del conjunto.
+   *
+   * Piloto → comercial: el acuerdo de piloto firmado se archiva y el cupo del
+   * documento firmado queda libre para el Anexo B2B. Sin archivarlo, la subida
+   * del B2B borraría de R2 lo único que prueba lo que se firmó en el piloto.
+   *
+   * Comercial → piloto solo antes de activar: un conjunto que ya opera con
+   * contrato comercial no vuelve a la prueba gratis.
+   */
+  private applyEngagementChange(
+    complex: ResidentialComplex,
+    next: ComplexEngagement,
+  ): void {
+    if (next === ComplexEngagement.PILOT) {
+      const beforeActivation =
+        complex.status === ComplexStatus.PENDING_REVIEW ||
+        complex.status === ComplexStatus.PENDING_SETUP;
+      if (!beforeActivation || complex.convertedToCommercialAt) {
+        throw new CustomError({
+          message:
+            'Un conjunto que ya opera con contrato comercial no puede volver a prueba piloto',
+          statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: ComplexErrorCode.COMPLEX_ENGAGEMENT_CHANGE_FORBIDDEN,
+        });
+      }
+      complex.engagement = next;
+      return;
+    }
+
+    if (complex.signedDpaPublicId) {
+      complex.pilotAgreementPublicId = complex.signedDpaPublicId;
+      complex.pilotAgreementFileName =
+        complex.signedDpaFileName ??
+        `acuerdo-piloto-firmado-${complex.slug}.pdf`;
+      complex.pilotAgreementSignedAt = complex.signedDpaUploadedAt ?? null;
+    }
+    complex.signedDpaUrl = null;
+    complex.signedDpaPublicId = null;
+    complex.signedDpaFileName = null;
+    complex.signedDpaUploadedAt = null;
+    complex.signedDpaStatus = null;
+    complex.signedDpaRejectionReason = null;
+    complex.signedDpaReviewedAt = null;
+    complex.signedDpaReviewedById = null;
+    complex.convertedToCommercialAt = new Date();
+    complex.engagement = next;
+  }
+
+  /**
+   * Otorga la prueba gratis del piloto al activarlo. Un complejo sin periodos
+   * de suscripción no tiene restricciones (estado NONE): si la prueba no se
+   * otorga, el piloto nunca vence. Por eso es automática y no depende de que
+   * alguien se acuerde.
+   *
+   * Si ya usó la prueba (se reactivó tras una suspensión) no se repite.
+   */
+  private async grantPilotTrial(
+    complex: ResidentialComplex,
+    currentUser: JwtAccessPayload,
+  ): Promise<void> {
+    const trialUsed = await this.dataSource
+      .getRepository(SubscriptionPeriod)
+      .exists({
+        where: { complexId: complex.id, kind: SubscriptionPeriodKind.TRIAL },
+      });
+    if (trialUsed) return;
+
+    const days = complex.pilotTrialDays ?? DEFAULT_PILOT_TRIAL_DAYS;
+    try {
+      // Import dinámico: el estático arma un ciclo de archivos
+      // (subscriptions → notifications → este servicio) y Nest recibe
+      // NotificationsService como undefined al construir SubscriptionsService.
+      const { SubscriptionsService } =
+        await import('../../subscriptions/services/subscriptions.service');
+      await this.moduleRef
+        .get(SubscriptionsService, { strict: false })
+        .grantTrial(
+          {
+            complexId: complex.id,
+            days,
+            reason: FreePeriodReason.TRIAL,
+            notes: 'Prueba piloto: otorgada al activar el conjunto',
+          },
+          currentUser.sub,
+        );
+      this.logger.log(
+        `Prueba piloto de ${days} días otorgada a ${complex.slug} (${complex.id})`,
+      );
+    } catch (err: any) {
+      // La activación ya quedó guardada; no se revierte. Se deja rastro para
+      // otorgar la prueba a mano desde Suscripciones.
+      this.logger.error(
+        `No se pudo otorgar la prueba piloto a ${complex.id}: ${err?.message}. Otórgala a mano en Suscripciones.`,
+      );
+    }
   }
 
   // ================================================================
@@ -637,6 +759,16 @@ export class ResidentialComplexService {
 
       return saved;
     });
+
+    // Fuera de la transacción: grantTrial bloquea la fila del complejo y
+    // dentro de esta se quedaría esperándose a sí mismo.
+    if (
+      status === ComplexStatus.ACTIVE &&
+      previousStatus !== ComplexStatus.ACTIVE &&
+      saved.engagement === ComplexEngagement.PILOT
+    ) {
+      await this.grantPilotTrial(saved, currentUser);
+    }
 
     // Fuera de la transacción: borrar la caché o avisar antes del commit deja
     // que alguien relea el estado viejo y lo vuelva a cachear.
@@ -910,6 +1042,19 @@ export class ResidentialComplexService {
     }
 
     if (complex.subscriptionPricingMode === SubscriptionPricingMode.PER_UNIT) {
+      return;
+    }
+
+    // El piloto no paga plan: su tope son las unidades que declaró el conjunto.
+    // Con el de FREE (10) un conjunto real no alcanzaría a cargarse.
+    if (complex.engagement === ComplexEngagement.PILOT && complex.totalUnits) {
+      if (currentCount >= complex.totalUnits) {
+        throw new CustomError({
+          message: `La prueba piloto cubre las ${complex.totalUnits} unidades declaradas por el conjunto. Si son más, pide que corrijan el total.`,
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: ComplexErrorCode.COMPLEX_SUBSCRIPTION_EXPIRED,
+        });
+      }
       return;
     }
 
@@ -1271,9 +1416,23 @@ export class ResidentialComplexService {
         'legalRepDocumentUrl',
         'signedDpaUrl',
         'signedDpaPublicId',
+        'engagement',
+        'pilotAgreementPublicId',
       ],
     });
     if (!complex) throw new NotFoundException('Complejo no encontrado');
+
+    if (doc === 'pilot-agreement') {
+      if (!complex.pilotAgreementPublicId) {
+        throw new NotFoundException(
+          'El complejo no tiene un acuerdo de piloto archivado',
+        );
+      }
+      return {
+        key: complex.pilotAgreementPublicId,
+        fileName: `acuerdo-piloto-firmado-${complex.slug}.pdf`,
+      };
+    }
 
     if (doc === 'signed-dpa') {
       // El DPA guarda su llave de R2 aparte; la URL queda como respaldo.
@@ -1282,12 +1441,13 @@ export class ResidentialComplexService {
         (complex.signedDpaUrl
           ? this.registrationDocumentKey(complex.signedDpaUrl)
           : null);
+      const { label, fileSlug } = signedDocumentLabel(complex.engagement);
       if (!key) {
         throw new NotFoundException(
-          'El complejo aún no ha subido el DPA firmado',
+          `El complejo aún no ha subido el ${label} firmado`,
         );
       }
-      return { key, fileName: `dpa-firmado-${complex.slug}.pdf` };
+      return { key, fileName: `${fileSlug}-${complex.slug}.pdf` };
     }
 
     const url =
@@ -1365,17 +1525,19 @@ export class ResidentialComplexService {
       'signed-dpa',
     );
     const oldPublicId = complex.signedDpaPublicId;
+    const { label, fileSlug } = signedDocumentLabel(complex.engagement);
+    const defaultFileName = `${fileSlug}-${complex.slug}.pdf`;
 
     const uploaded = await this.storageService.uploadBuffer(
       buffer,
       folder,
-      fileName ?? `dpa-firmado-${complex.slug}.pdf`,
+      fileName ?? defaultFileName,
       'raw',
     );
 
     complex.signedDpaUrl = uploaded.url;
     complex.signedDpaPublicId = uploaded.publicId;
-    complex.signedDpaFileName = fileName ?? `dpa-firmado-${complex.slug}.pdf`;
+    complex.signedDpaFileName = fileName ?? defaultFileName;
     complex.signedDpaUploadedAt = new Date();
     // (Re)subida → vuelve a estado pendiente de revisión y limpia el veredicto anterior.
     complex.signedDpaStatus = DpaValidationStatus.PENDING;
@@ -1397,10 +1559,11 @@ export class ResidentialComplexService {
       name: saved.name,
       ownerId: saved.ownerId,
       fileUrl: saved.signedDpaUrl,
+      documentLabel: label,
     });
 
     this.logger.log(
-      `DPA firmado adjuntado al complejo ${complex.slug} (${complex.id})`,
+      `${label} firmado adjuntado al complejo ${complex.slug} (${complex.id})`,
     );
     return saved;
   }
@@ -1453,6 +1616,7 @@ export class ResidentialComplexService {
       status,
       reason: trimmedReason,
       reviewerId: currentUser.sub,
+      documentLabel: signedDocumentLabel(saved.engagement).label,
     });
 
     this.logger.log(
@@ -1482,7 +1646,9 @@ export class ResidentialComplexService {
 
   /**
    * ¿Están aprobados todos los documentos que el complejo debe firmar?
-   * Hoy el único documento firmable es el DPA (Anexo B2B). Si en el futuro se
+   * Hay un solo documento firmable: el Anexo B2B (DPA) en un conjunto
+   * comercial o el acuerdo de piloto, que trae las cláusulas de tratamiento de
+   * datos, en un piloto. Ambos ocupan los campos signed_dpa_*. Si en el futuro se
    * agregan más documentos firmables por complejo, extender esta comprobación.
    */
   private areRequiredSignedDocsApproved(complex: ResidentialComplex): boolean {

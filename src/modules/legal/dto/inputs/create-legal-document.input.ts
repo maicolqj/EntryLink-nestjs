@@ -9,6 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { LegalAudience } from '../../enums/legal-audience.enum';
+import { ComplexEngagement } from '../../../residential-complex/enums/complex-engagement.enum';
 
 @InputType()
 export class CreateLegalDocumentInput {
@@ -48,6 +49,15 @@ export class CreateLegalDocumentInput {
   @IsOptional()
   @IsEnum(LegalAudience)
   audience?: LegalAudience;
+
+  @Field(() => ComplexEngagement, {
+    nullable: true,
+    description:
+      'Solo para audience COMPLEX: a qué vinculación va dirigido (PILOT o COMMERCIAL). Vacío = a todos los complejos.',
+  })
+  @IsOptional()
+  @IsEnum(ComplexEngagement)
+  engagement?: ComplexEngagement | null;
 
   @Field(() => Boolean, {
     nullable: true,

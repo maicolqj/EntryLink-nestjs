@@ -489,6 +489,21 @@ type ResidentialComplex {
   """Fecha en que el SUPER_ADMIN revisó (aprobó/rechazó) el DPA firmado"""
   signedDpaReviewedAt: DateTime
 
+  """Tipo de vinculación: prueba piloto o comercial"""
+  engagement: ComplexEngagement!
+
+  """Días de prueba que se otorgan solos al activar un piloto. Vacío = 30."""
+  pilotTrialDays: Int
+
+  """Nombre del acuerdo de piloto firmado (archivado)"""
+  pilotAgreementFileName: String
+
+  """Cuándo se subió el acuerdo de piloto archivado"""
+  pilotAgreementSignedAt: DateTime
+
+  """Cuándo el piloto pasó a contrato comercial"""
+  convertedToCommercialAt: DateTime
+
   """URL del logo del complejo"""
   logoUrl: String
 
@@ -578,6 +593,15 @@ enum DpaValidationStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+"""Tipo de vinculación del conjunto: prueba piloto o comercial"""
+enum ComplexEngagement {
+  """Prueba piloto (firma el acuerdo de piloto)"""
+  PILOT
+
+  """Comercial (firma el Anexo B2B / DPA)"""
+  COMMERCIAL
 }
 
 """Roles de la paltaforma"""
@@ -2146,6 +2170,129 @@ type SupervisorVisit {
 enum SupervisorVisitStatus {
   ACTIVE
   CLOSED
+}
+
+"""Impuesto aplicado a un cobro"""
+type SubscriptionTaxLine {
+  name: String!
+
+  """Tarifa en porcentaje (19 = 19 %)"""
+  rate: Float!
+
+  """CHARGE se sumó al cobro; WITHHOLDING lo retuvo el conjunto"""
+  kind: SubscriptionTaxKind!
+  amount: Float!
+}
+
+"""Si el impuesto se suma al cobro o lo retiene el conjunto"""
+enum SubscriptionTaxKind {
+  """Se suma al subtotal (IVA)"""
+  CHARGE
+
+  """Lo retiene el conjunto: se descuenta de lo que paga"""
+  WITHHOLDING
+}
+
+"""Periodo de suscripción de un complejo"""
+type SubscriptionPeriod {
+  id: ID!
+  complexId: String!
+  kind: SubscriptionPeriodKind!
+  plan: ComplexPlan!
+
+  """Ciclo pagado. Vacío en la prueba gratis y el periodo inicial."""
+  cycle: BillingCycle
+  startsAt: DateTime!
+  endsAt: DateTime!
+
+  """Valor pagado (COP): subtotal + impuestos − retenciones del conjunto"""
+  amount: Float
+
+  """Modalidad con la que se calculó el cobro"""
+  pricingMode: SubscriptionPricingMode
+
+  """Unidades cobradas (modalidad por unidad)"""
+  unitCount: Int
+
+  """Valor por unidad"""
+  unitPrice: Float
+
+  """Valor antes de impuestos"""
+  subtotal: Float
+
+  """Total de impuestos"""
+  taxAmount: Float
+
+  """Total retenido por el conjunto (retención en la fuente…)"""
+  withholdingAmount: Float
+
+  """Impuestos aplicados, con la tarifa vigente al pagar"""
+  taxes: [SubscriptionTaxLine!]
+
+  """Motivo de los días gratis (prueba y cortesía)"""
+  freeReason: FreePeriodReason
+  paidAt: DateTime
+
+  """Referencia del pago (número de transferencia, consignación…)"""
+  paymentReference: String
+  notes: String
+  createdById: String
+
+  """Quién corrigió el pago por última vez"""
+  updatedById: String
+  paymentUpdatedAt: DateTime
+  createdAt: DateTime!
+}
+
+"""Origen de un periodo de suscripción"""
+enum SubscriptionPeriodKind {
+  """Periodo inicial al lanzar las suscripciones"""
+  INITIAL
+
+  """Prueba gratis"""
+  TRIAL
+
+  """Días gratis de cortesía"""
+  COURTESY
+
+  """Periodo pagado"""
+  PAID
+}
+
+"""Ciclo de cobro de la suscripción"""
+enum BillingCycle {
+  """Mensual"""
+  MONTHLY
+
+  """Anual"""
+  ANNUAL
+}
+
+"""Modalidad de cobro de la suscripción del conjunto"""
+enum SubscriptionPricingMode {
+  """Valor por unidad × unidades"""
+  PER_UNIT
+
+  """Precio de lista del plan"""
+  PLAN
+
+  """Valor fijo acordado con el conjunto"""
+  FIXED
+}
+
+"""Motivo de los días gratis"""
+enum FreePeriodReason {
+  """Prueba gratis (una vez por complejo)"""
+  TRIAL
+
+  """Por recomendar a otro conjunto"""
+  REFERRAL
+
+  """Promoción"""
+  PROMOTION
+
+  """Otro motivo (explicarlo en las notas)"""
+  OTHER
 }
 
 type DeviceInfo {
@@ -4205,6 +4352,11 @@ type LegalDocument {
   """Audiencia: PUBLIC (/legal) o COMPLEX (solo complejos registrados)"""
   audience: LegalAudience!
 
+  """
+  Vinculación a la que va dirigido (PILOT / COMMERCIAL). Vacío = a todos los complejos.
+  """
+  engagement: ComplexEngagement
+
   """Si ofrece un archivo descargable (PDF)"""
   isDownloadable: Boolean!
 
@@ -5440,129 +5592,6 @@ type ComplexDocumentAckReport {
 
   """Una fila por unidad: primero las pendientes"""
   units: [ComplexDocumentAckEntry!]!
-}
-
-"""Impuesto aplicado a un cobro"""
-type SubscriptionTaxLine {
-  name: String!
-
-  """Tarifa en porcentaje (19 = 19 %)"""
-  rate: Float!
-
-  """CHARGE se sumó al cobro; WITHHOLDING lo retuvo el conjunto"""
-  kind: SubscriptionTaxKind!
-  amount: Float!
-}
-
-"""Si el impuesto se suma al cobro o lo retiene el conjunto"""
-enum SubscriptionTaxKind {
-  """Se suma al subtotal (IVA)"""
-  CHARGE
-
-  """Lo retiene el conjunto: se descuenta de lo que paga"""
-  WITHHOLDING
-}
-
-"""Periodo de suscripción de un complejo"""
-type SubscriptionPeriod {
-  id: ID!
-  complexId: String!
-  kind: SubscriptionPeriodKind!
-  plan: ComplexPlan!
-
-  """Ciclo pagado. Vacío en la prueba gratis y el periodo inicial."""
-  cycle: BillingCycle
-  startsAt: DateTime!
-  endsAt: DateTime!
-
-  """Valor pagado (COP): subtotal + impuestos − retenciones del conjunto"""
-  amount: Float
-
-  """Modalidad con la que se calculó el cobro"""
-  pricingMode: SubscriptionPricingMode
-
-  """Unidades cobradas (modalidad por unidad)"""
-  unitCount: Int
-
-  """Valor por unidad"""
-  unitPrice: Float
-
-  """Valor antes de impuestos"""
-  subtotal: Float
-
-  """Total de impuestos"""
-  taxAmount: Float
-
-  """Total retenido por el conjunto (retención en la fuente…)"""
-  withholdingAmount: Float
-
-  """Impuestos aplicados, con la tarifa vigente al pagar"""
-  taxes: [SubscriptionTaxLine!]
-
-  """Motivo de los días gratis (prueba y cortesía)"""
-  freeReason: FreePeriodReason
-  paidAt: DateTime
-
-  """Referencia del pago (número de transferencia, consignación…)"""
-  paymentReference: String
-  notes: String
-  createdById: String
-
-  """Quién corrigió el pago por última vez"""
-  updatedById: String
-  paymentUpdatedAt: DateTime
-  createdAt: DateTime!
-}
-
-"""Origen de un periodo de suscripción"""
-enum SubscriptionPeriodKind {
-  """Periodo inicial al lanzar las suscripciones"""
-  INITIAL
-
-  """Prueba gratis"""
-  TRIAL
-
-  """Días gratis de cortesía"""
-  COURTESY
-
-  """Periodo pagado"""
-  PAID
-}
-
-"""Ciclo de cobro de la suscripción"""
-enum BillingCycle {
-  """Mensual"""
-  MONTHLY
-
-  """Anual"""
-  ANNUAL
-}
-
-"""Modalidad de cobro de la suscripción del conjunto"""
-enum SubscriptionPricingMode {
-  """Valor por unidad × unidades"""
-  PER_UNIT
-
-  """Precio de lista del plan"""
-  PLAN
-
-  """Valor fijo acordado con el conjunto"""
-  FIXED
-}
-
-"""Motivo de los días gratis"""
-enum FreePeriodReason {
-  """Prueba gratis (una vez por complejo)"""
-  TRIAL
-
-  """Por recomendar a otro conjunto"""
-  REFERRAL
-
-  """Promoción"""
-  PROMOTION
-
-  """Otro motivo (explicarlo en las notas)"""
-  OTHER
 }
 
 """Impuesto aplicado a la suscripción"""
@@ -6948,9 +6977,9 @@ type Query {
   legalDocumentsAdmin: [LegalDocument!]!
 
   """
-  Documentos legales dirigidos a complejos registrados (audience COMPLEX, publicados). Ej: Anexo B2B / DPA a firmar. Disponible para complejos autenticados.
+  Documentos legales dirigidos a complejos registrados (audience COMPLEX, publicados). El complejo recibe los de su vinculación (piloto: acuerdo de piloto; comercial: Anexo B2B) más los que van a todos. La plataforma puede filtrar con `engagement`.
   """
-  complexLegalDocuments: [LegalDocument!]!
+  complexLegalDocuments(engagement: ComplexEngagement): [LegalDocument!]!
   amenityScheduleExceptions(amenityId: String!, from: String!, to: String!): [AmenityScheduleException!]!
   amenities(complexId: String!, pagination: PaginationInput, filters: FilterAmenitiesInput): PaginatedAmenitiesResponse!
   amenity(amenityId: String!): Amenity!
@@ -8443,6 +8472,24 @@ input CreateComplexInput {
   zipCode: String
   type: ComplexType! = APARTMENT_COMPLEX
   plan: ComplexPlan! = FREE
+
+  """
+  Prueba piloto o comercial. Vacío = COMMERCIAL. Define qué documento firma el conjunto.
+  """
+  engagement: ComplexEngagement
+
+  """
+  Días de prueba que se otorgan solos al activar el piloto (1 a 365). Vacío = 30.
+  """
+  pilotTrialDays: Int
+
+  """
+  Unidades que declara el conjunto. En un piloto es el tope de unidades que puede cargar.
+  """
+  totalUnits: Int
+
+  """Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)"""
+  numberOfTowers: Int
   countryCode: CountryCode
   phoneNumber: String
   email: String
@@ -8510,6 +8557,24 @@ input UpdateComplexInput {
   zipCode: String
   type: ComplexType
   plan: ComplexPlan
+
+  """
+  Prueba piloto o comercial. Vacío = COMMERCIAL. Define qué documento firma el conjunto.
+  """
+  engagement: ComplexEngagement
+
+  """
+  Días de prueba que se otorgan solos al activar el piloto (1 a 365). Vacío = 30.
+  """
+  pilotTrialDays: Int
+
+  """
+  Unidades que declara el conjunto. En un piloto es el tope de unidades que puede cargar.
+  """
+  totalUnits: Int
+
+  """Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)"""
+  numberOfTowers: Int
   countryCode: CountryCode
   phoneNumber: String
   email: String
@@ -9599,6 +9664,11 @@ input CreateLegalDocumentInput {
   """PUBLIC por defecto"""
   audience: LegalAudience
 
+  """
+  Solo para audience COMPLEX: a qué vinculación va dirigido (PILOT o COMMERCIAL). Vacío = a todos los complejos.
+  """
+  engagement: ComplexEngagement
+
   """Si ofrece descarga (requiere pdfBase64)"""
   isDownloadable: Boolean
 
@@ -9619,6 +9689,11 @@ input UpdateLegalDocumentInput {
   """
   docxBase64: String
   audience: LegalAudience
+
+  """
+  Solo para audience COMPLEX: a qué vinculación va dirigido (PILOT o COMMERCIAL). Vacío = a todos los complejos.
+  """
+  engagement: ComplexEngagement
   isDownloadable: Boolean
 
   """Nuevo PDF descargable en base64. Reemplaza el anterior."""

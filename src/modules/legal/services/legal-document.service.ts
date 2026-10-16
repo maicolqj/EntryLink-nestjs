@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { LegalDocument } from '../entities/legal-document.entity';
 import { LegalAudience } from '../enums/legal-audience.enum';
+import { ComplexEngagement } from '../../residential-complex/enums/complex-engagement.enum';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { CreateLegalDocumentInput } from '../dto/inputs/create-legal-document.input';
 import { UpdateLegalDocumentInput } from '../dto/inputs/update-legal-document.input';
 import {
@@ -26,6 +28,8 @@ export class LegalDocumentService {
   constructor(
     @InjectRepository(LegalDocument)
     private readonly repo: Repository<LegalDocument>,
+    @InjectRepository(ResidentialComplex)
+    private readonly complexRepo: Repository<ResidentialComplex>,
     private readonly storage: R2StorageService,
   ) {}
 
@@ -75,10 +79,32 @@ export class LegalDocumentService {
   /**
    * Documentos dirigidos a complejos registrados (audience COMPLEX, publicados).
    * Consumido por el dashboard del complejo autenticado. Incluye la URL de descarga.
+   *
+   * Cada conjunto ve los de su vinculación más los que van a todos: un piloto
+   * descarga el acuerdo de piloto y no el Anexo B2B. Sin `complexId` (la
+   * plataforma) se filtra por `engagement`, o se devuelven todos.
    */
-  findComplexDocuments(): Promise<LegalDocument[]> {
+  async findComplexDocuments(params: {
+    complexId?: string;
+    engagement?: ComplexEngagement;
+  }): Promise<LegalDocument[]> {
+    let engagement = params.engagement;
+    if (params.complexId) {
+      const complex = await this.complexRepo.findOne({
+        where: { id: params.complexId },
+        select: ['id', 'engagement'],
+      });
+      engagement = complex?.engagement ?? ComplexEngagement.COMMERCIAL;
+    }
+
+    const base = { isPublished: true, audience: LegalAudience.COMPLEX };
     return this.repo.find({
-      where: { isPublished: true, audience: LegalAudience.COMPLEX },
+      where: engagement
+        ? [
+            { ...base, engagement: IsNull() },
+            { ...base, engagement },
+          ]
+        : base,
       order: { title: 'ASC' },
     });
   }
@@ -138,6 +164,7 @@ export class LegalDocumentService {
       description: input.description,
       contentHtml,
       audience: input.audience ?? LegalAudience.PUBLIC,
+      engagement: input.engagement ?? null,
       isDownloadable,
       downloadFileUrl,
       downloadFilePublicId,
@@ -162,6 +189,8 @@ export class LegalDocumentService {
     if (input.title !== undefined) doc.title = input.title;
     if (input.description !== undefined) doc.description = input.description;
     if (input.audience !== undefined) doc.audience = input.audience;
+    if (input.engagement !== undefined)
+      doc.engagement = input.engagement ?? null;
 
     if (input.docxBase64) {
       doc.contentHtml = await docxBase64ToHtml(input.docxBase64);

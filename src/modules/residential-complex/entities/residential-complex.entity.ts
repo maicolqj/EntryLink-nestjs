@@ -19,6 +19,7 @@ import { ComplexType } from '../enums/complex-type.enum';
 import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
+import { ComplexEngagement } from '../enums/complex-engagement.enum';
 import { Country, User } from '../../users/entities/user.entity';
 import { Building } from './building.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -690,6 +691,69 @@ export class ResidentialComplex {
   /** Usuario SUPER_ADMIN que revisó el DPA. Sin @Field = oculto en GraphQL. */
   @Column({ name: 'signed_dpa_reviewed_by_id', type: 'text', nullable: true })
   signedDpaReviewedById?: string;
+
+  // ==================== VINCULACIÓN (PILOTO / COMERCIAL) ====================
+  //
+  // El documento firmado vive en los campos signed_dpa_*: en un piloto es el
+  // acuerdo de piloto, en uno comercial el Anexo B2B. Al pasar de piloto a
+  // comercial el acuerdo firmado se archiva en pilot_agreement_* para que no
+  // se pierda la prueba de lo que se firmó.
+
+  @Field(() => ComplexEngagement, {
+    description: 'Tipo de vinculación: prueba piloto o comercial',
+  })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: ComplexEngagement.COMMERCIAL,
+  })
+  engagement: ComplexEngagement;
+
+  @Field(() => Int, {
+    description:
+      'Días de prueba que se otorgan solos al activar un piloto. Vacío = 30.',
+    nullable: true,
+  })
+  @Column({ name: 'pilot_trial_days', type: 'int', nullable: true })
+  pilotTrialDays?: number | null;
+
+  /** Llave de R2 del acuerdo de piloto archivado. Sin @Field = oculto en GraphQL. */
+  @Column({ name: 'pilot_agreement_public_id', type: 'text', nullable: true })
+  pilotAgreementPublicId?: string | null;
+
+  @Field(() => String, {
+    description: 'Nombre del acuerdo de piloto firmado (archivado)',
+    nullable: true,
+  })
+  @Column({
+    name: 'pilot_agreement_file_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  pilotAgreementFileName?: string | null;
+
+  @Field(() => Date, {
+    description: 'Cuándo se subió el acuerdo de piloto archivado',
+    nullable: true,
+  })
+  @Column({
+    name: 'pilot_agreement_signed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  pilotAgreementSignedAt?: Date | null;
+
+  @Field(() => Date, {
+    description: 'Cuándo el piloto pasó a contrato comercial',
+    nullable: true,
+  })
+  @Column({
+    name: 'converted_to_commercial_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  convertedToCommercialAt?: Date | null;
 
   // ==================== IMÁGENES ====================
 
