@@ -8,12 +8,14 @@ import {
 } from 'typeorm';
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { LegalAudience } from '../enums/legal-audience.enum';
+import { ComplexEngagement } from '../../residential-complex/enums/complex-engagement.enum';
 
 /**
  * Documento legal (Términos, Política de Privacidad, DPA, etc.).
  * - `contentHtml`: vista web, generada de un .docx subido por el SUPER_ADMIN.
  * - `downloadFileUrl`: PDF descargable (ej. DPA a firmar), subido aparte.
  * - `audience`: PUBLIC (/legal) o COMPLEX (solo complejos registrados).
+ * - `engagement`: con COMPLEX, si va al piloto, al comercial o a ambos.
  */
 @ObjectType({ description: 'Documento legal público del sistema' })
 @Entity({ name: 'legal_documents' })
@@ -55,6 +57,18 @@ export class LegalDocument {
   })
   @Column({ type: 'enum', enum: LegalAudience, default: LegalAudience.PUBLIC })
   audience: LegalAudience;
+
+  /**
+   * Con audience COMPLEX, a qué conjuntos va: el piloto descarga su acuerdo y
+   * no el Anexo B2B. NULL = a todos.
+   */
+  @Field(() => ComplexEngagement, {
+    description:
+      'Vinculación a la que va dirigido (PILOT / COMMERCIAL). Vacío = a todos los complejos.',
+    nullable: true,
+  })
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  engagement?: ComplexEngagement | null;
 
   @Field(() => Boolean, {
     description: 'Si ofrece un archivo descargable (PDF)',

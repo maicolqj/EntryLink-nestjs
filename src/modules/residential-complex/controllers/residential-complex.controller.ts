@@ -45,6 +45,7 @@ const REGISTRATION_DOCUMENTS: RegistrationDocumentKind[] = [
   'rut',
   'legal-rep',
   'signed-dpa',
+  'pilot-agreement',
 ];
 
 @Controller('complexes')
@@ -110,8 +111,10 @@ export class ResidentialComplexController {
    * GET /api/v1/complexes/:id/registration-documents/:doc?download=1
    *
    * Sirve el RUT (`rut`) o el documento del representante legal (`legal-rep`)
-   * que el complejo adjuntó al registrarse, o el DPA (Anexo B2B) que firmó
-   * después (`signed-dpa`), en cualquier estado de revisión. Son datos
+   * que el complejo adjuntó al registrarse, el documento que firmó después
+   * (`signed-dpa`: Anexo B2B, o acuerdo de piloto si es piloto) o el acuerdo
+   * de piloto archivado al pasar a comercial (`pilot-agreement`), en cualquier
+   * estado de revisión. Son datos
    * personales: los ven SUPER_ADMIN, el oficial de cumplimiento y la cuenta
    * del propio complejo (solo los suyos). El archivo lo transmite el backend,
    * sin entregar la URL de R2: la carpeta `documents/` no es pública.
