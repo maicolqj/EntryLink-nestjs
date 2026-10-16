@@ -105,6 +105,16 @@ export class CreateComplexInput {
   @Max(99_999)
   totalUnits?: number;
 
+  @Field(() => Int, {
+    nullable: true,
+    description: 'Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(500)
+  numberOfTowers?: number;
+
   @Field(() => CountryCode, { nullable: true })
   @IsOptional()
   @ValidateNested()

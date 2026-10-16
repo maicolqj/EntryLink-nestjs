@@ -8487,6 +8487,9 @@ input CreateComplexInput {
   Unidades que declara el conjunto. En un piloto es el tope de unidades que puede cargar.
   """
   totalUnits: Int
+
+  """Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)"""
+  numberOfTowers: Int
   countryCode: CountryCode
   phoneNumber: String
   email: String
@@ -8569,6 +8572,9 @@ input UpdateComplexInput {
   Unidades que declara el conjunto. En un piloto es el tope de unidades que puede cargar.
   """
   totalUnits: Int
+
+  """Número de torres (APARTMENT_COMPLEX / MIXED_COMPLEX)"""
+  numberOfTowers: Int
   countryCode: CountryCode
   phoneNumber: String
   email: String
