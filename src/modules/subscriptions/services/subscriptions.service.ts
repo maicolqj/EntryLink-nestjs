@@ -50,6 +50,7 @@ import {
   graceEndsAt,
 } from '../utils/subscription-status';
 import { formatBogotaDate, formatCop } from '../utils/format-date';
+import { REFERRAL_REWARD_DAYS } from '../utils/referral-code';
 
 /** Planes que se pueden pagar. FREE es solo la prueba gratis. */
 const PAID_PLANS = [ComplexPlan.BASIC, ComplexPlan.PRO, ComplexPlan.ENTERPRISE];
@@ -367,7 +368,75 @@ export class SubscriptionsService {
     this.logger.log(
       `Suscripción renovada: complejo ${input.complexId}, ${input.plan} ${input.cycle} hasta ${period.endsAt.toISOString()}`,
     );
+
+    await this.rewardReferrer(input.complexId, userId);
     return this.getSummary(input.complexId);
+  }
+
+  /**
+   * Cortesía por recomendación: con el primer pago del conjunto recomendado,
+   * el que lo recomendó recibe sus días gratis sin que nadie tenga que
+   * acordarse. Se premia el pago y no el registro: un registro no cuesta nada
+   * y la prueba piloto tampoco.
+   *
+   * `referral_rewarded_at` se marca con un UPDATE condicionado: dos pagos
+   * registrados a la vez no pueden premiar dos veces. Si otorgar los días
+   * falla, la marca se suelta para que el próximo pago lo intente de nuevo.
+   * Nunca tumba el pago, que ya quedó guardado.
+   */
+  private async rewardReferrer(
+    complexId: string,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const claim = await this.complexRepo
+        .createQueryBuilder()
+        .update(ResidentialComplex)
+        .set({ referralRewardedAt: () => 'now()' })
+        .where('id = :complexId', { complexId })
+        .andWhere('referred_by_complex_id IS NOT NULL')
+        .andWhere('referral_rewarded_at IS NULL')
+        .returning(['referred_by_complex_id', 'name'])
+        .execute();
+      const row = (
+        claim.raw as { referred_by_complex_id: string; name: string }[]
+      )?.[0];
+      if (!row) return;
+
+      const referrerId = row.referred_by_complex_id;
+      const referrerExists = await this.complexRepo.exists({
+        where: { id: referrerId, deletedAt: IsNull() },
+      });
+      if (!referrerExists) {
+        // Eliminado: no hay a quién premiar. La marca queda para no reintentar.
+        this.logger.warn(
+          `Recomendación de ${complexId}: el conjunto que lo recomendó (${referrerId}) ya no existe; no se otorga cortesía`,
+        );
+        return;
+      }
+
+      try {
+        await this.grantTrial(
+          {
+            complexId: referrerId,
+            days: REFERRAL_REWARD_DAYS,
+            reason: FreePeriodReason.REFERRAL,
+            notes: `Por recomendar a «${row.name}»: otorgada sola con su primer pago`,
+          },
+          userId,
+        );
+        this.logger.log(
+          `Cortesía por recomendación: ${REFERRAL_REWARD_DAYS} días a ${referrerId} por el primer pago de ${complexId}`,
+        );
+      } catch (err) {
+        await this.complexRepo.update(complexId, { referralRewardedAt: null });
+        throw err;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo otorgar la cortesía por recomendación del complejo ${complexId}: ${(err as Error).message}. Otórgala a mano en Suscripciones.`,
+      );
+    }
   }
 
   /**

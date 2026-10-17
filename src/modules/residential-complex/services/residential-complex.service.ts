@@ -66,6 +66,7 @@ import { SubscriptionPricingMode } from '../../subscriptions/enums/subscription-
 import { SubscriptionPeriodKind } from '../../subscriptions/enums/subscription-period-kind.enum';
 import { FreePeriodReason } from '../../subscriptions/enums/free-period-reason.enum';
 import { SubscriptionPeriod } from '../../subscriptions/entities/subscription-period.entity';
+import { normalizeReferralCode } from '../../subscriptions/utils/referral-code';
 
 /**
  * Documentos privados del complejo: el RUT y el documento del representante
@@ -1307,6 +1308,23 @@ export class ResidentialComplexService {
       throw new ConflictException(`El email "${dto.email}" ya está registrado`);
     }
 
+    // Antes de subir documentos: un código mal escrito no debe dejar archivos
+    // huérfanos en R2 ni un registro sin el conjunto que lo recomendó.
+    const referralCode = normalizeReferralCode(dto.referralCode);
+    let referredByComplexId: string | null = null;
+    if (referralCode) {
+      const referrer = await this.complexRepo.findOne({
+        where: { referralCode, deletedAt: IsNull() },
+        select: ['id'],
+      });
+      if (!referrer) {
+        throw new BadRequestException(
+          `El código de recomendación "${referralCode}" no existe. Revísalo o déjalo vacío.`,
+        );
+      }
+      referredByComplexId = referrer.id;
+    }
+
     const folder = this.storageService.buildFolder(slug, 'documents');
 
     let rutPublicId: string | undefined;
@@ -1363,6 +1381,7 @@ export class ResidentialComplexService {
         legalRepDocumentUrl,
         acceptedTermsAt: new Date(),
         status: ComplexStatus.PENDING_REVIEW,
+        referredByComplexId,
       });
 
       const saved = await this.complexRepo.save(complex);

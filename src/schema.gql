@@ -504,6 +504,14 @@ type ResidentialComplex {
   """Cuándo el piloto pasó a contrato comercial"""
   convertedToCommercialAt: DateTime
 
+  """Conjunto que recomendó a este"""
+  referredByComplexId: String
+
+  """
+  Cuándo se otorgó la cortesía al conjunto que lo recomendó (primer pago)
+  """
+  referralRewardedAt: DateTime
+
   """URL del logo del complejo"""
   logoUrl: String
 
@@ -5702,6 +5710,38 @@ type SubscriptionPlanPriceView {
   updatedAt: DateTime
 }
 
+"""Conjunto que llegó por una recomendación"""
+type ReferredComplex {
+  id: ID!
+  name: String!
+  status: ComplexStatus!
+
+  """Cuándo se registró"""
+  registeredAt: DateTime!
+
+  """
+  Cuándo se otorgó la cortesía por esta recomendación. Vacío = aún no hace su primer pago.
+  """
+  rewardedAt: DateTime
+}
+
+"""Código de recomendación de un conjunto y lo que ha traído"""
+type ComplexReferralSummary {
+  """Código que el conjunto comparte para recomendarnos"""
+  code: String!
+
+  """
+  Días gratis que recibe por cada conjunto recomendado que hace su primer pago
+  """
+  rewardDays: Int!
+
+  """Conjunto que recomendó a este"""
+  referredBy: ReferredComplex
+
+  """Conjuntos que se registraron con su código"""
+  referrals: [ReferredComplex!]!
+}
+
 """Versión mínima obligatoria de una app"""
 type AppVersionPolicy {
   """Vacío = nunca se configuró (no se obliga a nadie)"""
@@ -7059,6 +7099,16 @@ type Query {
   subscriptionTaxes(complexId: ID): [SubscriptionTax!]!
 
   """
+  Código de recomendación del complejo de la sesión y los conjuntos que llegaron con él.
+  """
+  myComplexReferral: ComplexReferralSummary!
+
+  """
+  Código de recomendación de un complejo, quién lo recomendó y a quiénes recomendó. Solo plataforma.
+  """
+  complexReferral(complexId: ID!): ComplexReferralSummary!
+
+  """
   ¿La versión instalada debe actualizarse obligatoriamente? (cambios que rompen compatibilidad)
   """
   appVersionCheck(app: ClientApp!, platform: ClientPlatform!, versionCode: Int!): AppVersionCheck!
@@ -8079,6 +8129,11 @@ type Mutation {
 
   """Elimina un impuesto de la suscripción."""
   deleteSubscriptionTax(id: ID!): Boolean!
+
+  """
+  Asigna o quita el conjunto que recomendó a otro. La cortesía se otorga con el siguiente pago registrado; ya otorgada, no se cambia.
+  """
+  setComplexReferrer(input: SetComplexReferrerInput!): ComplexReferralSummary!
 
   """
   Fija la versión mínima: las instalaciones anteriores quedan bloqueadas hasta actualizar.
@@ -10329,6 +10384,16 @@ input SaveSubscriptionTaxInput {
   rate: Float!
   isActive: Boolean
   sortOrder: Int
+}
+
+"""
+Asigna (o quita) el conjunto que recomendó a otro, para los que se registraron sin el código
+"""
+input SetComplexReferrerInput {
+  complexId: ID!
+
+  """Código del conjunto que lo recomendó. Vacío = quitarlo."""
+  referralCode: String
 }
 
 """Fijar la versión mínima obligatoria de una app"""

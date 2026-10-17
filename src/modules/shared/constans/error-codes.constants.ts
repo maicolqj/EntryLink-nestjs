@@ -575,6 +575,12 @@ export enum SubscriptionErrorCode {
   SUBSCRIPTION_OVERLAPS_PAID = 'SUBSCRIPTION_OVERLAPS_PAID',
   /** Solo los periodos pagados tienen un pago que corregir. */
   SUBSCRIPTION_PERIOD_NOT_PAID = 'SUBSCRIPTION_PERIOD_NOT_PAID',
+  /** El código de recomendación no corresponde a ningún conjunto. */
+  REFERRAL_CODE_NOT_FOUND = 'REFERRAL_CODE_NOT_FOUND',
+  /** El premio por la recomendación ya se otorgó: no se cambia quién recomendó. */
+  REFERRAL_ALREADY_REWARDED = 'REFERRAL_ALREADY_REWARDED',
+  /** Un conjunto no se recomienda a sí mismo. */
+  REFERRAL_SELF = 'REFERRAL_SELF',
 }
 
 export enum ComplexInfoErrorCode {

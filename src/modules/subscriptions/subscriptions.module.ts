@@ -13,6 +13,8 @@ import { SubscriptionRemindersService } from './services/subscription-reminders.
 import { SubscriptionsResolver } from './resolvers/subscriptions.resolver';
 import { ComplexSubscriptionFieldsResolver } from './resolvers/complex-subscription-fields.resolver';
 import { SubscriptionsCron } from './cron/subscriptions.cron';
+import { ComplexReferralsService } from './services/complex-referrals.service';
+import { ComplexReferralsResolver } from './resolvers/complex-referrals.resolver';
 
 /**
  * Suscripción de los complejos a la plataforma: periodos mensuales o anuales,
@@ -37,6 +39,8 @@ import { SubscriptionsCron } from './cron/subscriptions.cron';
     SubscriptionsResolver,
     ComplexSubscriptionFieldsResolver,
     SubscriptionsCron,
+    ComplexReferralsService,
+    ComplexReferralsResolver,
   ],
   exports: [SubscriptionsService],
 })
