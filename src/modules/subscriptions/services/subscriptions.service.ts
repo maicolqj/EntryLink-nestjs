@@ -369,12 +369,15 @@ export class SubscriptionsService {
       `Suscripción renovada: complejo ${input.complexId}, ${input.plan} ${input.cycle} hasta ${period.endsAt.toISOString()}`,
     );
 
-    await this.rewardReferrer(input.complexId, userId);
+    // Un "pago" en cero (extender a mano) no consume la recomendación: el
+    // premio queda para el primer pago con dinero.
+    if (amount > 0) await this.rewardReferrer(input.complexId, userId);
     return this.getSummary(input.complexId);
   }
 
   /**
-   * Cortesía por recomendación: con el primer pago del conjunto recomendado,
+   * Cortesía por recomendación: con el primer pago (valor > 0) de un plan del
+   * conjunto recomendado,
    * el que lo recomendó recibe sus días gratis sin que nadie tenga que
    * acordarse. Se premia el pago y no el registro: un registro no cuesta nada
    * y la prueba piloto tampoco.
