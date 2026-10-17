@@ -676,6 +676,22 @@ describe('SubscriptionsService — cortesía por recomendación', () => {
     expect(grant).toHaveBeenCalledTimes(1);
   });
 
+  it('un pago en cero no premia ni consume la recomendación', async () => {
+    const { service } = build({
+      price: { monthlyPrice: 100_000 },
+      referral: { referrerId: REFERRER_ID },
+    });
+    const grant = jest
+      .spyOn(service, 'grantTrial')
+      .mockResolvedValue({} as never);
+
+    await service.renew({ ...renewInput, amount: 0 }, 'admin');
+    expect(grant).not.toHaveBeenCalled();
+
+    await service.renew(renewInput, 'admin');
+    expect(grant).toHaveBeenCalledTimes(1);
+  });
+
   it('sin recomendación no regala nada', async () => {
     const { service } = build({ price: { monthlyPrice: 100_000 } });
     const grant = jest.spyOn(service, 'grantTrial');
