@@ -17,9 +17,12 @@ import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface'
 
 /** Cuánto espera la mutation el ack de una matera conectada. */
 export const SET_THEME_ACK_MS = 6000;
+/** Instalar descarga el paquete por HTTPS antes de responder. */
+export const INSTALL_THEME_ACK_MS = 20000;
 
 export interface FaceThemeView extends DeviceFaceTheme {
   available: boolean;
+  installed: boolean;
   reason?: string;
   active: boolean;
 }
@@ -30,12 +33,16 @@ export interface SetFaceThemeResult {
   themeId: string;
   /** Tema que muestra la matera ahora (según su ack o el último conocido). */
   activeTheme: string;
+  /** true si hubo que descargarlo (install_theme). */
+  installed?: boolean;
   reason?: string;
 }
 
 /**
  * Temas de caras: qué puede mostrar cada matera y el cambio desde la app.
- * El resultado también llega por Socket.io (`device:theme`, desde el ack).
+ * Un tema PACKAGE que la matera no tiene se instala "como una actualización"
+ * (install_theme: HTTPS + SHA-256) y se activa en el mismo paso. El
+ * resultado también llega por Socket.io (`device:theme`).
  */
 @Injectable()
 export class DeviceThemesService {
@@ -80,39 +87,75 @@ export class DeviceThemesService {
       );
     }
 
+    // Paquete que no tiene (o en una versión vieja): se descarga y se activa
+    const instalar = theme.kind === 'PACKAGE' && !disp.installed;
+    const cmd = instalar ? 'install_theme' : 'set_theme';
+    const extra = instalar
+      ? {
+          themeId,
+          url: theme.packageUrl,
+          sha256: theme.sha256,
+          version: theme.version,
+          activate: true,
+        }
+      : { themeId };
+
     const conectada = this.publisher.isConnected(device.deviceId);
     // Si está conectada se espera su respuesta; la espera se arma ANTES de publicar
     const espera = conectada
-      ? this.acks.wait(device.deviceId, 'set_theme', SET_THEME_ACK_MS)
+      ? this.acks.wait(
+          device.deviceId,
+          cmd,
+          instalar ? INSTALL_THEME_ACK_MS : SET_THEME_ACK_MS,
+        )
       : null;
-    const salio = await this.outbox.sendCommand(device, 'set_theme', {
-      themeId,
-    });
+    const salio = await this.outbox.sendCommand(device, cmd, extra);
     const ack = salio && espera !== null ? await espera : null;
     if (!ack)
       return {
         status: 'pending',
         themeId,
         activeTheme: device.faceTheme || 'classic',
+        installed: instalar,
       };
 
     const activo = typeof ack.theme === 'string' ? ack.theme : device.faceTheme;
-    return ack.ok === true
-      ? { status: 'applied', themeId, activeTheme: activo }
+    const motivo =
+      typeof ack.reason === 'string'
+        ? ack.reason
+        : typeof ack.error === 'string'
+          ? ack.error
+          : 'rejected';
+    // Instalado pero no activado (lo diría "reason") cuenta como rechazo
+    return ack.ok === true && activo === themeId
+      ? { status: 'applied', themeId, activeTheme: activo, installed: instalar }
       : {
           status: 'rejected',
           themeId,
           activeTheme: activo,
-          reason:
-            typeof ack.reason === 'string'
-              ? ack.reason
-              : typeof ack.error === 'string'
-                ? ack.error
-                : 'rejected',
+          installed: instalar,
+          reason: motivo,
         };
   }
 
-  /** Pide a la matera su informe de capacidades y temas (ack "themes"). */
+  /** Borra un paquete de la matera (si era el activo, vuelve a classic). */
+  async removeDeviceFaceTheme(
+    device: Device,
+    themeId: string,
+    u: JwtAccessPayload,
+  ): Promise<boolean> {
+    if (device.ownerId !== u.sub)
+      throw new ForbiddenException(
+        'Solo el dueño gestiona los temas de su matera',
+      );
+    if (themeId === 'classic' || themeId === 'minimal')
+      throw new BadRequestException(
+        'Ese tema viene con la matera y no se borra',
+      );
+    return this.outbox.sendCommand(device, 'remove_theme', { themeId });
+  }
+
+  /** Pide a la matera su informe de temas (ack "themes"). */
   pingThemes(device: Device): Promise<boolean> {
     return this.outbox.sendCommand(device, 'ping_themes');
   }

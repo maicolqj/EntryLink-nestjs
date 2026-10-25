@@ -171,8 +171,10 @@ export class DeviceIngressService {
       // Informe de capacidades (una vez por encendido o ante ping_themes)
       const lista = Array.isArray(ack.themes) ? (ack.themes as unknown[]) : [];
       cambios.capabilities = {
-        hasSD: ack.hasSD === true,
-        hasPSRAM: ack.hasPSRAM === true,
+        packages: typeof ack.packages === 'number' ? ack.packages : 0,
+        ...(typeof ack.storageFree === 'number'
+          ? { storageFree: ack.storageFree }
+          : {}),
         themes: lista
           .filter(
             (x): x is Record<string, unknown> =>
@@ -184,14 +186,17 @@ export class DeviceIngressService {
           .map((x) => ({
             id: (x.id as string).slice(0, 24),
             kind: typeof x.kind === 'string' ? x.kind : undefined,
+            ...(typeof x.version === 'number' ? { version: x.version } : {}),
             available: x.available === true,
             ...(typeof x.reason === 'string' ? { reason: x.reason } : {}),
           })),
         reportedAt: ack.at as string,
       };
     }
-    if (tema && (ack.cmd === 'themes' || ack.cmd === 'set_theme'))
-      cambios.faceTheme = tema;
+    const deTema = ['set_theme', 'install_theme', 'remove_theme'].includes(
+      ack.cmd as string,
+    );
+    if (tema && (ack.cmd === 'themes' || deTema)) cambios.faceTheme = tema;
     await this.devices.update(device.id, cambios);
 
     if (device.ownerId) {
@@ -200,11 +205,12 @@ export class DeviceIngressService {
         deviceId: device.deviceId,
         ack,
       });
-      if (ack.cmd === 'set_theme') {
+      if (deTema) {
         this.sockets.toUser(device.ownerId, IotSocketEvent.THEME, {
           id: device.id,
           deviceId: device.deviceId,
           ok: ack.ok === true,
+          cmd: ack.cmd,
           themeId: ack.themeId,
           theme: tema,
           reason: ack.reason ?? null,

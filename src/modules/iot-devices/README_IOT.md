@@ -202,23 +202,43 @@ Sin probar todavía (necesita PostgreSQL + Redis en staging): migración `up`/`d
 
 ## 10. Temas de caras (apariencia de la mascota)
 
-Contrato con el firmware: `set_theme`, `ping_themes`, el ack `themes` y el campo `theme` de la telemetría (CONTRATO_REAL.md y `nexus-firmware/README_temas.md`).
+**No hay microSD.** Hay dos tipos de tema:
+- **VECTOR**: viene en el firmware (`classic`, `minimal`).
+- **PACKAGE**: un JSON pequeño (1-8 KB) con las piezas y la paleta del motor vectorial de la matera. La matera lo descarga **como una actualización**: HTTPS, verificación SHA-256 y validación antes de guardarlo en su flash.
 
-- **Migración** `1781100100000-AddDeviceFaceThemes`, aditiva. Crea la tabla nueva `iot_device_face_themes` (semilla: `classic` y `minimal`) y añade `face_theme` y `capabilities` a `iot_devices`, que es una tabla de este mismo módulo. No toca ninguna tabla existente de EntryLink. Tiene `down()`.
-- **`availableThemesForDevice(deviceId)`**: devuelve el catálogo activo con `available`, `reason` y `active`. Lo cruza con lo que la matera reporta (`capabilities`: `hasSD`, `hasPSRAM`, sus temas):
-  - si la matera nunca ha informado (firmware sin temas), solo se ofrece `classic`;
-  - los que piden SD o PSRAM que la matera no tiene salen como `needs_sd` o `needs_psram`;
-  - si la matera no lista el tema, sale como `not_installed`.
+El formato del paquete, para el equipo de diseño, está en `nexus-firmware/README_temas.md`. `tools/theme_pack.py` lo valida con las mismas reglas que el firmware y calcula el SHA-256.
+
+**Migración** `1781100100000-AddDeviceFaceThemes` (aditiva):
+- crea la tabla nueva `iot_device_face_themes` (`kind`, `package_url`, `sha256`, `version`, `preview_url`…; semilla `classic` y `minimal`);
+- añade `face_theme` y `capabilities` a `iot_devices`, que es una tabla de este mismo módulo;
+- no toca ninguna tabla existente de EntryLink y tiene `down()`.
+
+**Dar de alta un tema descargable:**
+1. Sube el JSON a R2 (p. ej. `https://files.alternaqj.com/themes/pastel.json`).
+2. Inserta la fila con su `sha256` y `version`.
+3. Para publicar una versión nueva: archivo nuevo, nuevo `sha256` y `version` + 1. Las materas con una versión anterior lo reinstalan al elegirlo.
+
+**API:**
+- **`availableThemesForDevice(deviceId)`**: devuelve el catálogo activo con `available` (se puede ofrecer), `installed` (ya está en la matera, en esa versión o una más nueva), `reason` y `active`. Lo cruza con lo que reporta la matera (`capabilities`: `packages`, `storageFree`, sus temas con versión):
+  - si la matera nunca ha informado, solo se ofrece `classic`;
+  - un VECTOR que su firmware no trae sale como `not_in_firmware`;
+  - un PACKAGE en un firmware sin paquetes sale como `firmware_too_old`.
 - **`setDeviceFaceTheme(deviceId, themeId)`** (solo el dueño):
-  - valida el tema contra el catálogo y la disponibilidad (400 si esa matera no puede mostrarlo) y publica `set_theme`;
-  - si la matera está conectada, espera su ack hasta 6 s y devuelve `applied` o `rejected` (con `reason`);
-  - si está dormida, devuelve `pending`: el comando espera en la outbox (7 días) y el resultado llega por Socket.io.
+  - un VECTOR, o un PACKAGE que ya tiene, se cambia con `set_theme`;
+  - un PACKAGE que no tiene, o en una versión vieja, se manda con `install_theme` (`url`, `sha256`, `version`, `activate:true`): **descarga y activación en un paso**;
+  - si la matera está conectada, se espera su ack (6 s para `set_theme`, 20 s para instalar) y se devuelve `applied` o `rejected` con su `reason` (p. ej. `sha256_mismatch`);
+  - si está dormida, se devuelve `pending`: el comando espera en la outbox (7 días) y el resultado llega por Socket.io.
+- **`removeDeviceFaceTheme(deviceId, themeId)`**: borra un paquete de la matera; si era el activo, vuelve a `classic`.
 - **`refreshDeviceThemes(deviceId)`**: pide `ping_themes`.
-- **Socket.io `device:theme`** → `user:<dueño>`: `{ id, deviceId, ok, themeId, theme, reason, fallback }`. También avisa cuando la matera cae sola a `classic` (`fallback: true`).
-- **`IotDevice.faceTheme`** guarda el tema activo según la matera (telemetría y ack). **`IotDevice.capabilities`** guarda su último informe.
-- **Reset de fábrica:** `faceTheme` vuelve a `classic`, igual que en la matera (el reset borra su NVS `user`).
-- **`previewUrl`**: hay que rellenarlo en la tabla con la imagen de cada tema para la pantalla Apariencia de RemoteLink.
+- **Socket.io `device:theme`** → `user:<dueño>`: `{ id, deviceId, cmd, ok, themeId, theme, reason, fallback }`, para `set_theme`, `install_theme` y `remove_theme`.
+- **`IotDevice.faceTheme`** guarda el activo según la matera. **`IotDevice.capabilities`** guarda su último informe.
+- **Reset de fábrica:** `faceTheme` vuelve a `classic`. Los paquetes siguen instalados en la matera.
 
-**Probado con la placa** (por MQTT): `classic` se ve igual que antes, `minimal` se aplica con `ack ok` y la telemetría lo refleja, y un BITMAP sin SD se rechaza con `needs_sd` sin cambiar el tema. El resolver y el servicio están cubiertos por `themes/device-themes.spec.ts` (12 tests); la mutation real contra la placa queda para staging.
+**Probado con la placa** (por MQTT, con el mock como servidor de paquetes):
+- `install_theme` Pastel: descargado, verificado, guardado y activo, y la cara cambió de color;
+- SHA-256 falso: rechazado con `sha256_mismatch` y la matera siguió con el anterior;
+- `remove_theme`: volvió a `classic`.
+
+El servicio y el resolver están cubiertos por `themes/device-themes.spec.ts` (13 tests); la mutation real contra la placa queda para staging.
 
 > **Confirmación:** los temas tampoco modifican nada existente fuera del módulo. Todo está en `src/modules/iot-devices/`, detrás de `IOT_ENABLED`.

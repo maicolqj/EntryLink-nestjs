@@ -95,8 +95,10 @@ JSON roto → `{"cmd":"?","ok":false,"error":"invalid_json"}`. Comando desconoci
 | `ota` | `{"cmd":"ota","url":"https://…/nexus-0.4.1.bin","sha256":"<64 hex>","version":"0.4.1"}` | `ok:true,"status":"downloading","version"` o `ok:false,"error"` | descarga, verifica SHA-256 y reinicia. Confirma a los 60 s; si falla, vuelve sola a la versión anterior |
 | `identify` | `{"cmd":"identify"}` | `ok:true` | LEDs blancos parpadeando 5 s + pío |
 | `ping` | `{"cmd":"ping"}` | `ok:true` | publica una telemetría al momento |
-| `set_theme` | `{"cmd":"set_theme","themeId":"minimal"}` | `ok`, `themeId`, `theme` (el activo tras el intento), `reason` si no (`unknown_theme`, `needs_sd`, `missing_assets`, `needs_psram`) | cambia el tema de caras; si no se puede, sigue el anterior. Una caída en caliente llega como ack `set_theme` con `"fallback":true` |
-| `ping_themes` | `{"cmd":"ping_themes"}` | `{"cmd":"themes","ok":true,"theme","hasSD","hasPSRAM","themes":[{"id","kind","available","reason"?}]}` | informe de capacidades. También sale solo al conectar, una vez por encendido |
+| `set_theme` | `{"cmd":"set_theme","themeId":"minimal"}` | `ok`, `themeId`, `theme` (el activo tras el intento), `reason` si no (`unknown_theme`, `not_installed`, `bad_theme:…`) | cambia el tema de caras; si no se puede, sigue el anterior. Una caída en caliente llega como ack `set_theme` con `"fallback":true` |
+| `install_theme` | `{"cmd":"install_theme","themeId","url":"https://…","sha256":"<64 hex>","version","activate":true}` | `ok`, `themeId`, `version`, `theme` · o `error` (`sha256_mismatch`, `bad_theme:…`, `http_…`, `too_big`…) | descarga el paquete por HTTPS (soltando MQTT un momento), lo verifica, lo valida y lo guarda; con `activate` lo pone. El ack sale al reconectar MQTT |
+| `remove_theme` | `{"cmd":"remove_theme","themeId":"pastel"}` | `ok`, `themeId`, `theme` | borra un paquete; si era el activo, vuelve a classic |
+| `ping_themes` | `{"cmd":"ping_themes"}` | `{"cmd":"themes","ok":true,"theme","packages":1,"storageFree","themes":[{"id","kind":"vector"\|"package","version"?,"available","reason"?}]}` | informe de temas. También sale solo al conectar (una vez por encendido) y tras instalar/borrar. Formato del paquete: README_temas.md |
 
 **`set_plant`:**
 ```json

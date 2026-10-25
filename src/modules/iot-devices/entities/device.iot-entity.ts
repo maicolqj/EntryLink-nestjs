@@ -32,9 +32,17 @@ export interface DeviceConfig {
 
 /** Capacidades que reporta el firmware (ack {"cmd":"themes"}). */
 export interface DeviceCapabilities {
-  hasSD: boolean;
-  hasPSRAM: boolean;
-  themes: { id: string; kind?: string; available: boolean; reason?: string }[];
+  /** Formato de paquete de tema que entiende su firmware (0 = ninguno). */
+  packages: number;
+  /** Bytes libres para paquetes en su flash. */
+  storageFree?: number;
+  themes: {
+    id: string;
+    kind?: string;
+    version?: number;
+    available: boolean;
+    reason?: string;
+  }[];
   reportedAt: string;
 }
 
@@ -171,7 +179,7 @@ export class Device {
 
   /**
    * Lo que la matera dice que puede mostrar (ack "themes", una vez por
-   * encendido): { hasSD, hasPSRAM, themes: [{id, kind, available, reason?}], reportedAt }
+   * encendido y tras instalar/borrar): { packages, storageFree, themes: [{id, kind, version?, available, reason?}], reportedAt }
    */
   @Field(() => GraphQLJSON, { nullable: true })
   @Column({ type: 'jsonb', nullable: true })

@@ -25,9 +25,14 @@ export class DeviceFaceThemeView extends DeviceFaceTheme {
   @Field(() => String, {
     nullable: true,
     description:
-      'needs_sd · needs_psram · not_installed · unknown_capabilities · motivo de la matera',
+      'firmware_too_old · not_in_firmware · unknown_capabilities · motivo de la matera',
   })
   reason?: string;
+
+  @Field(() => Boolean, {
+    description: 'Ya está en la matera (si no, se descarga al elegirlo)',
+  })
+  installed: boolean;
 
   @Field(() => Boolean, { description: 'Es el que muestra ahora' })
   active: boolean;
@@ -45,6 +50,12 @@ export class SetDeviceFaceThemeResult {
 
   @Field(() => String, { description: 'Tema que muestra la matera ahora' })
   activeTheme: string;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description: 'Hubo que descargarlo (install_theme)',
+  })
+  installed?: boolean;
 
   @Field(() => String, { nullable: true })
   reason?: string;
@@ -87,6 +98,24 @@ export class DeviceThemesResolver {
     @CurrentUser() u: JwtAccessPayload,
   ) {
     return this.themes.setDeviceFaceTheme(
+      await this.devices.device(deviceId, u),
+      themeId,
+      u,
+    );
+  }
+
+  @Mutation(() => Boolean, {
+    name: 'removeDeviceFaceTheme',
+    description:
+      'Borra un tema descargado de la matera. true = ya; false = al despertar',
+  })
+  @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
+  async removeDeviceFaceTheme(
+    @Args('deviceId') deviceId: string,
+    @Args('themeId') themeId: string,
+    @CurrentUser() u: JwtAccessPayload,
+  ) {
+    return this.themes.removeDeviceFaceTheme(
       await this.devices.device(deviceId, u),
       themeId,
       u,

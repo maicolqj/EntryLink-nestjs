@@ -19,6 +19,8 @@ export const CMD_TTL_S = {
   ping: 5 * 60,
   set_theme: 7 * 24 * 3600,
   ping_themes: 30 * 60,
+  install_theme: 7 * 24 * 3600,
+  remove_theme: 7 * 24 * 3600,
 } as const;
 
 export type DeviceCommand = keyof typeof CMD_TTL_S;

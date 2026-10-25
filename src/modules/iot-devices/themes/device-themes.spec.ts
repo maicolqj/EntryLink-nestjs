@@ -16,12 +16,13 @@ import { IotSocketEmitter, IotSocketEvent } from '../socket/iot-socket.events';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 
+const SHA = 'f37619f6887df5b271bda111b5bc46afcafe713ab16559e492eebc4b63282fe9';
 const CATALOGO: DeviceFaceTheme[] = [
   {
     id: 'classic',
     nombre: 'Clásico',
     kind: 'VECTOR',
-    requires: 'none',
+    version: 1,
     activo: true,
     sortOrder: 0,
   },
@@ -29,35 +30,38 @@ const CATALOGO: DeviceFaceTheme[] = [
     id: 'minimal',
     nombre: 'Minimalista',
     kind: 'VECTOR',
-    requires: 'none',
+    version: 1,
     activo: true,
     sortOrder: 1,
   },
   {
-    id: 'greeny',
-    nombre: 'Greeny',
-    kind: 'BITMAP',
-    requires: 'sd',
+    id: 'pastel',
+    nombre: 'Pastel',
+    kind: 'PACKAGE',
+    packageUrl: 'https://files.alternaqj.com/themes/pastel.json',
+    sha256: SHA,
+    version: 2,
     activo: true,
     sortOrder: 2,
   },
   {
-    id: 'deluxe',
-    nombre: 'Deluxe',
-    kind: 'BITMAP',
-    requires: 'psram',
+    id: 'futuro',
+    nombre: 'Futuro',
+    kind: 'VECTOR',
+    version: 1,
     activo: true,
     sortOrder: 3,
   },
 ];
 
-/** Lo que reporta la FireBeetle de pruebas: sin SD ni PSRAM, dos vectoriales. */
-const FIREBEETLE: DeviceCapabilities = {
-  hasSD: false,
-  hasPSRAM: false,
+/** Lo que reporta la matera de pruebas: paquetes v1, con pastel v1 instalado. */
+const MATERA: DeviceCapabilities = {
+  packages: 1,
+  storageFree: 120000,
   themes: [
     { id: 'classic', kind: 'vector', available: true },
     { id: 'minimal', kind: 'vector', available: true },
+    { id: 'pastel', kind: 'package', version: 1, available: true },
   ],
   reportedAt: '2026-10-24T22:00:00Z',
 };
@@ -74,53 +78,51 @@ const ana: JwtAccessPayload = {
   complexId: 'complex-1',
 };
 
-describe('faceThemeAvailability (criterio 4)', () => {
-  const tema = (id: string) => CATALOGO.find((t) => t.id === id);
+const tema = (id: string) => CATALOGO.find((t) => t.id === id);
 
+describe('faceThemeAvailability (criterio 4)', () => {
   it('classic siempre; sin informe de la matera, solo classic', () => {
-    expect(faceThemeAvailability(tema('classic'), null)).toEqual({
+    expect(faceThemeAvailability(tema('classic'), null)).toMatchObject({
       available: true,
+      installed: true,
     });
-    expect(faceThemeAvailability(tema('minimal'), null)).toEqual({
+    expect(faceThemeAvailability(tema('pastel'), null)).toMatchObject({
       available: false,
       reason: 'unknown_capabilities',
     });
   });
 
-  it('BITMAP sin SD / sin PSRAM no se ofrece', () => {
-    expect(faceThemeAvailability(tema('greeny'), FIREBEETLE)).toEqual({
+  it('un VECTOR que su firmware no trae no se ofrece', () => {
+    expect(faceThemeAvailability(tema('futuro'), MATERA)).toMatchObject({
       available: false,
-      reason: 'needs_sd',
+      reason: 'not_in_firmware',
     });
-    expect(faceThemeAvailability(tema('deluxe'), FIREBEETLE)).toEqual({
-      available: false,
-      reason: 'needs_psram',
-    });
-  });
-
-  it('con SD manda lo que dice la matera (faltan imágenes, no instalado)', () => {
-    const conSd = {
-      ...FIREBEETLE,
-      hasSD: true,
-      themes: [
-        ...FIREBEETLE.themes,
-        { id: 'greeny', available: false, reason: 'missing_assets' },
-      ],
-    };
-    expect(faceThemeAvailability(tema('greeny'), conSd)).toEqual({
-      available: false,
-      reason: 'missing_assets',
-    });
-    const sinListar = { ...FIREBEETLE, hasSD: true };
-    expect(faceThemeAvailability(tema('greeny'), sinListar)).toEqual({
-      available: false,
-      reason: 'not_installed',
-    });
-  });
-
-  it('un vectorial que esta matera reporta → disponible', () => {
-    expect(faceThemeAvailability(tema('minimal'), FIREBEETLE)).toEqual({
+    expect(faceThemeAvailability(tema('minimal'), MATERA)).toMatchObject({
       available: true,
+      installed: true,
+    });
+  });
+
+  it('PACKAGE: instalable; instalado solo si tiene esa versión o una más nueva', () => {
+    // la matera tiene pastel v1 y el catálogo publica la v2 → hay que reinstalar
+    expect(faceThemeAvailability(tema('pastel'), MATERA)).toEqual({
+      available: true,
+      installed: false,
+    });
+    expect(
+      faceThemeAvailability({ ...tema('pastel'), version: 1 }, MATERA),
+    ).toEqual({
+      available: true,
+      installed: true,
+    });
+  });
+
+  it('PACKAGE con un firmware que no entiende paquetes → no se ofrece', () => {
+    expect(
+      faceThemeAvailability(tema('pastel'), { ...MATERA, packages: 0 }),
+    ).toMatchObject({
+      available: false,
+      reason: 'firmware_too_old',
     });
   });
 });
@@ -160,23 +162,25 @@ const materaDeAna = (partial: Partial<Device> = {}) =>
     deviceId: 'NEXUS-TEST01',
     ownerId: 'ana',
     faceTheme: 'classic',
-    capabilities: FIREBEETLE,
+    capabilities: MATERA,
     ...partial,
   }) as Device;
 
 describe('DeviceThemesService', () => {
-  it('lista el catálogo marcando lo que esta matera puede mostrar y el activo', async () => {
+  it('lista el catálogo marcando disponible / instalado / activo', async () => {
     const h = buildHarness(true);
     const lista = await h.service.availableThemesForDevice(materaDeAna());
-    expect(lista.map((t) => [t.id, t.available, t.active])).toEqual([
-      ['classic', true, true],
-      ['minimal', true, false],
-      ['greeny', false, false],
-      ['deluxe', false, false],
+    expect(
+      lista.map((t) => [t.id, t.available, t.installed, t.active]),
+    ).toEqual([
+      ['classic', true, true, true],
+      ['minimal', true, true, false],
+      ['pastel', true, false, false],
+      ['futuro', false, false, false],
     ]);
   });
 
-  it('criterio 2: conectada → set_theme y el ack dice aplicado', async () => {
+  it('criterio 2: un vectorial → set_theme y el ack dice aplicado', async () => {
     const h = buildHarness(true, {
       cmd: 'set_theme',
       ok: true,
@@ -189,6 +193,7 @@ describe('DeviceThemesService', () => {
       status: 'applied',
       themeId: 'minimal',
       activeTheme: 'minimal',
+      installed: false,
     });
     expect(h.outbox.sendCommand).toHaveBeenCalledWith(
       expect.anything(),
@@ -197,21 +202,49 @@ describe('DeviceThemesService', () => {
     );
   });
 
-  it('criterio 3: la matera lo rechaza → sigue en classic y vuelve el motivo', async () => {
+  it('un paquete que no tiene (o viejo) se instala como una actualización y se activa', async () => {
     const h = buildHarness(true, {
-      cmd: 'set_theme',
+      cmd: 'install_theme',
+      ok: true,
+      themeId: 'pastel',
+      version: 2,
+      theme: 'pastel',
+    });
+    await expect(
+      h.service.setDeviceFaceTheme(materaDeAna(), 'pastel', ana),
+    ).resolves.toEqual({
+      status: 'applied',
+      themeId: 'pastel',
+      activeTheme: 'pastel',
+      installed: true,
+    });
+    expect(h.outbox.sendCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      'install_theme',
+      {
+        themeId: 'pastel',
+        url: 'https://files.alternaqj.com/themes/pastel.json',
+        sha256: SHA,
+        version: 2,
+        activate: true,
+      },
+    );
+  });
+
+  it('la matera rechaza el paquete (SHA-256 no coincide) → sigue en classic con el motivo', async () => {
+    const h = buildHarness(true, {
+      cmd: 'install_theme',
       ok: false,
-      themeId: 'minimal',
-      reason: 'needs_sd',
+      themeId: 'pastel',
+      error: 'sha256_mismatch',
       theme: 'classic',
     });
     await expect(
-      h.service.setDeviceFaceTheme(materaDeAna(), 'minimal', ana),
-    ).resolves.toEqual({
+      h.service.setDeviceFaceTheme(materaDeAna(), 'pastel', ana),
+    ).resolves.toMatchObject({
       status: 'rejected',
-      themeId: 'minimal',
       activeTheme: 'classic',
-      reason: 'needs_sd',
+      reason: 'sha256_mismatch',
     });
   });
 
@@ -228,12 +261,12 @@ describe('DeviceThemesService', () => {
   it('un tema que esta matera no puede mostrar ni se envía (400)', async () => {
     const h = buildHarness(true);
     await expect(
-      h.service.setDeviceFaceTheme(materaDeAna(), 'greeny', ana),
+      h.service.setDeviceFaceTheme(materaDeAna(), 'futuro', ana),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(h.outbox.sendCommand).not.toHaveBeenCalled();
   });
 
-  it('tema desconocido 404 · otro dueño 403', async () => {
+  it('tema desconocido 404 · otro dueño 403 · classic no se borra', async () => {
     const h = buildHarness(true);
     await expect(
       h.service.setDeviceFaceTheme(materaDeAna(), 'nope', ana),
@@ -245,6 +278,9 @@ describe('DeviceThemesService', () => {
         ana,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.service.removeDeviceFaceTheme(materaDeAna(), 'classic', ana),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
@@ -268,48 +304,45 @@ describe('DeviceIngressService.recordAck (temas)', () => {
     await h.service.recordAck(materaDeAna(), {
       cmd: 'themes',
       ok: true,
-      theme: 'minimal',
-      hasSD: false,
-      hasPSRAM: false,
-      themes: [{ id: 'classic', kind: 'vector', available: true }],
+      theme: 'pastel',
+      packages: 1,
+      storageFree: 118000,
+      themes: [{ id: 'pastel', kind: 'package', version: 2, available: true }],
     });
     const cambios = (
       h.deviceRepo.update.mock.calls[0] as unknown[]
     )[1] as Partial<Device>;
-    expect(cambios.faceTheme).toBe('minimal');
+    expect(cambios.faceTheme).toBe('pastel');
     expect(cambios.capabilities).toMatchObject({
-      hasSD: false,
-      hasPSRAM: false,
-      themes: [{ id: 'classic', kind: 'vector', available: true }],
+      packages: 1,
+      storageFree: 118000,
+      themes: [{ id: 'pastel', kind: 'package', version: 2, available: true }],
     });
   });
 
-  it('set_theme: guarda el activo, emite device:theme y despierta a la mutation', async () => {
+  it('install_theme: guarda el activo, emite device:theme y despierta a la mutation', async () => {
     const h = build();
-    const espera = h.waiter.wait('NEXUS-TEST01', 'set_theme', 1000);
+    const espera = h.waiter.wait('NEXUS-TEST01', 'install_theme', 1000);
     await h.service.recordAck(materaDeAna(), {
-      cmd: 'set_theme',
-      ok: false,
-      themeId: 'greeny',
-      reason: 'needs_sd',
-      theme: 'classic',
+      cmd: 'install_theme',
+      ok: true,
+      themeId: 'pastel',
+      version: 2,
+      theme: 'pastel',
     });
-    await expect(espera).resolves.toMatchObject({
-      ok: false,
-      reason: 'needs_sd',
-    });
+    await expect(espera).resolves.toMatchObject({ ok: true, theme: 'pastel' });
     expect(h.deviceRepo.update).toHaveBeenCalledWith(
       'dev-1',
-      expect.objectContaining({ faceTheme: 'classic' }),
+      expect.objectContaining({ faceTheme: 'pastel' }),
     );
     expect(h.sockets.toUser).toHaveBeenCalledWith(
       'ana',
       IotSocketEvent.THEME,
       expect.objectContaining({
-        ok: false,
-        themeId: 'greeny',
-        theme: 'classic',
-        reason: 'needs_sd',
+        cmd: 'install_theme',
+        ok: true,
+        themeId: 'pastel',
+        theme: 'pastel',
       }),
     );
   });
