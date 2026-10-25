@@ -268,6 +268,8 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     MailModule,
     BullBoardAppModule,
     HealthModule,
+    // IoT (matera Niko): solo con IOT_ENABLED=true. `require` y no `import` → sin el flag no se carga ningún archivo del módulo (README_IOT.md)
+    ...(process.env.IOT_ENABLED === 'true' ? [(require('./modules/iot-devices/iot-devices.module') as typeof import('./modules/iot-devices/iot-devices.module')).IotDevicesModule] : []), // eslint-disable-line @typescript-eslint/no-require-imports, prettier/prettier
   ],
   providers: [
     // Aplica rate limiting globalmente a todos los endpoints REST y GraphQL
