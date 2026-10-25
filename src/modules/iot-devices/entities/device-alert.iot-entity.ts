@@ -39,7 +39,7 @@ export class DeviceAlert {
   @Column({ type: 'varchar', length: 40 })
   kind: string;
 
-  /** Por dónde salió: push, socket, whatsapp, device (aro + buzzer + pantalla)… */
+  /** Por dónde salió: push, socket, socket_admin, device (aro + buzzer + pantalla)… */
   @Field(() => [String])
   @Column({ type: 'text', array: true, default: () => `'{}'` })
   channels: string[];

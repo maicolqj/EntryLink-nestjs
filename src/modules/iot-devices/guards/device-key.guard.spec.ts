@@ -26,26 +26,35 @@ const buildCredentials = async () => {
       return qb;
     },
     buscado: '',
-    getOne: () => Promise.resolve(qb.buscado === device.deviceId ? { ...device } : null),
+    getOne: () =>
+      Promise.resolve(qb.buscado === device.deviceId ? { ...device } : null),
   };
   const repo = { createQueryBuilder: () => qb };
   return new DeviceCredentialsService(repo as never);
 };
 
-const ctxDe = (headers: Record<string, string>, params: Record<string, string> = {}) => {
+const ctxDe = (
+  headers: Record<string, string>,
+  params: Record<string, string> = {},
+) => {
   const req = {
     header: (n: string) => headers[n.toLowerCase()],
     params,
     iotDevice: undefined as Device | undefined,
   };
-  const ctx = { switchToHttp: () => ({ getRequest: () => req }) } as unknown as ExecutionContext;
+  const ctx = {
+    switchToHttp: () => ({ getRequest: () => req }),
+  } as unknown as ExecutionContext;
   return { ctx, req };
 };
 
 describe('DeviceKeyGuard', () => {
   it('acepta X-Device-Id + X-Device-Key correctos y deja el aparato en la petición (sin hash)', async () => {
     const guard = new DeviceKeyGuard(await buildCredentials());
-    const { ctx, req } = ctxDe({ 'x-device-id': 'NEXUS-TEST01', 'x-device-key': CLAVE });
+    const { ctx, req } = ctxDe({
+      'x-device-id': 'NEXUS-TEST01',
+      'x-device-key': CLAVE,
+    });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
     expect(req.iotDevice?.deviceId).toBe('NEXUS-TEST01');
     expect(req.iotDevice?.deviceKeyHash).toBeUndefined();
@@ -53,23 +62,39 @@ describe('DeviceKeyGuard', () => {
 
   it.each([
     ['clave mala', { 'x-device-id': 'NEXUS-TEST01', 'x-device-key': 'mala' }],
-    ['aparato desconocido', { 'x-device-id': 'NEXUS-OTRO', 'x-device-key': CLAVE }],
+    [
+      'aparato desconocido',
+      { 'x-device-id': 'NEXUS-OTRO', 'x-device-key': CLAVE },
+    ],
     ['sin cabeceras', {}],
   ])('401 con %s', async (_, headers) => {
     const guard = new DeviceKeyGuard(await buildCredentials());
-    await expect(guard.canActivate(ctxDe(headers).ctx)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(guard.canActivate(ctxDe(headers).ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('401 si el :deviceId de la ruta es de otro aparato', async () => {
     const guard = new DeviceKeyGuard(await buildCredentials());
-    const { ctx } = ctxDe({ 'x-device-id': 'NEXUS-TEST01', 'x-device-key': CLAVE }, { deviceId: 'NEXUS-B' });
-    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException);
+    const { ctx } = ctxDe(
+      { 'x-device-id': 'NEXUS-TEST01', 'x-device-key': CLAVE },
+      { deviceId: 'NEXUS-B' },
+    );
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('la caché solo vale para la misma clave', async () => {
     const credentials = await buildCredentials();
-    await expect(credentials.verify('NEXUS-TEST01', CLAVE)).resolves.toBeTruthy();
-    await expect(credentials.verify('NEXUS-TEST01', CLAVE)).resolves.toBeTruthy();
-    await expect(credentials.verify('NEXUS-TEST01', `${CLAVE}x`)).resolves.toBeNull();
+    await expect(
+      credentials.verify('NEXUS-TEST01', CLAVE),
+    ).resolves.toBeTruthy();
+    await expect(
+      credentials.verify('NEXUS-TEST01', CLAVE),
+    ).resolves.toBeTruthy();
+    await expect(
+      credentials.verify('NEXUS-TEST01', `${CLAVE}x`),
+    ).resolves.toBeNull();
   });
 });

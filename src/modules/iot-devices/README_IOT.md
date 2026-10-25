@@ -58,7 +58,7 @@ Todo está en `src/modules/iot-devices/`:
 | `mqtt/` | `IotMqttBroker` (aedes embebido, TLS, auth bcrypt, ACL), `DevicePublisher`, topics |
 | `services/` | `DevicesService` (alta, vincular, reset, ajustes, planta, OTA, consultas), `DeviceIngressService` (telemetría, presencia y ack de MQTT y REST), `DeviceOutboxService` (cmd/notify ahora o al conectar), `DeviceCredentialsService` |
 | `telemetry/` | Parser único de la telemetría del firmware (MQTT y REST) |
-| `alerts/` | Reglas puras (sed, depósito, riego, exceso, calor/frío sostenidos, sin conexión, throttling, horas de silencio) y despachador (push, socket, WhatsApp pendiente) |
+| `alerts/` | Reglas puras (sed, depósito, riego, exceso, calor/frío sostenidos, sin conexión, throttling, horas de silencio) y despachador (push + Socket.io) |
 | `notifications/` | Catálogo, reglas del conjunto, preferencias, política de entrega y suscriptor de `notifications` |
 | `queues/` | Colas BullMQ `device-alerts` y `device-notify` con sus workers |
 | `cron/` | Sin conexión cada hora (+ limpieza de la outbox) |
@@ -113,7 +113,7 @@ curl https://api.alternaqj.com/api/v1/iot/devices/NEXUS-7F3A9C/status -H "X-Devi
 # Perfil de planta → 200 {"plantId","nombre","thresholds"} · 204 sin planta
 curl https://api.alternaqj.com/api/v1/iot/devices/NEXUS-7F3A9C/plant -H "X-Device-Id: ..." -H "X-Device-Key: ..."
 ```
-La telemetría responde rápido: guarda la lectura, actualiza el aparato, emite el socket y **encola** las alertas, sin esperar ni al push ni a WhatsApp. La misma lectura que llegue dos veces (por MQTT y por REST) se descarta gracias al índice único (aparato, `measuredAt`).
+La telemetría responde rápido: guarda la lectura, actualiza el aparato, emite el socket y **encola** las alertas, sin esperar al push. La misma lectura que llegue dos veces (por MQTT y por REST) se descarta gracias al índice único (aparato, `measuredAt`).
 
 ## 6. Para RemoteLink
 
@@ -126,7 +126,7 @@ La telemetría responde rápido: guarda la lectura, actualiza el aparato, emite 
 | `regenerateDevicePairingCode(deviceId)` | admin | código nuevo |
 | `linkDeviceByCode(code)` | residente | Errores en español: código inválido (404), caducado (410), ya vinculado a otra cuenta (409), otro conjunto (403), ya usado (409) |
 | `factoryResetDevice(input:{deviceId, wipeCalibration?})` | dueño o admin | sin dueño, `UNPROVISIONED`, código nuevo, config vacía; orden `factory_reset` |
-| `renameDevice`, `updateDeviceConfig(input:{deviceId, config})` | dueño | `config`: `whatsappEnabled`, `notifyComplexAdmins`, `quietHours {start,end,timeZone?}` |
+| `renameDevice`, `updateDeviceConfig(input:{deviceId, config})` | dueño | `config`: `notifyComplexAdmins`, `quietHours {start,end,timeZone?}` |
 | `setDevicePlant(deviceId, plantId)`, `clearDevicePlant` | dueño | `set_plant` por MQTT y perfil para `GET /plant` |
 | `identifyDevice(deviceId)` | dueño o admin | LEDs blancos 5 s. `true` = ya, `false` = al despertar |
 | `startDeviceOta(input:{deviceId,url,sha256,version})` | SUPER_ADMIN | El ack llega en `lastAck` y como `device:ack` |
@@ -174,7 +174,7 @@ Las alertas de la matera salen con `data.type = "DEVICE_ALERT"`, `entityType = "
 
 ## 8. Pendiente y limitaciones
 
-1. **WhatsApp:** el repo no tiene servicio de Twilio (ni dependencia ni código), así que `tank_empty` + `whatsappEnabled` solo queda registrado. Hay que conectarlo en `DeviceAlertDispatcher.sendWhatsapp` cuando exista.
+1. **Canales:** solo push (FCM/Web Push de `NotificationsService`) y Socket.io, como el resto de EntryLink. No hay SMS, WhatsApp ni suscripciones GraphQL: el prompt original los mencionaba y se descartaron.
 2. **Un solo proceso:** el broker está embebido. Con varias réplicas, cada una tendría su broker y su lista de aparatos conectados. Para escalar habría que usar un broker externo, o aedes con `mqemitter-redis` y persistencia compartida, y el `connected` en Redis.
 3. **Certificado del broker:** en producción hace falta un certificado para el host MQTT (p. ej. `mqtt.alternaqj.com`). Si es de Let's Encrypt, el firmware ya trae ISRG Root X1. Si el host es una IP, el certificado debe incluir también `DNS:<IP>` (mbedTLS 2.28 ignora los SAN de tipo IP).
 4. **El puerto 8883** debe estar abierto en el servidor (firewall o docker-compose).

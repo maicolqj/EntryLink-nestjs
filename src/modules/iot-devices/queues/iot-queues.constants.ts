@@ -1,4 +1,4 @@
-/** Alertas de la matera a partir de una lectura (push, socket, WhatsApp). */
+/** Alertas de la matera a partir de una lectura (push + Socket.io). */
 export const DEVICE_ALERTS_QUEUE = 'device-alerts';
 /** Reenvío de notificaciones de EntryLink (paquete, pánico…) a los aparatos. */
 export const DEVICE_NOTIFY_QUEUE = 'device-notify';

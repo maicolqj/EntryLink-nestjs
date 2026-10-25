@@ -1,24 +1,28 @@
-import { buildNotifyPayload, decideDelivery } from './device-notification.policy';
+import {
+  buildNotifyPayload,
+  decideDelivery,
+} from './device-notification.policy';
 import { DeviceNotificationType } from '../entities/device-notification-type.iot-entity';
 
-const tipo = (partial: Partial<DeviceNotificationType> = {}): DeviceNotificationType =>
-  ({
-    key: 'PACKAGE',
-    title: 'Paquete en portería',
-    icon: 'package',
-    ledColor: '#2E7DFF',
-    ledPattern: 'pulse',
-    sound: 'two_beep',
-    priority: 50,
-    interrupts: true,
-    mandatory: false,
-    requiresPowered: false,
-    ttlSec: 20,
-    deliveryTtlSec: 14400,
-    urgent: false,
-    entrylinkTypes: ['PACKAGE_RECEIVED'],
-    ...partial,
-  }) as DeviceNotificationType;
+const tipo = (
+  partial: Partial<DeviceNotificationType> = {},
+): DeviceNotificationType => ({
+  key: 'PACKAGE',
+  title: 'Paquete en portería',
+  icon: 'package',
+  ledColor: '#2E7DFF',
+  ledPattern: 'pulse',
+  sound: 'two_beep',
+  priority: 50,
+  interrupts: true,
+  mandatory: false,
+  requiresPowered: false,
+  ttlSec: 20,
+  deliveryTtlSec: 14400,
+  urgent: false,
+  entrylinkTypes: ['PACKAGE_RECEIVED'],
+  ...partial,
+});
 
 /**
  * PARTE H, criterios 9 y 10: un obligatorio no se apaga, el silencio no calla
@@ -26,7 +30,12 @@ const tipo = (partial: Partial<DeviceNotificationType> = {}): DeviceNotification
  * prometerse en tiempo real.
  */
 describe('decideDelivery', () => {
-  const base = { mandatory: false, enabled: undefined, quiet: false, connected: true };
+  const base = {
+    mandatory: false,
+    enabled: undefined,
+    quiet: false,
+    connected: true,
+  };
 
   it('conectado (USB) → ahora', () => {
     expect(decideDelivery(tipo(), base)).toBe('now');
@@ -37,25 +46,42 @@ describe('decideDelivery', () => {
   });
 
   it('PANIC (requiresPowered) con batería tampoco es tiempo real: va a la cola', () => {
-    const panico = tipo({ key: 'PANIC', mandatory: true, requiresPowered: true, urgent: true });
-    expect(decideDelivery(panico, { ...base, mandatory: true, connected: false })).toBe('queue');
-    expect(decideDelivery(panico, { ...base, mandatory: true, connected: true })).toBe('now');
+    const panico = tipo({
+      key: 'PANIC',
+      mandatory: true,
+      requiresPowered: true,
+      urgent: true,
+    });
+    expect(
+      decideDelivery(panico, { ...base, mandatory: true, connected: false }),
+    ).toBe('queue');
+    expect(
+      decideDelivery(panico, { ...base, mandatory: true, connected: true }),
+    ).toBe('now');
   });
 
   it('desactivado por el residente → no se envía, salvo que sea obligatorio', () => {
-    expect(decideDelivery(tipo(), { ...base, enabled: false })).toBe('skip_disabled');
-    expect(decideDelivery(tipo(), { ...base, enabled: false, mandatory: true })).toBe('now');
+    expect(decideDelivery(tipo(), { ...base, enabled: false })).toBe(
+      'skip_disabled',
+    );
+    expect(
+      decideDelivery(tipo(), { ...base, enabled: false, mandatory: true }),
+    ).toBe('now');
   });
 
   it('horas de silencio: calla lo normal, nunca lo urgente', () => {
     expect(decideDelivery(tipo(), { ...base, quiet: true })).toBe('skip_quiet');
-    expect(decideDelivery(tipo({ urgent: true }), { ...base, quiet: true })).toBe('now');
+    expect(
+      decideDelivery(tipo({ urgent: true }), { ...base, quiet: true }),
+    ).toBe('now');
   });
 });
 
 describe('buildNotifyPayload', () => {
   it('arma el JSON que espera el firmware (CONTRATO_REAL.md §5)', () => {
-    expect(buildNotifyPayload(tipo(), 'n-1', 'Llegó un paquete de Servientrega')).toEqual({
+    expect(
+      buildNotifyPayload(tipo(), 'n-1', 'Llegó un paquete de Servientrega'),
+    ).toEqual({
       id: 'n-1',
       kind: 'PACKAGE',
       title: 'Llegó un paquete de Servientrega',

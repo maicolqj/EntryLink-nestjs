@@ -19,13 +19,11 @@ import { Unit } from '../../residential-complex/entities/unit.entity';
 
 /**
  * Configuración libre por tipo (jsonb). Claves que entiende el backend hoy:
- *  - whatsappEnabled: avisar "tanque vacío" también por WhatsApp
  *  - quietHours: { start: "22:00", end: "07:00", timeZone?: "America/Bogota" }
  *  - notifyComplexAdmins: las alertas de la matera llegan también a la administración
  *  - plant: perfil de planta elegido (lo que se manda en set_plant y en GET /plant)
  */
 export interface DeviceConfig {
-  whatsappEnabled?: boolean;
   quietHours?: { start: string; end: string; timeZone?: string };
   notifyComplexAdmins?: boolean;
   plant?: PlantProfile;

@@ -43,8 +43,13 @@ describe('parsePlanterTelemetry', () => {
   });
 
   it('lectura de la cola: queued y su ts original; sin soilRaw ni rssi', () => {
-    const { soilRaw: _s, rssi: _r, ...cola } = REAL;
-    const r = parsePlanterTelemetry({ ...cola, queued: true, ts: 1792890000 }, ahora);
+    const cola: Record<string, unknown> = { ...REAL };
+    delete cola.soilRaw;
+    delete cola.rssi;
+    const r = parsePlanterTelemetry(
+      { ...cola, queued: true, ts: 1792890000 },
+      ahora,
+    );
     expect(r.value.queued).toBe(true);
     expect(r.value.soilRaw).toBeNull();
     expect(r.value.measuredAt.getTime()).toBe(1792890000 * 1000);
@@ -57,18 +62,33 @@ describe('parsePlanterTelemetry', () => {
   });
 
   it('tank "empty" y sensores sin dato (null)', () => {
-    const r = parsePlanterTelemetry({ ...REAL, tank: 'empty', lux: null, tempC: null, tilt: null }, ahora);
-    expect(r.value).toMatchObject({ tankHasWater: false, lux: null, tempC: null, tilt: null });
+    const r = parsePlanterTelemetry(
+      { ...REAL, tank: 'empty', lux: null, tempC: null, tilt: null },
+      ahora,
+    );
+    expect(r.value).toMatchObject({
+      tankHasWater: false,
+      lux: null,
+      tempC: null,
+      tilt: null,
+    });
   });
 
   it('faults del firmware', () => {
-    const r = parsePlanterTelemetry({ ...REAL, faults: ['imu', 'battery_sensor'] }, ahora);
+    const r = parsePlanterTelemetry(
+      { ...REAL, faults: ['imu', 'battery_sensor'] },
+      ahora,
+    );
     expect(r.value.faults).toEqual(['imu', 'battery_sensor']);
   });
 
   it.each([
     ['no es un objeto', 'hola', 'invalid_json'],
-    ['otro tipo de aparato', { ...REAL, type: 'SMART_LOCK' }, 'unsupported_type'],
+    [
+      'otro tipo de aparato',
+      { ...REAL, type: 'SMART_LOCK' },
+      'unsupported_type',
+    ],
     ['suelo fuera de 0-100', { ...REAL, soil: 140 }, 'bad_soil'],
     ['sin batería', { ...REAL, battery: undefined }, 'bad_battery'],
     ['depósito con valor raro', { ...REAL, tank: true }, 'bad_tank'],

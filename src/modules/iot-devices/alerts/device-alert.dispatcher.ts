@@ -32,9 +32,8 @@ export type DispatchOutcome = 'sent' | 'throttled' | 'quiet' | 'no_owner';
  *  - throttling por (aparato, tipo) contra `iot_device_alerts`;
  *  - horas de silencio de `config.quietHours`: no hay push y NO se registra,
  *    así que el aviso sale con la primera lectura después del silencio;
- *  - canales: push + socket; socket a la administración si
- *    `config.notifyComplexAdmins`; WhatsApp para `tank_empty` si
- *    `config.whatsappEnabled` (pendiente: ver `sendWhatsapp`).
+ *  - canales: push + Socket.io (los de EntryLink; no hay SMS ni WhatsApp);
+ *    socket también a la administración si `config.notifyComplexAdmins`.
  * Portería (SECURITY_ROL) no recibe nunca estas alertas.
  */
 @Injectable()
@@ -111,29 +110,9 @@ export class DeviceAlertDispatcher {
       );
     }
 
-    if (
-      kind === 'tank_empty' &&
-      device.config?.whatsappEnabled &&
-      this.sendWhatsapp(device)
-    ) {
-      channels.push('whatsapp');
-    }
-
     await this.alerts.save(
       this.alerts.create({ deviceUuid: device.id, kind, channels }),
     );
     return 'sent';
-  }
-
-  /**
-   * TODO: el backend todavía no tiene un servicio de Twilio/WhatsApp (no hay
-   * dependencia ni código que reutilizar). Cuando exista, se llama aquí. Hasta
-   * entonces solo se registra, igual que `WhatsAppPanicChannel` en pánico.
-   */
-  private sendWhatsapp(device: Device): boolean {
-    this.logger.log(
-      `[alert] WhatsApp de ${device.deviceId} no disponible: falta el servicio de Twilio`,
-    );
-    return false;
   }
 }

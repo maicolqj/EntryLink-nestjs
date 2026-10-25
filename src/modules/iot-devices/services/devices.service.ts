@@ -338,7 +338,7 @@ export class DevicesService {
     this.assertOwner(device, u);
     const config: DeviceConfig = { ...(device.config ?? {}) };
     for (const [k, v] of Object.entries(cambios ?? {})) {
-      if (k === 'whatsappEnabled' || k === 'notifyComplexAdmins') {
+      if (k === 'notifyComplexAdmins') {
         if (typeof v !== 'boolean')
           throw new BadRequestException(`${k} debe ser true o false`);
         config[k] = v;

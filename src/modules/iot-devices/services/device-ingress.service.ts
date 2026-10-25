@@ -26,7 +26,7 @@ export interface IngestResult {
 /**
  * Todo lo que llega DESDE los aparatos, venga por MQTT o por REST: misma
  * validación, misma persistencia, mismos eventos. Rápido a propósito: las
- * alertas (push, WhatsApp) se encolan y no se esperan.
+ * alertas (push) se encolan y no se esperan.
  */
 @Injectable()
 export class DeviceIngressService {

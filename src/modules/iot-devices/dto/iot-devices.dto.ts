@@ -73,7 +73,7 @@ export class UpdateDeviceConfigInput {
   @MaxLength(40)
   deviceId: string;
 
-  /** { whatsappEnabled?, notifyComplexAdmins?, quietHours?: { start, end, timeZone? } | null } */
+  /** { notifyComplexAdmins?, quietHours?: { start, end, timeZone? } | null } */
   @Field(() => GraphQLJSON)
   config: Record<string, unknown>;
 }
