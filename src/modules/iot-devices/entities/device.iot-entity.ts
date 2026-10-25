@@ -30,6 +30,14 @@ export interface DeviceConfig {
   [clave: string]: unknown;
 }
 
+/** Capacidades que reporta el firmware (ack {"cmd":"themes"}). */
+export interface DeviceCapabilities {
+  hasSD: boolean;
+  hasPSRAM: boolean;
+  themes: { id: string; kind?: string; available: boolean; reason?: string }[];
+  reportedAt: string;
+}
+
 /** Perfil de planta: mismo JSON que `set_plant` (sin "cmd") y que GET /plant. */
 export interface PlantProfile {
   plantId: string;
@@ -150,6 +158,24 @@ export class Device {
   @Field(() => GraphQLJSON, { nullable: true })
   @Column({ name: 'last_ack', type: 'jsonb', nullable: true })
   lastAck?: Record<string, unknown> | null;
+
+  /** Tema de caras activo según la propia matera (telemetría y ack). */
+  @Field(() => String)
+  @Column({
+    name: 'face_theme',
+    type: 'varchar',
+    length: 24,
+    default: 'classic',
+  })
+  faceTheme: string;
+
+  /**
+   * Lo que la matera dice que puede mostrar (ack "themes", una vez por
+   * encendido): { hasSD, hasPSRAM, themes: [{id, kind, available, reason?}], reportedAt }
+   */
+  @Field(() => GraphQLJSON, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  capabilities?: DeviceCapabilities | null;
 
   @Field(() => GraphQLJSON)
   @Column({ type: 'jsonb', default: () => `'{}'::jsonb` })

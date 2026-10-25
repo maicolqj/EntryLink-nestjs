@@ -5,6 +5,7 @@ import { DeviceOutboxMessage } from './device-outbox.iot-entity';
 import { DeviceNotificationType } from './device-notification-type.iot-entity';
 import { DeviceNotificationRule } from './device-notification-rule.iot-entity';
 import { DeviceNotificationPref } from './device-notification-pref.iot-entity';
+import { DeviceFaceTheme } from './device-face-theme.iot-entity';
 
 export {
   Device,
@@ -14,6 +15,7 @@ export {
   DeviceNotificationType,
   DeviceNotificationRule,
   DeviceNotificationPref,
+  DeviceFaceTheme,
 };
 
 /** Se registran con TypeOrmModule.forFeature() solo si el módulo se carga. */
@@ -25,4 +27,5 @@ export const IOT_ENTITIES = [
   DeviceNotificationType,
   DeviceNotificationRule,
   DeviceNotificationPref,
+  DeviceFaceTheme,
 ];

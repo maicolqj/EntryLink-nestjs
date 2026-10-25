@@ -23,6 +23,8 @@ export enum IotSocketEvent {
   ACK = 'device:ack',
   /** Cambió `connected` (enchufado al broker o no). */
   PRESENCE = 'device:presence',
+  /** Resultado de un cambio de tema de caras (o caída a classic). */
+  THEME = 'device:theme',
 }
 
 @Injectable()

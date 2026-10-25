@@ -10,6 +10,7 @@ import { DeviceType } from '../enums/device-type.enum';
 import { DeviceStatus } from '../enums/device-status.enum';
 import { parsePlanterTelemetry } from '../telemetry/planter-telemetry.parser';
 import { IotSocketEmitter, IotSocketEvent } from '../socket/iot-socket.events';
+import { DeviceAckWaiter } from '../themes/device-ack-waiter';
 import {
   DEVICE_ALERTS_JOBS,
   DEVICE_ALERTS_QUEUE,
@@ -39,6 +40,7 @@ export class DeviceIngressService {
     @InjectQueue(DEVICE_ALERTS_QUEUE)
     private readonly alertsQueue: Queue<EvaluateReadingJob>,
     private readonly sockets: IotSocketEmitter,
+    private readonly acks: DeviceAckWaiter,
   ) {}
 
   findByDeviceId(deviceId: string): Promise<Device | null> {
@@ -110,6 +112,9 @@ export class DeviceIngressService {
     if (!t.queued) {
       cambios.lastTelemetry = raw as Record<string, unknown>;
       if (t.power) cambios.power = t.power;
+      const tema = (raw as Record<string, unknown>).theme;
+      if (typeof tema === 'string' && tema)
+        cambios.faceTheme = tema.slice(0, 24);
     }
     await this.devices.update(device.id, cambios);
 
@@ -157,14 +162,57 @@ export class DeviceIngressService {
       ...(raw as Record<string, unknown>),
       at: new Date().toISOString(),
     };
-    await this.devices.update(device.id, { lastAck: ack });
+    const cambios: Partial<Device> = { lastAck: ack };
+    const tema =
+      typeof ack.theme === 'string' && ack.theme
+        ? ack.theme.slice(0, 24)
+        : null;
+    if (ack.cmd === 'themes') {
+      // Informe de capacidades (una vez por encendido o ante ping_themes)
+      const lista = Array.isArray(ack.themes) ? (ack.themes as unknown[]) : [];
+      cambios.capabilities = {
+        hasSD: ack.hasSD === true,
+        hasPSRAM: ack.hasPSRAM === true,
+        themes: lista
+          .filter(
+            (x): x is Record<string, unknown> =>
+              !!x &&
+              typeof x === 'object' &&
+              typeof (x as Record<string, unknown>).id === 'string',
+          )
+          .slice(0, 20)
+          .map((x) => ({
+            id: (x.id as string).slice(0, 24),
+            kind: typeof x.kind === 'string' ? x.kind : undefined,
+            available: x.available === true,
+            ...(typeof x.reason === 'string' ? { reason: x.reason } : {}),
+          })),
+        reportedAt: ack.at as string,
+      };
+    }
+    if (tema && (ack.cmd === 'themes' || ack.cmd === 'set_theme'))
+      cambios.faceTheme = tema;
+    await this.devices.update(device.id, cambios);
+
     if (device.ownerId) {
       this.sockets.toUser(device.ownerId, IotSocketEvent.ACK, {
         id: device.id,
         deviceId: device.deviceId,
         ack,
       });
+      if (ack.cmd === 'set_theme') {
+        this.sockets.toUser(device.ownerId, IotSocketEvent.THEME, {
+          id: device.id,
+          deviceId: device.deviceId,
+          ok: ack.ok === true,
+          themeId: ack.themeId,
+          theme: tema,
+          reason: ack.reason ?? null,
+          fallback: ack.fallback === true,
+        });
+      }
     }
+    this.acks.notify(device.deviceId, ack);
     if (ack.cmd === 'ota' || ack.ok === false) {
       this.logger.log(`[ack] ${device.deviceId}: ${JSON.stringify(ack)}`);
     }

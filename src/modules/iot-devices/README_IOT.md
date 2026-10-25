@@ -62,6 +62,7 @@ Todo está en `src/modules/iot-devices/`:
 | `notifications/` | Catálogo, reglas del conjunto, preferencias, política de entrega y suscriptor de `notifications` |
 | `queues/` | Colas BullMQ `device-alerts` y `device-notify` con sus workers |
 | `cron/` | Sin conexión cada hora (+ limpieza de la outbox) |
+| `themes/` | Temas de caras: catálogo `iot_device_face_themes`, disponibilidad según lo que reporta la matera, `setDeviceFaceTheme` (espera el ack) y `DeviceAckWaiter` |
 | `plants/` | Catálogo de plantas (Potus incluido; las 60 especies con `IOT_PLANT_CATALOG`) |
 | `controllers/`, `guards/` | REST de los aparatos y `DeviceKeyGuard` (X-Device-Id/Key, sin JWT) |
 | `resolvers/`, `dto/` | GraphQL para RemoteLink |
@@ -198,3 +199,26 @@ Las alertas de la matera salen con `data.type = "DEVICE_ALERT"`, `entityType = "
 | Cliente sin TLS | rechazado (`Protocol error`) |
 
 Sin probar todavía (necesita PostgreSQL + Redis en staging): migración `up`/`down`, el flujo completo con BD, los workers de BullMQ, el push y el suscriptor de `notifications`.
+
+## 10. Temas de caras (apariencia de la mascota)
+
+Contrato con el firmware: `set_theme`, `ping_themes`, el ack `themes` y el campo `theme` de la telemetría (CONTRATO_REAL.md y `nexus-firmware/README_temas.md`).
+
+- **Migración** `1781100100000-AddDeviceFaceThemes`, aditiva. Crea la tabla nueva `iot_device_face_themes` (semilla: `classic` y `minimal`) y añade `face_theme` y `capabilities` a `iot_devices`, que es una tabla de este mismo módulo. No toca ninguna tabla existente de EntryLink. Tiene `down()`.
+- **`availableThemesForDevice(deviceId)`**: devuelve el catálogo activo con `available`, `reason` y `active`. Lo cruza con lo que la matera reporta (`capabilities`: `hasSD`, `hasPSRAM`, sus temas):
+  - si la matera nunca ha informado (firmware sin temas), solo se ofrece `classic`;
+  - los que piden SD o PSRAM que la matera no tiene salen como `needs_sd` o `needs_psram`;
+  - si la matera no lista el tema, sale como `not_installed`.
+- **`setDeviceFaceTheme(deviceId, themeId)`** (solo el dueño):
+  - valida el tema contra el catálogo y la disponibilidad (400 si esa matera no puede mostrarlo) y publica `set_theme`;
+  - si la matera está conectada, espera su ack hasta 6 s y devuelve `applied` o `rejected` (con `reason`);
+  - si está dormida, devuelve `pending`: el comando espera en la outbox (7 días) y el resultado llega por Socket.io.
+- **`refreshDeviceThemes(deviceId)`**: pide `ping_themes`.
+- **Socket.io `device:theme`** → `user:<dueño>`: `{ id, deviceId, ok, themeId, theme, reason, fallback }`. También avisa cuando la matera cae sola a `classic` (`fallback: true`).
+- **`IotDevice.faceTheme`** guarda el tema activo según la matera (telemetría y ack). **`IotDevice.capabilities`** guarda su último informe.
+- **Reset de fábrica:** `faceTheme` vuelve a `classic`, igual que en la matera (el reset borra su NVS `user`).
+- **`previewUrl`**: hay que rellenarlo en la tabla con la imagen de cada tema para la pantalla Apariencia de RemoteLink.
+
+**Probado con la placa** (por MQTT): `classic` se ve igual que antes, `minimal` se aplica con `ack ok` y la telemetría lo refleja, y un BITMAP sin SD se rechaza con `needs_sd` sin cambiar el tema. El resolver y el servicio están cubiertos por `themes/device-themes.spec.ts` (12 tests); la mutation real contra la placa queda para staging.
+
+> **Confirmación:** los temas tampoco modifican nada existente fuera del módulo. Todo está en `src/modules/iot-devices/`, detrás de `IOT_ENABLED`.

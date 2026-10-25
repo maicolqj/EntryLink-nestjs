@@ -185,6 +185,7 @@ describe('DevicesService — vincular, reset y volver a vincular', () => {
       unitId: null,
       status: DeviceStatus.UNPROVISIONED,
       config: {},
+      faceTheme: 'classic', // criterio 5: el reset vuelve a classic
     });
     expect(reseteado.pairingCode).toMatch(/^[0-9A-F]{6}$/);
     expect(reseteado.pairingCode).not.toBe(code);

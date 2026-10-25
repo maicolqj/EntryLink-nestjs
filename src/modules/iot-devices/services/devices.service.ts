@@ -291,6 +291,7 @@ export class DevicesService {
       unitId: null,
       status: DeviceStatus.UNPROVISIONED,
       config: {},
+      faceTheme: 'classic',
     });
     await this.nuevoCodigo(device);
     await this.prefs.delete({ deviceUuid: device.id });

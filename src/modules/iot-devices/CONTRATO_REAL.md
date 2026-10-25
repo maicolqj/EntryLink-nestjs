@@ -67,6 +67,7 @@ El backend debe impedir (ACL) que una matera publique o se suscriba fuera de `en
 | `plantId` | string \| null | perfil aplicado con `set_plant`; `null` = perfil genérico |
 | `plantProfile` | string | `"species"` o `"generic"` |
 | `soilIdeal` | [int, int] | `suelo_ideal_min`/`max` del perfil. Solo con perfil y no en las de la cola |
+| `theme` | string | tema de caras activo (`classic`, `minimal`…). Ver README_temas.md |
 | `rssi` | int | dBm. **No viene** en las lecturas de la cola |
 | `faults` | string[] | solo si hay fallos: `temp_humidity_sensor`, `light_sensor`, `imu`, `mqtt_auth`, `battery_sensor` |
 | `queued_pending` | int | solo si quedan lecturas en la cola |
@@ -94,6 +95,8 @@ JSON roto → `{"cmd":"?","ok":false,"error":"invalid_json"}`. Comando desconoci
 | `ota` | `{"cmd":"ota","url":"https://…/nexus-0.4.1.bin","sha256":"<64 hex>","version":"0.4.1"}` | `ok:true,"status":"downloading","version"` o `ok:false,"error"` | descarga, verifica SHA-256 y reinicia. Confirma a los 60 s; si falla, vuelve sola a la versión anterior |
 | `identify` | `{"cmd":"identify"}` | `ok:true` | LEDs blancos parpadeando 5 s + pío |
 | `ping` | `{"cmd":"ping"}` | `ok:true` | publica una telemetría al momento |
+| `set_theme` | `{"cmd":"set_theme","themeId":"minimal"}` | `ok`, `themeId`, `theme` (el activo tras el intento), `reason` si no (`unknown_theme`, `needs_sd`, `missing_assets`, `needs_psram`) | cambia el tema de caras; si no se puede, sigue el anterior. Una caída en caliente llega como ack `set_theme` con `"fallback":true` |
+| `ping_themes` | `{"cmd":"ping_themes"}` | `{"cmd":"themes","ok":true,"theme","hasSD","hasPSRAM","themes":[{"id","kind","available","reason"?}]}` | informe de capacidades. También sale solo al conectar, una vez por encendido |
 
 **`set_plant`:**
 ```json

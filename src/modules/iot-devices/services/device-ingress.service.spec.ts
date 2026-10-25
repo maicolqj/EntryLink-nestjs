@@ -41,6 +41,7 @@ const buildHarness = (insertado = true) => {
     readingRepo as never,
     queue as never,
     sockets as unknown as IotSocketEmitter,
+    { notify: jest.fn() } as never,
   );
   return { service, deviceRepo, queue, sockets, insertados };
 };

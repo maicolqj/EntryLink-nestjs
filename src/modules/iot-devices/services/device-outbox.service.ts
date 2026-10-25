@@ -17,6 +17,8 @@ export const CMD_TTL_S = {
   ota: 24 * 3600,
   identify: 5 * 60,
   ping: 5 * 60,
+  set_theme: 7 * 24 * 3600,
+  ping_themes: 30 * 60,
 } as const;
 
 export type DeviceCommand = keyof typeof CMD_TTL_S;

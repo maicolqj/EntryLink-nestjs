@@ -26,6 +26,9 @@ import { IotSocketEmitter } from './socket/iot-socket.events';
 import { DeviceKeyGuard } from './guards/device-key.guard';
 import { IotDevicesController } from './controllers/iot-devices.controller';
 import { IotDevicesResolver } from './resolvers/iot-devices.resolver';
+import { DeviceAckWaiter } from './themes/device-ack-waiter';
+import { DeviceThemesService } from './themes/device-themes.service';
+import { DeviceThemesResolver } from './themes/device-themes.resolver';
 
 import { NotificationsModule } from '../notifications/notifications.module';
 import { User } from '../users/entities/user.entity';
@@ -77,6 +80,9 @@ import { ResidentialComplex } from '../residential-complex/entities/residential-
     DeviceNotifyProcessor,
     DeviceKeyGuard,
     IotDevicesResolver,
+    DeviceAckWaiter,
+    DeviceThemesService,
+    DeviceThemesResolver,
   ],
 })
 export class IotDevicesModule {}
