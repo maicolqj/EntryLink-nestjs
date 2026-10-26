@@ -1,0 +1,88 @@
+import { Field, InputType } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+
+import {
+  AnnouncementAudience,
+  AnnouncementCategory,
+  AnnouncementTargetMode,
+} from '../enums/platform-announcement.enums';
+import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
+import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
+import { ComplexEngagement } from '../../residential-complex/enums/complex-engagement.enum';
+
+/**
+ * A qué conjuntos va el comunicado.
+ *
+ * - ALL_COMPLEXES: todos los aprobados (no los que esperan revisión).
+ * - SELECTED: `complexIds`.
+ * - FILTERED: plan, estado y vinculación. Dentro de cada lista es "cualquiera
+ *   de", entre listas es "y". Una lista vacía no filtra.
+ */
+@InputType()
+export class AnnouncementTargetInput {
+  @Field(() => AnnouncementTargetMode)
+  @IsEnum(AnnouncementTargetMode)
+  mode: AnnouncementTargetMode;
+
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @IsUUID('all', { each: true })
+  complexIds?: string[];
+
+  @Field(() => [ComplexPlan], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(ComplexPlan, { each: true })
+  plans?: ComplexPlan[];
+
+  @Field(() => [ComplexStatus], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(ComplexStatus, { each: true })
+  statuses?: ComplexStatus[];
+
+  @Field(() => [ComplexEngagement], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(ComplexEngagement, { each: true })
+  engagements?: ComplexEngagement[];
+}
+
+/**
+ * Lo que llega en el campo `payload` (JSON) del POST multipart. Va por REST y
+ * no por GraphQL porque trae las imágenes en la misma petición.
+ */
+export class SendPlatformAnnouncementDto {
+  @IsEnum(AnnouncementCategory)
+  category: AnnouncementCategory;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  body: string;
+
+  @IsEnum(AnnouncementAudience)
+  audience: AnnouncementAudience;
+
+  @ValidateNested()
+  @Type(() => AnnouncementTargetInput)
+  target: AnnouncementTargetInput;
+}
