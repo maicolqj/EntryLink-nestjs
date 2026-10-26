@@ -68,6 +68,13 @@ export class PlatformAnnouncementNotificationDetailProvider
         ]),
       ],
       images: announcement.imageUrls.map((url) => image(url)),
+      // Ruta relativa y no URL pública: el archivo lo entrega el backend a
+      // quien recibió el comunicado, con su sesión. La web la descarga con el
+      // token (ver NotificationSnapshot).
+      files: (announcement.attachments ?? []).map((a, index) => ({
+        url: `/api/v1/platform-announcements/${announcement.id}/attachments/${index}`,
+        label: a.name,
+      })),
     });
   }
 }

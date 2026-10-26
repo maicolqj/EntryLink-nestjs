@@ -58,6 +58,27 @@ registerEnumType(AnnouncementTargetMode, {
 });
 
 /**
+ * Por dónde sale el comunicado. Se puede elegir uno o los dos.
+ *
+ * - NOTIFICATION: aviso en la bandeja del panel/app + push, según la audiencia.
+ * - EMAIL: correo al email registrado del conjunto (el administrativo), con
+ *   los adjuntos. La audiencia no aplica: el conjunto tiene un solo correo.
+ */
+export enum AnnouncementChannel {
+  NOTIFICATION = 'NOTIFICATION',
+  EMAIL = 'EMAIL',
+}
+
+registerEnumType(AnnouncementChannel, {
+  name: 'AnnouncementChannel',
+  description: 'Canal por el que sale el comunicado',
+  valuesMap: {
+    NOTIFICATION: { description: 'Aviso en el panel/app y push' },
+    EMAIL: { description: 'Correo al email registrado del conjunto' },
+  },
+});
+
+/**
  * El reparto corre después de responder: con residentes pueden ser miles de
  * avisos y la web no debería esperar a que salgan todos.
  */

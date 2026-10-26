@@ -2,6 +2,7 @@ import { Field, InputType } from '@nestjs/graphql';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsEnum,
   IsNotEmpty,
@@ -15,6 +16,7 @@ import {
 import {
   AnnouncementAudience,
   AnnouncementCategory,
+  AnnouncementChannel,
   AnnouncementTargetMode,
 } from '../enums/platform-announcement.enums';
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
@@ -79,8 +81,16 @@ export class SendPlatformAnnouncementDto {
   @MaxLength(4000)
   body: string;
 
+  /** Solo aplica al aviso: el correo va siempre al email del conjunto. */
   @IsEnum(AnnouncementAudience)
   audience: AnnouncementAudience;
+
+  /** Sin canales llega como solo aviso, que es como se enviaba antes. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsEnum(AnnouncementChannel, { each: true })
+  channels?: AnnouncementChannel[];
 
   @ValidateNested()
   @Type(() => AnnouncementTargetInput)

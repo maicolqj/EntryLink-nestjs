@@ -14,9 +14,29 @@ import { User } from '../../users/entities/user.entity';
 import {
   AnnouncementAudience,
   AnnouncementCategory,
+  AnnouncementChannel,
   AnnouncementStatus,
   AnnouncementTargetMode,
 } from '../enums/platform-announcement.enums';
+
+/**
+ * Archivo adjunto. La llave de R2 no tiene campo GraphQL a propósito: el
+ * archivo no tiene URL pública y solo lo entrega el backend a quien recibió el
+ * comunicado (`GET /platform-announcements/:id/attachments/:index`).
+ */
+@ObjectType()
+export class AnnouncementAttachment {
+  key: string;
+
+  @Field()
+  name: string;
+
+  @Field()
+  mimeType: string;
+
+  @Field(() => Int)
+  size: number;
+}
 
 /**
  * Comunicado que la plataforma (SUPER_ADMIN, oficial de cumplimiento) envía a
@@ -51,6 +71,14 @@ export class PlatformAnnouncement {
   @Field(() => [String])
   @Column({ name: 'image_urls', type: 'jsonb', default: () => "'[]'" })
   imageUrls: string[];
+
+  @Field(() => [AnnouncementAttachment])
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  attachments: AnnouncementAttachment[];
+
+  @Field(() => [AnnouncementChannel])
+  @Column({ type: 'jsonb', default: () => `'["NOTIFICATION"]'` })
+  channels: AnnouncementChannel[];
 
   @Field(() => AnnouncementAudience)
   @Column({ type: 'varchar', length: 20 })
@@ -97,6 +125,15 @@ export class PlatformAnnouncement {
   @Field(() => Int)
   @Column({ name: 'recipients_count', type: 'int', default: 0 })
   recipientsCount: number;
+
+  /**
+   * Correos puestos en la cola (uno por conjunto con email registrado). Que
+   * estén en la cola no quiere decir que se hayan entregado: los fallos del
+   * SMTP quedan en el log y en Bull Board.
+   */
+  @Field(() => Int)
+  @Column({ name: 'emails_count', type: 'int', default: 0 })
+  emailsCount: number;
 
   @Field(() => Date, { nullable: true })
   @Column({ name: 'sent_at', type: 'timestamptz', nullable: true })

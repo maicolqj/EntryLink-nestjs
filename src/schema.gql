@@ -10659,6 +10659,8 @@ type PlatformAnnouncement {
   title: String!
   body: String!
   imageUrls: [String!]!
+  attachments: [AnnouncementAttachment!]!
+  channels: [AnnouncementChannel!]!
   audience: AnnouncementAudience!
   targetMode: AnnouncementTargetMode!
   complexIds: [String!]!
@@ -10668,6 +10670,7 @@ type PlatformAnnouncement {
   status: AnnouncementStatus!
   complexesCount: Int!
   recipientsCount: Int!
+  emailsCount: Int!
   sentAt: DateTime
   createdByUserId: String
   createdBy: User
@@ -10728,6 +10731,7 @@ type AnnouncementTargetComplex {
 
 type AnnouncementTargetPreview {
   complexesCount: Int!
+  withEmailCount: Int!
   complexes: [AnnouncementTargetComplex!]!
 }
 
@@ -10742,4 +10746,19 @@ input AnnouncementTargetInput {
   plans: [ComplexPlan!]
   statuses: [ComplexStatus!]
   engagements: [ComplexEngagement!]
+}
+
+type AnnouncementAttachment {
+  name: String!
+  mimeType: String!
+  size: Int!
+}
+
+"""Canal por el que sale el comunicado"""
+enum AnnouncementChannel {
+  """Aviso en el panel/app y push"""
+  NOTIFICATION
+
+  """Correo al email registrado del conjunto"""
+  EMAIL
 }

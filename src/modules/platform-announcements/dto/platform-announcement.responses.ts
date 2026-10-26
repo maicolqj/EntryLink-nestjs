@@ -18,6 +18,10 @@ export class AnnouncementTargetPreview {
   @Field(() => Int)
   complexesCount: number;
 
+  /** Cuántos de esos conjuntos tienen un correo registrado. */
+  @Field(() => Int)
+  withEmailCount: number;
+
   @Field(() => [AnnouncementTargetComplex])
   complexes: AnnouncementTargetComplex[];
 }

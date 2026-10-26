@@ -1,19 +1,26 @@
 import {
   ANNOUNCEMENT_ENTITY_TYPE,
+  EMAIL_SPACING_MS,
   PlatformAnnouncementsService,
+  decodeFileName,
 } from './platform-announcements.service';
 import { PlatformAnnouncement } from '../entities/platform-announcement.entity';
 import { SendPlatformAnnouncementDto } from '../dto/platform-announcement.inputs';
 import {
   AnnouncementAudience,
   AnnouncementCategory,
+  AnnouncementChannel,
   AnnouncementStatus,
   AnnouncementTargetMode,
 } from '../enums/platform-announcement.enums';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
-import { PlatformAnnouncementErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  GeneralErrorCode,
+  PlatformAnnouncementErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { SendPlatformAnnouncementJobPayload } from '../../../mail/constants/mail.constants';
 
 const ADMIN_ID = '99999999-9999-9999-9999-999999999999';
 const CX_A = '11111111-1111-1111-1111-111111111111';
@@ -30,8 +37,21 @@ const superAdmin: JwtAccessPayload = {
   permissions: [],
 };
 
-const file = (name: string) =>
-  ({ buffer: Buffer.from('x'), originalname: name }) as Express.Multer.File;
+const file = (name: string, size = 1024, mimetype = 'image/png') =>
+  ({
+    buffer: Buffer.from('x'),
+    originalname: name,
+    size,
+    mimetype,
+  }) as Express.Multer.File;
+
+const MB = 1024 * 1024;
+
+const resident: JwtAccessPayload = {
+  ...superAdmin,
+  sub: 'u1',
+  roles: [ValidRoles.RESIDENT_ROL],
+};
 
 const dto = (
   overrides: Partial<SendPlatformAnnouncementDto> = {},
@@ -48,13 +68,13 @@ const dto = (
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 function setup(options?: {
-  complexes?: { id: string; name: string }[];
+  complexes?: { id: string; name: string; email?: string | null }[];
   residentsByComplex?: Record<string, string[]>;
   notifyFails?: string[];
 }) {
   const complexes = options?.complexes ?? [
-    { id: CX_A, name: 'Alameda' },
-    { id: CX_B, name: 'Bosques' },
+    { id: CX_A, name: 'Alameda', email: 'admin@alameda.co' },
+    { id: CX_B, name: 'Bosques', email: null },
   ];
 
   const qb = {
@@ -64,7 +84,10 @@ function setup(options?: {
     orderBy: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue(complexes),
   };
-  const complexRepo = { createQueryBuilder: jest.fn(() => qb) };
+  const complexRepo = {
+    createQueryBuilder: jest.fn(() => qb),
+    find: jest.fn().mockResolvedValue(complexes),
+  };
 
   const announcementRepo = {
     create: jest.fn((data: Partial<PlatformAnnouncement>) => data),
@@ -72,6 +95,12 @@ function setup(options?: {
       Promise.resolve({ id: 'ann-1', createdAt: new Date(), ...data }),
     ),
     update: jest.fn().mockResolvedValue(undefined),
+    findOne: jest.fn().mockResolvedValue(null),
+  };
+
+  const notificationRepo = { exist: jest.fn().mockResolvedValue(false) };
+  const mailService = {
+    queuePlatformAnnouncementEmail: jest.fn().mockResolvedValue(undefined),
   };
 
   const residentsByComplex = options?.residentsByComplex ?? {};
@@ -110,7 +139,9 @@ function setup(options?: {
     announcementRepo as never,
     complexRepo as never,
     residentRepo as never,
+    notificationRepo as never,
     notificationsService as never,
+    mailService as never,
     storageService as never,
   );
 
@@ -119,7 +150,9 @@ function setup(options?: {
     qb,
     announcementRepo,
     residentRepo,
+    notificationRepo,
     notificationsService,
+    mailService,
     storageService,
   };
 }
@@ -199,7 +232,7 @@ describe('PlatformAnnouncementsService', () => {
       });
 
       await expect(
-        service.send(dto(), [file('a.png')], superAdmin),
+        service.send(dto(), [file('a.png')], [], superAdmin),
       ).rejects.toMatchObject({
         errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_NO_TARGETS,
       });
@@ -212,7 +245,7 @@ describe('PlatformAnnouncementsService', () => {
       const files = ['1', '2', '3', '4', '5'].map((n) => file(`${n}.png`));
 
       await expect(
-        service.send(dto(), files, superAdmin),
+        service.send(dto(), files, [], superAdmin),
       ).rejects.toMatchObject({
         errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_TOO_MANY_IMAGES,
       });
@@ -226,6 +259,7 @@ describe('PlatformAnnouncementsService', () => {
       const saved = await service.send(
         dto(),
         [file('a.png'), file('b.jpg')],
+        [],
         superAdmin,
       );
       await flush();
@@ -260,6 +294,7 @@ describe('PlatformAnnouncementsService', () => {
       await service.send(
         dto({ audience: AnnouncementAudience.ADMINISTRATION }),
         [],
+        [],
         superAdmin,
       );
       await flush();
@@ -278,9 +313,168 @@ describe('PlatformAnnouncementsService', () => {
       announcementRepo.save.mockRejectedValueOnce(new Error('BD caída'));
 
       await expect(
-        service.send(dto(), [file('a.png')], superAdmin),
+        service.send(dto(), [file('a.png')], [], superAdmin),
       ).rejects.toThrow('BD caída');
       expect(storageService.deleteByPublicId).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('correo', () => {
+    it('sin canales sale solo como aviso, como antes', async () => {
+      const { service, mailService } = setup();
+
+      const saved = await service.send(dto(), [], [], superAdmin);
+      await flush();
+
+      expect(saved.channels).toEqual([AnnouncementChannel.NOTIFICATION]);
+      expect(mailService.queuePlatformAnnouncementEmail).not.toHaveBeenCalled();
+    });
+
+    it('solo correo: un correo por conjunto con email, sin avisos', async () => {
+      const { service, mailService, notificationsService, announcementRepo } =
+        setup({
+          complexes: [
+            { id: CX_A, name: 'Alameda', email: 'admin@alameda.co' },
+            { id: CX_B, name: 'Bosques', email: ' admin@bosques.co ' },
+            { id: 'cx-c', name: 'Cedros', email: 'no-es-correo' },
+          ],
+        });
+
+      await service.send(
+        dto({ channels: [AnnouncementChannel.EMAIL] }),
+        [],
+        [file('Acta.pdf', 2 * MB, 'application/pdf')],
+        superAdmin,
+      );
+      await flush();
+
+      expect(notificationsService.notify).not.toHaveBeenCalled();
+      const calls = mailService.queuePlatformAnnouncementEmail.mock.calls as [
+        SendPlatformAnnouncementJobPayload,
+        number,
+      ][];
+      expect(calls).toHaveLength(2);
+      expect(calls[0][0]).toMatchObject({
+        email: 'admin@alameda.co',
+        complexName: 'Alameda',
+        attachments: [
+          expect.objectContaining({
+            name: 'Acta.pdf',
+            mimeType: 'application/pdf',
+          }),
+        ],
+      });
+      // El segundo sale después: el proveedor limita correos por segundo.
+      expect(calls[1][0].email).toBe('admin@bosques.co');
+      expect(calls[1][1]).toBe(EMAIL_SPACING_MS);
+      expect(announcementRepo.update).toHaveBeenCalledWith(
+        'ann-1',
+        expect.objectContaining({ emailsCount: 2, recipientsCount: 0 }),
+      );
+    });
+
+    it('solo correo sin ningún email registrado se rechaza antes de subir nada', async () => {
+      const { service, storageService } = setup({
+        complexes: [{ id: CX_B, name: 'Bosques', email: null }],
+      });
+
+      await expect(
+        service.send(
+          dto({ channels: [AnnouncementChannel.EMAIL] }),
+          [],
+          [file('a.pdf', 1024, 'application/pdf')],
+          superAdmin,
+        ),
+      ).rejects.toMatchObject({
+        errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_NO_EMAILS,
+      });
+      expect(storageService.uploadBuffer).not.toHaveBeenCalled();
+    });
+
+    it('rechaza adjuntos que suman más de 20 MB', async () => {
+      const { service } = setup();
+      const big = ['a', 'b', 'c'].map((n) =>
+        file(`${n}.pdf`, 8 * MB, 'application/pdf'),
+      );
+
+      await expect(
+        service.send(dto(), [], big, superAdmin),
+      ).rejects.toMatchObject({
+        errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_FILES_LIMIT,
+      });
+    });
+
+    it('si el guardado falla borra de R2 imágenes y adjuntos', async () => {
+      const { service, announcementRepo, storageService } = setup();
+      announcementRepo.save.mockRejectedValueOnce(new Error('BD caída'));
+
+      await expect(
+        service.send(
+          dto(),
+          [file('a.png')],
+          [file('b.pdf', 1024, 'application/pdf')],
+          superAdmin,
+        ),
+      ).rejects.toThrow('BD caída');
+      expect(storageService.deleteByPublicId).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('resolveAttachment', () => {
+    const announcement = {
+      id: 'ann-1',
+      attachments: [
+        { key: 'k/acta.pdf', name: 'acta.pdf', mimeType: 'application/pdf' },
+      ],
+    };
+
+    it('el personal de la plataforma descarga sin haberlo recibido', async () => {
+      const { service, announcementRepo, notificationRepo } = setup();
+      announcementRepo.findOne.mockResolvedValue(announcement);
+
+      const a = await service.resolveAttachment('ann-1', 0, superAdmin);
+
+      expect(a.key).toBe('k/acta.pdf');
+      expect(notificationRepo.exist).not.toHaveBeenCalled();
+    });
+
+    it('quien recibió el aviso lo descarga', async () => {
+      const { service, announcementRepo, notificationRepo } = setup();
+      announcementRepo.findOne.mockResolvedValue(announcement);
+      notificationRepo.exist.mockResolvedValue(true);
+
+      await expect(
+        service.resolveAttachment('ann-1', 0, resident),
+      ).resolves.toMatchObject({ name: 'acta.pdf' });
+      const [[query]] = notificationRepo.exist.mock.calls as [
+        [{ where: Record<string, unknown> }],
+      ];
+      expect(query.where).toMatchObject({
+        entityId: 'ann-1',
+        recipientUserId: 'u1',
+      });
+    });
+
+    it('quien no lo recibió ve lo mismo que si no existiera', async () => {
+      const { service, announcementRepo } = setup();
+      announcementRepo.findOne.mockResolvedValue(announcement);
+
+      await expect(
+        service.resolveAttachment('ann-1', 0, resident),
+      ).rejects.toMatchObject({ errorCode: GeneralErrorCode.NOT_FOUND });
+      await expect(
+        service.resolveAttachment('ann-1', 3, superAdmin),
+      ).rejects.toMatchObject({ errorCode: GeneralErrorCode.NOT_FOUND });
+    });
+  });
+
+  describe('decodeFileName', () => {
+    it('recupera tildes y eñes que multer entrega como latin1', () => {
+      const asMulter = Buffer.from('Acta reunión año.pdf', 'utf8').toString(
+        'latin1',
+      );
+      expect(decodeFileName(asMulter)).toBe('Acta reunión año.pdf');
+      expect(decodeFileName('simple.pdf')).toBe('simple.pdf');
     });
   });
 });
