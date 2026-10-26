@@ -628,3 +628,15 @@ export enum SecurityAppExitErrorCode {
   /** La hora enviada por el equipo está en el futuro o es de hace más de un día. */
   SECURITY_APP_EXIT_INVALID_TIME = 'SECURITY_APP_EXIT_INVALID_TIME',
 }
+
+/**
+ * Comunicados de la plataforma a los conjuntos.
+ */
+export enum PlatformAnnouncementErrorCode {
+  /** El campo `payload` del multipart no es JSON o no pasa la validación. */
+  ANNOUNCEMENT_INVALID_PAYLOAD = 'ANNOUNCEMENT_INVALID_PAYLOAD',
+  /** Los filtros elegidos no dejan ningún conjunto. */
+  ANNOUNCEMENT_NO_TARGETS = 'ANNOUNCEMENT_NO_TARGETS',
+  /** Más imágenes de las permitidas por comunicado. */
+  ANNOUNCEMENT_TOO_MANY_IMAGES = 'ANNOUNCEMENT_TOO_MANY_IMAGES',
+}

@@ -104,7 +104,9 @@ describe('NOTIFICATION_AUDIENCE', () => {
 
     // No es un número mágico: es un tope que obliga a justificar cada tipo
     // nuevo que se marque ANY en vez de decidir su sombrero.
-    expect(any.length).toBeLessThanOrEqual(15);
+    // 16: PLATFORM_ANNOUNCEMENT — quien lo envía elige administración,
+    // residentes o ambos, así que el mismo tipo vive en las dos bandejas.
+    expect(any.length).toBeLessThanOrEqual(16);
   });
 });
 

@@ -1931,6 +1931,7 @@ enum NotificationType {
   SUBSCRIPTION_EXPIRED
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_RENEWED
+  PLATFORM_ANNOUNCEMENT
 }
 
 """Prioridad de entrega de la notificación"""
@@ -7208,6 +7209,12 @@ type Query {
 
   """Verifica conectividad con el backend. Siempre retorna "pong"."""
   ping: String!
+
+  """Historial de comunicados enviados a los conjuntos"""
+  platformAnnouncements(pagination: PaginationInput): PlatformAnnouncementPaginatedResult!
+
+  """Conjuntos que recibirían el comunicado con estos filtros"""
+  platformAnnouncementTargetPreview(target: AnnouncementTargetInput!): AnnouncementTargetPreview!
 }
 
 input PaginationInput {
@@ -10644,4 +10651,95 @@ input ReportAppStateInput {
   Hora del cambio en el equipo. Solo para eventos que quedaron en cola sin conexión; si no se envía se usa la hora del servidor
   """
   occurredAt: DateTime
+}
+"""Comunicado de la plataforma a los conjuntos"""
+type PlatformAnnouncement {
+  id: ID!
+  category: AnnouncementCategory!
+  title: String!
+  body: String!
+  imageUrls: [String!]!
+  audience: AnnouncementAudience!
+  targetMode: AnnouncementTargetMode!
+  complexIds: [String!]!
+  targetPlans: [String!]!
+  targetStatuses: [String!]!
+  targetEngagements: [String!]!
+  status: AnnouncementStatus!
+  complexesCount: Int!
+  recipientsCount: Int!
+  sentAt: DateTime
+  createdByUserId: String
+  createdBy: User
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Tipo de comunicado de la plataforma"""
+enum AnnouncementCategory {
+  """Informativo"""
+  INFORMATIVE
+
+  """Promoción"""
+  PROMOTION
+
+  """Noticia"""
+  NEWS
+
+  """Otro"""
+  OTHER
+}
+
+"""Destinatarios del comunicado dentro de cada conjunto"""
+enum AnnouncementAudience {
+  """Solo la administración del conjunto"""
+  ADMINISTRATION
+
+  """Solo los residentes activos"""
+  RESIDENTS
+
+  """Administración y residentes"""
+  ALL
+}
+
+"""Cómo se eligen los conjuntos que reciben el comunicado"""
+enum AnnouncementTargetMode {
+  """Todos los conjuntos aprobados"""
+  ALL_COMPLEXES
+
+  """Los conjuntos elegidos uno a uno"""
+  SELECTED
+
+  """Los conjuntos que cumplen plan/estado/vinculación"""
+  FILTERED
+}
+
+"""Estado del reparto del comunicado"""
+enum AnnouncementStatus {
+  SENDING
+  SENT
+  FAILED
+}
+
+type AnnouncementTargetComplex {
+  id: ID!
+  name: String!
+}
+
+type AnnouncementTargetPreview {
+  complexesCount: Int!
+  complexes: [AnnouncementTargetComplex!]!
+}
+
+type PlatformAnnouncementPaginatedResult {
+  items: [PlatformAnnouncement!]!
+  pagination: PaginationReponse!
+}
+
+input AnnouncementTargetInput {
+  mode: AnnouncementTargetMode!
+  complexIds: [String!]
+  plans: [ComplexPlan!]
+  statuses: [ComplexStatus!]
+  engagements: [ComplexEngagement!]
 }
