@@ -212,7 +212,8 @@ export class DeviceHealthService {
       .innerJoin(
         PushSubscription,
         'ps',
-        'ps.user_id = u.id AND ps.is_active = true AND ps.platform = :platform',
+        // push_subscriptions.user_id es varchar y users.id es uuid.
+        'ps.user_id = u.id::text AND ps.is_active = true AND ps.platform = :platform',
         { platform: PushPlatform.ANDROID },
       )
       .where('r.name IN (:...roles)', {
