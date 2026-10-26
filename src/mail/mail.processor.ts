@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { Job } from 'bullmq';
@@ -23,6 +23,22 @@ export class MailProcessor extends WorkerHost {
 
   constructor(private readonly mailerService: MailerService) {
     super();
+  }
+
+  /**
+   * Sin esto un fallo SMTP no deja rastro en consola: solo se ve
+   * "Procesando envío..." repetido y el motivo queda guardado en Redis.
+   */
+  @OnWorkerEvent('failed')
+  onFailed(job: Job | undefined, error: Error): void {
+    const attempts = job?.opts.attempts ?? 1;
+    const made = job?.attemptsMade ?? 0;
+    const code = (error as Error & { code?: string }).code;
+
+    this.logger.error(
+      `Fallo al enviar correo [${job?.name ?? 'desconocido'}] — intento ${made}/${attempts}` +
+        `${code ? ` | ${code}` : ''} | ${error.message}`,
+    );
   }
 
   async process(job: Job): Promise<void> {
