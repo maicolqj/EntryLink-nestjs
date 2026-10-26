@@ -1931,6 +1931,8 @@ enum NotificationType {
   SUBSCRIPTION_EXPIRED
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_PAYMENT_SUBMITTED
+  SUBSCRIPTION_PAYMENT_REJECTED
   PLATFORM_ANNOUNCEMENT
 }
 
@@ -7215,6 +7217,20 @@ type Query {
 
   """Conjuntos que recibirían el comunicado con estos filtros"""
   platformAnnouncementTargetPreview(target: AnnouncementTargetInput!): AnnouncementTargetPreview!
+
+  """QR e instrucciones para pagar la suscripción"""
+  subscriptionPaymentInfo: SubscriptionPaymentInfo!
+
+  """
+  Lo que el conjunto de la sesión debe pagar para renovar (el valor contra el que se valida el soporte)
+  """
+  myRenewalQuote: SubscriptionQuote!
+
+  """Soportes de pago enviados por el conjunto de la sesión"""
+  mySubscriptionPayments: [SubscriptionPaymentSubmission!]!
+
+  """Soportes de pago de un conjunto (personal de la plataforma)"""
+  complexSubscriptionPayments(complexId: ID!): [SubscriptionPaymentSubmission!]!
 }
 
 input PaginationInput {
@@ -8231,6 +8247,12 @@ type Mutation {
   EntryLink volvió a primer plano (o arrancó). Cierra la salida abierta del vigilante; null si no había ninguna.
   """
   reportAppForeground(input: ReportAppStateInput): SecurityAppExit
+
+  """Aprueba el soporte: registra el pago y renueva"""
+  approveSubscriptionPayment(id: ID!): SubscriptionPaymentSubmission!
+
+  """Rechaza el soporte con motivo; el conjunto puede reenviar"""
+  rejectSubscriptionPayment(id: ID!, reason: String!): SubscriptionPaymentSubmission!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -10761,4 +10783,58 @@ enum AnnouncementChannel {
 
   """Correo al email registrado del conjunto"""
   EMAIL
+}
+
+"""Soporte de pago enviado por el conjunto"""
+type SubscriptionPaymentSubmission {
+  id: ID!
+  complexId: String!
+  complex: ResidentialComplex
+  plan: ComplexPlan!
+  cycle: BillingCycle!
+
+  """Lo que debía pagar según su cotización"""
+  amountDue: Float!
+
+  """Valor que el conjunto dice haber pagado"""
+  amountPaid: Float!
+  paidAt: DateTime!
+  reference: String
+  receiptName: String!
+  receiptMimeType: String!
+  status: SubscriptionPaymentStatus!
+
+  """Motivo del rechazo"""
+  reviewNote: String
+  reviewedByUserId: String
+  reviewedAt: DateTime
+
+  """Periodo pagado que se creó al aprobar"""
+  periodId: String
+  submittedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Estado del soporte de pago enviado por el conjunto"""
+enum SubscriptionPaymentStatus {
+  """Pendiente de revisión"""
+  PENDING
+
+  """Aprobado: suscripción renovada"""
+  APPROVED
+
+  """Rechazado con motivo"""
+  REJECTED
+}
+
+"""Datos para pagar la suscripción"""
+type SubscriptionPaymentInfo {
+  qrImageUrl: String
+
+  """Cuenta, titular y lo que haga falta saber para pagar"""
+  instructions: String
+
+  """Días antes del vencimiento desde los que se puede renovar"""
+  renewalWindowDays: Int!
 }
