@@ -5,6 +5,7 @@ export const MAIL_JOBS = {
   SEND_EMAIL_VERIFICATION: 'send-email-verification',
   SEND_PANIC_ALERT: 'send-panic-alert',
   SEND_SUBSCRIPTION_NOTICE: 'send-subscription-notice',
+  SEND_PLATFORM_ANNOUNCEMENT: 'send-platform-announcement',
 } as const;
 
 export interface SendPasswordResetJobPayload {
@@ -58,4 +59,23 @@ export interface SendSubscriptionNoticeJobPayload {
   ctaUrl: string;
   /** Color del encabezado según la urgencia. */
   tone: 'warning' | 'danger';
+}
+
+/**
+ * Comunicado de la plataforma al correo registrado de un conjunto.
+ *
+ * Los adjuntos viajan como llaves de R2 y no como contenido: un mismo
+ * comunicado sale a cientos de conjuntos y meter el archivo en cada job
+ * llenaría Redis. El worker los descarga al enviar.
+ */
+export interface SendPlatformAnnouncementJobPayload {
+  email: string;
+  complexId: string;
+  complexName: string;
+  announcementId: string;
+  title: string;
+  body: string;
+  categoryLabel: string;
+  imageUrls: string[];
+  attachments: { key: string; name: string; mimeType: string }[];
 }

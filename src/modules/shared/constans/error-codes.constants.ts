@@ -639,4 +639,8 @@ export enum PlatformAnnouncementErrorCode {
   ANNOUNCEMENT_NO_TARGETS = 'ANNOUNCEMENT_NO_TARGETS',
   /** Más imágenes de las permitidas por comunicado. */
   ANNOUNCEMENT_TOO_MANY_IMAGES = 'ANNOUNCEMENT_TOO_MANY_IMAGES',
+  /** Se pidió solo correo y ningún conjunto destino tiene email registrado. */
+  ANNOUNCEMENT_NO_EMAILS = 'ANNOUNCEMENT_NO_EMAILS',
+  /** Imagen o adjunto por encima del tamaño, o demasiados adjuntos. */
+  ANNOUNCEMENT_FILES_LIMIT = 'ANNOUNCEMENT_FILES_LIMIT',
 }

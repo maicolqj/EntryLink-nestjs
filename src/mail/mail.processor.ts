@@ -2,6 +2,7 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { Job } from 'bullmq';
+import { Readable } from 'node:stream';
 import {
   MAIL_QUEUE_NAME,
   MAIL_JOBS,
@@ -9,7 +10,9 @@ import {
   SendEmailVerificationJobPayload,
   SendPanicAlertJobPayload,
   SendSubscriptionNoticeJobPayload,
+  SendPlatformAnnouncementJobPayload,
 } from './constants/mail.constants';
+import { R2StorageService } from '../core/infrastructure/r2/r2.service';
 
 /**
  * Worker que procesa los jobs de envío de correos electrónicos.
@@ -21,7 +24,10 @@ import {
 export class MailProcessor extends WorkerHost {
   private readonly logger = new Logger(MailProcessor.name);
 
-  constructor(private readonly mailerService: MailerService) {
+  constructor(
+    private readonly mailerService: MailerService,
+    private readonly storageService: R2StorageService,
+  ) {
     super();
   }
 
@@ -59,9 +65,52 @@ export class MailProcessor extends WorkerHost {
           job as Job<SendSubscriptionNoticeJobPayload>,
         );
         break;
+      case MAIL_JOBS.SEND_PLATFORM_ANNOUNCEMENT:
+        await this.handlePlatformAnnouncement(
+          job as Job<SendPlatformAnnouncementJobPayload>,
+        );
+        break;
       default:
         this.logger.warn(`Job desconocido en cola mail: ${job.name}`);
     }
+  }
+
+  private async handlePlatformAnnouncement(
+    job: Job<SendPlatformAnnouncementJobPayload>,
+  ): Promise<void> {
+    const d = job.data;
+
+    const attachments = await Promise.all(
+      d.attachments.map(async (a) => {
+        const file = await this.storageService.getObjectStream(a.key);
+        return {
+          filename: a.name,
+          content: await streamToBuffer(file.stream),
+          contentType: a.mimeType,
+        };
+      }),
+    );
+
+    await this.mailerService.sendMail({
+      to: d.email,
+      subject: `${d.title} — EntryLink`,
+      template: 'platform-announcement',
+      context: {
+        title: d.title,
+        categoryLabel: d.categoryLabel,
+        complexName: d.complexName,
+        body: d.body,
+        imageUrls: d.imageUrls,
+        attachmentNames: d.attachments.map((a) => a.name),
+        hasAttachments: d.attachments.length > 0,
+        year: new Date().getFullYear(),
+      },
+      attachments,
+    });
+
+    this.logger.log(
+      `Comunicado ${d.announcementId} enviado por correo al complejo ${d.complexId}`,
+    );
   }
 
   private async handleSubscriptionNotice(
@@ -164,4 +213,12 @@ export class MailProcessor extends WorkerHost {
       `Email de verificación enviado a ${email.replace(/(.{2}).+(@.+)/, '$1***$2')}`,
     );
   }
+}
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+  }
+  return Buffer.concat(chunks);
 }
