@@ -199,6 +199,10 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.SUBSCRIPTION_EXPIRED]: NotificationAudience.STAFF,
   [NotificationType.SUBSCRIPTION_SUSPENDED]: NotificationAudience.STAFF,
   [NotificationType.SUBSCRIPTION_RENEWED]: NotificationAudience.STAFF,
+
+  // Quien envía elige si va a la administración, a los residentes o a ambos:
+  // el mismo tipo se lee en el panel y en la app.
+  [NotificationType.PLATFORM_ANNOUNCEMENT]: NotificationAudience.ANY,
 };
 
 /**
@@ -252,7 +256,6 @@ export function isResidentOnlySession(roles?: readonly string[]): boolean {
  * Lista de permitidos, igual que RESIDENT_VISIBLE_TYPES: un tipo sin clasificar
  * cae en STAFF y entra al panel, que es donde se atiende.
  */
-export const PANEL_VISIBLE_TYPES: readonly NotificationType[] =
-  Object.values(NotificationType).filter(
-    (type) => audienceOf(type) !== NotificationAudience.RESIDENT,
-  );
+export const PANEL_VISIBLE_TYPES: readonly NotificationType[] = Object.values(
+  NotificationType,
+).filter((type) => audienceOf(type) !== NotificationAudience.RESIDENT);

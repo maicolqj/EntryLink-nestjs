@@ -63,6 +63,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
 import { SecurityAppExitsModule } from './modules/security-app-exits/security-app-exits.module';
+import { PlatformAnnouncementsModule } from './modules/platform-announcements/platform-announcements.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
  *  `code` pero no `statusCode`. Sin este mapeo caían al default 500 y se reportaban como
@@ -265,6 +266,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     MarketplaceModule,
     DataExportModule,
     SecurityAppExitsModule,
+    PlatformAnnouncementsModule,
     MailModule,
     BullBoardAppModule,
     HealthModule,
