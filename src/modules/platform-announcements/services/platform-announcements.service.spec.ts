@@ -71,6 +71,7 @@ function setup(options?: {
   complexes?: { id: string; name: string; email?: string | null }[];
   residentsByComplex?: Record<string, string[]>;
   notifyFails?: string[];
+  noticeCounts?: { complexId: string; notices: string; read: string }[];
 }) {
   const complexes = options?.complexes ?? [
     { id: CX_A, name: 'Alameda', email: 'admin@alameda.co' },
@@ -98,7 +99,20 @@ function setup(options?: {
     findOne: jest.fn().mockResolvedValue(null),
   };
 
-  const notificationRepo = { exist: jest.fn().mockResolvedValue(false) };
+  const countsQb = {
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest
+      .fn()
+      .mockResolvedValue(options?.noticeCounts ?? ([] as unknown[])),
+  };
+  const notificationRepo = {
+    exist: jest.fn().mockResolvedValue(false),
+    createQueryBuilder: jest.fn(() => countsQb),
+  };
   const mailService = {
     queuePlatformAnnouncementEmail: jest.fn().mockResolvedValue(undefined),
   };
@@ -465,6 +479,45 @@ describe('PlatformAnnouncementsService', () => {
       await expect(
         service.resolveAttachment('ann-1', 3, superAdmin),
       ).rejects.toMatchObject({ errorCode: GeneralErrorCode.NOT_FOUND });
+    });
+  });
+
+  describe('findRecipients', () => {
+    it('lista los conjuntos del envío con sus avisos creados y leídos', async () => {
+      const { service, announcementRepo } = setup({
+        noticeCounts: [{ complexId: CX_A, notices: '5', read: '2' }],
+      });
+      announcementRepo.findOne.mockResolvedValue({
+        id: 'ann-1',
+        complexIds: [CX_A, CX_B],
+      });
+
+      const rows = await service.findRecipients('ann-1');
+
+      expect(rows).toEqual([
+        {
+          id: CX_A,
+          name: 'Alameda',
+          email: 'admin@alameda.co',
+          noticesCount: 5,
+          readCount: 2,
+        },
+        {
+          id: CX_B,
+          name: 'Bosques',
+          email: null,
+          noticesCount: 0,
+          readCount: 0,
+        },
+      ]);
+    });
+
+    it('no existe el comunicado → NOT_FOUND', async () => {
+      const { service } = setup();
+
+      await expect(service.findRecipients('nope')).rejects.toMatchObject({
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
     });
   });
 

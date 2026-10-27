@@ -26,6 +26,30 @@ export class AnnouncementTargetPreview {
   complexes: AnnouncementTargetComplex[];
 }
 
+/**
+ * Un conjunto que recibió el comunicado. El correo es el registrado HOY en la
+ * ficha: no se guarda a qué dirección salió cada envío.
+ */
+@ObjectType()
+export class AnnouncementRecipientComplex {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  name: string;
+
+  @Field(() => String, { nullable: true })
+  email: string | null;
+
+  /** Avisos creados para este conjunto (administración y/o residentes). */
+  @Field(() => Int)
+  noticesCount: number;
+
+  /** De esos avisos, cuántos ya se leyeron. */
+  @Field(() => Int)
+  readCount: number;
+}
+
 @ObjectType()
 export class PlatformAnnouncementPaginatedResult {
   @Field(() => [PlatformAnnouncement])

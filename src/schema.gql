@@ -7231,6 +7231,9 @@ type Query {
 
   """Soportes de pago de un conjunto (personal de la plataforma)"""
   complexSubscriptionPayments(complexId: ID!): [SubscriptionPaymentSubmission!]!
+
+  """Conjuntos que recibieron el comunicado, con avisos creados y leídos"""
+  platformAnnouncementRecipients(id: ID!): [AnnouncementRecipientComplex!]!
 }
 
 input PaginationInput {
@@ -10837,4 +10840,12 @@ type SubscriptionPaymentInfo {
 
   """Días antes del vencimiento desde los que se puede renovar"""
   renewalWindowDays: Int!
+}
+
+type AnnouncementRecipientComplex {
+  id: ID!
+  name: String!
+  email: String
+  noticesCount: Int!
+  readCount: Int!
 }
