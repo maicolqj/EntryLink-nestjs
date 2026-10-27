@@ -1,9 +1,10 @@
-import { Args, Query, Resolver } from '@nestjs/graphql';
+import { Args, ID, Query, Resolver } from '@nestjs/graphql';
 
 import { PlatformAnnouncementsService } from '../services/platform-announcements.service';
 import { PlatformAnnouncement } from '../entities/platform-announcement.entity';
 import { AnnouncementTargetInput } from '../dto/platform-announcement.inputs';
 import {
+  AnnouncementRecipientComplex,
   AnnouncementTargetPreview,
   PlatformAnnouncementPaginatedResult,
 } from '../dto/platform-announcement.responses';
@@ -47,5 +48,17 @@ export class PlatformAnnouncementsResolver {
     @Args('target') target: AnnouncementTargetInput,
   ): Promise<AnnouncementTargetPreview> {
     return this.announcementsService.previewTarget(target);
+  }
+
+  @Query(() => [AnnouncementRecipientComplex], {
+    name: 'platformAnnouncementRecipients',
+    description:
+      'Conjuntos que recibieron el comunicado, con avisos creados y leídos',
+  })
+  @Auth({ roles: PLATFORM_STAFF })
+  platformAnnouncementRecipients(
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<AnnouncementRecipientComplex[]> {
+    return this.announcementsService.findRecipients(id);
   }
 }

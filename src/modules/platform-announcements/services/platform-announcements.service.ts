@@ -11,6 +11,7 @@ import {
   SendPlatformAnnouncementDto,
 } from '../dto/platform-announcement.inputs';
 import {
+  AnnouncementRecipientComplex,
   AnnouncementTargetPreview,
   PlatformAnnouncementPaginatedResult,
 } from '../dto/platform-announcement.responses';
@@ -120,6 +121,55 @@ export class PlatformAnnouncementsService {
 
   async findById(id: string): Promise<PlatformAnnouncement | null> {
     return this.announcementRepo.findOne({ where: { id } });
+  }
+
+  /**
+   * Conjuntos a los que fue el comunicado, con los avisos creados y leídos en
+   * cada uno. Sale del snapshot `complexIds`: un conjunto borrado después ya
+   * no aparece.
+   */
+  async findRecipients(id: string): Promise<AnnouncementRecipientComplex[]> {
+    const announcement = await this.announcementRepo.findOne({
+      select: { id: true, complexIds: true },
+      where: { id },
+    });
+    if (!announcement) {
+      throw new CustomError({
+        message: 'Comunicado no encontrado',
+        statusCode: HttpStatus.NOT_FOUND,
+        errorCode: GeneralErrorCode.NOT_FOUND,
+      });
+    }
+    if (announcement.complexIds.length === 0) return [];
+
+    const [complexes, counts] = await Promise.all([
+      this.complexRepo.find({
+        select: { id: true, name: true, email: true },
+        where: { id: In(announcement.complexIds) },
+        order: { name: 'ASC' },
+      }),
+      this.notificationRepo
+        .createQueryBuilder('n')
+        .select('n.complexId', 'complexId')
+        .addSelect('COUNT(*)', 'notices')
+        .addSelect('SUM(CASE WHEN n.isRead THEN 1 ELSE 0 END)', 'read')
+        .where('n.entityType = :type', { type: ANNOUNCEMENT_ENTITY_TYPE })
+        .andWhere('n.entityId = :id', { id })
+        .groupBy('n.complexId')
+        .getRawMany<{ complexId: string; notices: string; read: string }>(),
+    ]);
+
+    const byComplex = new Map(counts.map((c) => [c.complexId, c]));
+    return complexes.map((c) => {
+      const count = byComplex.get(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        email: c.email?.trim() || null,
+        noticesCount: Number(count?.notices ?? 0),
+        readCount: Number(count?.read ?? 0),
+      };
+    });
   }
 
   /**

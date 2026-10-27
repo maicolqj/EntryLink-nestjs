@@ -1050,5 +1050,6 @@
   "faad74a6a45b6e7efac059b953f395d273566fb2": "query MySubscriptionPayments { __typename mySubscriptionPayments { __typename amountDue amountPaid complexId createdAt cycle id paidAt plan receiptMimeType receiptName reference reviewNote reviewedAt status } }",
   "901f996d0029d956a49828b98267a23645685fdf": "query ComplexSubscriptionPayments($complexId: ID!) { __typename complexSubscriptionPayments(complexId: $complexId) { __typename amountDue amountPaid complexId createdAt cycle id paidAt plan receiptMimeType receiptName reference reviewNote reviewedAt status } }",
   "2e60415690c6e764e86c77926e43364611720893": "mutation ApproveSubscriptionPayment($id: ID!) { __typename approveSubscriptionPayment(id: $id) { __typename id reviewedAt status } }",
-  "28a2a89fb0dc4cb00af9ea86f532310346294f17": "mutation RejectSubscriptionPayment($id: ID!, $reason: String!) { __typename rejectSubscriptionPayment(id: $id, reason: $reason) { __typename id reviewNote reviewedAt status } }"
+  "28a2a89fb0dc4cb00af9ea86f532310346294f17": "mutation RejectSubscriptionPayment($id: ID!, $reason: String!) { __typename rejectSubscriptionPayment(id: $id, reason: $reason) { __typename id reviewNote reviewedAt status } }",
+  "8875a69d75525811d3c491bb4a41af4dff67759b": "query GetPlatformAnnouncementRecipients($id: ID!) { __typename platformAnnouncementRecipients(id: $id) { __typename email id name noticesCount readCount } }"
 }
