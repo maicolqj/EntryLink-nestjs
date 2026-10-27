@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PlatformAnnouncement } from './entities/platform-announcement.entity';
+import { PlatformAnnouncementUserState } from './entities/platform-announcement-user-state.entity';
+import { PlatformAnnouncementsTrashCron } from './cron/platform-announcements-trash.cron';
 import { PlatformAnnouncementsService } from './services/platform-announcements.service';
 import { PlatformAnnouncementsResolver } from './resolvers/platform-announcements.resolver';
 import { PlatformAnnouncementsController } from './controllers/platform-announcements.controller';
@@ -23,6 +25,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     TypeOrmModule.forFeature([
       PlatformAnnouncement,
+      PlatformAnnouncementUserState, // destacado/archivado de cada quien
       ResidentialComplex, // segmentación por plan, estado y vinculación
       Resident, // residentes activos de cada conjunto
       Notification, // quién recibió el comunicado (descarga de adjuntos)
@@ -34,6 +37,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     PlatformAnnouncementsService,
     PlatformAnnouncementsResolver,
     PlatformAnnouncementNotificationDetailProvider,
+    PlatformAnnouncementsTrashCron,
   ],
 })
 export class PlatformAnnouncementsModule {}

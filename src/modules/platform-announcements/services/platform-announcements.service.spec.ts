@@ -95,8 +95,15 @@ function setup(options?: {
     save: jest.fn((data: Partial<PlatformAnnouncement>) =>
       Promise.resolve({ id: 'ann-1', createdAt: new Date(), ...data }),
     ),
-    update: jest.fn().mockResolvedValue(undefined),
+    update: jest.fn().mockResolvedValue({ affected: 0 }),
     findOne: jest.fn().mockResolvedValue(null),
+    find: jest.fn().mockResolvedValue([]),
+    delete: jest.fn().mockResolvedValue({ affected: 0 }),
+  };
+
+  const stateRepo = {
+    find: jest.fn().mockResolvedValue([]),
+    upsert: jest.fn().mockResolvedValue(undefined),
   };
 
   const countsQb = {
@@ -112,6 +119,7 @@ function setup(options?: {
   const notificationRepo = {
     exist: jest.fn().mockResolvedValue(false),
     createQueryBuilder: jest.fn(() => countsQb),
+    delete: jest.fn().mockResolvedValue({ affected: 7 }),
   };
   const mailService = {
     queuePlatformAnnouncementEmail: jest.fn().mockResolvedValue(undefined),
@@ -151,6 +159,7 @@ function setup(options?: {
 
   const service = new PlatformAnnouncementsService(
     announcementRepo as never,
+    stateRepo as never,
     complexRepo as never,
     residentRepo as never,
     notificationRepo as never,
@@ -163,6 +172,7 @@ function setup(options?: {
     service,
     qb,
     announcementRepo,
+    stateRepo,
     residentRepo,
     notificationRepo,
     notificationsService,
@@ -518,6 +528,108 @@ describe('PlatformAnnouncementsService', () => {
       await expect(service.findRecipients('nope')).rejects.toMatchObject({
         errorCode: GeneralErrorCode.NOT_FOUND,
       });
+    });
+  });
+
+  describe('bandeja', () => {
+    it('destacar guarda la marca solo para quien la pone', async () => {
+      const { service, announcementRepo, stateRepo } = setup();
+      announcementRepo.find.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
+
+      const result = await service.setStarred(
+        ['a1', 'a2', 'a1'],
+        ADMIN_ID,
+        true,
+      );
+
+      expect(result.affected).toBe(2);
+      const [rows, conflict] = stateRepo.upsert.mock.calls[0] as [
+        unknown[],
+        string[],
+      ];
+      expect(rows).toEqual([
+        { announcementId: 'a1', userId: ADMIN_ID, isStarred: true },
+        { announcementId: 'a2', userId: ADMIN_ID, isStarred: true },
+      ]);
+      expect(conflict).toEqual(['announcementId', 'userId']);
+    });
+
+    it('eliminar manda a la papelera y retira los avisos de los conjuntos', async () => {
+      const { service, announcementRepo, notificationRepo } = setup();
+      announcementRepo.find.mockResolvedValue([
+        { id: 'a1', status: AnnouncementStatus.SENT },
+      ]);
+
+      const result = await service.moveToTrash(['a1'], superAdmin);
+
+      expect(result).toEqual({ affected: 1, noticesRemoved: 7 });
+      const [, changes] = announcementRepo.update.mock.calls[0] as [
+        unknown,
+        { deletedAt: Date; deletedByUserId: string },
+      ];
+      expect(changes.deletedAt).toBeInstanceOf(Date);
+      expect(changes.deletedByUserId).toBe(ADMIN_ID);
+      const [criteria] = notificationRepo.delete.mock.calls[0] as [
+        { entityType: string },
+      ];
+      expect(criteria.entityType).toBe(ANNOUNCEMENT_ENTITY_TYPE);
+    });
+
+    it('no elimina lo que todavía se está enviando', async () => {
+      const { service, announcementRepo, notificationRepo } = setup();
+      announcementRepo.find.mockResolvedValue([
+        { id: 'a1', status: AnnouncementStatus.SENDING },
+      ]);
+
+      await expect(
+        service.moveToTrash(['a1'], superAdmin),
+      ).rejects.toMatchObject({
+        errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_STILL_SENDING,
+      });
+      expect(announcementRepo.update).not.toHaveBeenCalled();
+      expect(notificationRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it('eliminar para siempre borra la fila y sus archivos en R2', async () => {
+      const { service, announcementRepo, storageService } = setup();
+      announcementRepo.find.mockResolvedValue([
+        {
+          id: 'a1',
+          imageUrls: ['https://files.alternaqj.com/img.png'],
+          attachments: [
+            { key: 'att/acta.pdf', name: 'acta.pdf', mimeType: 'x', size: 1 },
+          ],
+        },
+      ]);
+
+      const result = await service.purgeFromTrash(['a1']);
+
+      expect(result.affected).toBe(1);
+      expect(announcementRepo.delete).toHaveBeenCalledTimes(1);
+      const keys = storageService.deleteByPublicId.mock.calls.map(
+        ([key]) => key as string,
+      );
+      expect(keys).toEqual([
+        'https://files.alternaqj.com/img.png',
+        'att/acta.pdf',
+      ]);
+    });
+
+    it('un conjunto ya no descarga adjuntos de un comunicado en la papelera', async () => {
+      const { service, announcementRepo, notificationRepo } = setup();
+      announcementRepo.findOne.mockResolvedValue({
+        id: 'a1',
+        deletedAt: new Date(),
+        attachments: [{ key: 'k', name: 'acta.pdf', mimeType: 'x', size: 1 }],
+      });
+      notificationRepo.exist.mockResolvedValue(true);
+
+      await expect(
+        service.resolveAttachment('a1', 0, resident),
+      ).rejects.toMatchObject({ errorCode: GeneralErrorCode.NOT_FOUND });
+      await expect(
+        service.resolveAttachment('a1', 0, superAdmin),
+      ).resolves.toMatchObject({ name: 'acta.pdf' });
     });
   });
 
