@@ -6,7 +6,8 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { GqlExceptionFilter } from '@nestjs/graphql';
+import { GqlArgumentsHost, GqlExceptionFilter } from '@nestjs/graphql';
+import * as Sentry from '@sentry/nestjs';
 import { CustomError } from '../utils/errors.utils';
 import { GeneralErrorCode } from '../constans/error-codes.constants';
 import { GraphQLError } from 'graphql';
@@ -73,6 +74,32 @@ export class UniversalExceptionFilter
     } else {
       this.logger.warn(`${summary} ${payload}`);
     }
+  }
+
+  /**
+   * Solo los 5xx van a Sentry: los 4xx son del cliente y ahogarían las caídas
+   * reales. Se adjunta el id del usuario y su conjunto, nunca datos personales.
+   */
+  private reportToSentry(
+    exception: unknown,
+    status: number,
+    request: any,
+    errorCode: string,
+  ) {
+    if (status < HttpStatus.INTERNAL_SERVER_ERROR) return;
+
+    Sentry.withScope((scope) => {
+      const user = request?.user as
+        { sub?: string; complexId?: string; roles?: string[] } | undefined;
+      if (user?.sub) scope.setUser({ id: user.sub });
+      if (user?.complexId) scope.setTag('complexId', user.complexId);
+      if (user?.roles?.length) scope.setTag('roles', user.roles.join(','));
+      scope.setTag('errorCode', errorCode);
+      scope.setTag('status', String(status));
+      Sentry.captureException(
+        exception instanceof Error ? exception : new Error(String(exception)),
+      );
+    });
   }
 
   /** Mapea un status HTTP a un errorCode de negocio para HttpException nativas
@@ -246,6 +273,7 @@ export class UniversalExceptionFilter
         request,
         JSON.stringify({ message, errorCode }),
       );
+      this.reportToSentry(exception, status, request, errorCode);
 
       response.status(status).json(errorResponse);
     } catch (error) {
@@ -261,6 +289,15 @@ export class UniversalExceptionFilter
         path: request.url,
         method: request.method,
       });
+    }
+  }
+
+  /** El request de una operación GraphQL (para saber quién la hizo). */
+  private graphqlRequest(host: ArgumentsHost): any {
+    try {
+      return GqlArgumentsHost.create(host).getContext<{ req?: unknown }>()?.req;
+    } catch {
+      return undefined;
     }
   }
 
@@ -309,6 +346,12 @@ export class UniversalExceptionFilter
       const gqlPayload = JSON.stringify({ message, errorCode, statusCode });
       if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
         this.logger.error(`GraphQL error`, gqlPayload);
+        this.reportToSentry(
+          exception,
+          statusCode,
+          this.graphqlRequest(host),
+          errorCode,
+        );
       } else {
         this.logger.warn(`GraphQL error ${gqlPayload}`);
       }

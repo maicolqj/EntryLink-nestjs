@@ -1,5 +1,6 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { MailerService } from '@nestjs-modules/mailer';
 import { Job } from 'bullmq';
 import { Readable } from 'node:stream';
@@ -45,6 +46,17 @@ export class MailProcessor extends WorkerHost {
       `Fallo al enviar correo [${job?.name ?? 'desconocido'}] — intento ${made}/${attempts}` +
         `${code ? ` | ${code}` : ''} | ${error.message}`,
     );
+
+    // Solo el último intento: los anteriores se reintentan solos. Sin el
+    // destinatario (dato personal), solo el tipo de correo.
+    if (made >= attempts) {
+      Sentry.withScope((scope) => {
+        scope.setTag('queue', MAIL_QUEUE_NAME);
+        scope.setTag('mailJob', job?.name ?? 'desconocido');
+        if (code) scope.setTag('smtpCode', code);
+        Sentry.captureException(error);
+      });
+    }
   }
 
   async process(job: Job): Promise<void> {

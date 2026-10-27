@@ -88,6 +88,11 @@ export const envValidationSchema = Joi.object({
   BULL_REMOVE_ON_FAIL: Joi.number().integer().default(5),
   BULL_ATTEMPTS: Joi.number().integer().default(3),
 
+  // ── Sentry (opcional: sin DSN no se envía nada) ──────────────────────────
+  SENTRY_DSN: Joi.string().uri().allow('').optional(),
+  SENTRY_ENVIRONMENT: Joi.string().allow('').optional(),
+  SENTRY_TRACES_SAMPLE_RATE: Joi.number().min(0).max(1).optional(),
+
   // ── Trusted Documents sync (solo requerido en producción) ─────────────────
   GRAPHQL_SYNC_SECRET: prodRequired(Joi.string().min(32)),
 }).options({ allowUnknown: true }); // permite vars de OS que no son del proyecto
