@@ -58,3 +58,31 @@ export class PlatformAnnouncementPaginatedResult {
   @Field(() => PaginationReponse)
   pagination: PaginationReponse;
 }
+
+/** Cuántos hay en cada carpeta para quien consulta. */
+@ObjectType()
+export class AnnouncementFolderCounts {
+  @Field(() => Int)
+  sent: number;
+
+  @Field(() => Int)
+  starred: number;
+
+  @Field(() => Int)
+  archived: number;
+
+  @Field(() => Int)
+  trash: number;
+}
+
+/** Resultado de una acción sobre varios comunicados a la vez. */
+@ObjectType()
+export class AnnouncementBulkResult {
+  /** Cuántos comunicados cambiaron. */
+  @Field(() => Int)
+  affected: number;
+
+  /** Avisos retirados de las bandejas de los conjuntos (al eliminar). */
+  @Field(() => Int, { defaultValue: 0 })
+  noticesRemoved: number;
+}

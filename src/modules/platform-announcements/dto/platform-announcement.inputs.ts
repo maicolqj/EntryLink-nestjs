@@ -17,6 +17,7 @@ import {
   AnnouncementAudience,
   AnnouncementCategory,
   AnnouncementChannel,
+  AnnouncementFolder,
   AnnouncementTargetMode,
 } from '../enums/platform-announcement.enums';
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
@@ -95,4 +96,25 @@ export class SendPlatformAnnouncementDto {
   @ValidateNested()
   @Type(() => AnnouncementTargetInput)
   target: AnnouncementTargetInput;
+}
+
+/** Carpeta, búsqueda y canal del historial. */
+@InputType()
+export class PlatformAnnouncementFilterInput {
+  @Field(() => AnnouncementFolder, { defaultValue: AnnouncementFolder.SENT })
+  @IsOptional()
+  @IsEnum(AnnouncementFolder)
+  folder?: AnnouncementFolder;
+
+  /** Busca en el título y el mensaje. */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+
+  @Field(() => AnnouncementChannel, { nullable: true })
+  @IsOptional()
+  @IsEnum(AnnouncementChannel)
+  channel?: AnnouncementChannel;
 }

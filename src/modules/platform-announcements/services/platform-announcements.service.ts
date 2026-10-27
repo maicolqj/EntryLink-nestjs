@@ -1,16 +1,20 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, LessThan, Not, Repository } from 'typeorm';
 
 import {
   AnnouncementAttachment,
   PlatformAnnouncement,
 } from '../entities/platform-announcement.entity';
+import { PlatformAnnouncementUserState } from '../entities/platform-announcement-user-state.entity';
 import {
   AnnouncementTargetInput,
+  PlatformAnnouncementFilterInput,
   SendPlatformAnnouncementDto,
 } from '../dto/platform-announcement.inputs';
 import {
+  AnnouncementBulkResult,
+  AnnouncementFolderCounts,
   AnnouncementRecipientComplex,
   AnnouncementTargetPreview,
   PlatformAnnouncementPaginatedResult,
@@ -19,6 +23,7 @@ import {
   ANNOUNCEMENT_CATEGORY_LABELS,
   AnnouncementAudience,
   AnnouncementChannel,
+  AnnouncementFolder,
   AnnouncementStatus,
   AnnouncementTargetMode,
 } from '../enums/platform-announcement.enums';
@@ -57,6 +62,9 @@ export const EMAIL_SPACING_MS = 600;
 
 export const ANNOUNCEMENT_ENTITY_TYPE = 'platform_announcement';
 
+/** Días que un comunicado se puede recuperar de la papelera. */
+export const ANNOUNCEMENT_TRASH_DAYS = 30;
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MB = 1024 * 1024;
 
@@ -72,6 +80,8 @@ export class PlatformAnnouncementsService {
   constructor(
     @InjectRepository(PlatformAnnouncement)
     private readonly announcementRepo: Repository<PlatformAnnouncement>,
+    @InjectRepository(PlatformAnnouncementUserState)
+    private readonly stateRepo: Repository<PlatformAnnouncementUserState>,
     @InjectRepository(ResidentialComplex)
     private readonly complexRepo: Repository<ResidentialComplex>,
     @InjectRepository(Resident)
@@ -96,14 +106,57 @@ export class PlatformAnnouncementsService {
 
   async findAll(
     pagination: PaginationInput,
+    userId: string,
+    filter: PlatformAnnouncementFilterInput = {},
   ): Promise<PlatformAnnouncementPaginatedResult> {
     const { page, limit } = pagination;
-    const [items, totalItems] = await this.announcementRepo.findAndCount({
-      relations: { createdBy: true },
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const folder = filter.folder ?? AnnouncementFolder.SENT;
+
+    const qb = this.announcementRepo
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.createdBy', 'cb')
+      .leftJoin(
+        PlatformAnnouncementUserState,
+        's',
+        's.announcementId = a.id AND s.userId = :userId',
+        { userId },
+      );
+
+    if (folder === AnnouncementFolder.TRASH) {
+      qb.withDeleted().where('a.deletedAt IS NOT NULL');
+    } else {
+      qb.where('a.deletedAt IS NULL');
+      if (folder === AnnouncementFolder.SENT) {
+        qb.andWhere('COALESCE(s.isArchived, false) = false');
+      } else if (folder === AnnouncementFolder.ARCHIVED) {
+        qb.andWhere('s.isArchived = true');
+      } else {
+        qb.andWhere('s.isStarred = true');
+      }
+    }
+
+    const search = filter.search?.trim();
+    if (search) {
+      qb.andWhere('(a.title ILIKE :q OR a.body ILIKE :q)', {
+        q: `%${search.replace(/[%_\\]/g, '\\$&')}%`,
+      });
+    }
+    if (filter.channel) {
+      qb.andWhere('a.channels @> CAST(:channel AS jsonb)', {
+        channel: JSON.stringify([filter.channel]),
+      });
+    }
+
+    const [items, totalItems] = await qb
+      .orderBy(
+        folder === AnnouncementFolder.TRASH ? 'a.deletedAt' : 'a.createdAt',
+        'DESC',
+      )
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    await this.attachUserMarks(items, userId);
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
@@ -123,6 +176,190 @@ export class PlatformAnnouncementsService {
     return this.announcementRepo.findOne({ where: { id } });
   }
 
+  /** Cuántos hay en cada carpeta para `userId`. */
+  async folderCounts(userId: string): Promise<AnnouncementFolderCounts> {
+    const row = await this.announcementRepo
+      .createQueryBuilder('a')
+      .withDeleted()
+      .leftJoin(
+        PlatformAnnouncementUserState,
+        's',
+        's.announcementId = a.id AND s.userId = :userId',
+        { userId },
+      )
+      .select(
+        'COUNT(*) FILTER (WHERE a.deletedAt IS NULL AND COALESCE(s.isArchived, false) = false)',
+        'sent',
+      )
+      .addSelect(
+        'COUNT(*) FILTER (WHERE a.deletedAt IS NULL AND s.isStarred = true)',
+        'starred',
+      )
+      .addSelect(
+        'COUNT(*) FILTER (WHERE a.deletedAt IS NULL AND s.isArchived = true)',
+        'archived',
+      )
+      .addSelect('COUNT(*) FILTER (WHERE a.deletedAt IS NOT NULL)', 'trash')
+      .getRawOne<Record<keyof AnnouncementFolderCounts, string>>();
+
+    return {
+      sent: Number(row?.sent ?? 0),
+      starred: Number(row?.starred ?? 0),
+      archived: Number(row?.archived ?? 0),
+      trash: Number(row?.trash ?? 0),
+    };
+  }
+
+  /** Destaca o quita el destacado, solo para `userId`. */
+  async setStarred(
+    ids: string[],
+    userId: string,
+    starred: boolean,
+  ): Promise<AnnouncementBulkResult> {
+    return this.setUserMark(ids, userId, { isStarred: starred });
+  }
+
+  /** Archiva o devuelve a Enviados, solo para `userId`. */
+  async setArchived(
+    ids: string[],
+    userId: string,
+    archived: boolean,
+  ): Promise<AnnouncementBulkResult> {
+    return this.setUserMark(ids, userId, { isArchived: archived });
+  }
+
+  /**
+   * Manda a la papelera y retira los avisos de las bandejas de los conjuntos
+   * (y con eso el acceso a los adjuntos). Los correos ya enviados y los push
+   * ya mostrados no se pueden recoger. Lo que se está repartiendo no se toca:
+   * el reparto seguiría creando avisos.
+   */
+  async moveToTrash(
+    ids: string[],
+    currentUser: JwtAccessPayload,
+  ): Promise<AnnouncementBulkResult> {
+    const rows = await this.announcementRepo.find({
+      select: { id: true, status: true },
+      where: { id: In(uniq(ids)) },
+    });
+    if (rows.some((r) => r.status === AnnouncementStatus.SENDING)) {
+      throw new CustomError({
+        message:
+          'Hay comunicados que todavía se están enviando. Espera a que terminen para eliminarlos.',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: PlatformAnnouncementErrorCode.ANNOUNCEMENT_STILL_SENDING,
+      });
+    }
+    if (rows.length === 0) return { affected: 0, noticesRemoved: 0 };
+
+    const found = rows.map((r) => r.id);
+    await this.announcementRepo.update(
+      { id: In(found) },
+      {
+        deletedAt: new Date(),
+        deletedByUserId:
+          currentUser.entityType === 'user' ? currentUser.sub : null,
+      },
+    );
+    const removed = await this.notificationRepo.delete({
+      entityType: ANNOUNCEMENT_ENTITY_TYPE,
+      entityId: In(found),
+    });
+    const noticesRemoved = removed.affected ?? 0;
+
+    this.logger.log(
+      `Comunicados a la papelera por ${currentUser.sub}: ${found.join(', ')} — ${noticesRemoved} avisos retirados`,
+    );
+    return { affected: found.length, noticesRemoved };
+  }
+
+  /**
+   * Saca de la papelera. Los avisos retirados al eliminar no vuelven: el
+   * comunicado regresa solo al historial.
+   */
+  async restoreFromTrash(ids: string[]): Promise<AnnouncementBulkResult> {
+    const result = await this.announcementRepo.update(
+      { id: In(uniq(ids)), deletedAt: Not(IsNull()) },
+      { deletedAt: null, deletedByUserId: null },
+    );
+    return { affected: result.affected ?? 0, noticesRemoved: 0 };
+  }
+
+  /** Elimina para siempre lo que está en la papelera, con sus archivos. */
+  async purgeFromTrash(ids: string[]): Promise<AnnouncementBulkResult> {
+    const rows = await this.announcementRepo.find({
+      withDeleted: true,
+      where: { id: In(uniq(ids)), deletedAt: Not(IsNull()) },
+    });
+    return { affected: await this.purgeRows(rows), noticesRemoved: 0 };
+  }
+
+  /** Lo que lleva más de 30 días en la papelera. Lo llama el cron. */
+  async purgeExpiredTrash(now = new Date()): Promise<number> {
+    const limit = new Date(
+      now.getTime() - ANNOUNCEMENT_TRASH_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const rows = await this.announcementRepo.find({
+      withDeleted: true,
+      where: { deletedAt: LessThan(limit) },
+      take: 200,
+    });
+    return this.purgeRows(rows);
+  }
+
+  private async purgeRows(rows: PlatformAnnouncement[]): Promise<number> {
+    if (rows.length === 0) return 0;
+
+    const keys = rows.flatMap((a) => [
+      ...a.imageUrls
+        .map((url) => this.storageService.keyFromPublicUrl(url))
+        .filter((key): key is string => !!key),
+      ...a.attachments.map((f) => f.key),
+    ]);
+
+    // Las marcas de cada quien caen por la FK en cascada.
+    await this.announcementRepo.delete({ id: In(rows.map((a) => a.id)) });
+    await this.purgeKeys(keys);
+    return rows.length;
+  }
+
+  private async setUserMark(
+    ids: string[],
+    userId: string,
+    mark: Partial<
+      Pick<PlatformAnnouncementUserState, 'isStarred' | 'isArchived'>
+    >,
+  ): Promise<AnnouncementBulkResult> {
+    // Solo los que existen y no están en la papelera.
+    const rows = await this.announcementRepo.find({
+      select: { id: true },
+      where: { id: In(uniq(ids)) },
+    });
+    if (rows.length === 0) return { affected: 0, noticesRemoved: 0 };
+
+    await this.stateRepo.upsert(
+      rows.map((r) => ({ announcementId: r.id, userId, ...mark })),
+      ['announcementId', 'userId'],
+    );
+    return { affected: rows.length, noticesRemoved: 0 };
+  }
+
+  private async attachUserMarks(
+    items: PlatformAnnouncement[],
+    userId: string,
+  ): Promise<void> {
+    if (items.length === 0) return;
+    const states = await this.stateRepo.find({
+      where: { userId, announcementId: In(items.map((a) => a.id)) },
+    });
+    const byId = new Map(states.map((s) => [s.announcementId, s]));
+    for (const item of items) {
+      const state = byId.get(item.id);
+      item.isStarred = state?.isStarred ?? false;
+      item.isArchived = state?.isArchived ?? false;
+    }
+  }
+
   /**
    * Conjuntos a los que fue el comunicado, con los avisos creados y leídos en
    * cada uno. Sale del snapshot `complexIds`: un conjunto borrado después ya
@@ -132,6 +369,7 @@ export class PlatformAnnouncementsService {
     const announcement = await this.announcementRepo.findOne({
       select: { id: true, complexIds: true },
       where: { id },
+      withDeleted: true, // también se consulta desde la papelera
     });
     if (!announcement) {
       throw new CustomError({
@@ -259,7 +497,10 @@ export class PlatformAnnouncementsService {
     index: number,
     currentUser: JwtAccessPayload,
   ): Promise<AnnouncementAttachment> {
-    const announcement = await this.findById(announcementId);
+    const announcement = await this.announcementRepo.findOne({
+      where: { id: announcementId },
+      withDeleted: true,
+    });
     const attachment = announcement?.attachments?.[index];
     if (!announcement || !attachment) throw notFound();
 
@@ -267,6 +508,8 @@ export class PlatformAnnouncementsService {
       PLATFORM_STAFF.includes(r),
     );
     if (isStaff) return attachment;
+    // En la papelera ya no es de los conjuntos (sus avisos se retiraron).
+    if (announcement.deletedAt) throw notFound();
 
     const received = await this.notificationRepo.exist({
       where: {
@@ -575,6 +818,10 @@ export function decodeFileName(name: string): string {
 
 function isValidEmail(email?: string | null): boolean {
   return !!email && EMAIL_RE.test(email.trim());
+}
+
+function uniq(ids: string[]): string[] {
+  return [...new Set(ids)];
 }
 
 function notFound(): CustomError {

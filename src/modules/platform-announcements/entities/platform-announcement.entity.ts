@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   JoinColumn,
@@ -157,4 +158,24 @@ export class PlatformAnnouncement {
   @Field()
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  // ── Papelera ──────────────────────────────────────────────────
+
+  /** En la papelera desde esta fecha; a los 30 días se elimina del todo. */
+  @Field(() => Date, { nullable: true })
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
+  deletedAt?: Date | null;
+
+  @Column({ name: 'deleted_by_user_id', type: 'uuid', nullable: true })
+  deletedByUserId?: string | null;
+
+  // ── Marcas de quien consulta (no son columnas) ────────────────
+
+  /** Destacado por quien consulta. Lo llena el servicio. */
+  @Field(() => Boolean)
+  isStarred = false;
+
+  /** Archivado por quien consulta. Lo llena el servicio. */
+  @Field(() => Boolean)
+  isArchived = false;
 }

@@ -7213,7 +7213,7 @@ type Query {
   ping: String!
 
   """Historial de comunicados enviados a los conjuntos"""
-  platformAnnouncements(pagination: PaginationInput): PlatformAnnouncementPaginatedResult!
+  platformAnnouncements(pagination: PaginationInput, filter: PlatformAnnouncementFilterInput): PlatformAnnouncementPaginatedResult!
 
   """Conjuntos que recibirían el comunicado con estos filtros"""
   platformAnnouncementTargetPreview(target: AnnouncementTargetInput!): AnnouncementTargetPreview!
@@ -7234,6 +7234,9 @@ type Query {
 
   """Conjuntos que recibieron el comunicado, con avisos creados y leídos"""
   platformAnnouncementRecipients(id: ID!): [AnnouncementRecipientComplex!]!
+
+  """Cuántos comunicados hay en cada carpeta para quien consulta"""
+  platformAnnouncementFolderCounts: AnnouncementFolderCounts!
 }
 
 input PaginationInput {
@@ -8256,6 +8259,23 @@ type Mutation {
 
   """Rechaza el soporte con motivo; el conjunto puede reenviar"""
   rejectSubscriptionPayment(id: ID!, reason: String!): SubscriptionPaymentSubmission!
+
+  """Destaca o quita el destacado (solo para quien lo hace)"""
+  starPlatformAnnouncements(ids: [ID!]!, starred: Boolean!): AnnouncementBulkResult!
+
+  """Archiva o devuelve a Enviados (solo para quien lo hace)"""
+  archivePlatformAnnouncements(ids: [ID!]!, archived: Boolean!): AnnouncementBulkResult!
+
+  """
+  Manda a la papelera y retira los avisos de las bandejas de los conjuntos
+  """
+  trashPlatformAnnouncements(ids: [ID!]!): AnnouncementBulkResult!
+
+  """Saca de la papelera (los avisos retirados no vuelven)"""
+  restorePlatformAnnouncements(ids: [ID!]!): AnnouncementBulkResult!
+
+  """Elimina para siempre lo que está en la papelera"""
+  purgePlatformAnnouncements(ids: [ID!]!): AnnouncementBulkResult!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -10701,6 +10721,9 @@ type PlatformAnnouncement {
   createdBy: User
   createdAt: DateTime!
   updatedAt: DateTime!
+  deletedAt: DateTime
+  isStarred: Boolean!
+  isArchived: Boolean!
 }
 
 """Tipo de comunicado de la plataforma"""
@@ -10848,4 +10871,37 @@ type AnnouncementRecipientComplex {
   email: String
   noticesCount: Int!
   readCount: Int!
+}
+
+"""Carpeta del historial de comunicados"""
+enum AnnouncementFolder {
+  """Enviados (sin archivados ni borrados)"""
+  SENT
+
+  """Destacados por quien consulta"""
+  STARRED
+
+  """Archivados por quien consulta"""
+  ARCHIVED
+
+  """Papelera: se eliminan solos a los 30 días"""
+  TRASH
+}
+
+input PlatformAnnouncementFilterInput {
+  folder: AnnouncementFolder! = SENT
+  search: String
+  channel: AnnouncementChannel
+}
+
+type AnnouncementFolderCounts {
+  sent: Int!
+  starred: Int!
+  archived: Int!
+  trash: Int!
+}
+
+type AnnouncementBulkResult {
+  affected: Int!
+  noticesRemoved: Int!
 }

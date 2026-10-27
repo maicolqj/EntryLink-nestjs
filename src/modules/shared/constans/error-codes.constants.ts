@@ -656,4 +656,6 @@ export enum PlatformAnnouncementErrorCode {
   ANNOUNCEMENT_NO_EMAILS = 'ANNOUNCEMENT_NO_EMAILS',
   /** Imagen o adjunto por encima del tamaño, o demasiados adjuntos. */
   ANNOUNCEMENT_FILES_LIMIT = 'ANNOUNCEMENT_FILES_LIMIT',
+  /** Se intentó eliminar un comunicado que todavía se está repartiendo. */
+  ANNOUNCEMENT_STILL_SENDING = 'ANNOUNCEMENT_STILL_SENDING',
 }

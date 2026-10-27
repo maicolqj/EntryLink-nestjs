@@ -102,3 +102,26 @@ export const ANNOUNCEMENT_CATEGORY_LABELS: Record<
   [AnnouncementCategory.NEWS]: 'Noticia',
   [AnnouncementCategory.OTHER]: 'Comunicado',
 };
+
+/**
+ * Carpetas del historial, como en el correo. Destacados y archivados son de
+ * cada quien; la papelera es de todo el equipo (el comunicado es uno solo).
+ */
+export enum AnnouncementFolder {
+  /** Todo lo enviado que no está archivado ni en la papelera. */
+  SENT = 'SENT',
+  STARRED = 'STARRED',
+  ARCHIVED = 'ARCHIVED',
+  TRASH = 'TRASH',
+}
+
+registerEnumType(AnnouncementFolder, {
+  name: 'AnnouncementFolder',
+  description: 'Carpeta del historial de comunicados',
+  valuesMap: {
+    SENT: { description: 'Enviados (sin archivados ni borrados)' },
+    STARRED: { description: 'Destacados por quien consulta' },
+    ARCHIVED: { description: 'Archivados por quien consulta' },
+    TRASH: { description: 'Papelera: se eliminan solos a los 30 días' },
+  },
+});
