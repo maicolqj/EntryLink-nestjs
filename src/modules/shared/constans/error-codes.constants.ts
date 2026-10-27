@@ -581,6 +581,19 @@ export enum SubscriptionErrorCode {
   REFERRAL_ALREADY_REWARDED = 'REFERRAL_ALREADY_REWARDED',
   /** Un conjunto no se recomienda a sí mismo. */
   REFERRAL_SELF = 'REFERRAL_SELF',
+  /** El botón de renovar se abre en los últimos días o ya vencida. */
+  SUBSCRIPTION_RENEWAL_NOT_OPEN = 'SUBSCRIPTION_RENEWAL_NOT_OPEN',
+  /** El valor declarado no cubre la cotización del conjunto. */
+  SUBSCRIPTION_PAYMENT_INCOMPLETE = 'SUBSCRIPTION_PAYMENT_INCOMPLETE',
+  /** Ya hay un soporte esperando revisión. */
+  SUBSCRIPTION_PAYMENT_PENDING_EXISTS = 'SUBSCRIPTION_PAYMENT_PENDING_EXISTS',
+  /** El soporte ya fue aprobado o rechazado. */
+  SUBSCRIPTION_PAYMENT_NOT_PENDING = 'SUBSCRIPTION_PAYMENT_NOT_PENDING',
+  SUBSCRIPTION_PAYMENT_NOT_FOUND = 'SUBSCRIPTION_PAYMENT_NOT_FOUND',
+  /** Falta el comprobante o el formato no se acepta. */
+  SUBSCRIPTION_PAYMENT_RECEIPT_REQUIRED = 'SUBSCRIPTION_PAYMENT_RECEIPT_REQUIRED',
+  /** La plataforma todavía no publicó el QR de pago. */
+  SUBSCRIPTION_PAYMENT_QR_NOT_SET = 'SUBSCRIPTION_PAYMENT_QR_NOT_SET',
 }
 
 export enum ComplexInfoErrorCode {

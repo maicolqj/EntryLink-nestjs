@@ -199,6 +199,8 @@ export const NOTIFICATION_AUDIENCE: Record<
   [NotificationType.SUBSCRIPTION_EXPIRED]: NotificationAudience.STAFF,
   [NotificationType.SUBSCRIPTION_SUSPENDED]: NotificationAudience.STAFF,
   [NotificationType.SUBSCRIPTION_RENEWED]: NotificationAudience.STAFF,
+  [NotificationType.SUBSCRIPTION_PAYMENT_SUBMITTED]: NotificationAudience.STAFF,
+  [NotificationType.SUBSCRIPTION_PAYMENT_REJECTED]: NotificationAudience.STAFF,
 
   // Quien envía elige si va a la administración, a los residentes o a ambos:
   // el mismo tipo se lee en el panel y en la app.

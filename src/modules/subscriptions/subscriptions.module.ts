@@ -15,6 +15,12 @@ import { ComplexSubscriptionFieldsResolver } from './resolvers/complex-subscript
 import { SubscriptionsCron } from './cron/subscriptions.cron';
 import { ComplexReferralsService } from './services/complex-referrals.service';
 import { ComplexReferralsResolver } from './resolvers/complex-referrals.resolver';
+import { SubscriptionPaymentSubmission } from './entities/subscription-payment-submission.entity';
+import { SubscriptionPaymentSettings } from './entities/subscription-payment-settings.entity';
+import { SubscriptionPaymentsService } from './services/subscription-payments.service';
+import { SubscriptionPaymentsResolver } from './resolvers/subscription-payments.resolver';
+import { SubscriptionPaymentsController } from './controllers/subscription-payments.controller';
+import { SubscriptionPaymentNotificationDetailProvider } from './providers/subscription-payment-notification-detail.provider';
 
 /**
  * Suscripción de los complejos a la plataforma: periodos mensuales o anuales,
@@ -28,11 +34,16 @@ import { ComplexReferralsResolver } from './resolvers/complex-referrals.resolver
       SubscriptionPlanPrice,
       SubscriptionReminder,
       SubscriptionTax,
+      SubscriptionPaymentSubmission,
+      SubscriptionPaymentSettings,
       ResidentialComplex,
       Unit,
     ]),
     NotificationsModule,
   ],
+  // Renovación con soporte de pago: el conjunto envía el comprobante y el
+  // SUPER_ADMIN lo aprueba desde el aviso o desde el panel del conjunto.
+  controllers: [SubscriptionPaymentsController],
   providers: [
     SubscriptionsService,
     SubscriptionRemindersService,
@@ -41,6 +52,9 @@ import { ComplexReferralsResolver } from './resolvers/complex-referrals.resolver
     SubscriptionsCron,
     ComplexReferralsService,
     ComplexReferralsResolver,
+    SubscriptionPaymentsService,
+    SubscriptionPaymentsResolver,
+    SubscriptionPaymentNotificationDetailProvider,
   ],
   exports: [SubscriptionsService],
 })

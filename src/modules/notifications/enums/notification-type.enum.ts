@@ -141,6 +141,8 @@ export enum NotificationType {
   SUBSCRIPTION_EXPIRED = 'SUBSCRIPTION_EXPIRED', // Venció y corre la gracia (aviso al complejo y a SUPER_ADMIN)
   SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED', // Pasó la gracia: panel en solo lectura (aviso al complejo y a SUPER_ADMIN)
   SUBSCRIPTION_RENEWED = 'SUBSCRIPTION_RENEWED', // Se registró un pago o una prueba (aviso al complejo)
+  SUBSCRIPTION_PAYMENT_SUBMITTED = 'SUBSCRIPTION_PAYMENT_SUBMITTED', // Un conjunto envió el soporte de pago para renovar (aviso a SUPER_ADMIN)
+  SUBSCRIPTION_PAYMENT_REJECTED = 'SUBSCRIPTION_PAYMENT_REJECTED', // El SUPER_ADMIN rechazó el soporte de pago (aviso al complejo, con motivo)
 
   // ── Comunicados de la plataforma ───────────────────────────────
   PLATFORM_ANNOUNCEMENT = 'PLATFORM_ANNOUNCEMENT', // Novedad, promoción o noticia de EntryLink (a la administración y/o a los residentes)
