@@ -32,4 +32,50 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  // ── Growth Suite: aislamiento de datos comerciales ────────────────────────
+  // La suite no importa módulos operativos (residentes, conjuntos, …): solo
+  // `shared` y los enums de roles/permisos. La lista autoritativa (allow-list,
+  // con rutas resueltas) está en src/modules/growth/growth-isolation.spec.ts.
+  {
+    files: ['src/modules/growth/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex:
+                '(^|/)(amenities|app-versions|audit|auth|call-logs|complex-info|data-export|device-management|finance|graphql-manifest|health|legal|maintenance|marketplace|messages|my-unit|notes|notifications|packages|pets|platform-announcements|pqrf|residential-complex|residents|security-app-exits|special-numbers|subscriptions|supervisor-visits|users|vehicles|visitor-parking|visitors|voting|mail|core)(/|$)',
+              message:
+                'Growth Suite: no importa módulos operativos. Ver src/modules/growth/README.md',
+            },
+            {
+              regex: '(^|/)(permissions|roles)/(?!enums/)',
+              message: 'Growth Suite: de roles y permisos solo se importan los enums.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Y al revés: fuera de la suite nadie la importa, salvo su catálogo de
+  // acceso (datos puros para seeds y el bloqueo de roles inactivos).
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/modules/growth/**', 'src/app.module.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)growth/(?!shared/growth-access\\.catalog$)',
+              message:
+                'Solo src/app.module.ts registra la Growth Suite; fuera de ella solo se importa growth/shared/growth-access.catalog.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

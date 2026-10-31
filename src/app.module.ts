@@ -63,6 +63,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
 import { SecurityAppExitsModule } from './modules/security-app-exits/security-app-exits.module';
+import { GrowthLoaderModule } from './modules/growth/growth.loader';
 import { PlatformAnnouncementsModule } from './modules/platform-announcements/platform-announcements.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
@@ -267,6 +268,8 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     DataExportModule,
     SecurityAppExitsModule,
     PlatformAnnouncementsModule,
+    // Growth Suite: solo con GROWTH_ENABLED=true explícito (ver growth.loader.ts).
+    GrowthLoaderModule.register(),
     MailModule,
     BullBoardAppModule,
     HealthModule,

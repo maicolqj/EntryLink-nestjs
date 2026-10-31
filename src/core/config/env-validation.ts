@@ -90,4 +90,28 @@ export const envValidationSchema = Joi.object({
 
   // ── Trusted Documents sync (solo requerido en producción) ─────────────────
   GRAPHQL_SYNC_SECRET: prodRequired(Joi.string().min(32)),
+
+  // ── Growth Suite (apagada por defecto) ────────────────────────────────────
+  // Solo con GROWTH_ENABLED=true se registra el módulo (src/modules/growth).
+  // `.empty('')`: docker compose pasa '' cuando la variable no está definida.
+  GROWTH_ENABLED: Joi.boolean().empty('').default(false),
+  // Llavero HMAC versionado de la lista de exclusión: "1:<base64>,2:<base64>".
+  // Obligatorio solo con la suite encendida. Ver docs/growth/ACTIVATION.md.
+  GROWTH_SUPPRESSION_HMAC_KEYS: Joi.string()
+    .empty('')
+    .pattern(/^\d+:[A-Za-z0-9+/=]{43,}(,\d+:[A-Za-z0-9+/=]{43,})*$/)
+    .when('GROWTH_ENABLED', {
+      is: true,
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }),
+  GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: Joi.number()
+    .empty('')
+    .integer()
+    .min(1)
+    .when('GROWTH_ENABLED', {
+      is: true,
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }),
 }).options({ allowUnknown: true }); // permite vars de OS que no son del proyecto
