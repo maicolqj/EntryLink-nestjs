@@ -1,5 +1,6 @@
 import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -84,6 +85,9 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
 
 @Module({
   imports: [
+    // ── Observabilidad (Sentry); el SDK se inicia en src/instrument.ts ───
+    SentryModule.forRoot(),
+
     // ── Configuración global ─────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
