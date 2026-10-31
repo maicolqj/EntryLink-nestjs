@@ -1,6 +1,6 @@
 {
   "name": "phone-dialer-nestjs",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "description": "",
   "author": "",
   "private": true,
@@ -22,6 +22,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:growth:int": "jest --config ./test/jest-growth-int.json --runInBand",
     "seed": "ts-node -r tsconfig-paths/register src/core/database/seeds/commands/seed.commands.ts",
     "seed:permissions": "yarn seed permissions",
     "seed:roles": "yarn seed roles",

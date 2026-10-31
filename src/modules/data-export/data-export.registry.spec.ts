@@ -22,7 +22,9 @@ describe('Registro de exportación de datos', () => {
     await (
       dataSource as unknown as { buildMetadatas: () => Promise<void> }
     ).buildMetadatas();
-  });
+    // Carga y transpila TODAS las entidades del proyecto: con la suite completa
+    // en paralelo supera el límite por defecto de 5 s.
+  }, 30_000);
 
   const entries = DATA_EXPORT_MODULES.flatMap((module) =>
     module.entities.map((entity) => ({ module: module.module, entity })),

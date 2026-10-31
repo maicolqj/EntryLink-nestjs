@@ -116,6 +116,10 @@ services:
       BULL_REMOVE_ON_COMPLETE: ${BULL_REMOVE_ON_COMPLETE:-10}
       BULL_REMOVE_ON_FAIL: ${BULL_REMOVE_ON_FAIL:-5}
       BULL_ATTEMPTS: ${BULL_ATTEMPTS:-3}
+      # Growth Suite (apagada por defecto; ver docs/growth/ACTIVATION.md)
+      GROWTH_ENABLED: ${GROWTH_ENABLED:-false}
+      GROWTH_SUPPRESSION_HMAC_KEYS: ${GROWTH_SUPPRESSION_HMAC_KEYS:-}
+      GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: ${GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION:-}
     depends_on:
       postgres:
         condition: service_healthy
