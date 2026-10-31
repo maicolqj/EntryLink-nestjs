@@ -42,13 +42,31 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
   yarn test:growth:int
 ```
 
-Reversión: `yarn migration:revert` ×3 con las mismas variables. Tras revertir,
+Hay dos suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
+
+- `growth-db.int-spec.ts` (fase 0, 23 pruebas);
+- `prospects-db.int-spec.ts` (entrega 1A, 22 pruebas):
+  - fuente ACTIVE obligatoria y evidencia por campo;
+  - NIT único y dígito de verificación;
+  - trigger de transiciones de validación;
+  - separación de funciones y excepción de SUPER_ADMIN auditada y desactivable;
+  - requisitos de VALIDATED (empresa y administrador independiente: PROFESSIONAL o DIRECT con base documentada);
+  - bloqueo jurídico en la base (CHECK) y en el servicio;
+  - la vista de contactables;
+  - lista de exclusión antes de guardar canales (correo y dominio);
+  - historial de administración (una vigente) y de vínculos laborales;
+  - asignaciones con historial;
+  - visibilidad por asignación;
+  - dashboard;
+  - configuración no borrable.
+
+Reversión: `yarn migration:revert` con las mismas variables (×3 para revertir solo 1A, ×6 para revertir también la fase 0). Tras revertir,
 el `pg_dump --schema-only` debe ser igual al de antes de migrar, salvo los
 valores de enum agregados, que Postgres no permite quitar.
 
 ## Esquema GraphQL con la bandera apagada
 
 Con `GROWTH_ENABLED` ausente o en `false`, el esquema generado al arrancar debe
-ser igual al de `main`, salvo 16 valores nuevos de los enums `ValidPermissions`
-(13) y `ValidRoles` (3). Se verifica arrancando `dist/main` de los dos checkouts
+ser igual al de `main`, salvo 24 valores nuevos de los enums `ValidPermissions`
+(21) y `ValidRoles` (3). Se verifica arrancando `dist/main` de los dos checkouts
 contra servicios desechables y comparando sus `src/schema.gql` generados.

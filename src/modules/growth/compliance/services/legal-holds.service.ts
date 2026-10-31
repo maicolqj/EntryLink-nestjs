@@ -8,6 +8,20 @@ import { GrowthErrorCode } from '../../shared/growth-error-codes';
 import { GrowthEntityType } from '../../shared/growth.enums';
 import { GrowthDataSource } from '../../sources/entities/growth-data-source.entity';
 import { TeamMember } from '../../team/entities/team-member.entity';
+import {
+  OrganizationChannel,
+  PersonChannel,
+} from '../../prospects/entities/channels.entity';
+import { Evidence } from '../../prospects/entities/evidence.entity';
+import { GrowthSettings } from '../../prospects/entities/growth-settings.entity';
+import { Organization } from '../../prospects/entities/organization.entity';
+import { Person } from '../../prospects/entities/person.entity';
+import { Property } from '../../prospects/entities/property.entity';
+import { ProspectAssignment } from '../../prospects/entities/prospect-assignment.entity';
+import {
+  Employment,
+  PropertyManagement,
+} from '../../prospects/entities/relations.entity';
 import { DataSubjectRequest } from '../entities/data-subject-request.entity';
 import { LegalHold } from '../entities/legal-hold.entity';
 import { Suppression } from '../entities/suppression.entity';
@@ -28,6 +42,16 @@ const HOLDABLE: Record<GrowthEntityType, EntityTarget<ObjectLiteral>> = {
   [GrowthEntityType.SUPPRESSION]: Suppression,
   [GrowthEntityType.DATA_SUBJECT_REQUEST]: DataSubjectRequest,
   [GrowthEntityType.LEGAL_HOLD]: LegalHold,
+  [GrowthEntityType.ORGANIZATION]: Organization,
+  [GrowthEntityType.PERSON]: Person,
+  [GrowthEntityType.PROPERTY]: Property,
+  [GrowthEntityType.ORGANIZATION_CHANNEL]: OrganizationChannel,
+  [GrowthEntityType.PERSON_CHANNEL]: PersonChannel,
+  [GrowthEntityType.EMPLOYMENT]: Employment,
+  [GrowthEntityType.PROPERTY_MANAGEMENT]: PropertyManagement,
+  [GrowthEntityType.EVIDENCE]: Evidence,
+  [GrowthEntityType.PROSPECT_ASSIGNMENT]: ProspectAssignment,
+  [GrowthEntityType.SETTINGS]: GrowthSettings,
 };
 
 const MAX_YEARS = 10;

@@ -19,6 +19,43 @@ import { DataSourcesService } from './sources/services/data-sources.service';
 import { TeamMember } from './team/entities/team-member.entity';
 import { GrowthTeamResolver } from './team/resolvers/growth-team.resolver';
 import { TeamMembersService } from './team/services/team-members.service';
+import {
+  OrganizationChannel,
+  PersonChannel,
+} from './prospects/entities/channels.entity';
+import { Evidence } from './prospects/entities/evidence.entity';
+import { GrowthSettings } from './prospects/entities/growth-settings.entity';
+import { Organization } from './prospects/entities/organization.entity';
+import { Person } from './prospects/entities/person.entity';
+import { Property } from './prospects/entities/property.entity';
+import { ProspectAssignment } from './prospects/entities/prospect-assignment.entity';
+import {
+  Employment,
+  PropertyManagement,
+} from './prospects/entities/relations.entity';
+import {
+  GrowthEvidenceResolver,
+  GrowthProspectOperationsResolver,
+} from './prospects/resolvers/prospect-operations.resolver';
+import {
+  GrowthOrganizationChannelResolver,
+  GrowthOrganizationsResolver,
+  GrowthPeopleResolver,
+  GrowthPersonChannelResolver,
+  GrowthPropertiesResolver,
+} from './prospects/resolvers/prospect-records.resolver';
+import { AssignmentsService } from './prospects/services/assignments.service';
+import { ChannelsService } from './prospects/services/channels.service';
+import { EvidencesService } from './prospects/services/evidences.service';
+import { LegalBasisService } from './prospects/services/legal-basis.service';
+import { OrganizationsService } from './prospects/services/organizations.service';
+import { PeopleService } from './prospects/services/people.service';
+import { PropertiesService } from './prospects/services/properties.service';
+import { ProspectDashboardService } from './prospects/services/prospect-dashboard.service';
+import { ProspectGuardsService } from './prospects/services/prospect-guards.service';
+import { RelationshipsService } from './prospects/services/relationships.service';
+import { ValidationService } from './prospects/services/validation.service';
+import './prospects/prospects.enums';
 
 /**
  * EntryLink Growth Suite (comercial de Alterna QJ). Se registra SOLO con
@@ -37,6 +74,17 @@ import { TeamMembersService } from './team/services/team-members.service';
       SuppressionHash,
       DataSubjectRequest,
       LegalHold,
+      // EntryLink Prospect (1A)
+      Organization,
+      Person,
+      Property,
+      OrganizationChannel,
+      PersonChannel,
+      Employment,
+      PropertyManagement,
+      Evidence,
+      ProspectAssignment,
+      GrowthSettings,
     ]),
   ],
   providers: [
@@ -52,6 +100,25 @@ import { TeamMembersService } from './team/services/team-members.service';
     GrowthTeamResolver,
     GrowthDataSourcesResolver,
     GrowthComplianceResolver,
+    // EntryLink Prospect (1A)
+    ProspectGuardsService,
+    EvidencesService,
+    ChannelsService,
+    OrganizationsService,
+    PeopleService,
+    PropertiesService,
+    RelationshipsService,
+    ValidationService,
+    AssignmentsService,
+    LegalBasisService,
+    ProspectDashboardService,
+    GrowthOrganizationsResolver,
+    GrowthOrganizationChannelResolver,
+    GrowthPeopleResolver,
+    GrowthPersonChannelResolver,
+    GrowthPropertiesResolver,
+    GrowthProspectOperationsResolver,
+    GrowthEvidenceResolver,
   ],
 })
 export class GrowthModule {}

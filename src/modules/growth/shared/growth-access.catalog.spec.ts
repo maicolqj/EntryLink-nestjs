@@ -10,6 +10,11 @@ import {
   GROWTH_PERMISSION_ROWS,
   GROWTH_ROLE_ROWS,
 } from '../../../core/database/migrations/1781010100000-GrowthRolesAndPermissionsData';
+import { GROWTH_PROSPECT_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781010300000-GrowthProspectPermissionsEnum';
+import {
+  GROWTH_PROSPECT_PERMISSION_ROWS,
+  GROWTH_PROSPECT_ROLE_GRANTS,
+} from '../../../core/database/migrations/1781010400000-GrowthProspectPermissionsData';
 import {
   GROWTH_COMPLIANCE_PERMISSIONS,
   GROWTH_PERMISSIONS,
@@ -21,8 +26,15 @@ import {
 const sorted = (xs: string[]) => [...xs].sort();
 
 describe('Catálogo de acceso de la Growth Suite', () => {
-  it('la migración de datos es copia fiel del catálogo (permisos)', () => {
-    expect(GROWTH_PERMISSION_ROWS).toEqual(
+  // Las migraciones de cada entrega quedan congeladas: el catálogo debe ser
+  // exactamente la unión de todas ellas.
+  const ALL_PERMISSION_ROWS = [
+    ...GROWTH_PERMISSION_ROWS,
+    ...GROWTH_PROSPECT_PERMISSION_ROWS,
+  ];
+
+  it('las migraciones de datos son copia fiel del catálogo (permisos)', () => {
+    expect(ALL_PERMISSION_ROWS).toEqual(
       GROWTH_PERMISSIONS.map((p) => ({
         id: p.id,
         name: p.name,
@@ -34,15 +46,29 @@ describe('Catálogo de acceso de la Growth Suite', () => {
     );
   });
 
-  it('la migración de datos es copia fiel del catálogo (roles)', () => {
-    expect(GROWTH_ROLE_ROWS).toEqual(GROWTH_ROLES.map((r) => ({ ...r })));
+  it('las migraciones de datos son copia fiel del catálogo (roles y sus permisos)', () => {
+    for (const role of GROWTH_ROLES) {
+      const phase0 = GROWTH_ROLE_ROWS.find((r) => r.name === role.name)!;
+      const { permissions: phase0Perms, ...phase0Role } = phase0;
+      const { permissions, ...catalogRole } = role;
+      expect(catalogRole).toEqual(phase0Role);
+      expect(sorted(permissions)).toEqual(
+        sorted([
+          ...phase0Perms,
+          ...(GROWTH_PROSPECT_ROLE_GRANTS[role.name] ?? []),
+        ]),
+      );
+    }
   });
 
-  it('la migración de enums agrega exactamente los roles y permisos del catálogo', () => {
+  it('las migraciones de enums agregan exactamente los roles y permisos del catálogo', () => {
     expect(sorted(GROWTH_ROLE_ENUM_VALUES)).toEqual(sorted(GROWTH_ROLE_NAMES));
-    expect(sorted(GROWTH_PERMISSION_ENUM_VALUES)).toEqual(
-      sorted(GROWTH_PERMISSIONS.map((p) => p.name)),
-    );
+    expect(
+      sorted([
+        ...GROWTH_PERMISSION_ENUM_VALUES,
+        ...GROWTH_PROSPECT_PERMISSION_ENUM_VALUES,
+      ]),
+    ).toEqual(sorted(GROWTH_PERMISSIONS.map((p) => p.name)));
   });
 
   it('todos los valores existen en los enums de la aplicación', () => {
