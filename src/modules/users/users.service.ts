@@ -46,6 +46,7 @@ import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
 import { Role } from '../roles/entities/role.entity';
 import { ValidRoles } from '../roles/enums/valid-roles';
+import { isInactiveGrowthRole } from '../growth/shared/growth-access.catalog';
 import {
   ensureResidentRole,
   roleNeedsResidentBase,
@@ -1590,7 +1591,19 @@ export class UsersService {
       );
     }
 
+    this.assertGrowthRoleActive(role);
     return role;
+  }
+
+  /** Los roles de la Growth Suite no se asignan mientras estén inactivos. */
+  private assertGrowthRoleActive(role: Role): void {
+    if (isInactiveGrowthRole(role)) {
+      throw new CustomError({
+        message: `El rol '${role.name}' está inactivo y no se puede asignar`,
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
   }
 
   // ── Cargo del usuario ────────────────────────────────────────────────────
@@ -1636,6 +1649,7 @@ export class UsersService {
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
+    this.assertGrowthRoleActive(role);
 
     const current = user.userRoles ?? [];
     const jobRoles = current.filter(

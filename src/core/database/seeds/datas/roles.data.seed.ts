@@ -1,5 +1,6 @@
 import { ValidPermissions } from '../../../../modules/permissions/enums/valid-permissions';
 import { ValidRoles } from '../../../../modules/roles/enums/valid-roles';
+import { GROWTH_ROLES } from '../../../../modules/growth/shared/growth-access.catalog';
 
 export interface RoleSeedData {
   id: string;
@@ -9,6 +10,8 @@ export interface RoleSeedData {
   frontName: string;
   icon: string;
   hierarchyLevel: number;
+  /** Solo al crear. Vacío = activo. Los roles de la Growth Suite nacen inactivos. */
+  status?: boolean;
 }
 
 export const ROLES_TO_SEED: RoleSeedData[] = [
@@ -235,4 +238,6 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
     icon: 'office-building',
     hierarchyLevel: 1,
   },
+
+  ...GROWTH_ROLES.map((r) => ({ ...r, status: false })),
 ];

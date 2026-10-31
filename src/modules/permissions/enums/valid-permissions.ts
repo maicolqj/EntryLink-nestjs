@@ -412,6 +412,50 @@ export enum ValidPermissions {
   /** Definir categorías, vigencia y política de moderación. ➜ Nivel: [HIGH] | Requiere: [VIEW_MARKETPLACE] */
   MANAGE_MARKETPLACE_SETTINGS = 'MANAGE_MARKETPLACE_SETTINGS',
 
+  // ═══════════════════════════════════════════════════════
+  // GROWTH SUITE (comercial de Alterna QJ, sin datos de conjuntos)
+  // Se crean inactivos (status = false) hasta autorizar GROWTH_ENABLED.
+  // ═══════════════════════════════════════════════════════
+
+  /** Ver el equipo comercial. ➜ Nivel: [LOW] */
+  VIEW_GROWTH_TEAM = 'VIEW_GROWTH_TEAM',
+
+  /** Agregar, editar y desactivar integrantes del equipo comercial. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_TEAM] */
+  MANAGE_GROWTH_TEAM = 'MANAGE_GROWTH_TEAM',
+
+  /** Ver la actividad de todo el equipo (la propia siempre es visible). ➜ Nivel: [MEDIUM] */
+  VIEW_GROWTH_ACTIVITY = 'VIEW_GROWTH_ACTIVITY',
+
+  /** Ver el catálogo de fuentes de información. ➜ Nivel: [LOW] */
+  VIEW_GROWTH_SOURCES = 'VIEW_GROWTH_SOURCES',
+
+  /** Registrar y editar fuentes de información. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_SOURCES] */
+  MANAGE_GROWTH_SOURCES = 'MANAGE_GROWTH_SOURCES',
+
+  /** Registrar la revisión jurídica de una fuente. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_GROWTH_SOURCES] */
+  REVIEW_GROWTH_SOURCES_LEGAL = 'REVIEW_GROWTH_SOURCES_LEGAL',
+
+  /** Aprobar costo, presupuesto y tope de una fuente de pago. Ningún rol lo tiene: solo SUPER_ADMIN. ➜ Nivel: [CRITICAL] | Requiere: [MANAGE_GROWTH_SOURCES] */
+  APPROVE_GROWTH_PAID_SOURCES = 'APPROVE_GROWTH_PAID_SOURCES',
+
+  /** Ver la lista de exclusión comercial. ➜ Nivel: [MEDIUM] */
+  VIEW_GROWTH_SUPPRESSIONS = 'VIEW_GROWTH_SUPPRESSIONS',
+
+  /** Agregar una exclusión y consultar si un dato está excluido. ➜ Nivel: [MEDIUM] */
+  ADD_GROWTH_SUPPRESSIONS = 'ADD_GROWTH_SUPPRESSIONS',
+
+  /** Levantar una exclusión con soporte jurídico. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_GROWTH_SUPPRESSIONS] */
+  LIFT_GROWTH_SUPPRESSIONS = 'LIFT_GROWTH_SUPPRESSIONS',
+
+  /** Ver solicitudes de titulares (Ley 1581). ➜ Nivel: [MEDIUM] */
+  VIEW_GROWTH_PRIVACY_REQUESTS = 'VIEW_GROWTH_PRIVACY_REQUESTS',
+
+  /** Registrar y resolver solicitudes de titulares. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_PRIVACY_REQUESTS] */
+  MANAGE_GROWTH_PRIVACY_REQUESTS = 'MANAGE_GROWTH_PRIVACY_REQUESTS',
+
+  /** Crear y liberar retenciones legales. ➜ Nivel: [CRITICAL] */
+  MANAGE_GROWTH_LEGAL_HOLDS = 'MANAGE_GROWTH_LEGAL_HOLDS',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }

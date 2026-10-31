@@ -21,6 +21,16 @@ export enum ValidRoles {
    * mantenimiento como "personal interno". Por ahora no inicia sesión.
    */
   MAINTENANCE_ROL = 'MAINTENANCE_ROL',
+  /**
+   * Growth Suite: dirección comercial de Alterna QJ. Administra el equipo,
+   * las fuentes y la lista de exclusión. No pertenece a ningún conjunto.
+   * Nace inactivo (status = false) hasta autorizar GROWTH_ENABLED.
+   */
+  GROWTH_MANAGER_ROL = 'GROWTH_MANAGER_ROL',
+  /** Growth Suite: ejecutivo comercial. Sin conjunto. Nace inactivo. */
+  SALES_ROL = 'SALES_ROL',
+  /** Growth Suite: investigador de prospectos, sin contacto comercial. Sin conjunto. Nace inactivo. */
+  GROWTH_RESEARCHER_ROL = 'GROWTH_RESEARCHER_ROL',
 }
 
 registerEnumType(ValidRoles, {
