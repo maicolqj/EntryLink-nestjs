@@ -25,6 +25,16 @@ conjuntos** y no toca datos de residentes.
 5. Ningún input usa un campo llamado `complexId`: `ComplexModuleGuard` lo
    interpretaría como un conjunto.
 
+## EntryLink Prospect (`prospects/`, entrega 1A)
+
+- Empresas, personas y copropiedades con canales, vínculos laborales e historial de administración, evidencias por campo, asignaciones con historial y validación humana.
+- `ProspectGuardsService` concentra:
+  - fuente ACTIVE obligatoria;
+  - visibilidad (sin `VIEW_ALL_GROWTH_PROSPECTS` solo lo propio o asignado; lo ajeno responde NOT_FOUND);
+  - separación de funciones con la excepción de SUPER_ADMIN, auditada y desactivable.
+- `LegalBasisService` es el único que cambia la base jurídica y la autorización de contacto. La base lo respalda con CHECK.
+- Los datos personales (canales y evidencias de personas) se enmascaran en los resolvers de campo, no en la interfaz.
+
 ## Integridad
 
 - Toda escritura registra su evento en `growth.activity_events` dentro de la

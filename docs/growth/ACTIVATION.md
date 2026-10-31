@@ -12,11 +12,11 @@ SUPER_ADMIN puede usar la suite.
 
 | Elemento | Estado |
 |---|---|
-| Esquema `growth` y sus 7 tablas | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`) |
+| Esquema `growth` y sus 17 tablas (7 de la fase 0 + 10 de 1A) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL` y la fila de `growth.settings`) |
 | `GROWTH_MANAGER_ROL`, `SALES_ROL`, `GROWTH_RESEARCHER_ROL` | existen con `status = false`: no se pueden asignar |
-| 13 permisos del grupo `GROWTH` | existen con `status = false`, asignados solo a esos 3 roles |
+| 21 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A) | existen con `status = false`, asignados solo a esos 3 roles |
 | `COMPILANCE_OFFICER_ROL` | sin permisos de la suite |
-| API GraphQL | sin operaciones `growth*`; el esquema solo suma los 16 valores nuevos de los enums `ValidRoles` y `ValidPermissions` |
+| API GraphQL | sin operaciones `growth*`; el esquema solo suma 24 valores nuevos de los enums `ValidRoles` (3) y `ValidPermissions` (21) |
 
 ## 1. Requisitos previos
 
@@ -73,11 +73,14 @@ SELECT r.id, p.id
     'VIEW_GROWTH_TEAM', 'VIEW_GROWTH_ACTIVITY', 'VIEW_GROWTH_SOURCES',
     'REVIEW_GROWTH_SOURCES_LEGAL', 'VIEW_GROWTH_SUPPRESSIONS',
     'LIFT_GROWTH_SUPPRESSIONS', 'VIEW_GROWTH_PRIVACY_REQUESTS',
-    'MANAGE_GROWTH_PRIVACY_REQUESTS', 'MANAGE_GROWTH_LEGAL_HOLDS')
+    'MANAGE_GROWTH_PRIVACY_REQUESTS', 'MANAGE_GROWTH_LEGAL_HOLDS',
+    -- Entrega 1A (EntryLink Prospect)
+    'VIEW_GROWTH_PROSPECTS', 'VIEW_ALL_GROWTH_PROSPECTS', 'VIEW_GROWTH_CONTACT_DATA',
+    'REVIEW_GROWTH_LEGAL_BASIS', 'AUTHORIZE_GROWTH_CONTACT')
  WHERE r.name = 'COMPILANCE_OFFICER_ROL'
 ON CONFLICT DO NOTHING;
 
--- Verificación: debe devolver 3 roles activos y 13 permisos activos.
+-- Verificación: debe devolver 3 roles activos y 21 permisos activos (13 de la fase 0 + 8 de 1A).
 SELECT name, status FROM public.roles WHERE name::text LIKE '%GROWTH%' OR name = 'SALES_ROL';
 SELECT count(*) FILTER (WHERE status) AS activos FROM public.permissions WHERE "group" = 'GROWTH';
 
@@ -129,3 +132,9 @@ los contactos que la suite conoce en claro.
 | Apagar la suite | `GROWTH_ENABLED=false` y redesplegar. Las operaciones desaparecen; los datos quedan. |
 | Desactivar roles | `UPDATE public.roles SET status = false WHERE name IN (…)` + `UPDATE public.permissions SET status = false WHERE "group" = 'GROWTH'` |
 | Quitar el esquema (solo si está vacío y con aprobación) | `yarn migration:revert` ×3 en orden. **Borra los datos de la suite.** Los valores de enum quedan, porque Postgres no permite quitarlos; sin filas son inocuos. |
+
+## 9. EntryLink Prospect (1A) — antes de capturar
+
+1. **Fuente activa.** Toda alta exige una fuente `ACTIVE`, así que primero se completan la revisión jurídica y la activación de al menos una fuente (paso 6).
+2. **Excepción de auto-validación.** `growth.settings.allow_super_admin_self_validation` nace en `true`: mientras el equipo sea una sola persona, SUPER_ADMIN puede validar lo que registró, y cada uso queda como `SELF_VALIDATION_EXCEPTION` en `growth.activity_events`. Al incorporar otros validadores se apaga con `growthUpdateSettings(input: { allowSuperAdminSelfValidation: false })`.
+3. **Contacto comercial.** Ninguna persona queda contactable por validarse. Hacen falta tres pasos de cumplimiento: base jurídica documentada (`growthSetPersonLegalBasis`), persona validada y autorización expresa (`growthSetPersonContactStatus`). La vista `growth.v_contactable_person_channels` es el único punto de entrada que tendrá Outreach.

@@ -35,9 +35,17 @@ Por eso:
 | `LEGAL_OBLIGATION` | Conservación exigida por ley | validar |
 | `PENDING_LEGAL_REVIEW` | Valor por defecto | **bloquea cualquier contacto comercial** |
 
-Regla técnica de la fase 1: un contacto con `PENDING_LEGAL_REVIEW` no entra a
-ninguna secuencia de contacto, y la base lo impide con un CHECK, no solo el
-código.
+Implementado en la entrega 1A:
+
+- Toda persona nace con `legal_basis = PENDING_LEGAL_REVIEW` y `contact_status = NOT_AUTHORIZED`, con fuente obligatoria y finalidad registrada (la explícita o la de la fuente).
+- **CHECK `ck_growth_people_contact_requires_basis`:** `AUTHORIZED` exige una base distinta de pendiente, una referencia documentada y la revisión registrada, además de que la persona no esté anonimizada ni borrada. Ni la aplicación ni un `UPDATE` directo pueden saltárselo.
+- **CHECK `ck_growth_people_legal_trace`:** una base distinta de pendiente exige referencia, revisor y fecha.
+- Volver a `PENDING_LEGAL_REVIEW` revoca en la misma operación un contacto autorizado.
+- Autorizar exige además que la persona esté VALIDATED. Validar **no** autoriza contacto.
+- Outreach (fase 3) solo leerá `growth.v_contactable_person_channels`: canales verificados de personas `AUTHORIZED` con base válida. Además deberá consultar la lista de exclusión antes de cada envío.
+- Los correos y teléfonos de personas, y sus evidencias, se enmascaran **en el servidor** para quien no tiene `VIEW_GROWTH_CONTACT_DATA`.
+- Antes de guardar un correo, teléfono o sitio se consulta la lista de exclusión (correo y dominio). Si está excluido no se guarda, y el evento no conserva el dato.
+- `retention_review_at` = 12 meses desde la última verificación o interacción, calculado por trigger. La anonimización llega con la entrega 1E.
 
 ## 2. Finalidad
 
