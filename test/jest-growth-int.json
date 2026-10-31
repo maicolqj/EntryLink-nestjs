@@ -1,0 +1,11 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "test/growth/.*\\.int-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": { "allowJs": true } }]
+  },
+  "transformIgnorePatterns": ["node_modules/(?!(uuid|@nestjs/bullmq|@nestjs/bull-shared)/)"],
+  "testEnvironment": "node",
+  "testTimeout": 60000
+}

@@ -26,7 +26,9 @@ describe('DataExportService', () => {
     await (
       metadataSource as unknown as { buildMetadatas: () => Promise<void> }
     ).buildMetadatas();
-  });
+    // Carga y transpila TODAS las entidades del proyecto: con la suite completa
+    // en paralelo supera el límite por defecto de 5 s.
+  }, 30_000);
 
   const admin = {
     sub: 'complex-1',
