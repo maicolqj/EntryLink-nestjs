@@ -23,6 +23,12 @@ import {
 } from './shared/growth-access.catalog';
 import { GrowthDataSourcesResolver } from './sources/resolvers/growth-data-sources.resolver';
 import { GrowthTeamResolver } from './team/resolvers/growth-team.resolver';
+import {
+  GrowthOrganizationsResolver,
+  GrowthPeopleResolver,
+  GrowthPropertiesResolver,
+} from './prospects/resolvers/prospect-records.resolver';
+import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
 
 /**
  * Matriz rol × operación con el guard REAL de la plataforma. Los permisos de
@@ -34,6 +40,10 @@ const RESOLVERS = [
   GrowthTeamResolver,
   GrowthDataSourcesResolver,
   GrowthComplianceResolver,
+  GrowthOrganizationsResolver,
+  GrowthPeopleResolver,
+  GrowthPropertiesResolver,
+  GrowthProspectOperationsResolver,
 ];
 
 type Operation = {
@@ -119,6 +129,47 @@ describe('Autorización de la Growth Suite', () => {
         'growthTeamMembers',
         'growthUpdateDataSource',
         'growthUpdateTeamMember',
+        // Entrega 1A
+        'growthOrganizations',
+        'growthOrganization',
+        'growthCreateOrganization',
+        'growthUpdateOrganization',
+        'growthPeople',
+        'growthPerson',
+        'growthCreatePerson',
+        'growthUpdatePerson',
+        'growthProperties',
+        'growthProperty',
+        'growthCreateProperty',
+        'growthUpdateProperty',
+        'growthAddOrganizationChannel',
+        'growthAddPersonChannel',
+        'growthVerifyOrganizationChannel',
+        'growthVerifyPersonChannel',
+        'growthDiscardChannel',
+        'growthLinkEmployment',
+        'growthEndEmployment',
+        'growthSetPropertyManager',
+        'growthEndPropertyManagement',
+        'growthEvidences',
+        'growthAddEvidence',
+        'growthVerifyEvidence',
+        'growthMarkEvidenceObsolete',
+        'growthReviewQueue',
+        'growthValidationChecklist',
+        'growthSubmitForReview',
+        'growthTakeForValidation',
+        'growthReleaseValidation',
+        'growthDecideValidation',
+        'growthReopenValidation',
+        'growthAssignProspect',
+        'growthUnassignProspect',
+        'growthAssignmentHistory',
+        'growthSetPersonLegalBasis',
+        'growthSetPersonContactStatus',
+        'growthProspectDashboard',
+        'growthSettings',
+        'growthUpdateSettings',
       ].sort(),
     );
   });
@@ -193,6 +244,12 @@ describe('Autorización de la Growth Suite', () => {
           'growthCreateLegalHold',
           'growthDataSubjectRequests',
           'growthCreateDataSource',
+          'growthDecideValidation',
+          'growthVerifyEvidence',
+          'growthAssignProspect',
+          'growthSetPersonLegalBasis',
+          'growthSetPersonContactStatus',
+          'growthUpdateSettings',
         ],
       },
       [ValidRoles.GROWTH_RESEARCHER_ROL]: {
@@ -201,12 +258,19 @@ describe('Autorización de la Growth Suite', () => {
           'growthDataSources',
           'growthAddSuppression',
           'growthActivity',
+          'growthCreateOrganization',
+          'growthAddEvidence',
+          'growthOrganizations',
         ],
         cannot: [
           'growthLiftSuppression',
           'growthAddTeamMember',
           'growthSetDataSourceStatus',
           'growthCreateDataSubjectRequest',
+          'growthDecideValidation',
+          'growthVerifyEvidence',
+          'growthAssignProspect',
+          'growthSetPersonContactStatus',
         ],
       },
       [ValidRoles.GROWTH_MANAGER_ROL]: {
@@ -219,6 +283,10 @@ describe('Autorización de la Growth Suite', () => {
           'growthAddSuppression',
           'growthCreateDataSubjectRequest',
           'growthCloseDataSubjectRequest',
+          'growthTakeForValidation',
+          'growthDecideValidation',
+          'growthVerifyEvidence',
+          'growthAssignProspect',
         ],
         cannot: [
           'growthLiftSuppression',
@@ -226,6 +294,9 @@ describe('Autorización de la Growth Suite', () => {
           'growthReviewDataSourceLegal',
           'growthCreateLegalHold',
           'growthReleaseLegalHold',
+          'growthSetPersonLegalBasis',
+          'growthSetPersonContactStatus',
+          'growthUpdateSettings',
         ],
       },
     };
@@ -286,6 +357,11 @@ describe('Autorización de la Growth Suite', () => {
     expect(await check('growthReviewDataSourceLegal')).toBe(true);
     expect(await check('growthApproveDataSourceCost')).toBe(false);
     expect(await check('growthAddTeamMember')).toBe(false);
+    // Base jurídica y contacto: solo cumplimiento; no registra ni valida.
+    expect(await check('growthSetPersonLegalBasis')).toBe(true);
+    expect(await check('growthSetPersonContactStatus')).toBe(true);
+    expect(await check('growthCreateOrganization')).toBe(false);
+    expect(await check('growthDecideValidation')).toBe(false);
   });
 
   describe('sin caminos alternativos', () => {

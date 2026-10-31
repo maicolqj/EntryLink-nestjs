@@ -12,6 +12,8 @@
  * Ver docs/growth/TESTING.md para preparar la base.
  */
 import 'reflect-metadata';
+import { resetGrowthTestData } from './db-cleanup';
+import { GROWTH_PERMISSIONS } from '../../src/modules/growth/shared/growth-access.catalog';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, QueryFailedError } from 'typeorm';
 import { ValidRoles } from '../../src/modules/roles/enums/valid-roles';
@@ -111,27 +113,8 @@ describeDb('Growth Suite — base de datos real', () => {
     if (!/test/i.test(db))
       throw new Error(`Base "${db}" no parece de prueba: abortado`);
 
-    await ds.query(`SET session_replication_role = replica`); // solo para limpiar
-    await ds.query(`DELETE FROM growth.suppression_hashes`);
-    await ds.query(`DELETE FROM growth.suppressions`);
-    await ds.query(`DELETE FROM growth.activity_events`);
-    await ds.query(`SET session_replication_role = DEFAULT`);
-    await ds.query(`DELETE FROM growth.legal_holds`);
-    await ds.query(`DELETE FROM growth.data_subject_requests`);
-    await ds.query(`DELETE FROM growth.team_members`);
-    await ds.query(`DELETE FROM growth.data_sources WHERE code LIKE 'IT_%'`);
-    // Las fuentes sembradas vuelven a su estado inicial (corridas anteriores).
-    await ds.query(
-      `UPDATE growth.data_sources SET status = 'PENDING_APPROVAL', legal_review_status = 'PENDING',
-              legal_review_reference = NULL, legal_reviewed_by_user_id = NULL, legal_reviewed_at = NULL,
-              cost_approved_by_user_id = NULL, cost_approved_at = NULL, monthly_budget_cop = NULL,
-              monthly_request_cap = NULL, cost_estimate_notes = NULL,
-              created_by_user_id = NULL, updated_by_user_id = NULL`,
-    );
-    await ds.query(
-      `DELETE FROM public.user_has_roles WHERE user_id::text LIKE 'aaaaaaaa-%'`,
-    );
-    await ds.query(`DELETE FROM public.users WHERE id::text LIKE 'aaaaaaaa-%'`);
+    // Ambas suites comparten la base: se limpian también las tablas de 1A.
+    await resetGrowthTestData(ds, ['aaaaaaaa-', 'bbbbbbbb-']);
 
     for (const [id, email, phone, complexId] of [
       [SALES_USER, 'ventas@alternaqj.com', '3009990001', null],
@@ -175,7 +158,10 @@ describeDb('Growth Suite — base de datos real', () => {
       const [perms] = await ds.query(
         `SELECT count(*)::int AS n, bool_or(status) AS any_active FROM public.permissions WHERE "group" = 'GROWTH'`,
       );
-      expect(perms).toEqual({ n: 13, any_active: false });
+      expect(perms).toEqual({
+        n: GROWTH_PERMISSIONS.length,
+        any_active: false,
+      });
     });
 
     it('ningún rol fuera de la suite recibe permisos GROWTH en la migración', async () => {

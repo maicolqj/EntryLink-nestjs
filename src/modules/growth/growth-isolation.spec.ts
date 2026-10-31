@@ -113,12 +113,22 @@ describe('Aislamiento de la Growth Suite', () => {
     );
     const growthTargets = new Set(growthEntities.map((t) => t.target));
 
-    it('las 7 entidades viven en el esquema growth', () => {
+    it('todas las entidades de la suite viven en el esquema growth', () => {
       expect(growthEntities.map((t) => t.name).sort()).toEqual([
         'activity_events',
         'data_sources',
         'data_subject_requests',
+        'employments',
+        'evidences',
         'legal_holds',
+        'organization_channels',
+        'organizations',
+        'people',
+        'person_channels',
+        'properties',
+        'property_managements',
+        'prospect_assignments',
+        'settings',
         'suppression_hashes',
         'suppressions',
         'team_members',
