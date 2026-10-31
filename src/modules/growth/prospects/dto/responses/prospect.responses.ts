@@ -6,9 +6,11 @@ import { Organization } from '../../entities/organization.entity';
 import { Person } from '../../entities/person.entity';
 import { Property } from '../../entities/property.entity';
 import {
+  GrowthPriority,
   GrowthProspectKind,
   GrowthValidationStatus,
 } from '../../prospects.enums';
+import { DuplicateCandidate } from '../../entities/dedupe-scoring.entity';
 import { ActivityEvent } from '../../../activity/entities/activity-event.entity';
 
 @ObjectType('PaginatedGrowthOrganizations')
@@ -126,6 +128,48 @@ export class GrowthKindStats {
   byStatus: GrowthStatusCount[];
 }
 
+@ObjectType('GrowthPriorityCount')
+export class GrowthPriorityCount {
+  @Field(() => GrowthPriority)
+  priority: GrowthPriority;
+
+  @Field(() => Int)
+  count: number;
+}
+
+@ObjectType('GrowthTopProspect')
+export class GrowthTopProspect {
+  @Field(() => GrowthProspectKind)
+  kind: GrowthProspectKind;
+
+  @Field()
+  id: string;
+
+  @Field()
+  displayName: string;
+
+  @Field(() => Int)
+  score: number;
+
+  @Field(() => GrowthPriority)
+  priority: GrowthPriority;
+
+  @Field({ description: 'true si el puntaje usa datos estimados' })
+  hasEstimates: boolean;
+
+  @Field(() => GrowthValidationStatus)
+  validationStatus: GrowthValidationStatus;
+}
+
+@ObjectType('PaginatedGrowthDuplicates')
+export class PaginatedGrowthDuplicates {
+  @Field(() => [DuplicateCandidate])
+  items: DuplicateCandidate[];
+
+  @Field(() => PaginationReponse)
+  pagination: PaginationReponse;
+}
+
 @ObjectType('GrowthProspectDashboard')
 export class GrowthProspectDashboard {
   @Field(() => Int, { description: 'Meta de prospectos validados' })
@@ -160,6 +204,19 @@ export class GrowthProspectDashboard {
 
   @Field(() => [ActivityEvent])
   recentActivity: ActivityEvent[];
+
+  @Field(() => [GrowthPriorityCount], {
+    description: 'Empresas e independientes por prioridad',
+  })
+  priorityCounts: GrowthPriorityCount[];
+
+  @Field(() => [GrowthTopProspect], { description: 'Los 10 de mayor puntaje' })
+  topProspects: GrowthTopProspect[];
+
+  @Field(() => Int, {
+    description: 'Posibles duplicados pendientes de revisión',
+  })
+  pendingDuplicates: number;
 }
 
 export type ProspectEntityType =

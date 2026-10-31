@@ -208,6 +208,23 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
     level: 'CRITICAL',
     dependsOn: [P.REVIEW_GROWTH_LEGAL_BASIS],
   },
+  // ── Entrega 1B: deduplicación y scoring ─────────────────────────────────
+  {
+    id: 'f73ada18-5553-4172-85d5-13815b110bd1',
+    name: P.MERGE_GROWTH_DUPLICATES,
+    label: 'Fusionar Duplicados',
+    description: 'Fusionar o descartar posibles duplicados (siempre manual)',
+    level: 'HIGH',
+    dependsOn: [P.VIEW_ALL_GROWTH_PROSPECTS],
+  },
+  {
+    id: '6f3da221-ac06-4601-ac85-26cdbba8b9a0',
+    name: P.MANAGE_GROWTH_SCORING,
+    label: 'Configurar Scoring',
+    description: 'Configurar reglas y umbrales del scoring comercial',
+    level: 'HIGH',
+    dependsOn: [P.VIEW_GROWTH_PROSPECTS],
+  },
 ];
 
 export const GROWTH_ROLES: GrowthRoleDefinition[] = [
@@ -235,6 +252,8 @@ export const GROWTH_ROLES: GrowthRoleDefinition[] = [
       P.VIEW_GROWTH_CONTACT_DATA,
       P.VALIDATE_GROWTH_PROSPECTS,
       P.ASSIGN_GROWTH_PROSPECTS,
+      P.MERGE_GROWTH_DUPLICATES,
+      P.MANAGE_GROWTH_SCORING,
     ],
   },
   {

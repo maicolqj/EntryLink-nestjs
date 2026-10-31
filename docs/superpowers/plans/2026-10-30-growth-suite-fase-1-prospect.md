@@ -424,3 +424,42 @@ Aplicable a Prospect en 1D:
 - mapa de copropiedades por localidad (fase posterior: exige geocodificación).
 
 Adaptación obligatoria: acento **cyan** (no violeta), contraste AA, iconos SVG (lucide, ya en la web), cifras tabulares, sin fotos de personas (dato personal: iniciales en su lugar).
+
+---
+
+## 17. Entrega 1B — deduplicación, fusiones y scoring (diseño)
+
+**Aprobación:** el usuario respondió "continúa" tras presentar 1A (#271). Se toma como luz verde para desarrollar 1B. **No** autoriza fusionar PR ni desplegar.
+
+### Decisiones técnicas
+
+| Tema | Decisión | Motivo |
+|---|---|---|
+| Similitud de nombres | Trigramas calculados en la aplicación (Jaccard), sin `pg_trgm` | `CREATE EXTENSION` en producción puede fallar por permisos; si falla la migración, el contenedor no arranca. Para miles de registros el cálculo en memoria es suficiente |
+| Ejecución | Cola BullMQ `growth-prospects` (Redis existente) con trabajos `dedupe`, `score` y `rescore-all`, encolados **después** del commit, con `jobId` estable para no duplicar trabajo | No bloquea la API; reintentos con backoff |
+| Registros fusionados | `merged_into_id` + estado `DUPLICATE`. No se borran; salen de listas, bandeja y conteos | Se conserva el historial |
+| Trigger de transiciones | Permite `* → DUPLICATE` **solo** si en la misma operación se fija `merged_into_id` | La fusión es la única vía para llegar ahí desde cualquier estado |
+| Personas fusionadas | Si el sobreviviente tenía contacto `AUTHORIZED`, pasa a `REVOKED` y requiere nueva autorización | Criterio conservador: dos fuentes de datos personales se combinaron |
+| Scoring | Reglas con **lista cerrada de predicados** y parámetros validados por predicado; umbrales y versión en `growth.settings`; un puntaje vigente por prospecto, con desglose y base `VERIFIED`/`ESTIMATED` por regla | Configurable y explicable; nunca valida ni autoriza contacto |
+| A quién se puntúa | Empresas y administradores independientes (los prospectos de la meta) | |
+
+### Señales de duplicado
+
+| Señal | Empresa | Persona | Copropiedad | Peso |
+|---|---|---|---|---|
+| NIT exacto | ✓ | | ✓ | 100 |
+| Matrícula inmobiliaria exacta | | | ✓ | 100 |
+| Correo exacto | ✓ | ✓ | | 90 |
+| Teléfono exacto | ✓ | ✓ | | 70 |
+| Dominio exacto (excepto gmail, hotmail, outlook, yahoo, icloud, live) | ✓ | | | 80 |
+| Dirección normalizada exacta | ✓ | | ✓ | 60 |
+| Nombre: similitud ≥ 0,85 / ≥ 0,7 | ✓ | ✓ (solo con empresa o copropiedad en común) | ✓ (misma localidad o ciudad) | 50 / 30 |
+
+Puntaje = suma de las señales, con tope de 100. Desde 50 se crea un candidato `PENDING`.
+
+### Permisos nuevos (inactivos)
+
+- `MERGE_GROWTH_DUPLICATES` (HIGH): gerente.
+- `MANAGE_GROWTH_SCORING` (HIGH): gerente.
+
+Ver duplicados exige `VIEW_ALL_GROWTH_PROSPECTS`.

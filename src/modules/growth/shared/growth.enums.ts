@@ -24,6 +24,9 @@ export enum GrowthEntityType {
   EVIDENCE = 'EVIDENCE',
   PROSPECT_ASSIGNMENT = 'PROSPECT_ASSIGNMENT',
   SETTINGS = 'SETTINGS',
+  // Entrega 1B
+  DUPLICATE_CANDIDATE = 'DUPLICATE_CANDIDATE',
+  SCORING_RULE = 'SCORING_RULE',
 }
 
 export enum GrowthTeamMemberStatus {

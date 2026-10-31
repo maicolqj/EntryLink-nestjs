@@ -130,6 +130,39 @@ export enum GrowthEvidenceStatus {
   OBSOLETE = 'OBSOLETE',
 }
 
+export enum GrowthDuplicateStatus {
+  PENDING = 'PENDING',
+  MERGED = 'MERGED',
+  DISMISSED = 'DISMISSED',
+}
+
+export enum GrowthPriority {
+  HIGH = 'HIGH',
+  MEDIUM = 'MEDIUM',
+  LOW = 'LOW',
+}
+
+/** Lista cerrada: la base no evalúa expresiones libres. */
+export enum GrowthScoringPredicate {
+  PROPERTIES_GTE = 'PROPERTIES_GTE',
+  PROPERTIES_BETWEEN = 'PROPERTIES_BETWEEN',
+  UNITS_GT = 'UNITS_GT',
+  VERIFIED_CHANNEL = 'VERIFIED_CHANNEL',
+  INTEREST_SIGNAL_IN = 'INTEREST_SIGNAL_IN',
+}
+
+/** Si una regla se evaluó con datos verificados o con estimados. */
+export enum GrowthScoreBasis {
+  VERIFIED = 'VERIFIED',
+  ESTIMATED = 'ESTIMATED',
+}
+
+/** De qué registro tomar un campo en conflicto al fusionar. */
+export enum GrowthMergeSide {
+  SURVIVOR = 'SURVIVOR',
+  MERGED = 'MERGED',
+}
+
 const enums: Array<[object, string, string]> = [
   [
     GrowthValidationStatus,
@@ -178,6 +211,23 @@ const enums: Array<[object, string, string]> = [
     GrowthEvidenceStatus,
     'GrowthEvidenceStatus',
     'Estado de verificación de la evidencia',
+  ],
+  [
+    GrowthDuplicateStatus,
+    'GrowthDuplicateStatus',
+    'Estado de un posible duplicado',
+  ],
+  [GrowthPriority, 'GrowthPriority', 'Prioridad comercial (scoring)'],
+  [
+    GrowthScoringPredicate,
+    'GrowthScoringPredicate',
+    'Condición evaluable de una regla de scoring',
+  ],
+  [GrowthScoreBasis, 'GrowthScoreBasis', 'Dato verificado o estimado'],
+  [
+    GrowthMergeSide,
+    'GrowthMergeSide',
+    'Registro del que se toma un campo al fusionar',
   ],
 ];
 for (const [e, name, description] of enums) {

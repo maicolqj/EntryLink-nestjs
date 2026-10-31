@@ -480,6 +480,12 @@ export enum ValidPermissions {
   /** Autorizar o revocar el contacto comercial de una persona. ➜ Nivel: [CRITICAL] | Requiere: [REVIEW_GROWTH_LEGAL_BASIS] */
   AUTHORIZE_GROWTH_CONTACT = 'AUTHORIZE_GROWTH_CONTACT',
 
+  /** Fusionar o descartar posibles duplicados (siempre manual). ➜ Nivel: [HIGH] | Requiere: [VIEW_ALL_GROWTH_PROSPECTS] */
+  MERGE_GROWTH_DUPLICATES = 'MERGE_GROWTH_DUPLICATES',
+
+  /** Configurar reglas y umbrales del scoring comercial. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  MANAGE_GROWTH_SCORING = 'MANAGE_GROWTH_SCORING',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }

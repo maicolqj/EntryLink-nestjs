@@ -55,6 +55,22 @@ import { ProspectDashboardService } from './prospects/services/prospect-dashboar
 import { ProspectGuardsService } from './prospects/services/prospect-guards.service';
 import { RelationshipsService } from './prospects/services/relationships.service';
 import { ValidationService } from './prospects/services/validation.service';
+import { BullModule } from '@nestjs/bullmq';
+import {
+  DuplicateCandidate,
+  MergeLog,
+  ProspectScore,
+  ScoringRule,
+} from './prospects/entities/dedupe-scoring.entity';
+import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
+import { DedupeService } from './prospects/services/dedupe.service';
+import { MergeService } from './prospects/services/merge.service';
+import {
+  GROWTH_PROSPECTS_QUEUE,
+  ProspectEventsService,
+} from './prospects/services/prospect-events.service';
+import { ProspectJobsProcessor } from './prospects/services/prospect-jobs.processor';
+import { ScoringService } from './prospects/services/scoring.service';
 import './prospects/prospects.enums';
 
 /**
@@ -85,7 +101,14 @@ import './prospects/prospects.enums';
       Evidence,
       ProspectAssignment,
       GrowthSettings,
+      // Entrega 1B
+      DuplicateCandidate,
+      MergeLog,
+      ScoringRule,
+      ProspectScore,
     ]),
+    // Cola propia de la suite (Redis existente): duplicados y scoring.
+    BullModule.registerQueue({ name: GROWTH_PROSPECTS_QUEUE }),
   ],
   providers: [
     GrowthHashService,
@@ -119,6 +142,13 @@ import './prospects/prospects.enums';
     GrowthPropertiesResolver,
     GrowthProspectOperationsResolver,
     GrowthEvidenceResolver,
+    // Entrega 1B
+    ProspectEventsService,
+    ScoringService,
+    DedupeService,
+    MergeService,
+    ProspectJobsProcessor,
+    GrowthDedupeScoringResolver,
   ],
 })
 export class GrowthModule {}
