@@ -456,6 +456,30 @@ export enum ValidPermissions {
   /** Crear y liberar retenciones legales. ➜ Nivel: [CRITICAL] */
   MANAGE_GROWTH_LEGAL_HOLDS = 'MANAGE_GROWTH_LEGAL_HOLDS',
 
+  /** Ver prospectos asignados o creados por uno mismo. ➜ Nivel: [LOW] */
+  VIEW_GROWTH_PROSPECTS = 'VIEW_GROWTH_PROSPECTS',
+
+  /** Ver todos los prospectos sin importar el responsable. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  VIEW_ALL_GROWTH_PROSPECTS = 'VIEW_ALL_GROWTH_PROSPECTS',
+
+  /** Registrar y editar empresas, personas, copropiedades, relaciones y evidencias. ➜ Nivel: [MEDIUM] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  EDIT_GROWTH_PROSPECTS = 'EDIT_GROWTH_PROSPECTS',
+
+  /** Ver en claro correos y teléfonos de personas. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  VIEW_GROWTH_CONTACT_DATA = 'VIEW_GROWTH_CONTACT_DATA',
+
+  /** Tomar y decidir validaciones, verificar evidencias. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  VALIDATE_GROWTH_PROSPECTS = 'VALIDATE_GROWTH_PROSPECTS',
+
+  /** Asignar responsables a los prospectos. ➜ Nivel: [HIGH] | Requiere: [VIEW_ALL_GROWTH_PROSPECTS] */
+  ASSIGN_GROWTH_PROSPECTS = 'ASSIGN_GROWTH_PROSPECTS',
+
+  /** Registrar la base jurídica de tratamiento de una persona. ➜ Nivel: [CRITICAL] | Requiere: [VIEW_GROWTH_PROSPECTS] */
+  REVIEW_GROWTH_LEGAL_BASIS = 'REVIEW_GROWTH_LEGAL_BASIS',
+
+  /** Autorizar o revocar el contacto comercial de una persona. ➜ Nivel: [CRITICAL] | Requiere: [REVIEW_GROWTH_LEGAL_BASIS] */
+  AUTHORIZE_GROWTH_CONTACT = 'AUTHORIZE_GROWTH_CONTACT',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }
