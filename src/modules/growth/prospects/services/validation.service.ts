@@ -204,6 +204,7 @@ export class ValidationService {
       const qb = this.dataSource.manager
         .createQueryBuilder(target.entity, 'e')
         .where('e.deleted_at IS NULL')
+        .andWhere('e.merged_into_id IS NULL')
         .andWhere('e.validation_status IN (:...statuses)', { statuses })
         .orderBy('e.updatedAt', 'ASC')
         .take(100);

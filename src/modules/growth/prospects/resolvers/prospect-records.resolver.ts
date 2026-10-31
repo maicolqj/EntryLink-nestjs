@@ -44,6 +44,9 @@ import { PeopleService } from '../services/people.service';
 import { PropertiesService } from '../services/properties.service';
 import { RelationshipsService } from '../services/relationships.service';
 import { maskChannel } from '../shared/masking';
+import { ProspectEventsService } from '../services/prospect-events.service';
+import { ScoringService } from '../services/scoring.service';
+import { ProspectScore } from '../entities/dedupe-scoring.entity';
 
 const PAGE = { page: 1, limit: 25 };
 
@@ -56,6 +59,8 @@ export class GrowthOrganizationsResolver {
     private readonly channelService: ChannelsService,
     private readonly relationships: RelationshipsService,
     private readonly assignments: AssignmentsService,
+    private readonly events: ProspectEventsService,
+    private readonly scoring: ScoringService,
   ) {}
 
   @Auth({ permissions: [P.VIEW_GROWTH_PROSPECTS] })
@@ -87,7 +92,11 @@ export class GrowthOrganizationsResolver {
     @Args('input') input: GrowthCreateOrganizationInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Organization> {
-    return this.organizations.create(input, actor);
+    return this.organizations
+      .create(input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.ORGANIZATION, r.id, true),
+      );
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -101,7 +110,11 @@ export class GrowthOrganizationsResolver {
     @Args('input') input: GrowthUpdateOrganizationInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Organization> {
-    return this.organizations.update(id, input, actor);
+    return this.organizations
+      .update(id, input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.ORGANIZATION, r.id, true),
+      );
   }
 
   @ResolveField(() => [OrganizationChannel])
@@ -121,6 +134,15 @@ export class GrowthOrganizationsResolver {
   })
   managements(@Parent() org: Organization): Promise<PropertyManagement[]> {
     return this.relationships.managementsByOrganization(org.id);
+  }
+
+  @ResolveField(() => ProspectScore, {
+    nullable: true,
+    description:
+      'Puntaje vigente con desglose (no valida ni autoriza contacto)',
+  })
+  score(@Parent() org: Organization): Promise<ProspectScore | null> {
+    return this.scoring.getScore(GrowthProspectKind.ORGANIZATION, org.id);
   }
 
   @ResolveField(() => ProspectAssignment, { nullable: true })
@@ -149,6 +171,8 @@ export class GrowthPeopleResolver {
     private readonly channelService: ChannelsService,
     private readonly relationships: RelationshipsService,
     private readonly assignments: AssignmentsService,
+    private readonly events: ProspectEventsService,
+    private readonly scoring: ScoringService,
   ) {}
 
   @Auth({ permissions: [P.VIEW_GROWTH_PROSPECTS] })
@@ -180,7 +204,9 @@ export class GrowthPeopleResolver {
     @Args('input') input: GrowthCreatePersonInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Person> {
-    return this.people.create(input, actor);
+    return this.people
+      .create(input, actor)
+      .then((r) => this.events.after(r, GrowthProspectKind.PERSON, r.id, true));
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -190,7 +216,9 @@ export class GrowthPeopleResolver {
     @Args('input') input: GrowthUpdatePersonInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Person> {
-    return this.people.update(id, input, actor);
+    return this.people
+      .update(id, input, actor)
+      .then((r) => this.events.after(r, GrowthProspectKind.PERSON, r.id, true));
   }
 
   @ResolveField(() => [PersonChannel])
@@ -208,6 +236,14 @@ export class GrowthPeopleResolver {
   })
   managements(@Parent() person: Person): Promise<PropertyManagement[]> {
     return this.relationships.managementsByPerson(person.id);
+  }
+
+  @ResolveField(() => ProspectScore, {
+    nullable: true,
+    description: 'Solo administradores independientes tienen puntaje',
+  })
+  score(@Parent() person: Person): Promise<ProspectScore | null> {
+    return this.scoring.getScore(GrowthProspectKind.PERSON, person.id);
   }
 
   @ResolveField(() => ProspectAssignment, { nullable: true })
@@ -250,6 +286,7 @@ export class GrowthPropertiesResolver {
     private readonly properties: PropertiesService,
     private readonly relationships: RelationshipsService,
     private readonly assignments: AssignmentsService,
+    private readonly events: ProspectEventsService,
   ) {}
 
   @Auth({ permissions: [P.VIEW_GROWTH_PROSPECTS] })
@@ -277,7 +314,11 @@ export class GrowthPropertiesResolver {
     @Args('input') input: GrowthCreatePropertyInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Property> {
-    return this.properties.create(input, actor);
+    return this.properties
+      .create(input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PROPERTY, r.id, true),
+      );
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -291,7 +332,11 @@ export class GrowthPropertiesResolver {
     @Args('input') input: GrowthUpdatePropertyInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Property> {
-    return this.properties.update(id, input, actor);
+    return this.properties
+      .update(id, input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PROPERTY, r.id, true),
+      );
   }
 
   @ResolveField(() => [PropertyManagement], {

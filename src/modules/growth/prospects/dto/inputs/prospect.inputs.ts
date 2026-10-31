@@ -19,6 +19,7 @@ import {
   GrowthInfoStatus,
   GrowthInterestSignal,
   GrowthPhType,
+  GrowthPriority,
   GrowthValidationStatus,
 } from '../../prospects.enums';
 import { GrowthSourceReferenceInput } from './source-reference.input';
@@ -282,4 +283,18 @@ export class GrowthProspectFilterInput {
   @IsOptional()
   @IsBoolean()
   independentOnly?: boolean;
+
+  @Field(() => GrowthPriority, {
+    nullable: true,
+    description:
+      'Solo empresas y administradores independientes con esta prioridad',
+  })
+  @IsOptional()
+  @IsEnum(GrowthPriority)
+  priority?: GrowthPriority;
+
+  @Field({ nullable: true, description: 'Ordenar por puntaje (mayor primero)' })
+  @IsOptional()
+  @IsBoolean()
+  orderByScore?: boolean;
 }
