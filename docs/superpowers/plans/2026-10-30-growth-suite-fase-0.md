@@ -434,3 +434,44 @@ docs/superpowers/plans/2026-10-30-growth-suite-fase-0.md   (este archivo)
 2. ¿Trigger en la base que bloquee `UPDATE`/`DELETE` en `activity_events` (más fuerte) o solo en la aplicación?
 3. ¿Aceptas que la migración cree el esquema vacío en producción aunque la bandera esté apagada (§5)?
 4. ¿Worktree aparte (recomendado) para la rama nueva?
+
+---
+
+## 13. Anexo — decisiones de revisión y hallazgos de implementación (2026-10-30)
+
+### Decisiones del responsable del producto
+
+1. Roles **inactivos** (`status = false`) hasta la activación autorizada. Procedimiento exacto en `docs/growth/ACTIVATION.md`: encender la bandera no activa los roles.
+2. Registro de actividad append-only en dos niveles: sin operaciones de edición o borrado en la aplicación, y trigger de PostgreSQL que rechaza UPDATE, DELETE y TRUNCATE. Una anonimización futura será un procedimiento controlado aparte.
+3. Las migraciones pueden crear el esquema, roles inactivos y permisos en producción **cuando se autorice el despliegue**. Esta fase no autoriza merge, despliegue ni migraciones en producción.
+4. Worktree independiente desde `origin/main`; documentos respaldados y versionados en el primer commit; originales sin borrar.
+
+### Ajustes obligatorios implementados
+
+| Ajuste | Implementación |
+|---|---|
+| **A. Rotación HMAC sin datos originales** | Llavero versionado `GROWTH_SUPPRESSION_HMAC_KEYS="1:<b64>,2:<b64>"` + `…_ACTIVE_VERSION`. Tabla `suppression_hashes` con un hash por versión (append-only). Se escribe con la activa y se consulta con todas; re-hash oportunista al ver el dato en claro; `growthSuppressionKeyStatus` dice cuándo retirar una versión; **falla cerrada** si alguna exclusión activa queda sin llave |
+| **B. Exclusiones no se eliminan por revocación** | Sin borrado (no hay operación + trigger). Supresión, revocación y oposición **agregan** exclusión. Levantar = `growthLiftSuppression` con `LIFT_GROWTH_SUPPRESSIONS` (solo cumplimiento y SUPER_ADMIN), fundamento ≥ 10 caracteres y soporte; el trigger solo permite ACTIVE → LIFTED sin tocar otros campos y nunca volver atrás |
+| **C. `LEGITIMATE_B2B_PUBLIC_ROLE`** | Descartada como base general. Bases previstas y pendientes de validación jurídica en `docs/growth/DATA-PROTECTION.md`; por defecto `PENDING_LEGAL_REVIEW`, que bloquea el contacto (fase 1). Las fuentes no se activan sin revisión jurídica registrada (CHECK) |
+| **D. Sin caminos alternativos** | Pruebas de la matriz con el guard real; ausencia de operaciones de borrado o edición; prototipos de servicio sin métodos de borrado; integración con Postgres real que intenta UPDATE, DELETE y TRUNCATE por SQL directo y por repositorio TypeORM, levantar a medias, activar fuentes saltándose el servicio, retenciones de más de 10 años |
+
+### Cambios respecto del plan original
+
+| Plan | Implementado | Motivo |
+|---|---|---|
+| `ConditionalModule.registerWhen(GrowthModule, 'GROWTH_ENABLED')` | `GrowthLoaderModule.register()` con import dinámico | (1) la forma con string **encendía el módulo si la variable no existía**; (2) el import estático publicaba tipos huérfanos `Growth*` en el esquema aunque el módulo no se registrara |
+| 10 permisos (`MANAGE_GROWTH_SUPPRESSIONS`) | 13 permisos | `ADD`, `VIEW` y `LIFT` separados en lugar de validar el rol en el servicio; `REVIEW_GROWTH_SOURCES_LEGAL` aparte |
+| `suppressions.identifier_hash` | tabla `suppression_hashes` (1:N por versión) | ajuste A |
+| `data_sources` con aprobación de costo | + `legal_review_status`, presupuesto mensual y tope de consultas | ajuste C y "cero gasto automático" |
+| Solo `status = false` en roles | + bloqueo en `users.service` (`assertGrowthRoleActive`) | `assignJobRole` y `createAdminUser` no miraban `role.status`: un SUPER_ADMIN podía asignar un rol inactivo y llegaba al JWT. El bloqueo se limita a los roles de la suite; los existentes no cambian |
+| `COMPILANCE_OFFICER_ROL` con permisos en la migración | permisos solo al activar (SQL en `ACTIVATION.md`) | es un rol activo; asignarlos antes sería visible |
+| — | `IdentityDirectoryService` | único punto que lee `public`, solo identidad; es el puerto para una extracción futura |
+| — | límite de 30 s en el `beforeAll` de dos specs de `data-export` | cargan todas las entidades por glob; con las nuevas, la corrida completa superaba los 5 s por defecto |
+
+### Verificación del esquema GraphQL
+
+Se arrancó `dist/main` de `origin/main` y de esta rama contra servicios desechables:
+
+- Bandera **ausente** o **`false`**: esquema idéntico al de main salvo 16 valores de enum (13 en `ValidPermissions`, 3 en `ValidRoles`). Son inevitables porque el JWT y el guard usan esos enums, y solo agregan valores.
+- Bandera **`true`**: aparecen las 24 operaciones `growth*` y sus tipos; el módulo arranca sin errores.
+- `src/schema.gql` versionado = el de `main` + esos 16 valores.
