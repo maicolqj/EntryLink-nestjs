@@ -1,3 +1,5 @@
+// Sentry tiene que cargarse antes que todo lo demás para instrumentarlo.
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
