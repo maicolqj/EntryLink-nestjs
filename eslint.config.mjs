@@ -38,6 +38,9 @@ export default tseslint.config(
   // con rutas resueltas) está en src/modules/growth/growth-isolation.spec.ts.
   {
     files: ['src/modules/growth/**/*.ts'],
+    // Las specs importan migraciones y seeds a propósito (verifican que las
+    // copias fijas coincidan con el catálogo).
+    ignores: ['src/modules/growth/**/*.spec.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -45,12 +48,12 @@ export default tseslint.config(
           patterns: [
             {
               regex:
-                '(^|/)(amenities|app-versions|audit|auth|call-logs|complex-info|data-export|device-management|finance|graphql-manifest|health|legal|maintenance|marketplace|messages|my-unit|notes|notifications|packages|pets|platform-announcements|pqrf|residential-complex|residents|security-app-exits|special-numbers|subscriptions|supervisor-visits|users|vehicles|visitor-parking|visitors|voting|mail|core)(/|$)',
+                '^\\.{1,2}/(?:.*/)?(amenities|app-versions|audit|auth|call-logs|complex-info|data-export|device-management|finance|graphql-manifest|health|legal|maintenance|marketplace|messages|my-unit|notes|notifications|packages|pets|platform-announcements|pqrf|residential-complex|residents|security-app-exits|special-numbers|subscriptions|supervisor-visits|users|vehicles|visitor-parking|visitors|voting|mail|core)(/|$)',
               message:
                 'Growth Suite: no importa módulos operativos. Ver src/modules/growth/README.md',
             },
             {
-              regex: '(^|/)(permissions|roles)/(?!enums/)',
+              regex: '^\\.{1,2}/(?:.*/)?(permissions|roles)/(?!enums/)',
               message: 'Growth Suite: de roles y permisos solo se importan los enums.',
             },
           ],

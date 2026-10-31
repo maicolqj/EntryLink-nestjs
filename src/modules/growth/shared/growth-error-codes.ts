@@ -16,4 +16,17 @@ export enum GrowthErrorCode {
   /** La configuración de llaves HMAC falta o es inválida. */
   GROWTH_HMAC_MISCONFIGURED = 'GROWTH_HMAC_MISCONFIGURED',
   GROWTH_LEGAL_HOLD_INVALID = 'GROWTH_LEGAL_HOLD_INVALID',
+  // ── EntryLink Prospect (1A) ─────────────────────────────────────────────
+  /** La fuente indicada no existe o no está ACTIVE (sin revisión jurídica). */
+  GROWTH_SOURCE_NOT_ACTIVE = 'GROWTH_SOURCE_NOT_ACTIVE',
+  /** El canal está en la lista de exclusión: no se almacena. */
+  GROWTH_CHANNEL_SUPPRESSED = 'GROWTH_CHANNEL_SUPPRESSED',
+  GROWTH_DUPLICATE_NIT = 'GROWTH_DUPLICATE_NIT',
+  /** Quien registró o capturó no puede validar (separación de funciones). */
+  GROWTH_SELF_VALIDATION_FORBIDDEN = 'GROWTH_SELF_VALIDATION_FORBIDDEN',
+  /** Faltan requisitos de la lista de validación. */
+  GROWTH_VALIDATION_INCOMPLETE = 'GROWTH_VALIDATION_INCOMPLETE',
+  /** La base jurídica está pendiente: no se puede autorizar contacto. */
+  GROWTH_LEGAL_BASIS_PENDING = 'GROWTH_LEGAL_BASIS_PENDING',
+  GROWTH_INVALID_INPUT = 'GROWTH_INVALID_INPUT',
 }
