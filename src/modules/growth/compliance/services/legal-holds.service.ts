@@ -34,6 +34,10 @@ import {
   GrowthLegalHoldFilterInput,
   GrowthReleaseLegalHoldInput,
 } from '../dto/inputs/legal-hold.inputs';
+import {
+  ImportBatch,
+  ImportMappingTemplate,
+} from '../../imports/entities/import.entities';
 
 /**
  * La tabla es polimórfica (una retención cae sobre cualquier entidad de la
@@ -58,6 +62,8 @@ const HOLDABLE: Record<GrowthEntityType, EntityTarget<ObjectLiteral>> = {
   [GrowthEntityType.SETTINGS]: GrowthSettings,
   [GrowthEntityType.DUPLICATE_CANDIDATE]: DuplicateCandidate,
   [GrowthEntityType.SCORING_RULE]: ScoringRule,
+  [GrowthEntityType.IMPORT_BATCH]: ImportBatch,
+  [GrowthEntityType.IMPORT_TEMPLATE]: ImportMappingTemplate,
 };
 
 const MAX_YEARS = 10;

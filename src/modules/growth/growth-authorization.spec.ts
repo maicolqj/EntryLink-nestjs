@@ -30,6 +30,8 @@ import {
 } from './prospects/resolvers/prospect-records.resolver';
 import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
 import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
+import { GrowthImportsResolver } from './imports/resolvers/growth-imports.resolver';
+import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 
 /**
  * Matriz rol × operación con el guard REAL de la plataforma. Los permisos de
@@ -46,6 +48,7 @@ const RESOLVERS = [
   GrowthPropertiesResolver,
   GrowthProspectOperationsResolver,
   GrowthDedupeScoringResolver,
+  GrowthImportsResolver,
 ];
 
 type Operation = {
@@ -184,6 +187,17 @@ describe('Autorización de la Growth Suite', () => {
         'growthUpdateScoringRule',
         'growthUpdateScoringThresholds',
         'growthRescoreAll',
+        // Entrega 1C
+        'growthImportFieldCatalog',
+        'growthImportBatches',
+        'growthImportBatch',
+        'growthImportPreview',
+        'growthImportRows',
+        'growthImportTemplates',
+        'growthMapImportColumns',
+        'growthSetImportRowDecision',
+        'growthCommitImport',
+        'growthCancelImport',
       ].sort(),
     );
   });
@@ -267,6 +281,9 @@ describe('Autorización de la Growth Suite', () => {
           'growthMergeDuplicates',
           'growthDuplicateCandidates',
           'growthUpdateScoringRule',
+          'growthImportBatches',
+          'growthMapImportColumns',
+          'growthCommitImport',
         ],
       },
       [ValidRoles.GROWTH_RESEARCHER_ROL]: {
@@ -278,6 +295,11 @@ describe('Autorización de la Growth Suite', () => {
           'growthCreateOrganization',
           'growthAddEvidence',
           'growthOrganizations',
+          'growthImportBatches',
+          'growthMapImportColumns',
+          'growthSetImportRowDecision',
+          'growthCommitImport',
+          'growthCancelImport',
         ],
         cannot: [
           'growthLiftSuppression',
@@ -310,6 +332,9 @@ describe('Autorización de la Growth Suite', () => {
           'growthDismissDuplicate',
           'growthUpdateScoringRule',
           'growthUpdateScoringThresholds',
+          'growthImportBatches',
+          'growthCommitImport',
+          'growthCancelImport',
         ],
         cannot: [
           'growthLiftSuppression',
@@ -332,14 +357,14 @@ describe('Autorización de la Growth Suite', () => {
           permissions: permissionsOf(role as ValidRoles),
         };
         for (const name of can) {
-          const op = operations.find((o) => o.name === name)!;
+          const op = operations.find((o) => o.name === name);
           expect({ name, ok: await allowed(op, user) }).toEqual({
             name,
             ok: true,
           });
         }
         for (const name of cannot) {
-          const op = operations.find((o) => o.name === name)!;
+          const op = operations.find((o) => o.name === name);
           expect({ name, ok: await allowed(op, user) }).toEqual({
             name,
             ok: false,
@@ -352,7 +377,7 @@ describe('Autorización de la Growth Suite', () => {
       const perms = permissionsOf(ValidRoles.GROWTH_MANAGER_ROL).filter(
         (p) => p !== P.MANAGE_GROWTH_TEAM,
       );
-      const op = operations.find((o) => o.name === 'growthAddTeamMember')!;
+      const op = operations.find((o) => o.name === 'growthAddTeamMember');
       expect(
         await allowed(op, {
           roles: [ValidRoles.GROWTH_MANAGER_ROL],
@@ -372,7 +397,7 @@ describe('Autorización de la Growth Suite', () => {
     };
     const check = async (name: string) =>
       allowed(
-        operations.find((o) => o.name === name)!,
+        operations.find((o) => o.name === name),
         user,
       );
     expect(await check('growthLiftSuppression')).toBe(true);
@@ -387,6 +412,56 @@ describe('Autorización de la Growth Suite', () => {
     expect(await check('growthDecideValidation')).toBe(false);
     expect(await check('growthMergeDuplicates')).toBe(false);
     expect(await check('growthUpdateScoringRule')).toBe(false);
+    expect(await check('growthCommitImport')).toBe(false);
+  });
+
+  describe('REST de importaciones (subida e informe)', () => {
+    const restAllowed = async (
+      method: 'upload' | 'report',
+      user: { roles: string[]; permissions: string[] },
+    ) => {
+      const handler = Object.getOwnPropertyDescriptor(
+        GrowthImportsController.prototype,
+        method,
+      )?.value as (...args: unknown[]) => unknown;
+      // Forma real de HTTP: [req, res, next]. Con 3 argumentos,
+      // GqlExecutionContext toma `res` como contexto, y Express pone `res.req`:
+      // así el guard encuentra al usuario (verificado con una ruta REST real).
+      const req = { user: { ...user, email: 'test@alternaqj.com' } };
+      const ctx = new ExecutionContextHost(
+        [req, { req }, () => {}],
+        GrowthImportsController,
+        handler,
+      );
+      ctx.setType('http');
+      try {
+        return await guard.canActivate(ctx);
+      } catch {
+        return false;
+      }
+    };
+
+    it.each(OPERATIONAL_ROLES)('%s no sube ni descarga', async (role) => {
+      const user = {
+        roles: [role, ValidRoles.RESIDENT_ROL],
+        permissions: permissionsOf(role),
+      };
+      expect(await restAllowed('upload', user)).toBe(false);
+      expect(await restAllowed('report', user)).toBe(false);
+    });
+
+    it('solo gerente e investigador (y SUPER_ADMIN) importan', async () => {
+      for (const [role, expected] of [
+        [ValidRoles.GROWTH_MANAGER_ROL, true],
+        [ValidRoles.GROWTH_RESEARCHER_ROL, true],
+        [ValidRoles.SALES_ROL, false],
+        [ValidRoles.SUPER_ADMIN_ROL, true],
+      ] as const) {
+        const user = { roles: [role], permissions: permissionsOf(role) };
+        expect(await restAllowed('upload', user)).toBe(expected);
+        expect(await restAllowed('report', user)).toBe(expected);
+      }
+    });
   });
 
   describe('sin caminos alternativos', () => {
@@ -411,7 +486,8 @@ describe('Autorización de la Growth Suite', () => {
       const methods = Object.getOwnPropertyNames(
         ActivityLogService.prototype,
       ).filter((m) => m !== 'constructor');
-      expect(methods.sort()).toEqual(['list', 'record']);
+      // recordSystem: eventos de procesos automáticos (purga), también solo inserción.
+      expect(methods.sort()).toEqual(['list', 'record', 'recordSystem']);
     });
 
     it('el servicio de exclusiones no tiene métodos de borrado ni edición libre', () => {
@@ -424,7 +500,7 @@ describe('Autorización de la Growth Suite', () => {
     });
 
     it('levantar una exclusión exige el permiso más alto y nadie de la suite lo tiene', () => {
-      const op = operations.find((o) => o.name === 'growthLiftSuppression')!;
+      const op = operations.find((o) => o.name === 'growthLiftSuppression');
       expect(Reflect.getMetadata('permissions', op.handler)).toEqual([
         P.LIFT_GROWTH_SUPPRESSIONS,
       ]);

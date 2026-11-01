@@ -6,6 +6,9 @@ import { SEED_SCORING_RULES } from '../../src/core/database/migrations/178101080
  * esta sesión (requiere superusuario, que es el usuario del contenedor de
  * prueba) para poder vaciar tablas append-only. Nunca se usa fuera de test.
  */
+/** Prefijos de los ids de usuarios de prueba de las cuatro suites. */
+const IT_USER_PREFIXES = ['aaaaaaaa-', 'bbbbbbbb-', 'cccccccc-', 'dddddddd-'];
+
 export async function resetGrowthTestData(
   ds: DataSource,
   userPrefixes: string[],
@@ -18,6 +21,10 @@ export async function resetGrowthTestData(
 
   await ds.query(`SET session_replication_role = replica`);
   for (const table of [
+    // Entrega 1C
+    'import_rows',
+    'import_batches',
+    'import_mapping_templates',
     'merge_log',
     'duplicate_candidates',
     'prospect_scores',
@@ -72,7 +79,9 @@ export async function resetGrowthTestData(
             monthly_request_cap = NULL, cost_estimate_notes = NULL,
             created_by_user_id = NULL, updated_by_user_id = NULL`,
   );
-  for (const prefix of userPrefixes) {
+  // Los usuarios de TODAS las suites: cada una comparte la base y los
+  // teléfonos son únicos, así que los restos de otra suite estorban.
+  for (const prefix of new Set([...userPrefixes, ...IT_USER_PREFIXES])) {
     await ds.query(
       `DELETE FROM public.user_has_roles WHERE user_id::text LIKE $1`,
       [`${prefix}%`],

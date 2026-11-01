@@ -96,6 +96,18 @@ impone). Cambiar su finalidad o sus términos anula la revisión.
 - Los 12 meses son un plazo de **revisión**, no una autorización para
   conservar indefinidamente.
 
+### Importaciones (1C)
+
+- **El archivo original no se guarda** (ni en la base ni en R2): se lee en memoria al subirlo y solo quedan su sha256 y su tamaño.
+- Las filas crudas (`raw`, `mapped`, `duplicate_hint`) se borran **30 días después** de que el lote termina (`COMMITTED`, `FAILED` o `CANCELLED`). Se conservan número de fila, códigos de error (nunca el valor), decisión y resultado. El evento `IMPORT_PURGED` lleva lote, conteos y fecha.
+- Un lote sin terminar y sin cambios en **7 días** se cierra solo (`CANCELLED`, o `FAILED` si estaba confirmando) y desde ahí corren los 30 días: ningún lote abandonado conserva datos indefinidamente.
+- Una retención legal vigente sobre el lote impide la purga; liberada o vencida, la purga sigue.
+- **Datos excluidos:** antes de guardar las filas, se buscan correos y teléfonos en **todas** las celdas (mapeadas o no, solas o dentro de un texto) y en los encabezados. Los que están en la lista de exclusión se reemplazan por `[excluido]`. La búsqueda se repite al validar, por si la lista cambió en medio. El dato excluido no queda en ninguna tabla, en el informe, en la actividad, en Redis ni en los logs (lo verifica `imports-db.int-spec.ts` recorriendo todas las columnas de texto del esquema `growth`). Lo que sí queda: el conteo `suppressedValues` y el aviso `SUPPRESSED` en la fila.
+- Limitación: el texto que no tiene forma de correo o teléfono (por ejemplo, un nombre) no se cruza con la lista de exclusión, porque la lista solo guarda identificadores.
+- Sin `VIEW_GROWTH_CONTACT_DATA`, la vista previa, las filas y el informe muestran enmascarado todo valor que parezca correo o teléfono, esté o no mapeado.
+- Las personas importadas nacen con `PENDING_LEGAL_REVIEW` y `NOT_AUTHORIZED`, igual que las capturadas a mano. En un lote de personas con correo o teléfono hay que declarar si son canales `PROFESSIONAL` o `DIRECT`.
+- Los eventos no llevan el nombre del archivo. Los respaldos de la base conservan las filas crudas de un lote hasta que el respaldo rota, aunque el lote ya se haya purgado; si se restaura un respaldo viejo, el cron vuelve a purgar al día siguiente.
+
 ## 6. Plazos de respuesta al titular
 
 Implementados (pendientes de confirmación jurídica):

@@ -27,6 +27,9 @@ export enum GrowthEntityType {
   // Entrega 1B
   DUPLICATE_CANDIDATE = 'DUPLICATE_CANDIDATE',
   SCORING_RULE = 'SCORING_RULE',
+  // Entrega 1C
+  IMPORT_BATCH = 'IMPORT_BATCH',
+  IMPORT_TEMPLATE = 'IMPORT_TEMPLATE',
 }
 
 export enum GrowthTeamMemberStatus {

@@ -17,6 +17,7 @@ import {
   GrowthSuppressionScope,
   GrowthSuppressionStatus,
 } from '../../shared/growth.enums';
+import { normalizeIdentifier } from '../../shared/identifier-normalizer';
 import { Suppression } from '../entities/suppression.entity';
 import { SuppressionHash } from '../entities/suppression-hash.entity';
 import {
@@ -99,6 +100,54 @@ export class SuppressionsService implements OnModuleInit {
     }
 
     return blocking.length > 0;
+  }
+
+  /**
+   * Consulta por lotes (importaciones): de `values`, cuáles están excluidos
+   * con cualquier alcance. Una sola consulta por cada 1.000 valores. Los
+   * valores que no se pueden normalizar se ignoran. A diferencia de
+   * `isSuppressed`, no hace re-hash oportunista: es de solo lectura.
+   */
+  async suppressedAmong(
+    identifierType: GrowthIdentifierType,
+    values: string[],
+  ): Promise<Set<string>> {
+    await this.assertCoverage();
+    const found = new Set<string>();
+    const unique = [...new Set(values)].filter((v) =>
+      normalizeIdentifier(identifierType, v),
+    );
+    for (let i = 0; i < unique.length; i += 1000) {
+      const chunk = unique.slice(i, i + 1000);
+      const owner = new Map<string, string[]>();
+      const versions: number[] = [];
+      const hashes: string[] = [];
+      for (const value of chunk) {
+        for (const h of this.hashes.hashAll(identifierType, value)) {
+          const key = `${h.keyVersion}:${h.hash}`;
+          owner.set(key, [...(owner.get(key) ?? []), value]);
+          versions.push(h.keyVersion);
+          hashes.push(h.hash);
+        }
+      }
+      const rows: Array<{ key_version: number; identifier_hash: string }> =
+        await this.dataSource.query(
+          `SELECT h.key_version::int AS key_version, h.identifier_hash
+             FROM growth.suppression_hashes h
+             JOIN growth.suppressions s ON s.id = h.suppression_id
+            WHERE s.status = 'ACTIVE' AND s.identifier_type = $1
+              AND (h.key_version, h.identifier_hash) IN (
+                SELECT * FROM unnest($2::smallint[], $3::char(64)[]))`,
+          [identifierType, versions, hashes],
+        );
+      for (const r of rows) {
+        for (const v of owner.get(`${r.key_version}:${r.identifier_hash}`) ??
+          []) {
+          found.add(v);
+        }
+      }
+    }
+    return found;
   }
 
   async add(

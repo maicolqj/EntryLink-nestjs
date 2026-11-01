@@ -463,3 +463,51 @@ Puntaje = suma de las señales, con tope de 100. Desde 50 se crea un candidato `
 - `MANAGE_GROWTH_SCORING` (HIGH): gerente.
 
 Ver duplicados exige `VIEW_ALL_GROWTH_PROSPECTS`.
+
+---
+
+## 18. Entrega 1C — importaciones CSV/XLSX (diseño)
+
+**Aprobación:** el usuario fusionó #273 (1B) el 2026-11-01 y pidió seguir con 1C. **No** autoriza fusionar el PR de 1C ni desplegarlo.
+
+### Decisiones técnicas
+
+| Tema | Decisión | Motivo |
+|---|---|---|
+| Dónde vive el archivo | **En ninguna parte**: se lee en memoria al subirlo; solo quedan su sha256 y su tamaño (ajuste de la revisión, 2026-11-01; antes era `bytea` en `growth.import_files`) | Menos datos personales retenidos y respaldos más livianos. R2 queda descartado: la suite no importa `core/` y `R2StorageService` solo arma URLs públicas |
+| Tope de texto | 15 millones de caracteres por lote, contados mientras se lee | Un XLSX de 68 KB con cadenas compartidas llegó a 60 MB de texto |
+| Lectura del archivo | Se lee al subirlo (máximo 5.000 filas): las filas crudas quedan en `import_rows.raw`. Validar y confirmar corren en la cola | Vista previa y mapeo inmediatos, sin volver a abrir el archivo |
+| XLSX | `exceljs` (ya instalado). Solo la primera hoja; las fórmulas se leen como su valor guardado, nunca se evalúan; antes de abrirlo se revisa el directorio del zip (tope de 50 MB descomprimido y de 200 entradas) | Bombas zip y fórmulas |
+| CSV | Parser propio RFC 4180 (comillas, saltos de línea dentro de comillas). Detecta `;` o `,`. UTF-8 (con o sin BOM) y, si no es UTF-8 válido, Windows-1252 | Excel en español exporta con `;` y en ANSI |
+| Tipo de archivo | Por contenido: zip (`PK\x03\x04`) = XLSX; texto = CSV. El `mimetype` del navegador no se usa | Ese dato lo controla el cliente |
+| Mapeo | Columna → campo, con sugerencia automática por sinónimos del encabezado. Se puede guardar como plantilla (`import_mapping_templates`) | Plan §5 |
+| Validación (cola) | Normaliza con los mismos normalizadores de 1A; errores por fila sin copiar el valor; duplicados **exactos** contra la base (NIT, matrícula, correo, teléfono, dominio no genérico, dirección de copropiedad) y dentro del archivo; cruce de correo y teléfono con la lista de exclusión | La similitud de nombres la hace después el job `scan` de 1B sobre lo creado |
+| Decisión sugerida | Con errores → `SKIP`. NIT o matrícula exactos en la base → `LINK_EXISTING`. Repetido dentro del archivo → `SKIP`. El resto → `CREATE` (con aviso si coincidió otra señal). Se puede cambiar por fila; `CREATE` con errores no se permite | Nunca se fusiona ni se sobrescribe nada |
+| `LINK_EXISTING` | No crea ni cambia el registro: agrega **evidencias** de los valores observados con la fuente del lote | Deja la traza sin pisar datos validados |
+| Confirmación (cola) | Fila por fila, cada una en su transacción, reutilizando los servicios de 1A (`create`, canales). Lock consultivo por lote. Reanudable: se salta lo que ya tiene resultado. Todo nace `NEW`. Al terminar se encolan duplicados y scoring | Un error en una fila no tumba el lote; dos trabajos simultáneos ya no duplican. Residual: una caída entre crear y marcar la fila |
+| Exclusiones | Antes de guardar las filas se redactan (`[excluido]`) los correos y teléfonos excluidos de **cualquier** celda y de los encabezados, con una consulta por lotes; se repite al validar. La fila lleva el aviso y el registro se crea sin ese canal | Plan §9; la revisión encontró que la primera versión los dejaba en `raw`, en el archivo y en el informe |
+| Canales de personas | Un lote de PEOPLE con correo o teléfono exige declarar `personChannelClass` (PROFESSIONAL o DIRECT) para todo el lote | La clase decide si el canal puede usarse; no se adivina |
+| Informe | XLSX descargable (REST): hoja Resumen y hoja Filas (fila, decisión, resultado, errores y columnas originales), con las celdas que empiezan por `=`, `+`, `-`, `@`, tab o CR neutralizadas | Plan §5 |
+| Visibilidad | El lote lo ve quien lo subió; con `VIEW_ALL_GROWTH_PROSPECTS`, todos. En lotes de PEOPLE los valores crudos de correo y teléfono salen enmascarados sin `VIEW_GROWTH_CONTACT_DATA` | Igual que los registros |
+| Archivo repetido | Si el `sha256` ya se importó, se avisa (`previousBatchIds`); no se bloquea | Plan §2.2 |
+| Purga (ajuste D) | Cron diario 3:45 (Bogotá): lotes `COMMITTED`, `FAILED` o `CANCELLED` terminados hace 30 días o más → `raw`, `mapped` y `duplicate_hint` quedan en NULL; `purged_at` se marca y el evento lleva lote, conteos y fecha, nunca datos. Un lote con retención legal activa no se purga | Ajuste D y retenciones de la fase 0 |
+| Estados | `UPLOADED → MAPPED → VALIDATING → VALIDATED → COMMITTING → COMMITTED`; volver a mapear desde `UPLOADED`, `MAPPED` o `VALIDATED`; cancelar en cualquier estado no terminal salvo `COMMITTING`; `FAILED` si la cola agota los reintentos. Sin cambios en 7 días, el cron cierra el lote (`CANCELLED`, o `FAILED` si estaba en `COMMITTING`). Trigger en la base | Ningún lote abandonado conserva datos indefinidamente |
+
+### Campos importables
+
+| Destino | Campos (obligatorio en negrita) |
+|---|---|
+| ORGANIZATIONS | **legalName**, tradeName, nit, website, address, city, locality, estimatedProperties, estimatedUnits, email, phone |
+| PROPERTIES | **name**, phType, buildingKind, address, city, locality, neighborhood, estimatedUnits, realEstateRegistration, nit |
+| PEOPLE | **fullName**, isIndependentAdmin, email, phone |
+
+Las localidades se aceptan con o sin tildes (por ejemplo, "Ciudad Bolívar" y "ciudad bolivar"). Vincular copropiedades con su administración desde la importación queda para después (requiere resolver la empresa por NIT y decidir qué pasa con la administración vigente).
+
+### Contratos
+
+- **REST:** `POST /api/v1/growth/imports` (multipart: `file`, `target`, `sourceId`, `consultedAt`, `reliability`, `url`, `notes`) y `GET /api/v1/growth/imports/:id/report` (XLSX).
+- **GraphQL:** `growthImportBatches`, `growthImportBatch`, `growthImportRows`, `growthImportFieldCatalog`, `growthImportTemplates`; `growthMapImportColumns`, `growthSetImportRowDecision`, `growthCommitImport`, `growthCancelImport`.
+
+### Permiso nuevo (inactivo)
+
+`IMPORT_GROWTH_DATA` (HIGH, requiere `EDIT_GROWTH_PROSPECTS`): gerente e investigador.

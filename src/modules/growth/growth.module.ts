@@ -72,6 +72,27 @@ import {
 import { ProspectJobsProcessor } from './prospects/services/prospect-jobs.processor';
 import { ScoringService } from './prospects/services/scoring.service';
 import './prospects/prospects.enums';
+import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
+import {
+  ImportBatch,
+  ImportMappingTemplate,
+  ImportRow,
+} from './imports/entities/import.entities';
+import './imports/imports.enums';
+import {
+  GrowthImportRowResolver,
+  GrowthImportsResolver,
+} from './imports/resolvers/growth-imports.resolver';
+import { ImportCommitService } from './imports/services/import-commit.service';
+import { ImportJobsProcessor } from './imports/services/import-jobs.processor';
+import { ImportPurgeService } from './imports/services/import-purge.service';
+import { ImportRedactionService } from './imports/services/import-redaction.service';
+import {
+  GROWTH_IMPORTS_QUEUE,
+  ImportQueueService,
+} from './imports/services/import-queue.service';
+import { ImportValidationService } from './imports/services/import-validation.service';
+import { ImportsService } from './imports/services/imports.service';
 
 /**
  * EntryLink Growth Suite (comercial de Alterna QJ). Se registra SOLO con
@@ -106,10 +127,16 @@ import './prospects/prospects.enums';
       MergeLog,
       ScoringRule,
       ProspectScore,
+      // Entrega 1C
+      ImportBatch,
+      ImportRow,
+      ImportMappingTemplate,
     ]),
     // Cola propia de la suite (Redis existente): duplicados y scoring.
     BullModule.registerQueue({ name: GROWTH_PROSPECTS_QUEUE }),
+    BullModule.registerQueue({ name: GROWTH_IMPORTS_QUEUE }),
   ],
+  controllers: [GrowthImportsController],
   providers: [
     GrowthHashService,
     IdentityDirectoryService,
@@ -149,6 +176,16 @@ import './prospects/prospects.enums';
     MergeService,
     ProspectJobsProcessor,
     GrowthDedupeScoringResolver,
+    // Entrega 1C
+    ImportQueueService,
+    ImportRedactionService,
+    ImportsService,
+    ImportValidationService,
+    ImportCommitService,
+    ImportJobsProcessor,
+    ImportPurgeService,
+    GrowthImportsResolver,
+    GrowthImportRowResolver,
   ],
 })
 export class GrowthModule {}

@@ -121,6 +121,9 @@ describe('Aislamiento de la Growth Suite', () => {
         'duplicate_candidates',
         'employments',
         'evidences',
+        'import_batches',
+        'import_mapping_templates',
+        'import_rows',
         'legal_holds',
         'merge_log',
         'organization_channels',
@@ -141,7 +144,7 @@ describe('Aislamiento de la Growth Suite', () => {
 
     it('no hay relaciones TypeORM entre la suite y entidades operativas', () => {
       const crossing = storage.relations.filter((r) => {
-        const from = growthTargets.has(r.target as never);
+        const from = growthTargets.has(r.target);
         const type =
           typeof r.type === 'function' ? (r.type as () => unknown)() : r.type;
         const to = growthTargets.has(type as never);
