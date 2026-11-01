@@ -12,7 +12,7 @@ SUPER_ADMIN puede usar la suite.
 
 | Elemento | Estado |
 |---|---|
-| Esquema `growth` y sus 25 tablas (7 de la fase 0 + 10 de 1A + 4 de 1B + 4 de 1C) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`, la fila de `growth.settings` y las 6 reglas de scoring sembradas) |
+| Esquema `growth` y sus 24 tablas (7 de la fase 0 + 10 de 1A + 4 de 1B + 3 de 1C) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`, la fila de `growth.settings` y las 6 reglas de scoring sembradas) |
 | `GROWTH_MANAGER_ROL`, `SALES_ROL`, `GROWTH_RESEARCHER_ROL` | existen con `status = false`: no se pueden asignar |
 | 24 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A + 2 de 1B + 1 de 1C) | existen con `status = false`, asignados solo a esos 3 roles |
 | `COMPILANCE_OFFICER_ROL` | sin permisos de la suite |
@@ -150,6 +150,7 @@ los contactos que la suite conoce en claro.
 
 - Permiso `IMPORT_GROWTH_DATA`: gerente e investigador. El oficial de cumplimiento no lo recibe.
 - Cola BullMQ `growth-imports` (Redis existente; validación y confirmación), visible en Bull Board. Solo se registra con la suite encendida.
-- Subida: `POST /api/v1/growth/imports` (multipart, máx. 5 MB y 5.000 filas). El archivo se guarda en `growth.import_files`, **no en R2**: no hace falta configurar nada en Cloudflare.
-- Cron `growth-import-purge` a las 3:45 (Bogotá): 30 días después de terminado un lote borra el archivo y las filas crudas. Un lote con retención legal (`entity_type = 'IMPORT_BATCH'`) no se purga.
-- Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas.
+- Subida: `POST /api/v1/growth/imports` (multipart en memoria; máx. 5 MB, 5.000 filas y 15 millones de caracteres en total). **El archivo original no se guarda** en ninguna parte: no hace falta configurar nada en Cloudflare.
+- Cron `growth-import-purge` a las 3:45 (Bogotá): cierra los lotes sin cambios en 7 días y, 30 días después de terminado un lote, borra sus filas crudas. Un lote con retención legal (`entity_type = 'IMPORT_BATCH'`) no se purga.
+- Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas. Un lock consultivo de Postgres por lote impide que dos trabajos lo confirmen a la vez (réplicas o trabajos dados por atascados).
+- Riesgo residual: si el proceso cae justo entre crear un registro y marcar su fila, al reanudar esa fila se crea otra vez (el NIT único lo evita en empresas con NIT). La deduplicación de 1B lo propondrá como duplicado.

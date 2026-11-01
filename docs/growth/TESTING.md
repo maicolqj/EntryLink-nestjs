@@ -14,7 +14,7 @@ yarn test src/modules/growth
 | `growth.flag.spec.ts` | Variable ausente = apagada |
 | `*.service.spec.ts` | Reglas de exclusión (falla cerrada, re-hash, sin dato en claro), solicitudes (plazos, supresión agrega exclusión, borra contacto), fuentes (activación con revisión y costo, redefinir anula aprobaciones), equipo (rechaza usuarios de conjuntos) |
 | `identifier-normalizer`, `growth-hash.service`, `business-days.util` | Normalización, llavero HMAC versionado y rotación, festivos de Colombia |
-| `imports/shared/imports-shared.spec.ts` (1C) | Lectura de CSV (`;`, comillas, Windows-1252) y XLSX (solo la primera hoja, fórmulas por su valor guardado, bomba zip, límites de tamaño, filas y columnas); mapeo sugerido y sus errores; normalización por fila sin copiar valores en los errores; neutralización de fórmulas en el informe; enmascarado por valor; huella del mapeo |
+| `imports/shared/imports-shared.spec.ts` (1C) | Lectura de CSV (`;`, comillas, Windows-1252) y XLSX (solo la primera hoja, fórmulas por su valor guardado, bomba zip, límites de tamaño, filas y columnas); mapeo sugerido y sus errores; normalización por fila sin copiar valores en los errores; neutralización de fórmulas en el informe; enmascarado por valor; huella del mapeo; tope total de texto; redacción de excluidos en cualquier celda |
 
 ## Integración con Postgres real (local, no en CI)
 
@@ -48,7 +48,7 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
 Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
-- `imports-db.int-spec.ts` (entrega 1C, 16 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
+- `imports-db.int-spec.ts` (entrega 1C, 23 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
   - lote de 500 empresas con 40 filas con errores, NIT existentes (vincular), NIT repetidos en el archivo y correos excluidos;
   - la base rechaza `CREATE` en filas con errores, retroceder un lote terminado y borrarlo;
   - confirmación: todo nace `NEW` con evidencia de la fuente, el vínculo no cambia el registro y repetir no duplica;
@@ -57,7 +57,14 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
   - mapeo nuevo contra trabajo viejo, cancelación durante la validación y `FAILED` tras reintentos;
   - personas (clase de canal obligatoria, base pendiente) y XLSX de copropiedades;
   - visibilidad por autor y enmascarado;
-  - purga a 30 días, con retención legal y lote purgado inmutable.
+  - purga a 30 días, con retención legal y lote purgado inmutable;
+  - ajustes de la revisión:
+    - un dato excluido, mapeado o dentro de un texto, no aparece en ninguna columna de texto del esquema ni en el informe;
+    - una exclusión agregada después de subir se redacta al validar;
+    - dos confirmaciones simultáneas no duplican y la reanudación no reprocesa;
+    - un XLSX amplificado se rechaza antes de guardar;
+    - los lotes abandonados se cierran a los 7 días y luego se purgan;
+    - la purga se aplica a COMMITTED, FAILED y CANCELLED, también con retención liberada o vencida.
 - `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas):
   - señales de duplicado (correo, nombre, matrícula, dominio);
   - homónimos sin contexto común no se proponen;

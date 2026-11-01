@@ -44,10 +44,11 @@ conjuntos** y no toca datos de residentes.
 
 ## Importaciones (`imports/`, entrega 1C)
 
-- Subida REST (`GrowthImportsController`, multipart en memoria) → `ImportsService.upload`: lee el archivo (`shared/file-reader.ts`: CSV propio RFC 4180 o `exceljs` con revisión del zip) y guarda lote, archivo (`import_files`, bytea) y filas crudas.
+- Subida REST (`GrowthImportsController`, multipart en memoria) → `ImportsService.upload`: lee el archivo (`shared/file-reader.ts`: CSV propio RFC 4180 o `exceljs` con revisión del zip) redacta los correos y teléfonos excluidos (`ImportRedactionService`, consulta por lotes) y guarda el lote y las filas crudas. El archivo original no se guarda.
 - `growthMapImportColumns` → cola `growth-imports` → `ImportValidationService`: normaliza con los normalizadores de 1A, cruza exclusiones y duplicados exactos y propone `CREATE` / `SKIP` / `LINK_EXISTING`.
 - `growthCommitImport` → `ImportCommitService`: fila por fila con los servicios de 1A (cada una en su transacción, idempotente). Todo nace `NEW`; luego se encolan duplicados y scoring de 1B.
-- `ImportPurgeService`: cron de purga a 30 días (ajuste D).
+- `growthCommitImport` toma un lock consultivo por lote: dos trabajos no confirman el mismo lote a la vez.
+- `ImportPurgeService`: cierra lotes inactivos 7 días y purga a 30 días (ajuste D).
 - El estado del lote lo vigila un trigger; un lote purgado no cambia.
 
 ## Integridad
