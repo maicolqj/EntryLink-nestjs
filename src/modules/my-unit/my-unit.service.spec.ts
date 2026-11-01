@@ -9,6 +9,43 @@ import { VehicleStatus } from '../vehicles/enums/vehicle-status.enum';
  */
 
 const COMPLEX_ID = 'complex-1';
+
+/**
+ * Reloj fijo. El servicio calcula la próxima rotación contra `new Date()`
+ * (effectiveNextRotation): con una fecha guardada fija y el reloj real, la
+ * prueba pasaba hasta las 6 a. m. del 1 de noviembre de 2026 y fallaba desde
+ * entonces. Solo se simula `Date`; los temporizadores y las promesas siguen
+ * siendo reales.
+ */
+const NOW = new Date('2026-10-31T15:00:00.000Z'); // 10 a. m. de Bogotá
+/** Próxima rotación guardada: mañana a las 6 a. m. de Bogotá. */
+const STORED_NEXT = new Date('2026-11-01T11:00:00.000Z');
+
+beforeEach(() => {
+  jest.useFakeTimers({
+    now: NOW,
+    doNotFake: [
+      'hrtime',
+      'nextTick',
+      'performance',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
+      'setImmediate',
+      'clearImmediate',
+      'setInterval',
+      'clearInterval',
+      'setTimeout',
+      'clearTimeout',
+    ],
+  });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
+});
 const user = { sub: 'user-me', roles: ['RESIDENT_ROL'] } as never;
 
 const resident = (overrides: Record<string, unknown>) => ({
@@ -21,16 +58,18 @@ const resident = (overrides: Record<string, unknown>) => ({
   ...overrides,
 });
 
-const build = (me: unknown, household: unknown[] = []) => {
+const build = (
+  me: unknown,
+  household: unknown[] = [],
+  nextExecutionAt: Date | null = STORED_NEXT,
+) => {
   const residentRepo = {
     findOne: jest.fn().mockResolvedValue(me),
     find: jest.fn().mockResolvedValue(household),
   };
   const vehicleRepo = { find: jest.fn().mockResolvedValue([{ id: 'veh-1' }]) };
   const rotationRepo = {
-    findOne: jest
-      .fn()
-      .mockResolvedValue({ nextExecutionAt: new Date('2026-11-01T11:00:00.000Z') }),
+    findOne: jest.fn().mockResolvedValue({ nextExecutionAt }),
   };
   const assetService = {
     listForUnit: jest.fn().mockResolvedValue([{ id: 'asset-1' }]),
@@ -94,7 +133,15 @@ describe('MyUnitService', () => {
     });
     expect(result.assets).toHaveLength(1);
     expect(result.vehicles).toHaveLength(1);
-    expect(result.nextRotationAt).toEqual(new Date('2026-11-01T11:00:00.000Z'));
+    expect(result.nextRotationAt).toEqual(STORED_NEXT);
+  });
+
+  it('si la fecha guardada ya pasó, muestra la siguiente pasada del cron (6 a. m. de Bogotá)', async () => {
+    // Guardada ayer: el cron no corrió. A las 10 a. m. ya pasó la de hoy,
+    // así que la próxima es mañana a las 6 a. m.
+    const h = build(me, [me], new Date('2026-10-30T11:00:00.000Z'));
+    const result = await h.service.find(COMPLEX_ID, user);
+    expect(result.nextRotationAt).toEqual(STORED_NEXT);
   });
 
   it('marca a quien consulta y pone primero al principal', async () => {
