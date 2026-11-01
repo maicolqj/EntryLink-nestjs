@@ -10,6 +10,12 @@ export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 export const IMPORT_MAX_ROWS = 5000;
 export const IMPORT_MAX_COLUMNS = 100;
 export const IMPORT_MAX_CELL_CHARS = 2000;
+/**
+ * Tope de texto de todo el lote. Un XLSX puede repetir una cadena compartida
+ * en miles de celdas: 68 KB de archivo llegaron a 60 MB de texto. Sin este
+ * tope, el caso extremo ronda 1 GB en la memoria del proceso de la API.
+ */
+export const IMPORT_MAX_TOTAL_CHARS = 15_000_000;
 /** Tope de lo que puede ocupar un XLSX descomprimido (bombas zip). */
 export const XLSX_MAX_UNCOMPRESSED = 50 * 1024 * 1024;
 export const XLSX_MAX_ENTRIES = 200;
@@ -25,7 +31,8 @@ export class ImportFileError extends Error {
       | 'NO_HEADERS'
       | 'NO_ROWS'
       | 'TOO_MANY_ROWS'
-      | 'TOO_MANY_COLUMNS',
+      | 'TOO_MANY_COLUMNS'
+      | 'TOO_MUCH_TEXT',
     message: string,
   ) {
     super(message);
@@ -96,13 +103,29 @@ function toSheet(
   const headers = head.values
     .slice(0, width)
     .map((h, i) => h.slice(0, 120) || `Columna ${i + 1}`);
+  const budget = textBudget();
   const rows = body.map((r) => ({
     rowNumber: r.rowNumber,
     values: Array.from({ length: width }, (_, i) =>
-      (r.values[i] ?? '').slice(0, IMPORT_MAX_CELL_CHARS),
+      budget((r.values[i] ?? '').slice(0, IMPORT_MAX_CELL_CHARS)),
     ),
   }));
   return { kind, headers, rows };
+}
+
+/** Cuenta el texto acumulado y corta en cuanto pasa el tope. */
+function textBudget(): (value: string) => string {
+  let total = 0;
+  return (value) => {
+    total += value.length;
+    if (total > IMPORT_MAX_TOTAL_CHARS) {
+      throw new ImportFileError(
+        'TOO_MUCH_TEXT',
+        'El archivo tiene demasiado texto (máx. 15 millones de caracteres)',
+      );
+    }
+    return value;
+  };
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
@@ -289,10 +312,17 @@ async function readXlsx(
     );
   }
   const rows: Array<{ rowNumber: number; values: string[] }> = [];
+  // Corta durante la lectura: no se arma la matriz completa de un archivo
+  // que se va a rechazar.
+  const budget = textBudget();
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     const values: string[] = [];
     row.eachCell({ includeEmpty: true }, (cell, col) => {
-      if (col <= IMPORT_MAX_COLUMNS) values[col - 1] = cellText(cell.value);
+      if (col <= IMPORT_MAX_COLUMNS) {
+        values[col - 1] = budget(
+          cellText(cell.value).slice(0, IMPORT_MAX_CELL_CHARS),
+        );
+      }
     });
     rows.push({
       rowNumber,

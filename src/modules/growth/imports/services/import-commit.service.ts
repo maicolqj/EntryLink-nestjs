@@ -65,7 +65,44 @@ export class ImportCommitService {
     private readonly activity: ActivityLogService,
   ) {}
 
+  /**
+   * Un solo trabajo confirma un lote a la vez: lock consultivo de Postgres
+   * (por sesión, en una conexión propia) con el id del lote. Sin él, dos
+   * trabajos simultáneos (réplicas, o uno que BullMQ dio por atascado)
+   * leían las mismas filas pendientes y duplicaban los registros. Si el lock
+   * está tomado, este trabajo termina sin hacer nada: el que lo tiene acaba
+   * el lote.
+   */
   async commit(batchId: string, jobActor: ImportJobActor): Promise<void> {
+    const key = `growth-import:${batchId}`;
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
+    try {
+      const [{ locked }] = (await runner.query(
+        `SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked`,
+        [key],
+      )) as Array<{ locked: boolean }>;
+      if (!locked) {
+        this.logger.warn(`Lote ${batchId}: ya hay una confirmación en curso`);
+        return;
+      }
+      try {
+        await this.commitLocked(batchId, jobActor);
+      } finally {
+        await runner.query(
+          `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
+          [key],
+        );
+      }
+    } finally {
+      await runner.release();
+    }
+  }
+
+  private async commitLocked(
+    batchId: string,
+    jobActor: ImportJobActor,
+  ): Promise<void> {
     const manager = this.dataSource.manager;
     const batch = await manager.findOne(ImportBatch, {
       where: { id: batchId },

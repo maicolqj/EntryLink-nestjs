@@ -8,16 +8,16 @@ import { DEDUPE_ENTITY_TYPES } from './1781010800000-CreateGrowthDedupeAndScorin
  *  - `import_batches`: un lote por archivo, con la fuente (ACTIVE al subir),
  *    el mapeo, los conteos y su estado. Las transiciones las vigila un
  *    trigger; un lote purgado ya no cambia.
- *  - `import_files`: el archivo original en `bytea` (máx. 5 MB), en su propia
- *    tabla para que listar lotes no lo cargue. No va a R2: la suite no importa
- *    `core/` y así los datos personales no salen del esquema `growth`.
- *  - `import_rows`: fila cruda, valores normalizados, errores (sin copiar el
- *    valor), pista de duplicado y decisión. `CREATE` con errores no pasa el
- *    CHECK.
+ *  - El archivo original NO se guarda (ni aquí ni en R2): solo su sha256 y su
+ *    tamaño. Se lee en memoria al subirlo.
+ *  - `import_rows`: fila cruda (con los correos y teléfonos excluidos ya
+ *    redactados), valores normalizados, errores (sin copiar el valor), pista
+ *    de duplicado y decisión. `CREATE` con errores no pasa el CHECK.
  *  - `import_mapping_templates`: mapeos guardados por encabezado.
  *
- * Purga (ajuste D): a los 30 días de terminado el lote se borra el archivo y
- * quedan en NULL `raw`, `mapped` y `duplicate_hint` (cron en la app).
+ * Purga (ajuste D): a los 30 días de terminado el lote quedan en NULL `raw`,
+ * `mapped` y `duplicate_hint`. Un lote sin actividad en 7 días se cancela
+ * solo y entra a la purga (cron en la app).
  */
 
 const IN = (values: string[]) => values.map((v) => `'${v}'`).join(', ');
@@ -196,15 +196,6 @@ export class CreateGrowthImports1781011100000 implements MigrationInterface {
       `CREATE TRIGGER trg_growth_import_batch_no_delete BEFORE DELETE ON growth.import_batches FOR EACH ROW EXECUTE FUNCTION growth.reject_modification()`,
     );
 
-    // ── Archivo original ───────────────────────────────────────────────────
-    await q.query(`
-      CREATE TABLE growth.import_files (
-        batch_id uuid PRIMARY KEY REFERENCES growth.import_batches(id) ON DELETE RESTRICT,
-        content bytea NOT NULL,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        CONSTRAINT ck_growth_import_file_bytes CHECK (octet_length(content) BETWEEN 1 AND ${IMPORT_MAX_BYTES})
-      )`);
-
     // ── Filas ──────────────────────────────────────────────────────────────
     await q.query(`
       CREATE TABLE growth.import_rows (
@@ -267,7 +258,6 @@ export class CreateGrowthImports1781011100000 implements MigrationInterface {
   public async down(q: QueryRunner): Promise<void> {
     await q.query(`DROP TABLE IF EXISTS growth.import_mapping_templates`);
     await q.query(`DROP TABLE IF EXISTS growth.import_rows`);
-    await q.query(`DROP TABLE IF EXISTS growth.import_files`);
     await q.query(`DROP TABLE IF EXISTS growth.import_batches`);
     await q.query(`DROP FUNCTION IF EXISTS growth.guard_import_batch()`);
     // Si ya hay eventos de lotes, el down falla a propósito antes que perder

@@ -18,6 +18,7 @@ import {
   GrowthImportTarget as T,
 } from '../imports.enums';
 import { IMPORT_FIELDS } from './field-catalog';
+import { containsRedacted } from './redaction';
 
 export interface ImportIssueValue {
   field?: string;
@@ -141,6 +142,10 @@ export function normalizeRow(
   for (const { column, field } of mapping) {
     const value = (raw[column] ?? '').trim();
     if (!value) continue;
+    // Correo o teléfono excluido: ya viene redactado; el aviso lo pone la validación.
+    if ((field === F.EMAIL || field === F.PHONE) && containsRedacted(value)) {
+      continue;
+    }
     const len = LENGTH[field];
     if (len && value.length < len[0]) {
       err(field, 'TOO_SHORT');

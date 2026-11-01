@@ -27,8 +27,8 @@ import { ImportsService } from '../services/imports.service';
 
 /**
  * Subida (multipart) y descarga del informe. El resto del flujo va por
- * GraphQL. El archivo se queda en memoria (máx. 5 MB) y se guarda en el
- * esquema growth: nunca toca el disco ni R2.
+ * GraphQL. El archivo se lee en memoria (máx. 5 MB) y no se guarda: ni en
+ * disco, ni en la base, ni en R2. Solo quedan su sha256 y su tamaño.
  */
 @Controller('growth/imports')
 export class GrowthImportsController {

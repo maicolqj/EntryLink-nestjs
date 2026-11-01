@@ -3,7 +3,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  PrimaryColumn,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -193,7 +192,8 @@ export class ImportBatch {
 
   @Field({
     nullable: true,
-    description: 'Archivo y filas crudas eliminados (30 días tras terminar)',
+    description:
+      'Filas crudas eliminadas (30 días tras terminar). El archivo original nunca se guarda.',
   })
   @Column({ name: 'purged_at', type: 'timestamptz', nullable: true })
   purgedAt?: Date | null;
@@ -205,19 +205,6 @@ export class ImportBatch {
   @Field()
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
-}
-
-/** Archivo original. Sin ObjectType: nunca sale por GraphQL. */
-@Entity({ schema: 'growth', name: 'import_files' })
-export class ImportFile {
-  @PrimaryColumn({ name: 'batch_id', type: 'uuid' })
-  batchId: string;
-
-  @Column({ type: 'bytea' })
-  content: Buffer;
-
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
 }
 
 @ObjectType('GrowthImportRow')

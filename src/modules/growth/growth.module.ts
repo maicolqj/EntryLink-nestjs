@@ -75,7 +75,6 @@ import './prospects/prospects.enums';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 import {
   ImportBatch,
-  ImportFile,
   ImportMappingTemplate,
   ImportRow,
 } from './imports/entities/import.entities';
@@ -87,6 +86,7 @@ import {
 import { ImportCommitService } from './imports/services/import-commit.service';
 import { ImportJobsProcessor } from './imports/services/import-jobs.processor';
 import { ImportPurgeService } from './imports/services/import-purge.service';
+import { ImportRedactionService } from './imports/services/import-redaction.service';
 import {
   GROWTH_IMPORTS_QUEUE,
   ImportQueueService,
@@ -129,7 +129,6 @@ import { ImportsService } from './imports/services/imports.service';
       ProspectScore,
       // Entrega 1C
       ImportBatch,
-      ImportFile,
       ImportRow,
       ImportMappingTemplate,
     ]),
@@ -179,6 +178,7 @@ import { ImportsService } from './imports/services/imports.service';
     GrowthDedupeScoringResolver,
     // Entrega 1C
     ImportQueueService,
+    ImportRedactionService,
     ImportsService,
     ImportValidationService,
     ImportCommitService,

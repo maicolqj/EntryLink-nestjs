@@ -27,7 +27,6 @@ import {
 } from '../dto/responses/import.responses';
 import {
   ImportBatch,
-  ImportFile,
   ImportMappingTemplate,
   ImportRow,
 } from '../entities/import.entities';
@@ -46,6 +45,7 @@ import {
   ImportQueueService,
   toJobActor,
 } from './import-queue.service';
+import { ImportRedactionService } from './import-redaction.service';
 import { mappingKeyOf } from './import-validation.service';
 
 const PREVIEW_ROWS = 20;
@@ -82,6 +82,7 @@ export class ImportsService {
     private readonly guards: ProspectGuardsService,
     private readonly activity: ActivityLogService,
     private readonly queue: ImportQueueService,
+    private readonly redaction: ImportRedactionService,
   ) {}
 
   // ── Subir ────────────────────────────────────────────────────────────────
@@ -100,6 +101,12 @@ export class ImportsService {
       if (error instanceof ImportFileError) throw invalidFile(error.message);
       throw invalidFile('No se pudo leer el archivo');
     }
+    // Antes de guardar nada: los correos y teléfonos excluidos se redactan en
+    // las filas (y en los encabezados). El archivo original no se conserva.
+    const suppressedValues = await this.redaction.redact([
+      sheet.headers,
+      ...sheet.rows.map((r) => r.values),
+    ]);
     if (input.consultedAt.getTime() > Date.now() + 60_000) {
       throw new CustomError({
         message: 'La fecha de consulta no puede ser futura',
@@ -124,14 +131,11 @@ export class ImportsService {
           fileSha256: createHash('sha256').update(file.buffer).digest('hex'),
           headers: sheet.headers,
           totalRows: sheet.rows.length,
+          suppressedValues,
           status: S.UPLOADED,
           createdByUserId: actor.sub,
         }),
       );
-      await manager.insert(ImportFile, {
-        batchId: batch.id,
-        content: file.buffer,
-      });
       for (let i = 0; i < sheet.rows.length; i += 500) {
         await manager.insert(
           ImportRow,
@@ -153,6 +157,7 @@ export class ImportsService {
           fileKind: batch.fileKind,
           fileSize: batch.fileSize,
           totalRows: batch.totalRows,
+          suppressedValues,
         },
       });
       return batch;
@@ -318,7 +323,6 @@ export class ImportsService {
         validRows: 0,
         errorRows: 0,
         duplicateRows: 0,
-        suppressedValues: 0,
         validatedAt: null,
       });
       const saved = await manager.save(batch);
@@ -435,6 +439,11 @@ export class ImportsService {
       row.linkEntityId = linkEntityId;
       row.decidedByUserId = actor.sub;
       const saved = await manager.save(row);
+      // Cuenta como actividad del lote (cancelación por inactividad).
+      await manager.query(
+        `UPDATE growth.import_batches SET updated_at = now() WHERE id = $1`,
+        [batch.id],
+      );
       await this.activity.record(manager, actor, {
         action: 'IMPORT_ROW_DECIDED',
         entityType: GrowthEntityType.IMPORT_BATCH,

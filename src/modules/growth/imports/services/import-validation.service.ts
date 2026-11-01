@@ -2,11 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager } from 'typeorm';
 import { ActivityLogService } from '../../activity/services/activity-log.service';
-import { SuppressionsService } from '../../compliance/services/suppressions.service';
-import {
-  GrowthEntityType,
-  GrowthIdentifierType,
-} from '../../shared/growth.enums';
+import { GrowthEntityType } from '../../shared/growth.enums';
 import { ImportBatch, ImportRow } from '../entities/import.entities';
 import {
   GrowthImportDecision as D,
@@ -19,7 +15,9 @@ import {
   ImportMatchKeys,
   normalizeRow,
 } from '../shared/row-normalizer';
+import { containsRedacted } from '../shared/redaction';
 import { fromJobActor, ImportJobActor } from './import-queue.service';
+import { ImportRedactionService } from './import-redaction.service';
 
 type KeyName = keyof ImportMatchKeys;
 
@@ -58,7 +56,6 @@ interface RowOutcome {
   } | null;
   decision: D;
   linkEntityId: string | null;
-  suppressed: number;
 }
 
 /**
@@ -72,7 +69,7 @@ export class ImportValidationService {
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly suppressions: SuppressionsService,
+    private readonly redaction: ImportRedactionService,
     private readonly activity: ActivityLogService,
   ) {}
 
@@ -97,6 +94,17 @@ export class ImportValidationService {
       where: { batchId },
       order: { rowNumber: 'ASC' },
     });
+    // La lista de exclusión pudo cambiar desde la subida: se redacta otra vez,
+    // y se guarda aunque el lote se cancele en medio.
+    const before = rows.map((r) => JSON.stringify(r.raw ?? []));
+    const newlySuppressed = await this.redaction.redact(
+      rows.map((r) => r.raw ?? []),
+    );
+    for (const [i, r] of rows.entries()) {
+      if (JSON.stringify(r.raw ?? []) !== before[i]) {
+        await manager.update(ImportRow, r.id, { raw: r.raw });
+      }
+    }
     const outcomes = await this.evaluate(manager, batch, rows);
 
     await this.dataSource.transaction(async (tx) => {
@@ -125,7 +133,7 @@ export class ImportValidationService {
         validRows: outcomes.filter((o) => !o.errors.length).length,
         errorRows: outcomes.filter((o) => o.errors.length).length,
         duplicateRows: outcomes.filter((o) => o.hint).length,
-        suppressedValues: outcomes.reduce((n, o) => n + o.suppressed, 0),
+        suppressedValues: locked.suppressedValues + newlySuppressed,
       };
       await tx.update(ImportBatch, batchId, {
         ...counts,
@@ -151,30 +159,19 @@ export class ImportValidationService {
       row: ImportRow;
       normalized: ReturnType<typeof normalizeRow>;
       warnings: ImportIssueValue[];
-      suppressed: number;
     }> = [];
 
     for (const row of rows) {
       const normalized = normalizeRow(batch.target, row.raw ?? [], mapping);
-      const warnings: ImportIssueValue[] = [];
-      let suppressed = 0;
-      // Lista de exclusión: el dato excluido no se guarda en ninguna parte.
-      for (const [field, key, type] of [
-        [F.EMAIL, 'email', GrowthIdentifierType.EMAIL],
-        [F.PHONE, 'phone', GrowthIdentifierType.PHONE],
-      ] as const) {
-        const value = normalized.values[field];
-        if (typeof value !== 'string') continue;
-        if (
-          await this.suppressions.isSuppressed({ identifierType: type, value })
-        ) {
-          delete normalized.values[field];
-          delete normalized.keys[key];
-          warnings.push({ field, code: 'SUPPRESSED' });
-          suppressed++;
-        }
-      }
-      prepared.push({ row, normalized, warnings, suppressed });
+      // Correo o teléfono excluido: ya viene redactado en la fila cruda.
+      const warnings: ImportIssueValue[] = mapping
+        .filter(
+          (m) =>
+            (m.field === F.EMAIL || m.field === F.PHONE) &&
+            containsRedacted(row.raw?.[m.column]),
+        )
+        .map((m) => ({ field: m.field, code: 'SUPPRESSED' }));
+      prepared.push({ row, normalized, warnings });
     }
 
     const existing = await this.findExisting(
@@ -184,7 +181,7 @@ export class ImportValidationService {
     );
 
     const firstSeen = new Map<string, number>();
-    return prepared.map(({ row, normalized, warnings, suppressed }) => {
+    return prepared.map(({ row, normalized, warnings }) => {
       const matchedOn = new Set<string>();
       const existingIds = new Set<string>();
       let linkCandidate: string | null = null;
@@ -240,7 +237,6 @@ export class ImportValidationService {
           : null,
         decision,
         linkEntityId,
-        suppressed,
       };
     });
   }
