@@ -15,6 +15,11 @@ import {
   GROWTH_DEDUPE_PERMISSION_ROWS,
   GROWTH_DEDUPE_ROLE_GRANTS,
 } from '../../../core/database/migrations/1781010700000-GrowthDedupeScoringPermissionsData';
+import { GROWTH_IMPORT_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781010900000-GrowthImportPermissionsEnum';
+import {
+  GROWTH_IMPORT_PERMISSION_ROWS,
+  GROWTH_IMPORT_ROLE_GRANTS,
+} from '../../../core/database/migrations/1781011000000-GrowthImportPermissionsData';
 import { GROWTH_PROSPECT_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781010300000-GrowthProspectPermissionsEnum';
 import {
   GROWTH_PROSPECT_PERMISSION_ROWS,
@@ -37,6 +42,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
     ...GROWTH_PERMISSION_ROWS,
     ...GROWTH_PROSPECT_PERMISSION_ROWS,
     ...GROWTH_DEDUPE_PERMISSION_ROWS,
+    ...GROWTH_IMPORT_PERMISSION_ROWS,
   ];
 
   it('las migraciones de datos son copia fiel del catálogo (permisos)', () => {
@@ -63,6 +69,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
           ...phase0Perms,
           ...(GROWTH_PROSPECT_ROLE_GRANTS[role.name] ?? []),
           ...(GROWTH_DEDUPE_ROLE_GRANTS[role.name] ?? []),
+          ...(GROWTH_IMPORT_ROLE_GRANTS[role.name] ?? []),
         ]),
       );
     }
@@ -75,6 +82,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
         ...GROWTH_PERMISSION_ENUM_VALUES,
         ...GROWTH_PROSPECT_PERMISSION_ENUM_VALUES,
         ...GROWTH_DEDUPE_PERMISSION_ENUM_VALUES,
+        ...GROWTH_IMPORT_PERMISSION_ENUM_VALUES,
       ]),
     ).toEqual(sorted(GROWTH_PERMISSIONS.map((p) => p.name)));
   });

@@ -225,6 +225,15 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
     level: 'HIGH',
     dependsOn: [P.VIEW_GROWTH_PROSPECTS],
   },
+  // ── Entrega 1C: importaciones ───────────────────────────────────────────
+  {
+    id: '0f70355f-ebc8-41c0-83d0-2fc39725d123',
+    name: P.IMPORT_GROWTH_DATA,
+    label: 'Importar Prospectos',
+    description: 'Importar empresas, personas y copropiedades desde CSV o XLSX',
+    level: 'HIGH',
+    dependsOn: [P.EDIT_GROWTH_PROSPECTS],
+  },
 ];
 
 export const GROWTH_ROLES: GrowthRoleDefinition[] = [
@@ -254,6 +263,7 @@ export const GROWTH_ROLES: GrowthRoleDefinition[] = [
       P.ASSIGN_GROWTH_PROSPECTS,
       P.MERGE_GROWTH_DUPLICATES,
       P.MANAGE_GROWTH_SCORING,
+      P.IMPORT_GROWTH_DATA,
     ],
   },
   {
@@ -287,6 +297,7 @@ export const GROWTH_ROLES: GrowthRoleDefinition[] = [
       P.VIEW_ALL_GROWTH_PROSPECTS,
       P.EDIT_GROWTH_PROSPECTS,
       P.VIEW_GROWTH_CONTACT_DATA,
+      P.IMPORT_GROWTH_DATA,
     ],
   },
 ];

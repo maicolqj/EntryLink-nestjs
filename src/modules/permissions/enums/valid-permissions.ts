@@ -486,6 +486,9 @@ export enum ValidPermissions {
   /** Configurar reglas y umbrales del scoring comercial. ➜ Nivel: [HIGH] | Requiere: [VIEW_GROWTH_PROSPECTS] */
   MANAGE_GROWTH_SCORING = 'MANAGE_GROWTH_SCORING',
 
+  /** Importar empresas, personas y copropiedades desde CSV o XLSX. ➜ Nivel: [HIGH] | Requiere: [EDIT_GROWTH_PROSPECTS] */
+  IMPORT_GROWTH_DATA = 'IMPORT_GROWTH_DATA',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }
