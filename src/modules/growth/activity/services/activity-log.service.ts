@@ -48,6 +48,21 @@ export class ActivityLogService {
     });
   }
 
+  /** Evento de un proceso automático (cron), sin usuario. */
+  async recordSystem(
+    manager: EntityManager,
+    event: GrowthActivityRecord,
+  ): Promise<void> {
+    await manager.insert(ActivityEvent, {
+      actorUserId: null,
+      actorRoles: [],
+      action: event.action,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      changes: event.changes ?? null,
+    });
+  }
+
   /** La actividad propia siempre; la de todos con VIEW_GROWTH_ACTIVITY. */
   async list(
     actor: JwtAccessPayload,

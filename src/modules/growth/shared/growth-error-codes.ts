@@ -29,4 +29,13 @@ export enum GrowthErrorCode {
   /** La base jurídica está pendiente: no se puede autorizar contacto. */
   GROWTH_LEGAL_BASIS_PENDING = 'GROWTH_LEGAL_BASIS_PENDING',
   GROWTH_INVALID_INPUT = 'GROWTH_INVALID_INPUT',
+  // ── Importaciones (1C) ──────────────────────────────────────────────────
+  /** El archivo no se pudo leer o supera los límites (tamaño, filas, columnas). */
+  GROWTH_IMPORT_FILE_INVALID = 'GROWTH_IMPORT_FILE_INVALID',
+  /** El mapeo de columnas no es válido para el destino. */
+  GROWTH_IMPORT_MAPPING_INVALID = 'GROWTH_IMPORT_MAPPING_INVALID',
+  /** La operación no aplica al estado actual del lote. */
+  GROWTH_IMPORT_INVALID_STATE = 'GROWTH_IMPORT_INVALID_STATE',
+  /** El archivo y las filas crudas ya se purgaron (30 días). */
+  GROWTH_IMPORT_PURGED = 'GROWTH_IMPORT_PURGED',
 }
