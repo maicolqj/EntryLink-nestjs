@@ -96,6 +96,15 @@ impone). Cambiar su finalidad o sus términos anula la revisión.
 - Los 12 meses son un plazo de **revisión**, no una autorización para
   conservar indefinidamente.
 
+### Importaciones (1C)
+
+- El archivo importado y las filas crudas (`raw`, `mapped`, `duplicate_hint`) se borran **30 días después** de que el lote termina (`COMMITTED`, `FAILED` o `CANCELLED`). Se conservan número de fila, códigos de error (nunca el valor), decisión y resultado. El evento `IMPORT_PURGED` lleva lote, conteos y fecha.
+- Una retención legal vigente sobre el lote impide la purga.
+- Antes de guardar, cada correo y teléfono se cruza con la lista de exclusión: si está excluido, el valor no se guarda en ninguna parte (ni en `mapped` ni como canal) y la fila lleva el aviso `SUPPRESSED`.
+- Sin `VIEW_GROWTH_CONTACT_DATA`, la vista previa, las filas y el informe muestran enmascarado todo valor que parezca correo o teléfono, esté o no mapeado.
+- Las personas importadas nacen con `PENDING_LEGAL_REVIEW` y `NOT_AUTHORIZED`, igual que las capturadas a mano. En un lote de personas con correo o teléfono hay que declarar si son canales `PROFESSIONAL` o `DIRECT`.
+- El archivo no sale del esquema `growth` (no va a R2), y los eventos no llevan el nombre del archivo.
+
 ## 6. Plazos de respuesta al titular
 
 Implementados (pendientes de confirmación jurídica):

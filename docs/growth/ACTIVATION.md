@@ -12,11 +12,11 @@ SUPER_ADMIN puede usar la suite.
 
 | Elemento | Estado |
 |---|---|
-| Esquema `growth` y sus 21 tablas (7 de la fase 0 + 10 de 1A + 4 de 1B) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`, la fila de `growth.settings` y las 6 reglas de scoring sembradas) |
+| Esquema `growth` y sus 25 tablas (7 de la fase 0 + 10 de 1A + 4 de 1B + 4 de 1C) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`, la fila de `growth.settings` y las 6 reglas de scoring sembradas) |
 | `GROWTH_MANAGER_ROL`, `SALES_ROL`, `GROWTH_RESEARCHER_ROL` | existen con `status = false`: no se pueden asignar |
-| 23 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A + 2 de 1B) | existen con `status = false`, asignados solo a esos 3 roles |
+| 24 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A + 2 de 1B + 1 de 1C) | existen con `status = false`, asignados solo a esos 3 roles |
 | `COMPILANCE_OFFICER_ROL` | sin permisos de la suite |
-| API GraphQL | sin operaciones `growth*`; el esquema solo suma 26 valores nuevos de los enums `ValidRoles` (3) y `ValidPermissions` (23) |
+| API GraphQL | sin operaciones `growth*`; el esquema solo suma 27 valores nuevos de los enums `ValidRoles` (3) y `ValidPermissions` (24) |
 
 ## 1. Requisitos previos
 
@@ -80,7 +80,7 @@ SELECT r.id, p.id
  WHERE r.name = 'COMPILANCE_OFFICER_ROL'
 ON CONFLICT DO NOTHING;
 
--- Verificación: debe devolver 3 roles activos y 23 permisos activos (13 de la fase 0 + 8 de 1A + 2 de 1B).
+-- Verificación: debe devolver 3 roles activos y 24 permisos activos (13 de la fase 0 + 8 de 1A + 2 de 1B + 1 de 1C).
 SELECT name, status FROM public.roles WHERE name::text LIKE '%GROWTH%' OR name = 'SALES_ROL';
 SELECT count(*) FILTER (WHERE status) AS activos FROM public.permissions WHERE "group" = 'GROWTH';
 
@@ -145,3 +145,11 @@ los contactos que la suite conoce en claro.
 - Tras activar, conviene lanzar una vez `growthRescoreAll` para calcular el puntaje de todo lo que ya exista.
 - Reglas sembradas: las aprobadas (10+ copropiedades +40, 5–9 +30, 2–4 +20, >500 unidades +20, canal verificado +10, interés +20). Umbrales: alta ≥ 50 y media ≥ 25. Ambos se configuran con `MANAGE_GROWTH_SCORING`.
 - La fusión es siempre manual, con `MERGE_GROWTH_DUPLICATES`. No hay deshacer automático: `growth.merge_log` guarda qué se eligió y qué se trasladó.
+
+## 11. Importaciones (1C)
+
+- Permiso `IMPORT_GROWTH_DATA`: gerente e investigador. El oficial de cumplimiento no lo recibe.
+- Cola BullMQ `growth-imports` (Redis existente; validación y confirmación), visible en Bull Board. Solo se registra con la suite encendida.
+- Subida: `POST /api/v1/growth/imports` (multipart, máx. 5 MB y 5.000 filas). El archivo se guarda en `growth.import_files`, **no en R2**: no hace falta configurar nada en Cloudflare.
+- Cron `growth-import-purge` a las 3:45 (Bogotá): 30 días después de terminado un lote borra el archivo y las filas crudas. Un lote con retención legal (`entity_type = 'IMPORT_BATCH'`) no se purga.
+- Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas.
