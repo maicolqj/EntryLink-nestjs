@@ -35,6 +35,13 @@ conjuntos** y no toca datos de residentes.
 - `LegalBasisService` es el único que cambia la base jurídica y la autorización de contacto. La base lo respalda con CHECK.
 - Los datos personales (canales y evidencias de personas) se enmascaran en los resolvers de campo, no en la interfaz.
 
+## Deduplicación y scoring (entrega 1B)
+
+- `DedupeService` **propone** pares (`duplicate_candidates`) con señales exactas (SQL) y similitud de nombres por trigramas (en la aplicación, sin `pg_trgm`). Nunca fusiona.
+- `MergeService` fusiona a mano, con un valor elegido por campo. Traslada relaciones, evidencias y asignaciones, deja al absorbido `DUPLICATE` con `merged_into_id` y escribe `merge_log` (append-only).
+- `ScoringService` usa una lista cerrada de predicados con parámetros validados; cada regla del desglose dice si se evaluó con datos `VERIFIED` o `ESTIMATED`. El puntaje no valida ni autoriza contacto.
+- Los trabajos van por la cola `growth-prospects` (`ProspectEventsService` → `ProspectJobsProcessor`), encolados por los resolvers después del commit.
+
 ## Integridad
 
 - Toda escritura registra su evento en `growth.activity_events` dentro de la

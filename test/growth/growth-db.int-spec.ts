@@ -114,7 +114,7 @@ describeDb('Growth Suite — base de datos real', () => {
       throw new Error(`Base "${db}" no parece de prueba: abortado`);
 
     // Ambas suites comparten la base: se limpian también las tablas de 1A.
-    await resetGrowthTestData(ds, ['aaaaaaaa-', 'bbbbbbbb-']);
+    await resetGrowthTestData(ds, ['aaaaaaaa-', 'bbbbbbbb-', 'cccccccc-']);
 
     for (const [id, email, phone, complexId] of [
       [SALES_USER, 'ventas@alternaqj.com', '3009990001', null],

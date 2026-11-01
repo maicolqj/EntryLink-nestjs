@@ -23,6 +23,20 @@ export class GrowthSettings {
   @Column({ name: 'prospect_goal', type: 'int', default: 100 })
   prospectGoal: number;
 
+  @Field(() => Int, { description: 'Prioridad alta desde este puntaje' })
+  @Column({ name: 'scoring_high_threshold', type: 'int', default: 50 })
+  scoringHighThreshold: number;
+
+  @Field(() => Int, { description: 'Prioridad media desde este puntaje' })
+  @Column({ name: 'scoring_medium_threshold', type: 'int', default: 25 })
+  scoringMediumThreshold: number;
+
+  @Field(() => Int, {
+    description: 'Sube con cada cambio de reglas o umbrales',
+  })
+  @Column({ name: 'scoring_version', type: 'int', default: 1 })
+  scoringVersion: number;
+
   @Field()
   @Column({ name: 'updated_at', type: 'timestamptz', default: () => 'now()' })
   updatedAt: Date;

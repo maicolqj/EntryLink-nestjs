@@ -66,6 +66,13 @@ export abstract class ValidatableRecord {
   @Column({ name: 'updated_by_user_id', type: 'uuid', nullable: true })
   updatedByUserId?: string | null;
 
+  @Field(() => ID, {
+    nullable: true,
+    description: 'Si se fusionó: registro sobreviviente (este queda DUPLICATE)',
+  })
+  @Column({ name: 'merged_into_id', type: 'uuid', nullable: true })
+  mergedIntoId?: string | null;
+
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt?: Date | null;
 }

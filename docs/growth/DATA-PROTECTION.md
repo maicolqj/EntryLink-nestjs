@@ -45,6 +45,7 @@ Implementado en la entrega 1A:
 - Outreach (fase 3) solo leerá `growth.v_contactable_person_channels`: canales verificados de personas `AUTHORIZED` con base válida. Además deberá consultar la lista de exclusión antes de cada envío.
 - Los correos y teléfonos de personas, y sus evidencias, se enmascaran **en el servidor** para quien no tiene `VIEW_GROWTH_CONTACT_DATA`.
 - Antes de guardar un correo, teléfono o sitio se consulta la lista de exclusión (correo y dominio). Si está excluido no se guarda, y el evento no conserva el dato.
+- **Fusiones (1B):** si se fusionan dos personas y el sobreviviente tenía contacto `AUTHORIZED`, pasa a `REVOKED` y necesita una nueva autorización. La base jurídica no se combina: queda la del sobreviviente.
 - `retention_review_at` = 12 meses desde la última verificación o interacción, calculado por trigger. La anonimización llega con la entrega 1E.
 
 ## 2. Finalidad

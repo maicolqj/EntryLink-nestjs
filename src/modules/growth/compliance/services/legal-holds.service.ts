@@ -12,6 +12,10 @@ import {
   OrganizationChannel,
   PersonChannel,
 } from '../../prospects/entities/channels.entity';
+import {
+  DuplicateCandidate,
+  ScoringRule,
+} from '../../prospects/entities/dedupe-scoring.entity';
 import { Evidence } from '../../prospects/entities/evidence.entity';
 import { GrowthSettings } from '../../prospects/entities/growth-settings.entity';
 import { Organization } from '../../prospects/entities/organization.entity';
@@ -52,6 +56,8 @@ const HOLDABLE: Record<GrowthEntityType, EntityTarget<ObjectLiteral>> = {
   [GrowthEntityType.EVIDENCE]: Evidence,
   [GrowthEntityType.PROSPECT_ASSIGNMENT]: ProspectAssignment,
   [GrowthEntityType.SETTINGS]: GrowthSettings,
+  [GrowthEntityType.DUPLICATE_CANDIDATE]: DuplicateCandidate,
+  [GrowthEntityType.SCORING_RULE]: ScoringRule,
 };
 
 const MAX_YEARS = 10;

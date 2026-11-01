@@ -12,11 +12,11 @@ SUPER_ADMIN puede usar la suite.
 
 | Elemento | Estado |
 |---|---|
-| Esquema `growth` y sus 17 tablas (7 de la fase 0 + 10 de 1A) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL` y la fila de `growth.settings`) |
+| Esquema `growth` y sus 21 tablas (7 de la fase 0 + 10 de 1A + 4 de 1B) | creados, vacíos (salvo 6 fuentes `PENDING_APPROVAL`, la fila de `growth.settings` y las 6 reglas de scoring sembradas) |
 | `GROWTH_MANAGER_ROL`, `SALES_ROL`, `GROWTH_RESEARCHER_ROL` | existen con `status = false`: no se pueden asignar |
-| 21 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A) | existen con `status = false`, asignados solo a esos 3 roles |
+| 23 permisos del grupo `GROWTH` (13 de la fase 0 + 8 de 1A + 2 de 1B) | existen con `status = false`, asignados solo a esos 3 roles |
 | `COMPILANCE_OFFICER_ROL` | sin permisos de la suite |
-| API GraphQL | sin operaciones `growth*`; el esquema solo suma 24 valores nuevos de los enums `ValidRoles` (3) y `ValidPermissions` (21) |
+| API GraphQL | sin operaciones `growth*`; el esquema solo suma 26 valores nuevos de los enums `ValidRoles` (3) y `ValidPermissions` (23) |
 
 ## 1. Requisitos previos
 
@@ -80,7 +80,7 @@ SELECT r.id, p.id
  WHERE r.name = 'COMPILANCE_OFFICER_ROL'
 ON CONFLICT DO NOTHING;
 
--- Verificación: debe devolver 3 roles activos y 21 permisos activos (13 de la fase 0 + 8 de 1A).
+-- Verificación: debe devolver 3 roles activos y 23 permisos activos (13 de la fase 0 + 8 de 1A + 2 de 1B).
 SELECT name, status FROM public.roles WHERE name::text LIKE '%GROWTH%' OR name = 'SALES_ROL';
 SELECT count(*) FILTER (WHERE status) AS activos FROM public.permissions WHERE "group" = 'GROWTH';
 
@@ -138,3 +138,10 @@ los contactos que la suite conoce en claro.
 1. **Fuente activa.** Toda alta exige una fuente `ACTIVE`, así que primero se completan la revisión jurídica y la activación de al menos una fuente (paso 6).
 2. **Excepción de auto-validación.** `growth.settings.allow_super_admin_self_validation` nace en `true`: mientras el equipo sea una sola persona, SUPER_ADMIN puede validar lo que registró, y cada uso queda como `SELF_VALIDATION_EXCEPTION` en `growth.activity_events`. Al incorporar otros validadores se apaga con `growthUpdateSettings(input: { allowSuperAdminSelfValidation: false })`.
 3. **Contacto comercial.** Ninguna persona queda contactable por validarse. Hacen falta tres pasos de cumplimiento: base jurídica documentada (`growthSetPersonLegalBasis`), persona validada y autorización expresa (`growthSetPersonContactStatus`). La vista `growth.v_contactable_person_channels` es el único punto de entrada que tendrá Outreach.
+
+## 10. Deduplicación y scoring (1B)
+
+- La cola BullMQ `growth-prospects` usa el Redis existente y solo se registra con la suite encendida. Se ve en Bull Board.
+- Tras activar, conviene lanzar una vez `growthRescoreAll` para calcular el puntaje de todo lo que ya exista.
+- Reglas sembradas: las aprobadas (10+ copropiedades +40, 5–9 +30, 2–4 +20, >500 unidades +20, canal verificado +10, interés +20). Umbrales: alta ≥ 50 y media ≥ 25. Ambos se configuran con `MANAGE_GROWTH_SCORING`.
+- La fusión es siempre manual, con `MERGE_GROWTH_DUPLICATES`. No hay deshacer automático: `growth.merge_log` guarda qué se eligió y qué se trasladó.

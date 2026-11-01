@@ -29,6 +29,7 @@ import {
   GrowthPropertiesResolver,
 } from './prospects/resolvers/prospect-records.resolver';
 import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
+import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
 
 /**
  * Matriz rol × operación con el guard REAL de la plataforma. Los permisos de
@@ -44,6 +45,7 @@ const RESOLVERS = [
   GrowthPeopleResolver,
   GrowthPropertiesResolver,
   GrowthProspectOperationsResolver,
+  GrowthDedupeScoringResolver,
 ];
 
 type Operation = {
@@ -170,6 +172,18 @@ describe('Autorización de la Growth Suite', () => {
         'growthProspectDashboard',
         'growthSettings',
         'growthUpdateSettings',
+        // Entrega 1B
+        'growthDuplicateCandidates',
+        'growthScanDuplicates',
+        'growthDismissDuplicate',
+        'growthMergeDuplicates',
+        'growthMergeHistory',
+        'growthProspectScore',
+        'growthScoringRules',
+        'growthCreateScoringRule',
+        'growthUpdateScoringRule',
+        'growthUpdateScoringThresholds',
+        'growthRescoreAll',
       ].sort(),
     );
   });
@@ -250,6 +264,9 @@ describe('Autorización de la Growth Suite', () => {
           'growthSetPersonLegalBasis',
           'growthSetPersonContactStatus',
           'growthUpdateSettings',
+          'growthMergeDuplicates',
+          'growthDuplicateCandidates',
+          'growthUpdateScoringRule',
         ],
       },
       [ValidRoles.GROWTH_RESEARCHER_ROL]: {
@@ -271,6 +288,8 @@ describe('Autorización de la Growth Suite', () => {
           'growthVerifyEvidence',
           'growthAssignProspect',
           'growthSetPersonContactStatus',
+          'growthMergeDuplicates',
+          'growthCreateScoringRule',
         ],
       },
       [ValidRoles.GROWTH_MANAGER_ROL]: {
@@ -287,6 +306,10 @@ describe('Autorización de la Growth Suite', () => {
           'growthDecideValidation',
           'growthVerifyEvidence',
           'growthAssignProspect',
+          'growthMergeDuplicates',
+          'growthDismissDuplicate',
+          'growthUpdateScoringRule',
+          'growthUpdateScoringThresholds',
         ],
         cannot: [
           'growthLiftSuppression',
@@ -362,6 +385,8 @@ describe('Autorización de la Growth Suite', () => {
     expect(await check('growthSetPersonContactStatus')).toBe(true);
     expect(await check('growthCreateOrganization')).toBe(false);
     expect(await check('growthDecideValidation')).toBe(false);
+    expect(await check('growthMergeDuplicates')).toBe(false);
+    expect(await check('growthUpdateScoringRule')).toBe(false);
   });
 
   describe('sin caminos alternativos', () => {

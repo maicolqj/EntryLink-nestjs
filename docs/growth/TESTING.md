@@ -45,6 +45,19 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
 Hay dos suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
+- `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas):
+  - señales de duplicado (correo, nombre, matrícula, dominio);
+  - homónimos sin contexto común no se proponen;
+  - un par descartado no se reabre;
+  - fusión con elección por campo, traslado de relaciones y evidencias, absorbido como DUPLICATE y `merge_log` append-only;
+  - la base no deja marcar DUPLICATE sin fusión ni modificar un fusionado;
+  - administración vigente en ambas copropiedades;
+  - revocación del contacto al fusionar personas;
+  - scoring con base verificada o estimada;
+  - umbrales y versión;
+  - parámetros validados y predicado cerrado en la base;
+  - recálculo desde la cola;
+  - dashboard con prioridades.
 - `prospects-db.int-spec.ts` (entrega 1A, 22 pruebas):
   - fuente ACTIVE obligatoria y evidencia por campo;
   - NIT único y dígito de verificación;
@@ -60,13 +73,13 @@ Hay dos suites, que comparten la base y el helper de limpieza `test/growth/db-cl
   - dashboard;
   - configuración no borrable.
 
-Reversión: `yarn migration:revert` con las mismas variables (×3 para revertir solo 1A, ×6 para revertir también la fase 0). Tras revertir,
+Reversión: `yarn migration:revert` con las mismas variables (×3 por entrega: 1B, luego 1A, luego la fase 0). Tras revertir,
 el `pg_dump --schema-only` debe ser igual al de antes de migrar, salvo los
 valores de enum agregados, que Postgres no permite quitar.
 
 ## Esquema GraphQL con la bandera apagada
 
 Con `GROWTH_ENABLED` ausente o en `false`, el esquema generado al arrancar debe
-ser igual al de `main`, salvo 24 valores nuevos de los enums `ValidPermissions`
-(21) y `ValidRoles` (3). Se verifica arrancando `dist/main` de los dos checkouts
+ser igual al de `main`, salvo 26 valores nuevos de los enums `ValidPermissions`
+(23) y `ValidRoles` (3). Se verifica arrancando `dist/main` de los dos checkouts
 contra servicios desechables y comparando sus `src/schema.gql` generados.

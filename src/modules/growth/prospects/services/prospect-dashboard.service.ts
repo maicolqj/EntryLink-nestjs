@@ -9,7 +9,9 @@ import { GrowthValidationStatus } from '../prospects.enums';
 import { GrowthUpdateSettingsInput } from '../dto/inputs/relations.inputs';
 import {
   GrowthKindStats,
+  GrowthPriorityCount,
   GrowthProspectDashboard,
+  GrowthTopProspect,
 } from '../dto/responses/prospect.responses';
 
 /**
@@ -34,13 +36,45 @@ export class ProspectDashboardService {
       await this.dataSource.query(
         `SELECT coalesce(sum(estimated_units) FILTER (WHERE validation_status = 'VALIDATED'), 0)::int AS verified,
                 coalesce(sum(estimated_units) FILTER (WHERE validation_status <> 'VALIDATED'), 0)::int AS estimated
-           FROM growth.properties WHERE deleted_at IS NULL`,
+           FROM growth.properties WHERE deleted_at IS NULL AND merged_into_id IS NULL`,
       );
     const count = (s: GrowthKindStats, ...statuses: GrowthValidationStatus[]) =>
       s.byStatus
         .filter((b) => statuses.includes(b.status))
         .reduce((acc, b) => acc + b.count, 0);
     const recent = await this.activity.list(actor, {}, { page: 1, limit: 20 });
+    const priorityCounts: GrowthPriorityCount[] = await this.dataSource.query(
+      `SELECT s.priority, count(*)::int AS count
+         FROM growth.prospect_scores s
+         LEFT JOIN growth.organizations o ON o.id = s.organization_id
+         LEFT JOIN growth.people p ON p.id = s.person_id
+        WHERE coalesce(o.merged_into_id, p.merged_into_id) IS NULL
+          AND coalesce(o.deleted_at, p.deleted_at) IS NULL
+        GROUP BY s.priority`,
+    );
+    const top: Array<
+      GrowthTopProspect & {
+        has_estimates: boolean;
+        validation_status: GrowthValidationStatus;
+        display_name: string;
+      }
+    > = await this.dataSource.query(
+      `SELECT CASE WHEN s.organization_id IS NOT NULL THEN 'ORGANIZATION' ELSE 'PERSON' END AS kind,
+                coalesce(s.organization_id, s.person_id) AS id,
+                coalesce(o.legal_name, p.full_name) AS display_name,
+                s.score, s.priority, s.has_estimates,
+                coalesce(o.validation_status, p.validation_status) AS validation_status
+           FROM growth.prospect_scores s
+           LEFT JOIN growth.organizations o ON o.id = s.organization_id
+           LEFT JOIN growth.people p ON p.id = s.person_id
+          WHERE coalesce(o.merged_into_id, p.merged_into_id) IS NULL
+            AND coalesce(o.deleted_at, p.deleted_at) IS NULL
+          ORDER BY s.score DESC, s.computed_at DESC
+          LIMIT 10`,
+    );
+    const [dups]: Array<{ n: number }> = await this.dataSource.query(
+      `SELECT count(*)::int AS n FROM growth.duplicate_candidates WHERE status = 'PENDING'`,
+    );
 
     return {
       goal: settings.prospectGoal,
@@ -63,6 +97,17 @@ export class ProspectDashboardService {
       verifiedUnits: units.verified,
       estimatedUnits: units.estimated,
       recentActivity: recent.items,
+      priorityCounts,
+      topProspects: top.map((t) => ({
+        kind: t.kind,
+        id: t.id,
+        displayName: t.display_name,
+        score: t.score,
+        priority: t.priority,
+        hasEstimates: t.has_estimates,
+        validationStatus: t.validation_status,
+      })),
+      pendingDuplicates: dups.n,
     };
   }
 
@@ -112,7 +157,7 @@ export class ProspectDashboardService {
     const rows: Array<{ status: GrowthValidationStatus; count: number }> =
       await this.dataSource.query(
         `SELECT validation_status AS status, count(*)::int AS count
-           FROM ${table} WHERE deleted_at IS NULL ${extra}
+           FROM ${table} WHERE deleted_at IS NULL AND merged_into_id IS NULL ${extra}
           GROUP BY validation_status`,
       );
     return {

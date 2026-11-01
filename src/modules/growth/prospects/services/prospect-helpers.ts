@@ -41,6 +41,31 @@ export function applyProspectFilter<T extends ObjectLiteral>(
   searchColumns: string[],
 ): void {
   qb.andWhere('e.deleted_at IS NULL');
+  // Los registros absorbidos en una fusión solo aparecen si se piden
+  // explícitamente (estado DUPLICATE).
+  if (!filter.statuses?.includes(GrowthValidationStatus.DUPLICATE)) {
+    qb.andWhere('e.merged_into_id IS NULL');
+  }
+  const scoreColumn =
+    kind === GrowthProspectKind.ORGANIZATION
+      ? 'organization_id'
+      : kind === GrowthProspectKind.PERSON
+        ? 'person_id'
+        : null;
+  if (filter.priority && scoreColumn) {
+    qb.andWhere(
+      `EXISTS (SELECT 1 FROM growth.prospect_scores ps WHERE ps.${scoreColumn} = e.id AND ps.priority = :priority)`,
+      { priority: filter.priority },
+    );
+  }
+  if (filter.orderByScore && scoreColumn) {
+    // Subconsulta (sin JOIN): la paginación con joins + orderBy rompe en TypeORM.
+    qb.orderBy(
+      `(SELECT ps.score FROM growth.prospect_scores ps WHERE ps.${scoreColumn} = e.id)`,
+      'DESC',
+      'NULLS LAST',
+    );
+  }
   const scope = guards.scope(kind, 'e', actor);
   if (scope) qb.andWhere(scope.sql, scope.params);
 

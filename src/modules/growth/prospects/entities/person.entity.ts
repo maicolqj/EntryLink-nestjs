@@ -1,6 +1,10 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { Column, Entity } from 'typeorm';
-import { GrowthContactStatus, GrowthLegalBasis } from '../prospects.enums';
+import {
+  GrowthContactStatus,
+  GrowthInterestSignal,
+  GrowthLegalBasis,
+} from '../prospects.enums';
 import { ValidatableRecord } from './validatable-record';
 
 /**
@@ -103,6 +107,15 @@ export class Person extends ValidatableRecord {
     update: false,
   })
   retentionReviewAt: Date;
+
+  @Field(() => GrowthInterestSignal)
+  @Column({
+    name: 'interest_signal',
+    type: 'varchar',
+    length: 20,
+    default: GrowthInterestSignal.NONE,
+  })
+  interestSignal: GrowthInterestSignal;
 
   @Field({ nullable: true })
   @Column({ name: 'anonymized_at', type: 'timestamptz', nullable: true })

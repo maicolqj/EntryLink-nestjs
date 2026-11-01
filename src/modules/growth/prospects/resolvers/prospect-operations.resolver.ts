@@ -58,6 +58,7 @@ import { ProspectDashboardService } from '../services/prospect-dashboard.service
 import { RelationshipsService } from '../services/relationships.service';
 import { ValidationService } from '../services/validation.service';
 import { maskObservedValue } from '../shared/masking';
+import { ProspectEventsService } from '../services/prospect-events.service';
 
 /**
  * Operaciones de EntryLink Prospect: canales, relaciones, evidencias,
@@ -74,6 +75,7 @@ export class GrowthProspectOperationsResolver {
     private readonly assignments: AssignmentsService,
     private readonly legal: LegalBasisService,
     private readonly dashboard: ProspectDashboardService,
+    private readonly events: ProspectEventsService,
   ) {}
 
   // ── Canales ────────────────────────────────────────────────────────────────
@@ -88,7 +90,16 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthChannelInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<OrganizationChannel> {
-    return this.channels.addToOrganization(organizationId, input, actor);
+    return this.channels
+      .addToOrganization(organizationId, input, actor)
+      .then((r) =>
+        this.events.after(
+          r,
+          GrowthProspectKind.ORGANIZATION,
+          r.organizationId,
+          true,
+        ),
+      );
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -102,7 +113,11 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthPersonChannelInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<PersonChannel> {
-    return this.channels.addToPerson(personId, input, actor);
+    return this.channels
+      .addToPerson(personId, input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PERSON, r.personId, true),
+      );
   }
 
   @Auth({ permissions: [P.VALIDATE_GROWTH_PROSPECTS] })
@@ -113,11 +128,16 @@ export class GrowthProspectOperationsResolver {
     @Args('channelId', { type: () => ID }) channelId: string,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<OrganizationChannel> {
-    return this.channels.verify(
-      GrowthProspectKind.ORGANIZATION,
-      channelId,
-      actor,
-    ) as Promise<OrganizationChannel>;
+    return this.channels
+      .verify(GrowthProspectKind.ORGANIZATION, channelId, actor)
+      .then((r) => {
+        const c = r as OrganizationChannel;
+        return this.events.after(
+          c,
+          GrowthProspectKind.ORGANIZATION,
+          c.organizationId,
+        );
+      });
   }
 
   @Auth({ permissions: [P.VALIDATE_GROWTH_PROSPECTS] })
@@ -126,11 +146,12 @@ export class GrowthProspectOperationsResolver {
     @Args('channelId', { type: () => ID }) channelId: string,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<PersonChannel> {
-    return this.channels.verify(
-      GrowthProspectKind.PERSON,
-      channelId,
-      actor,
-    ) as Promise<PersonChannel>;
+    return this.channels
+      .verify(GrowthProspectKind.PERSON, channelId, actor)
+      .then((r) => {
+        const c = r as PersonChannel;
+        return this.events.after(c, GrowthProspectKind.PERSON, c.personId);
+      });
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -157,7 +178,11 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthLinkEmploymentInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<Employment> {
-    return this.relationships.linkEmployment(input, actor);
+    return this.relationships
+      .linkEmployment(input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PERSON, r.personId, true),
+      );
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -180,7 +205,12 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthSetPropertyManagerInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<PropertyManagement> {
-    return this.relationships.setPropertyManager(input, actor);
+    // Recalcula el puntaje de todos los que han administrado la copropiedad.
+    return this.relationships
+      .setPropertyManager(input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PROPERTY, r.propertyId),
+      );
   }
 
   @Auth({ permissions: [P.EDIT_GROWTH_PROSPECTS] })
@@ -190,7 +220,11 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthEndRelationInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<PropertyManagement> {
-    return this.relationships.endPropertyManagement(id, input, actor);
+    return this.relationships
+      .endPropertyManagement(id, input, actor)
+      .then((r) =>
+        this.events.after(r, GrowthProspectKind.PROPERTY, r.propertyId),
+      );
   }
 
   // ── Evidencias ─────────────────────────────────────────────────────────────
@@ -306,7 +340,9 @@ export class GrowthProspectOperationsResolver {
     @Args('input') input: GrowthDecideValidationInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<GrowthReviewItem> {
-    return this.validation.decide(prospect, input, actor);
+    return this.validation
+      .decide(prospect, input, actor)
+      .then((r) => this.events.after(r, r.kind, r.id));
   }
 
   @Auth({ permissions: [P.VALIDATE_GROWTH_PROSPECTS] })

@@ -173,7 +173,7 @@ describeDb('EntryLink Prospect (1A) — base de datos real', () => {
       synchronize: false,
     });
     await ds.initialize();
-    await resetGrowthTestData(ds, ['aaaaaaaa-', 'bbbbbbbb-']);
+    await resetGrowthTestData(ds, ['aaaaaaaa-', 'bbbbbbbb-', 'cccccccc-']);
 
     for (const [id, phone] of [
       [ADMIN, '3008880001'],
