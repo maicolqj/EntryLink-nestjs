@@ -59,7 +59,6 @@ import { ProspectEventsService } from '../../src/modules/growth/prospects/servic
 import { ProspectGuardsService } from '../../src/modules/growth/prospects/services/prospect-guards.service';
 import {
   ImportBatch,
-  ImportFile,
   ImportMappingTemplate,
   ImportRow,
 } from '../../src/modules/growth/imports/entities/import.entities';
@@ -77,6 +76,7 @@ import {
   GrowthImportJob,
   ImportQueueService,
 } from '../../src/modules/growth/imports/services/import-queue.service';
+import { ImportRedactionService } from '../../src/modules/growth/imports/services/import-redaction.service';
 import { ImportValidationService } from '../../src/modules/growth/imports/services/import-validation.service';
 import { ImportsService } from '../../src/modules/growth/imports/services/imports.service';
 import { resetGrowthTestData } from './db-cleanup';
@@ -196,7 +196,6 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         ScoringRule,
         ProspectScore,
         ImportBatch,
-        ImportFile,
         ImportRow,
         ImportMappingTemplate,
       ],
@@ -257,8 +256,9 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       },
     } as unknown as ImportQueueService;
 
-    imports = new ImportsService(ds, guards, activity, queue);
-    const validation = new ImportValidationService(ds, suppressions, activity);
+    const redaction = new ImportRedactionService(suppressions);
+    imports = new ImportsService(ds, guards, activity, queue, redaction);
+    const validation = new ImportValidationService(ds, redaction, activity);
     const commit = new ImportCommitService(
       ds,
       orgs,
@@ -280,6 +280,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
 
   describe('lote de 500 empresas con errores, duplicados y exclusiones sembrados', () => {
     let batch: ImportBatch;
+    let csvText: string;
     const existing: string[] = [];
 
     beforeAll(async () => {
@@ -345,17 +346,27 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
           ].join(';'),
         );
       }
-      batch = await upload(lines.join('\r\n'));
+      csvText = lines.join('\r\n');
+      batch = await upload(csvText);
     });
 
-    it('al subir: filas crudas, archivo guardado en el esquema growth y mapeo sugerido', async () => {
+    it('al subir: el archivo no se guarda, los excluidos llegan redactados y hay mapeo sugerido', async () => {
       expect(batch.status).toBe(S.UPLOADED);
       expect(batch.totalRows).toBe(500);
       expect(batch.headers[0]).toBe('Razón social');
-      const file = await ds
-        .getRepository(ImportFile)
-        .findOneByOrFail({ batchId: batch.id });
-      expect(file.content.length).toBe(batch.fileSize);
+      expect(batch.fileSha256).toMatch(/^[0-9a-f]{64}$/);
+      // No existe ninguna tabla para el archivo original.
+      const [{ t }] = await ds.query(
+        `SELECT to_regclass('growth.import_files')::text AS t`,
+      );
+      expect(t).toBeNull();
+      // Los 3 correos excluidos se redactaron antes de guardar las filas.
+      expect(batch.suppressedValues).toBe(3);
+      const rows = await rowsOf(batch.id);
+      expect(rows[50].raw![2]).toBe('[excluido]');
+      expect(JSON.stringify(rows.map((r) => r.raw))).not.toMatch(
+        /excluido\d@empresa/,
+      );
       const preview = await imports.preview(batch.id, admin);
       expect(preview.rows).toHaveLength(20);
       expect(preview.suggestedMapping).toEqual([
@@ -403,7 +414,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         code: 'SUPPRESSED',
       });
       expect(at(50).mapped).not.toHaveProperty('email');
-      expect(JSON.stringify(at(50).errors)).not.toContain('excluido');
+      expect(at(50).errors).toEqual([]);
       const tpl = await imports.templates(T.ORGANIZATIONS);
       expect(tpl.map((t) => t.name)).toContain('Directorio IT');
     });
@@ -523,12 +534,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
     });
 
     it('un archivo repetido se avisa con los lotes anteriores', async () => {
-      const again = await upload(
-        await ds
-          .getRepository(ImportFile)
-          .findOneByOrFail({ batchId: batch.id })
-          .then((f) => f.content),
-      );
+      const again = await upload(csvText);
       expect((await imports.preview(again.id, admin)).previousBatchIds).toEqual(
         [batch.id],
       );
@@ -768,7 +774,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       return b;
     };
 
-    it('borra archivo y filas crudas; conserva el lote; el evento no lleva datos', async () => {
+    it('borra las filas crudas; conserva el lote; el evento no lleva datos', async () => {
       const old = await finishedAgo(31);
       const recent = await finishedAgo(29);
       const held = await finishedAgo(40);
@@ -780,26 +786,19 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
 
       expect(await purge.purgeDue()).toBe(1);
 
-      expect(
-        await ds.getRepository(ImportFile).countBy({ batchId: old.id }),
-      ).toBe(0);
       const [row] = await rowsOf(old.id);
       expect(row.raw).toBeNull();
       expect(row.mapped).toBeNull();
       expect((await imports.get(old.id, admin)).purgedAt).toBeTruthy();
-      expect(
-        await ds.getRepository(ImportFile).countBy({ batchId: recent.id }),
-      ).toBe(1);
-      expect(
-        await ds.getRepository(ImportFile).countBy({ batchId: held.id }),
-      ).toBe(1);
+      expect((await rowsOf(recent.id))[0].raw).not.toBeNull();
+      expect((await rowsOf(held.id))[0].raw).not.toBeNull();
 
       const [event] = await ds
         .getRepository(ActivityEvent)
         .findBy({ entityId: old.id, action: 'IMPORT_PURGED' });
       expect(event.actorUserId).toBeNull();
       expect(JSON.stringify(event.changes)).not.toMatch(/andes|Andes/);
-      expect(event.changes).toMatchObject({ filesDeleted: 1, rowsCleared: 1 });
+      expect(event.changes).toMatchObject({ rowsCleared: 1 });
 
       // Un lote purgado ya no cambia, ni da informe.
       await expectDbError(
@@ -812,6 +811,284 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       await expect(imports.report(old.id, admin)).rejects.toThrow(/purgó/);
       // Correr de nuevo no repite.
       expect(await purge.purgeDue()).toBe(0);
+    });
+  });
+
+  describe('ajustes de la revisión de 1C', () => {
+    const SUP = 'no.contactar@sondeo-ph.co';
+    const SUP_PHONE = '3159998877';
+
+    it('un dato excluido no queda en ninguna tabla ni en el informe, aunque venga en una columna sin mapear', async () => {
+      await suppressions.add(
+        {
+          identifierType: GrowthIdentifierType.EMAIL,
+          value: SUP,
+          scope: GrowthSuppressionScope.ALL_CHANNELS,
+          reason: GrowthSuppressionReason.UNSUBSCRIBE,
+        },
+        admin,
+      );
+      await suppressions.add(
+        {
+          identifierType: GrowthIdentifierType.PHONE,
+          value: SUP_PHONE,
+          scope: GrowthSuppressionScope.ALL_CHANNELS,
+          reason: GrowthSuppressionReason.UNSUBSCRIBE,
+        },
+        admin,
+      );
+      const b = await upload(
+        `Razón social;Correo;Teléfono;Notas\nSondeo SAS;${SUP.toUpperCase()};315 999 8877;llamar a ${SUP} o al +57 315 999 8877`,
+      );
+      expect(b.suppressedValues).toBe(4);
+      await imports.map(
+        {
+          batchId: b.id,
+          mapping: [
+            { column: 0, field: F.LEGAL_NAME },
+            { column: 1, field: F.EMAIL },
+            { column: 2, field: F.PHONE },
+          ],
+        },
+        admin,
+      );
+      await drain();
+      const [row] = await rowsOf(b.id);
+      expect(row.warnings).toEqual(
+        expect.arrayContaining([
+          { field: 'email', code: 'SUPPRESSED' },
+          { field: 'phone', code: 'SUPPRESSED' },
+        ]),
+      );
+      expect(row.raw).toEqual([
+        'Sondeo SAS',
+        '[excluido]',
+        '[excluido]',
+        'llamar a [excluido] o al [excluido]',
+      ]);
+      await imports.commit(b.id, admin);
+      await drain();
+
+      // Búsqueda en todo el esquema growth (texto) por el correo y el teléfono.
+      const tables: Array<{ table_name: string; column_name: string }> =
+        await ds.query(
+          `SELECT table_name, column_name FROM information_schema.columns
+            WHERE table_schema = 'growth' AND data_type IN ('text', 'character varying', 'jsonb', 'ARRAY')`,
+        );
+      for (const needle of [
+        SUP,
+        'no.contactar',
+        '3159998877',
+        '315 999 8877',
+      ]) {
+        for (const { table_name, column_name } of tables) {
+          const [{ n }] = await ds.query(
+            `SELECT count(*)::int AS n FROM growth."${table_name}" WHERE "${column_name}"::text ILIKE $1`,
+            [`%${needle}%`],
+          );
+          expect({ table_name, column_name, needle, n }).toMatchObject({
+            n: 0,
+          });
+        }
+      }
+      // Ni en el informe, ni siquiera para quien ve datos de contacto.
+      const { content } = await imports.report(b.id, admin);
+      const ExcelJS = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(content as unknown as ArrayBuffer);
+      const txt = JSON.stringify(wb.getWorksheet('Filas')!.getSheetValues());
+      expect(txt).not.toMatch(/no\.contactar|3159998877|315 999 8877/i);
+    });
+
+    it('una exclusión agregada después de subir se redacta al validar', async () => {
+      const late = 'tarde@sondeo-ph.co';
+      const b = await upload(`Razón social;Correo\nTarde SAS;${late}`);
+      await suppressions.add(
+        {
+          identifierType: GrowthIdentifierType.EMAIL,
+          value: late,
+          scope: GrowthSuppressionScope.ALL_CHANNELS,
+          reason: GrowthSuppressionReason.UNSUBSCRIBE,
+        },
+        admin,
+      );
+      await imports.map(
+        {
+          batchId: b.id,
+          mapping: [
+            { column: 0, field: F.LEGAL_NAME },
+            { column: 1, field: F.EMAIL },
+          ],
+        },
+        admin,
+      );
+      await drain();
+      const [row] = await rowsOf(b.id);
+      expect(row.raw).toEqual(['Tarde SAS', '[excluido]']);
+      expect((await imports.get(b.id, admin)).suppressedValues).toBe(1);
+    });
+
+    it('dos confirmaciones simultáneas del mismo lote no duplican (lock por lote)', async () => {
+      const b = await upload('Razón social\nAlfa L\nBeta L\nGama L\nDelta L');
+      await imports.map(
+        { batchId: b.id, mapping: [{ column: 0, field: F.LEGAL_NAME }] },
+        admin,
+      );
+      await drain();
+      await imports.commit(b.id, admin);
+      queued.length = 0;
+      const before = await ds.getRepository(Organization).count();
+      const job = {
+        name: 'commit',
+        data: { batchId: b.id, actor: admin },
+      } as never;
+      await Promise.all([processor.process(job), processor.process(job)]);
+      expect((await ds.getRepository(Organization).count()) - before).toBe(4);
+      expect((await imports.get(b.id, admin)).status).toBe(S.COMMITTED);
+    });
+
+    it('reanuda: las filas que ya tienen resultado no se reprocesan', async () => {
+      const b = await upload('Razón social\nUno R\nDos R\nTres R');
+      await imports.map(
+        { batchId: b.id, mapping: [{ column: 0, field: F.LEGAL_NAME }] },
+        admin,
+      );
+      await drain();
+      await imports.commit(b.id, admin);
+      const [first] = await rowsOf(b.id);
+      await ds.query(
+        `UPDATE growth.import_rows SET result = 'SKIPPED', processed_at = now() WHERE id = $1`,
+        [first.id],
+      );
+      const before = await ds.getRepository(Organization).count();
+      await drain();
+      expect((await ds.getRepository(Organization).count()) - before).toBe(2);
+      expect((await rowsOf(b.id)).map((r) => r.result)).toEqual([
+        R.SKIPPED,
+        R.CREATED,
+        R.CREATED,
+      ]);
+    });
+
+    it('un XLSX con texto repetido masivamente se rechaza antes de guardar', async () => {
+      const ExcelJS = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('a');
+      const big = 'x'.repeat(2000);
+      ws.addRow(Array.from({ length: 100 }, (_, i) => `c${i}`));
+      for (let i = 0; i < 100; i++)
+        ws.addRow(Array.from({ length: 100 }, () => big));
+      const buf = Buffer.from(await wb.xlsx.writeBuffer());
+      expect(buf.length).toBeLessThan(200_000);
+      const count = await ds.getRepository(ImportBatch).count();
+      await expect(
+        upload(buf, T.ORGANIZATIONS, admin, 'amplificado.xlsx'),
+      ).rejects.toThrow(/demasiado texto/);
+      expect(await ds.getRepository(ImportBatch).count()).toBe(count);
+    });
+
+    it('lotes abandonados: a los 7 días se cierran y luego se purgan; uno confirmando queda FAILED', async () => {
+      const mk = (label: string) => upload(`Razón social\n${label}`);
+      const uploaded = await mk('Abandonado subido');
+      const validated = await mk('Abandonado validado');
+      await imports.map(
+        {
+          batchId: validated.id,
+          mapping: [{ column: 0, field: F.LEGAL_NAME }],
+        },
+        admin,
+      );
+      await drain();
+      const committing = await mk('Abandonado confirmando');
+      await imports.map(
+        {
+          batchId: committing.id,
+          mapping: [{ column: 0, field: F.LEGAL_NAME }],
+        },
+        admin,
+      );
+      await drain();
+      await imports.commit(committing.id, admin);
+      queued.length = 0; // la confirmación nunca corre
+      const fresh = await mk('Reciente');
+      for (const b of [uploaded, validated, committing]) {
+        await ds.query(
+          `UPDATE growth.import_batches SET updated_at = now() - interval '8 days' WHERE id = $1`,
+          [b.id],
+        );
+      }
+
+      expect(await purge.expireInactive()).toBe(3);
+      expect((await imports.get(uploaded.id, admin)).status).toBe(S.CANCELLED);
+      expect((await imports.get(validated.id, admin)).status).toBe(S.CANCELLED);
+      expect((await imports.get(committing.id, admin)).status).toBe(S.FAILED);
+      expect((await imports.get(fresh.id, admin)).status).toBe(S.UPLOADED);
+      const [ev] = await ds
+        .getRepository(ActivityEvent)
+        .findBy({ entityId: uploaded.id, action: 'IMPORT_EXPIRED' });
+      expect(ev.actorUserId).toBeNull();
+
+      // 30 días después de cerrarse, se purgan.
+      const in31 = new Date(Date.now() + 31 * 86_400_000);
+      await purge.purgeDue(in31);
+      for (const b of [uploaded, validated, committing]) {
+        expect((await imports.get(b.id, admin)).purgedAt).toBeTruthy();
+        expect((await rowsOf(b.id))[0].raw).toBeNull();
+      }
+      await imports.cancel(fresh.id, 'Fin de la prueba', admin);
+    });
+
+    it('purga por estado: COMMITTED, FAILED y CANCELLED; retención liberada o vencida no la impide, activa sí', async () => {
+      const mk = (label: string) => upload(`Razón social\n${label}`);
+      const committed = await mk('Purga confirmado');
+      await imports.map(
+        {
+          batchId: committed.id,
+          mapping: [{ column: 0, field: F.LEGAL_NAME }],
+        },
+        admin,
+      );
+      await drain();
+      await imports.commit(committed.id, admin);
+      await drain();
+      const failed = await mk('Purga fallido');
+      await imports.map(
+        { batchId: failed.id, mapping: [{ column: 0, field: F.LEGAL_NAME }] },
+        admin,
+      );
+      queued.length = 0;
+      await imports.markFailed(failed.id, 'prueba');
+      const cancelled = await mk('Purga cancelado');
+      await imports.cancel(cancelled.id, 'Prueba de purga', admin);
+      const released = await mk('Retención liberada');
+      await imports.cancel(released.id, 'Prueba de purga', admin);
+      const expired = await mk('Retención vencida');
+      await imports.cancel(expired.id, 'Prueba de purga', admin);
+      const active = await mk('Retención activa');
+      await imports.cancel(active.id, 'Prueba de purga', admin);
+      const holdBasis = 'Requerimiento de autoridad (prueba)';
+      await ds.query(
+        `INSERT INTO growth.legal_holds (entity_type, entity_id, legal_basis, hold_until, created_by_user_id, released_at, released_by_user_id, release_reason)
+         VALUES ('IMPORT_BATCH', $1, $3, now() + interval '1 year', $2, now(), $2, 'Liberada por la autoridad')`,
+        [released.id, ADMIN, holdBasis],
+      );
+      await ds.query(
+        `INSERT INTO growth.legal_holds (entity_type, entity_id, legal_basis, hold_until, created_by_user_id, created_at)
+         VALUES ('IMPORT_BATCH', $1, $3, current_date - 1, $2, now() - interval '1 year')`,
+        [expired.id, ADMIN, holdBasis],
+      );
+      await ds.query(
+        `INSERT INTO growth.legal_holds (entity_type, entity_id, legal_basis, hold_until, created_by_user_id)
+         VALUES ('IMPORT_BATCH', $1, $3, now() + interval '1 year', $2)`,
+        [active.id, ADMIN, holdBasis],
+      );
+      const in31 = new Date(Date.now() + 31 * 86_400_000);
+      await purge.purgeDue(in31);
+      for (const b of [committed, failed, cancelled, released, expired]) {
+        expect((await imports.get(b.id, admin)).purgedAt).toBeTruthy();
+      }
+      expect((await imports.get(active.id, admin)).purgedAt).toBeNull();
+      expect((await rowsOf(active.id))[0].raw).not.toBeNull();
     });
   });
 });

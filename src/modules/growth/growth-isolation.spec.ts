@@ -122,7 +122,6 @@ describe('Aislamiento de la Growth Suite', () => {
         'employments',
         'evidences',
         'import_batches',
-        'import_files',
         'import_mapping_templates',
         'import_rows',
         'legal_holds',

@@ -30,6 +30,7 @@ import {
   parseCsv,
   readSpreadsheet,
 } from './file-reader';
+import { ImportRedactionService } from '../services/import-redaction.service';
 import { mappingKeyOf } from '../services/import-validation.service';
 import { maskRawRow, neutralizeFormula, buildImportReport } from './report';
 import {
@@ -401,5 +402,64 @@ describe('Importaciones: huella del mapeo', () => {
     ).not.toBe(
       mappingKeyOf({ columnMapping: [{ column: 0, field: F.LEGAL_NAME }] }),
     );
+  });
+});
+
+describe('Importaciones: ajustes de la revisión', () => {
+  it('rechaza un XLSX pequeño que se expande a demasiado texto (cadenas compartidas)', async () => {
+    // 80 filas x 100 celdas x 2.000 = 16 M de caracteres (> 15 M), en pocos KB.
+    const big = 'y'.repeat(2000);
+    const buffer = await xlsx([
+      Array.from({ length: 100 }, (_, i) => `c${i}`),
+      ...Array.from({ length: 80 }, () =>
+        Array.from({ length: 100 }, () => big),
+      ),
+    ]);
+    expect(buffer.length).toBeLessThan(IMPORT_MAX_BYTES);
+    await expect(readSpreadsheet(buffer)).rejects.toMatchObject({
+      code: 'TOO_MUCH_TEXT',
+    });
+  });
+
+  it('un correo o teléfono redactado no es un error de formato', () => {
+    const r = normalizeRow(
+      T.PEOPLE,
+      ['Ana', '[excluido]', '[excluido]'],
+      [
+        { column: 0, field: F.FULL_NAME },
+        { column: 1, field: F.EMAIL },
+        { column: 2, field: F.PHONE },
+      ],
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.values).toEqual({ fullName: 'Ana' });
+  });
+});
+
+describe('ImportRedactionService', () => {
+  const service = (blocked: string[]) =>
+    new ImportRedactionService({
+      suppressedAmong: (_type: unknown, values: string[]) =>
+        Promise.resolve(new Set(values.filter((v) => blocked.includes(v)))),
+    } as never);
+
+  it('redacta en cualquier celda, sola o dentro de un texto, y cuenta los reemplazos', async () => {
+    const rows = [
+      ['Ana', 'ana@x.co', 'escribir a ana@x.co o a otro@x.co', '3001234567'],
+    ];
+    const n = await service(['ana@x.co', '3001234567']).redact(rows);
+    expect(n).toBe(3);
+    expect(rows[0]).toEqual([
+      'Ana',
+      '[excluido]',
+      'escribir a [excluido] o a otro@x.co',
+      '[excluido]',
+    ]);
+  });
+
+  it('sin coincidencias no cambia nada', async () => {
+    const rows = [['Ana', 'ana@x.co']];
+    expect(await service([]).redact(rows)).toBe(0);
+    expect(rows[0]).toEqual(['Ana', 'ana@x.co']);
   });
 });

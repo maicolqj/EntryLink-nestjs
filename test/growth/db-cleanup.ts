@@ -23,7 +23,6 @@ export async function resetGrowthTestData(
   for (const table of [
     // Entrega 1C
     'import_rows',
-    'import_files',
     'import_batches',
     'import_mapping_templates',
     'merge_log',
