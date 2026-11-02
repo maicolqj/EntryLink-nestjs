@@ -198,6 +198,9 @@ describe('Autorización de la Growth Suite', () => {
         'growthSetImportRowDecision',
         'growthCommitImport',
         'growthCancelImport',
+        // Entrega 1E-0
+        'growthSimulateScoring',
+        'growthTeamWorkload',
       ].sort(),
     );
   });
@@ -284,6 +287,8 @@ describe('Autorización de la Growth Suite', () => {
           'growthImportBatches',
           'growthMapImportColumns',
           'growthCommitImport',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
       },
       [ValidRoles.GROWTH_RESEARCHER_ROL]: {
@@ -312,6 +317,8 @@ describe('Autorización de la Growth Suite', () => {
           'growthSetPersonContactStatus',
           'growthMergeDuplicates',
           'growthCreateScoringRule',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
       },
       [ValidRoles.GROWTH_MANAGER_ROL]: {
@@ -335,6 +342,8 @@ describe('Autorización de la Growth Suite', () => {
           'growthImportBatches',
           'growthCommitImport',
           'growthCancelImport',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
         cannot: [
           'growthLiftSuppression',
