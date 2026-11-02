@@ -1,4 +1,5 @@
-import { envValidationSchema } from './env-validation';
+import { envValidationSchema, validateEnv } from './env-validation';
+import { redactValues } from './redact';
 
 /** Variables de la Growth Suite: apagada por defecto y sin romper el arranque. */
 const BASE = {
@@ -58,5 +59,80 @@ describe('Variables de entorno de la Growth Suite', () => {
       GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: '1',
     });
     expect(error?.message).toMatch(/GROWTH_SUPPRESSION_HMAC_KEYS/);
+  });
+
+  it('apagada: un formato inválido en las variables de la suite NO impide arrancar y se descartan', () => {
+    const { error, value } = validate({
+      GROWTH_ENABLED: 'false',
+      GROWTH_SUPPRESSION_HMAC_KEYS: `1=${KEY}`,
+      GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: 'uno',
+    });
+    expect(error).toBeUndefined();
+    expect(value).not.toHaveProperty('GROWTH_SUPPRESSION_HMAC_KEYS');
+    expect(value).not.toHaveProperty('GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION');
+  });
+});
+
+describe('validateEnv: los errores de configuración no exponen valores', () => {
+  const secret = `1=${KEY}`;
+
+  it('el caso del 2026-11-01 ("1=" en vez de "1:"): nombra la variable, nunca el valor', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE,
+        GROWTH_ENABLED: 'true',
+        GROWTH_SUPPRESSION_HMAC_KEYS: secret,
+        GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: '1',
+      }),
+    ).toThrow(/GROWTH_SUPPRESSION_HMAC_KEYS no tiene el formato esperado/);
+    try {
+      validateEnv({
+        ...BASE,
+        GROWTH_ENABLED: 'true',
+        GROWTH_SUPPRESSION_HMAC_KEYS: secret,
+        GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: '1',
+      });
+    } catch (e) {
+      const msg = (e as Error).message;
+      expect(msg).not.toContain(KEY);
+      expect(msg).not.toMatch(/with value/);
+    }
+  });
+
+  it('secretos cortos o ausentes tampoco salen en el mensaje', () => {
+    const shortSecret = 'corto-y-secreto';
+    let msg = '';
+    try {
+      validateEnv({
+        ...BASE,
+        JWT_ACCESS_SECRET: shortSecret,
+        REDIS_PASSWORD: undefined,
+      });
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/JWT_ACCESS_SECRET es demasiado corta/);
+    expect(msg).toMatch(/REDIS_PASSWORD es obligatoria/);
+    expect(msg).not.toContain(shortSecret);
+  });
+
+  it('entorno válido: devuelve los valores con sus valores por defecto', () => {
+    const value = validateEnv({ ...BASE });
+    expect(value.GROWTH_ENABLED).toBe(false);
+    expect(value.PORT).toBe(3001);
+  });
+});
+
+describe('redactValues (defensa en Sentry)', () => {
+  it('quita el valor de un mensaje estilo Joi y deja el resto', () => {
+    const msg = `Config validation error: "GROWTH_SUPPRESSION_HMAC_KEYS" with value "1=${KEY}" fails to match the required pattern`;
+    const out = redactValues(msg);
+    expect(out).not.toContain(KEY);
+    expect(out).toContain('with value "[redactado]"');
+    expect(out).toContain('GROWTH_SUPPRESSION_HMAC_KEYS');
+    expect(redactValues("x with value 'abc' y")).toBe(
+      "x with value '[redactado]' y",
+    );
+    expect(redactValues('sin valores')).toBe('sin valores');
   });
 });

@@ -101,22 +101,58 @@ export const envValidationSchema = Joi.object({
   // `.empty('')`: docker compose pasa '' cuando la variable no está definida.
   GROWTH_ENABLED: Joi.boolean().empty('').default(false),
   // Llavero HMAC versionado de la lista de exclusión: "1:<base64>,2:<base64>".
-  // Obligatorio solo con la suite encendida. Ver docs/growth/ACTIVATION.md.
-  GROWTH_SUPPRESSION_HMAC_KEYS: Joi.string()
-    .empty('')
-    .pattern(/^\d+:[A-Za-z0-9+/=]{43,}(,\d+:[A-Za-z0-9+/=]{43,})*$/)
-    .when('GROWTH_ENABLED', {
-      is: true,
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }),
-  GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: Joi.number()
-    .empty('')
-    .integer()
-    .min(1)
-    .when('GROWTH_ENABLED', {
-      is: true,
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }),
+  // Solo se valida (y es obligatorio) con la suite encendida. Apagada, se
+  // descarta: un error de formato en una variable de Growth no debe impedir
+  // que arranque la API (caída del 2026-11-01). Ver docs/growth/ACTIVATION.md.
+  GROWTH_SUPPRESSION_HMAC_KEYS: Joi.when('GROWTH_ENABLED', {
+    is: true,
+    then: Joi.string()
+      .empty('')
+      .pattern(/^\d+:[A-Za-z0-9+/=]{43,}(,\d+:[A-Za-z0-9+/=]{43,})*$/)
+      .required(),
+    otherwise: Joi.any().strip(),
+  }),
+  GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: Joi.when('GROWTH_ENABLED', {
+    is: true,
+    then: Joi.number().empty('').integer().min(1).required(),
+    otherwise: Joi.any().strip(),
+  }),
 }).options({ allowUnknown: true }); // permite vars de OS que no son del proyecto
+
+/** Qué falla, sin el valor: se usa en mensajes que terminan en los logs. */
+const PROBLEM: Record<string, string> = {
+  'any.required': 'es obligatoria',
+  'string.empty': 'no puede estar vacía',
+  'string.pattern.base': 'no tiene el formato esperado',
+  'string.min': 'es demasiado corta',
+  'string.base': 'debe ser texto',
+  'number.base': 'debe ser un número',
+  'number.integer': 'debe ser un número entero',
+  'number.min': 'es menor que el mínimo permitido',
+  'number.max': 'es mayor que el máximo permitido',
+  'boolean.base': 'debe ser true o false',
+  'any.only': 'no es uno de los valores permitidos',
+};
+
+/**
+ * Valida el entorno sin poner nunca un valor en el error. Los mensajes de Joi
+ * incluyen el valor rechazado («with value "…"»), y Nest los imprime al
+ * fallar el arranque: así quedó una llave HMAC en los logs el 2026-11-01. El
+ * error solo nombra la variable y el problema.
+ */
+export function validateEnv(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const { error, value } = envValidationSchema.validate(config, {
+    abortEarly: false,
+    allowUnknown: true,
+  });
+  if (error) {
+    const problems = error.details.map(
+      (d) =>
+        `${d.path.join('.') || '(entorno)'} ${PROBLEM[d.type] ?? `no es válida (${d.type})`}`,
+    );
+    throw new Error(`Configuración inválida: ${problems.join('; ')}`);
+  }
+  return value as Record<string, unknown>;
+}
