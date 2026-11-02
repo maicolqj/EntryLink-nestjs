@@ -1060,6 +1060,15 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
       await s.dedupe.scan(K.ORGANIZATION, b.id);
       const c = (await candidateFor(a.id, b.id))!;
 
+      const listed = await s.dedupe.list(
+        { entityType: K.ORGANIZATION, status: GrowthDuplicateStatus.PENDING },
+        { page: 1, limit: 100 },
+      );
+      const row = listed.items.find((i) => i.id === c.id)!;
+      expect([row.leftName, row.rightName].sort()).toEqual(
+        ['Previa Horizontal SAS', 'Previa PH SAS'].sort(),
+      );
+
       const snapshot = async () => ({
         orgs: await ds.query(
           `SELECT id, legal_name, nit, address, merged_into_id, validation_status, updated_at
