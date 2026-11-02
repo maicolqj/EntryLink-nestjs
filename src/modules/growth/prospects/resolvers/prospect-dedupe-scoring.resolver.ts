@@ -14,6 +14,7 @@ import { GrowthSettings } from '../entities/growth-settings.entity';
 import {
   GrowthDuplicateFilterInput,
   GrowthMergeDuplicatesInput,
+  GrowthMergePreviewInput,
   GrowthScoringRuleInput,
   GrowthScoringThresholdsInput,
 } from '../dto/inputs/dedupe-scoring.inputs';
@@ -27,6 +28,7 @@ import { ScoringService } from '../services/scoring.service';
 import { ScoringSimulationService } from '../services/scoring-simulation.service';
 import { GrowthScoringSimulationInput } from '../dto/inputs/scoring-simulation.inputs';
 import { GrowthScoringSimulation } from '../dto/responses/scoring-simulation.responses';
+import { GrowthMergePreview } from '../dto/responses/merge-preview.responses';
 
 /**
  * Deduplicación (siempre con decisión humana) y scoring configurable.
@@ -81,6 +83,19 @@ export class GrowthDedupeScoringResolver {
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<DuplicateCandidate> {
     return this.dedupe.dismiss(id, note, actor);
+  }
+
+  @Auth({ permissions: [P.MERGE_GROWTH_DUPLICATES] })
+  @Query(() => GrowthMergePreview, {
+    name: 'growthMergePreview',
+    description:
+      'Vista previa de growthMergeDuplicates con los datos reales y la misma lógica: campos, traslados y efectos. No modifica nada.',
+  })
+  growthMergePreview(
+    @Args('input') input: GrowthMergePreviewInput,
+    @CurrentUser() actor: JwtAccessPayload,
+  ): Promise<GrowthMergePreview> {
+    return this.mergeService.preview(input, actor);
   }
 
   @Auth({ permissions: [P.MERGE_GROWTH_DUPLICATES] })

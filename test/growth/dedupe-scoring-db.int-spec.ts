@@ -1013,4 +1013,185 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
       );
     });
   });
+
+  describe('1E-0: vista previa de la fusión', () => {
+    it('muestra campos, traslados y efectos sin modificar nada, y coincide con la fusión real', async () => {
+      const a = await s.orgs.create(
+        {
+          legalName: 'Previa Horizontal SAS',
+          address: 'Calle 26 # 68-10',
+          source: src(),
+        },
+        admin,
+      );
+      const b = await s.orgs.create(
+        {
+          legalName: 'Previa PH SAS',
+          nit: '901444555',
+          address: 'Cra 15 # 93-20',
+          source: src(),
+        },
+        admin,
+      );
+      for (const [id, value] of [
+        [b.id, '601 444 5566'],
+        [a.id, '6014445566'],
+      ]) {
+        await s.channels.addToOrganization(
+          id,
+          { kind: GrowthChannelKind.PHONE, value, source: src() },
+          admin,
+        );
+      }
+      const prop = await s.props.create(
+        { name: 'Conjunto Previa', source: src() },
+        admin,
+      );
+      await s.rel.setPropertyManager(
+        {
+          propertyId: prop.id,
+          managerType: GrowthManagerType.ORGANIZATION,
+          organizationId: b.id,
+          status: GrowthRelationStatus.CURRENT,
+          source: src(),
+        },
+        admin,
+      );
+      await s.dedupe.scan(K.ORGANIZATION, b.id);
+      const c = (await candidateFor(a.id, b.id))!;
+
+      const snapshot = async () => ({
+        orgs: await ds.query(
+          `SELECT id, legal_name, nit, address, merged_into_id, validation_status, updated_at
+             FROM growth.organizations WHERE id = ANY($1) ORDER BY id`,
+          [[a.id, b.id]],
+        ),
+        channels: await ds.query(
+          `SELECT id, organization_id FROM growth.organization_channels WHERE organization_id = ANY($1) ORDER BY id`,
+          [[a.id, b.id]],
+        ),
+        evidences: await ds.query(
+          `SELECT id, entity_id FROM growth.evidences WHERE entity_id = ANY($1) ORDER BY id`,
+          [[a.id, b.id]],
+        ),
+        managements: await ds.query(
+          `SELECT id, organization_id, status FROM growth.property_managements WHERE property_id = $1`,
+          [prop.id],
+        ),
+        candidate: await ds.query(
+          `SELECT status, resolved_at FROM growth.duplicate_candidates WHERE id = $1`,
+          [c.id],
+        ),
+        events: (
+          await ds.query(
+            `SELECT count(*)::int AS n FROM growth.activity_events`,
+          )
+        )[0].n,
+        logs: (
+          await ds.query(`SELECT count(*)::int AS n FROM growth.merge_log`)
+        )[0].n,
+      });
+      const before = await snapshot();
+
+      const empty = await s.merge.preview(
+        { candidateId: c.id, survivorId: a.id, fieldChoices: [] },
+        admin,
+      );
+      expect(empty.ready).toBe(false);
+      expect(empty.missingChoices.sort()).toEqual(['address', 'legalName']);
+      const field = (name: string) =>
+        empty.fields.find((f) => f.field === name)!;
+      expect(field('nit').outcome).toBe('FROM_MERGED');
+      expect(field('nit').resultValue).toBe('901444555');
+      expect(field('legalName').outcome).toBe('CONFLICT');
+      expect(field('legalName').resultValue).toBeNull();
+      expect(empty.mergedId).toBe(b.id);
+
+      const choices = [
+        { field: 'legalName', side: GrowthMergeSide.SURVIVOR },
+        { field: 'address', side: GrowthMergeSide.MERGED },
+      ];
+      const preview = await s.merge.preview(
+        { candidateId: c.id, survivorId: a.id, fieldChoices: choices },
+        admin,
+      );
+      expect(preview.ready).toBe(true);
+      expect(
+        preview.fields.find((f) => f.field === 'address')!.resultValue,
+      ).toBe('Cra 15 # 93-20');
+      expect(preview.revalidation).toBe(false);
+      expect(preview.survivorContactRevoked).toBe(false);
+      expect(await snapshot()).toEqual(before);
+
+      const log = await s.merge.merge(
+        {
+          candidateId: c.id,
+          survivorId: a.id,
+          fieldChoices: choices,
+          note: 'Misma empresa según la vista previa',
+        },
+        admin,
+      );
+      const expectedChoices = Object.fromEntries(
+        preview.fields
+          .filter(
+            (f) => f.outcome === 'FROM_MERGED' || f.outcome === 'CONFLICT',
+          )
+          .map((f) => [
+            f.field,
+            f.outcome === 'FROM_MERGED' ? 'MERGED_AUTO' : f.chosenSide,
+          ]),
+      );
+      expect(log.fieldChoices).toEqual(expectedChoices);
+      expect(log.moved).toEqual(
+        Object.fromEntries(
+          preview.moves.filter((m) => m.count > 0).map((m) => [m.key, m.count]),
+        ),
+      );
+      expect(log.moved.candidatesClosed).toBeUndefined(); // el par fusionado no se cuenta
+
+      await expect(
+        s.merge.preview(
+          { candidateId: c.id, survivorId: a.id, fieldChoices: [] },
+          admin,
+        ),
+      ).rejects.toThrow(/ya está MERGED/);
+    });
+
+    it('rechaza lo mismo que la fusión: sobreviviente fuera del par y campos no combinables', async () => {
+      const x = await s.orgs.create(
+        { legalName: 'Rechazo Uno SAS', source: src() },
+        admin,
+      );
+      const y = await s.orgs.create(
+        { legalName: 'Rechazo Uno S.A.S.', source: src() },
+        admin,
+      );
+      await s.dedupe.scan(K.ORGANIZATION, y.id);
+      const c = (await candidateFor(x.id, y.id))!;
+      const pending = { id: c.id, left_id: c.leftId };
+      await expect(
+        s.merge.preview(
+          {
+            candidateId: pending.id,
+            survivorId: 'cccccccc-0000-4000-8000-00000000abcd',
+            fieldChoices: [],
+          },
+          admin,
+        ),
+      ).rejects.toThrow(/sobreviviente/);
+      await expect(
+        s.merge.preview(
+          {
+            candidateId: pending.id,
+            survivorId: pending.left_id,
+            fieldChoices: [
+              { field: 'legalBasis', side: GrowthMergeSide.MERGED },
+            ],
+          },
+          admin,
+        ),
+      ).rejects.toThrow(/no se combina/);
+    });
+  });
 });

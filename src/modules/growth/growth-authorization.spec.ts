@@ -201,6 +201,7 @@ describe('Autorización de la Growth Suite', () => {
         // Entrega 1E-0
         'growthSimulateScoring',
         'growthTeamWorkload',
+        'growthMergePreview',
       ].sort(),
     );
   });
@@ -282,6 +283,7 @@ describe('Autorización de la Growth Suite', () => {
           'growthSetPersonContactStatus',
           'growthUpdateSettings',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthDuplicateCandidates',
           'growthUpdateScoringRule',
           'growthImportBatches',
@@ -316,6 +318,7 @@ describe('Autorización de la Growth Suite', () => {
           'growthAssignProspect',
           'growthSetPersonContactStatus',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthCreateScoringRule',
           'growthSimulateScoring',
           'growthTeamWorkload',
@@ -336,6 +339,7 @@ describe('Autorización de la Growth Suite', () => {
           'growthVerifyEvidence',
           'growthAssignProspect',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthDismissDuplicate',
           'growthUpdateScoringRule',
           'growthUpdateScoringThresholds',

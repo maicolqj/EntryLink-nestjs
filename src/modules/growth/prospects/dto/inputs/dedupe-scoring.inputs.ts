@@ -80,6 +80,26 @@ export class GrowthMergeDuplicatesInput {
 }
 
 @InputType()
+export class GrowthMergePreviewInput {
+  @Field(() => ID)
+  @IsUUID()
+  candidateId: string;
+
+  @Field(() => ID, { description: 'Registro que se conservaría' })
+  @IsUUID()
+  survivorId: string;
+
+  @Field(() => [GrowthMergeFieldChoiceInput], {
+    defaultValue: [],
+    description: 'Elecciones hechas hasta ahora; pueden faltar',
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GrowthMergeFieldChoiceInput)
+  fieldChoices: GrowthMergeFieldChoiceInput[] = [];
+}
+
+@InputType()
 export class GrowthScoringRuleInput {
   @Field({ nullable: true, description: 'Solo al crear: MAYÚSCULAS_Y_GUIONES' })
   @IsOptional()
