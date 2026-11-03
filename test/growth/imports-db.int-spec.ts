@@ -121,6 +121,20 @@ function dv(nit: string): string {
 }
 const nitOf = (i: number) => String(800000000 + i);
 
+/**
+ * Presupuesto de la confirmación del lote de 500 filas. Cada fila creada abre
+ * varias transacciones (registro y evidencias, dos canales con consulta a la
+ * lista de exclusión, actividad): son miles de viajes a Postgres. Medido con
+ * Postgres en Docker sobre Windows: ~40 ms por fila sobre una base recién
+ * preparada (`test/growth/prepare-db.ts`) y 110–130 ms sobre una base
+ * reutilizada a mano, que quedaba al filo del límite global de 60 s. 300 ms
+ * por fila deja margen sin esconder una regresión grande; la prueba imprime
+ * lo medido.
+ */
+const COMMIT_ROWS = 500;
+const COMMIT_MS_PER_ROW = 300;
+const COMMIT_BUDGET_MS = COMMIT_ROWS * COMMIT_MS_PER_ROW;
+
 async function expectDbError(promise: Promise<unknown>, pattern: RegExp) {
   await expect(promise).rejects.toBeInstanceOf(QueryFailedError);
   await expect(promise).rejects.toThrow(pattern);
@@ -433,91 +447,153 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       ).rejects.toThrow(/errores/);
     });
 
-    it('confirma: crea en NEW con evidencia de la fuente, vincula sin cambiar y es idempotente', async () => {
-      await imports.commit(batch.id, admin);
+    it(
+      'confirma: crea en NEW con evidencia de la fuente, vincula sin cambiar y es idempotente',
+      async () => {
+        const started = Date.now();
+        await imports.commit(batch.id, admin);
+        await drain();
+        const ms = Date.now() - started;
+        process.stdout.write(
+          `confirmación de ${COMMIT_ROWS} filas: ${ms} ms (${Math.round(ms / COMMIT_ROWS)} ms por fila; presupuesto ${COMMIT_MS_PER_ROW})\n`,
+        );
+        const b = await imports.get(batch.id, admin);
+        expect(b.status).toBe(S.COMMITTED);
+        expect(b.finishedAt).toBeTruthy();
+        // 500 − 40 con errores − 5 vinculadas − 1 repetida en el archivo (fila 100, la 2.ª aparición del NIT de 45..49 es la 46ª…)
+        const rows = await rowsOf(batch.id);
+        const created = rows.filter((r) => r.result === R.CREATED);
+        expect(b.createdRows).toBe(created.length);
+        expect(b.linkedRows).toBe(5);
+        expect(b.failedRows).toBe(0);
+        expect(b.createdRows + b.linkedRows + b.skippedRows).toBe(500);
+
+        const createdOrgs = await ds
+          .getRepository(Organization)
+          .findBy(created.map((r) => ({ id: r.resultEntityId! })));
+        expect(createdOrgs.every((o) => o.validationStatus === 'NEW')).toBe(
+          true,
+        );
+        const ev = await ds
+          .getRepository(Evidence)
+          .findBy({ entityId: created[0].resultEntityId! });
+        expect(ev.length).toBeGreaterThan(0);
+        expect(ev.every((e) => e.sourceId === sourceId)).toBe(true);
+
+        // Excluido: la empresa existe, pero sin ese correo.
+        const suppressedRow = rows[50];
+        expect(suppressedRow.result).toBe(R.CREATED);
+        const ch = await ds
+          .getRepository(OrganizationChannel)
+          .findBy({ organizationId: suppressedRow.resultEntityId! });
+        expect(ch.map((c) => c.kind)).toEqual([GrowthChannelKind.PHONE]);
+
+        // Vinculada: el registro no cambia de nombre; solo gana evidencias.
+        const linked = await ds
+          .getRepository(Organization)
+          .findOneByOrFail({ id: existing[0] });
+        expect(linked.legalName).toBe('Existente 0');
+        const linkEv = await ds
+          .getRepository(Evidence)
+          .findBy({ entityId: existing[0], field: 'legalName' });
+        expect(linkEv.map((e) => e.observedValue)).toContain(
+          'Administraciones Prueba 40 SAS',
+        );
+
+        // Duplicados y scoring encolados para cada creado.
+        expect(changed.filter((c) => c.kind === K.ORGANIZATION)).toHaveLength(
+          created.length,
+        );
+
+        // Repetir la confirmación no duplica.
+        const before = await ds.getRepository(Organization).count();
+        await processor.process({
+          name: 'commit',
+          data: { batchId: batch.id, actor: admin },
+        } as never);
+        expect(await ds.getRepository(Organization).count()).toBe(before);
+      },
+      COMMIT_BUDGET_MS,
+    );
+
+    it('un archivo repetido se avisa con los lotes anteriores', async () => {
+      const again = await upload(csvText);
+      expect((await imports.preview(again.id, admin)).previousBatchIds).toEqual(
+        [batch.id],
+      );
+      await imports.cancel(again.id, 'Archivo repetido', admin);
+    });
+  });
+
+  /**
+   * Un lote confirmado propio, pequeño: estas pruebas no dependen de que la
+   * confirmación de 500 filas termine. Si aquella falla, falla sola.
+   */
+  describe('lote confirmado (independiente del de 500)', () => {
+    let small: ImportBatch;
+
+    beforeAll(async () => {
+      const lines = [
+        'Razón social;NIT;Correo;Teléfono;Localidad;Columna libre',
+      ];
+      for (let i = 0; i < 3; i++) {
+        const nit = nitOf(7000 + i);
+        lines.push(
+          [
+            i === 1 ? '' : `Pequeña ${i} SAS`, // la fila 2 tiene un error
+            `${nit}-${dv(nit)}`,
+            `pequena${i}@pequena${i}.co`,
+            `311${String(2000000 + i)}`,
+            'Suba',
+            '=HYPERLINK("http://malo")',
+          ].join(';'),
+        );
+      }
+      small = await upload(
+        lines.join('\r\n'),
+        T.ORGANIZATIONS,
+        admin,
+        'pequeno.csv',
+      );
+      const preview = await imports.preview(small.id, admin);
+      await imports.map(
+        { batchId: small.id, mapping: preview.suggestedMapping },
+        admin,
+      );
       await drain();
-      const b = await imports.get(batch.id, admin);
-      expect(b.status).toBe(S.COMMITTED);
-      expect(b.finishedAt).toBeTruthy();
-      // 500 − 40 con errores − 5 vinculadas − 1 repetida en el archivo (fila 100, la 2.ª aparición del NIT de 45..49 es la 46ª…)
-      const rows = await rowsOf(batch.id);
-      const created = rows.filter((r) => r.result === R.CREATED);
-      expect(b.createdRows).toBe(created.length);
-      expect(b.linkedRows).toBe(5);
-      expect(b.failedRows).toBe(0);
-      expect(b.createdRows + b.linkedRows + b.skippedRows).toBe(500);
-
-      const createdOrgs = await ds
-        .getRepository(Organization)
-        .findBy(created.map((r) => ({ id: r.resultEntityId! })));
-      expect(createdOrgs.every((o) => o.validationStatus === 'NEW')).toBe(true);
-      const ev = await ds
-        .getRepository(Evidence)
-        .findBy({ entityId: created[0].resultEntityId! });
-      expect(ev.length).toBeGreaterThan(0);
-      expect(ev.every((e) => e.sourceId === sourceId)).toBe(true);
-
-      // Excluido: la empresa existe, pero sin ese correo.
-      const suppressedRow = rows[50];
-      expect(suppressedRow.result).toBe(R.CREATED);
-      const ch = await ds
-        .getRepository(OrganizationChannel)
-        .findBy({ organizationId: suppressedRow.resultEntityId! });
-      expect(ch.map((c) => c.kind)).toEqual([GrowthChannelKind.PHONE]);
-
-      // Vinculada: el registro no cambia de nombre; solo gana evidencias.
-      const linked = await ds
-        .getRepository(Organization)
-        .findOneByOrFail({ id: existing[0] });
-      expect(linked.legalName).toBe('Existente 0');
-      const linkEv = await ds
-        .getRepository(Evidence)
-        .findBy({ entityId: existing[0], field: 'legalName' });
-      expect(linkEv.map((e) => e.observedValue)).toContain(
-        'Administraciones Prueba 40 SAS',
-      );
-
-      // Duplicados y scoring encolados para cada creado.
-      expect(changed.filter((c) => c.kind === K.ORGANIZATION)).toHaveLength(
-        created.length,
-      );
-
-      // Repetir la confirmación no duplica.
-      const before = await ds.getRepository(Organization).count();
-      await processor.process({
-        name: 'commit',
-        data: { batchId: batch.id, actor: admin },
-      } as never);
-      expect(await ds.getRepository(Organization).count()).toBe(before);
+      await imports.commit(small.id, admin);
+      await drain();
+      small = await imports.get(small.id, admin);
+      expect(small.status).toBe(S.COMMITTED);
     });
 
     it('la base no deja retroceder un lote terminado ni borrarlo', async () => {
       await expectDbError(
         ds.query(
           `UPDATE growth.import_batches SET status = 'MAPPED' WHERE id = $1`,
-          [batch.id],
+          [small.id],
         ),
         /transición COMMITTED -> MAPPED/,
       );
       await expectDbError(
-        ds.query(`DELETE FROM growth.import_batches WHERE id = $1`, [batch.id]),
+        ds.query(`DELETE FROM growth.import_batches WHERE id = $1`, [small.id]),
         /append-only|no se permite|modific/i,
       );
     });
 
     it('el informe neutraliza fórmulas y deja actividad sin datos', async () => {
-      const { content } = await imports.report(batch.id, admin);
+      const { content } = await imports.report(small.id, admin);
       const ExcelJS = await import('exceljs');
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(content as unknown as ArrayBuffer);
       const filas = wb.getWorksheet('Filas')!;
-      expect(filas.rowCount).toBe(501);
+      expect(filas.rowCount).toBe(small.totalRows + 1);
       const free = filas.getRow(2).getCell(4 + 6);
       expect(free.formula).toBeUndefined();
       expect(String(free.value)).toMatch(/^'=HYPERLINK/);
       const events: ActivityEvent[] = await ds
         .getRepository(ActivityEvent)
-        .findBy({ entityId: batch.id });
+        .findBy({ entityId: small.id });
       expect(events.map((e) => e.action)).toEqual(
         expect.arrayContaining([
           'IMPORT_UPLOADED',
@@ -531,14 +607,6 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       expect(JSON.stringify(events.map((e) => e.changes))).not.toMatch(
         /@admin|empresas\.csv|Prueba/,
       );
-    });
-
-    it('un archivo repetido se avisa con los lotes anteriores', async () => {
-      const again = await upload(csvText);
-      expect((await imports.preview(again.id, admin)).previousBatchIds).toEqual(
-        [batch.id],
-      );
-      await imports.cancel(again.id, 'Archivo repetido', admin);
     });
   });
 
@@ -760,6 +828,38 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         'Ana',
         '3001234567',
       ]);
+    });
+
+    it('el aviso de archivo repetido solo nombra lotes que el actor puede abrir', async () => {
+      // Mismo archivo: primero quien no ve todo, luego el admin, luego otra vez
+      // quien no ve todo. El contenido es único para no cruzarse con otras pruebas.
+      const csv = `Razón social\nRepetida ${Date.now()}`;
+      const first = await upload(csv, T.ORGANIZATIONS, limited);
+      const others = await upload(csv, T.ORGANIZATIONS, admin);
+      const again = await upload(csv, T.ORGANIZATIONS, limited);
+
+      // Sin VIEW_ALL: detecta su propio lote anterior, nunca el ajeno.
+      const own = await imports.preview(again.id, limited);
+      expect(own.previousBatchIds).toEqual([first.id]);
+      expect(own.previousBatchIds).not.toContain(others.id);
+
+      // Con permiso global (sin ser SUPER_ADMIN) y como SUPER_ADMIN: todos.
+      const manager = actor(
+        'dddddddd-0000-4000-8000-000000000003',
+        [ValidRoles.GROWTH_MANAGER_ROL],
+        [P.IMPORT_GROWTH_DATA, P.VIEW_ALL_GROWTH_PROSPECTS],
+      );
+      expect(
+        (await imports.preview(again.id, manager)).previousBatchIds,
+      ).toEqual([first.id, others.id]);
+      expect(
+        (await imports.preview(others.id, admin)).previousBatchIds,
+      ).toEqual([first.id, again.id]);
+
+      // El lote ajeno sigue cerrado para quien no ve todo.
+      await expect(imports.preview(others.id, limited)).rejects.toThrow(
+        /no encontrado/,
+      );
     });
   });
 

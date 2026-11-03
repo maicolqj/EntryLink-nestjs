@@ -30,6 +30,12 @@ el nombre de la base no contiene `test`.
 docker run -d --name growth-pg-test -e POSTGRES_PASSWORD=<clave-local> \
   -e POSTGRES_DB=growth_test -p 127.0.0.1:55432:5432 postgis/postgis:17-3.5
 
+# 2-3. Atajo: recrea la base DESDE CERO (la borra, arma el esquema base y
+#      corre las migraciones). Úsalo antes de cada corrida completa. Solo
+#      acepta un Postgres local y un nombre que termine en _test.
+GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_test   yarn test:growth:db
+
+# O, paso a paso:
 # 2. Esquema base: las migraciones de main no corren desde una base vacía
 #    (la primera supone tablas existentes). El script crea public con
 #    synchronize (sin las entidades de growth) y marca como aplicadas las
@@ -45,10 +51,20 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
   yarn test:growth:int
 ```
 
+**Una base para la suite y otra para probar a mano.** `growth-db` verifica el estado que dejan las migraciones (por ejemplo, roles y permisos de la suite inactivos). Si la misma base se usa para probar la web a mano, con permisos activados y datos sembrados, esa prueba falla con un mensaje que lo explica, y la confirmación de 500 filas se vuelve más lenta. En una base recién preparada tarda unos 40 ms por fila; en una base reutilizada, 110 a 130 ms. Para el navegador se usa otra base en el mismo contenedor (por ejemplo `growth_local`, con `DB_NAME=growth_local`).
+
+**Determinismo de `imports-db`:**
+- la cola se sustituye por una captura y los trabajos se ejecutan en el mismo hilo, así que no hay workers que terminar;
+- cada suite limpia el esquema `growth` al empezar (`db-cleanup.ts`) y usa contenido único;
+- la confirmación de 500 filas tiene su propio presupuesto (300 ms por fila) e imprime lo medido;
+- las pruebas que necesitan un lote confirmado usan un lote propio y pequeño, así que una falla en la de 500 no arrastra a las demás.
+
+Resultado de referencia (2026-11-03, base recién preparada): 93/93 en dos corridas seguidas, con la confirmación de 500 filas en 19,6 a 20,9 s.
+
 Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
-- `imports-db.int-spec.ts` (entrega 1C, 23 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
+- `imports-db.int-spec.ts` (entrega 1C, 24 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
   - lote de 500 empresas con 40 filas con errores, NIT existentes (vincular), NIT repetidos en el archivo y correos excluidos;
   - la base rechaza `CREATE` en filas con errores, retroceder un lote terminado y borrarlo;
   - confirmación: todo nace `NEW` con evidencia de la fuente, el vínculo no cambia el registro y repetir no duplica;
@@ -56,7 +72,7 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
   - archivo repetido, fuente inactiva, fecha futura, archivo binario o vacío;
   - mapeo nuevo contra trabajo viejo, cancelación durante la validación y `FAILED` tras reintentos;
   - personas (clase de canal obligatoria, base pendiente) y XLSX de copropiedades;
-  - visibilidad por autor y enmascarado;
+  - visibilidad por autor y enmascarado; el aviso de archivo repetido solo nombra lotes que el actor puede abrir;
   - purga a 30 días, con retención legal y lote purgado inmutable;
   - ajustes de la revisión:
     - un dato excluido, mapeado o dentro de un texto, no aparece en ninguna columna de texto del esquema ni en el informe;
