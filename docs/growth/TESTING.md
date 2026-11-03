@@ -45,7 +45,7 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
   yarn test:growth:int
 ```
 
-Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
+Hay cinco suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
 - `imports-db.int-spec.ts` (entrega 1C, 23 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
@@ -65,7 +65,18 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
     - un XLSX amplificado se rechaza antes de guardar;
     - los lotes abandonados se cierran a los 7 días y luego se purgan;
     - la purga se aplica a COMMITTED, FAILED y CANCELLED, también con retención liberada o vencida.
-- `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas):
+- `scoring-versions-db.int-spec.ts` (entrega 1E-C-0, 11 pruebas):
+  - estado inicial: versión 1 con las reglas y umbrales de antes; `APPROVE_GROWTH_SCORING` inactivo y sin rol;
+  - el borrador copia la activa y solo él cambia; comparar no guarda nada;
+  - separación de funciones: sin APPROVE no se activa, quien propuso o editó no aprueba, un descartado no se activa; excepción de SUPER_ADMIN con y sin la opción, auditada;
+  - **simulación idéntica al cálculo definitivo:** lo que predice `growthCompareScoringVersion` (puntaje, prioridad y distribución) es lo que queda guardado al activar y recalcular;
+  - el scoring no toca personas, canales, exclusiones ni la vista de contactables;
+  - activar retira la anterior y refleja reglas y umbrales en las tablas de 1B; actividad completa;
+  - historial: una entrada por cambio, nada nuevo al recalcular sin cambios; la base lo hace append-only;
+  - la base protege las versiones: inmutables fuera del borrador, sin borrado, una sola activa y nunca activa sin aprobador;
+  - **recuperación:** un recálculo que se cae a mitad se retoma sin duplicar historial, y el cron no corre si otra réplica tiene el lock;
+  - las mutaciones de 1B ya no cambian reglas ni umbrales.
+- `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas; desde 1E-C-0, los cambios de reglas y umbrales van por borrador y activación):
   - señales de duplicado (correo, nombre, matrícula, dominio);
   - homónimos sin contexto común no se proponen;
   - un par descartado no se reabre;
