@@ -154,3 +154,10 @@ los contactos que la suite conoce en claro.
 - Cron `growth-import-purge` a las 3:45 (Bogotá): cierra los lotes sin cambios en 7 días y, 30 días después de terminado un lote, borra sus filas crudas. Un lote con retención legal (`entity_type = 'IMPORT_BATCH'`) no se purga.
 - Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas. Un lock consultivo de Postgres por lote impide que dos trabajos lo confirmen a la vez (réplicas o trabajos dados por atascados).
 - Riesgo residual: si el proceso cae justo entre crear un registro y marcar su fila, al reanudar esa fila se crea otra vez (el NIT único lo evita en empresas con NIT). La deduplicación de 1B lo propondrá como duplicado.
+
+## 12. Variables de la suite y errores de configuración
+
+- Con `GROWTH_ENABLED` apagada (o ausente), `GROWTH_SUPPRESSION_HMAC_KEYS` y `GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION` **no se validan y se descartan**: un error de formato en ellas ya no impide arrancar la API (caída del 2026-11-01, por `1=` en lugar de `1:`).
+- Con la suite encendida son obligatorias. El formato es `1:<base64 de 32 bytes>` (44 caracteres después de `1:`), sin comillas ni espacios. Para rotar: `1:<llave vieja>,2:<llave nueva>` y versión activa `2`.
+- Un error de configuración nombra la variable y el problema, **nunca el valor** (`validateEnv` en `src/core/config/env-validation.ts`). Sentry redacta además cualquier `with value "…"` (`src/core/config/redact.ts`).
+- Generar una llave: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Nunca pegarla en chats ni tickets.

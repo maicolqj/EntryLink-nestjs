@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nestjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { redactValues } from './core/config/redact';
 
 /**
  * Sentry arranca antes que Nest (primer import de main.ts) para instrumentar
@@ -54,6 +55,12 @@ Sentry.init({
   // 10% de las transacciones en producción; ajustable sin desplegar código.
   tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
   beforeSend(event) {
+    // Defensa adicional: un mensaje con «with value "…"» (estilo Joi) nunca
+    // sale con el valor, venga de donde venga.
+    for (const ex of event.exception?.values ?? []) {
+      if (ex.value) ex.value = redactValues(ex.value);
+    }
+    if (event.message) event.message = redactValues(event.message);
     const request = event.request;
     if (request) {
       delete request.cookies;

@@ -20,7 +20,7 @@ import './core/infrastructure/graphql/date-time.scalar'; // patch GraphQLISODate
 import databaseConfig from './core/config/database.config';
 import redisConfig from './core/config/redis.config';
 import r2Config from './core/config/r2.config';
-import { envValidationSchema } from './core/config/env-validation';
+import { validateEnv } from './core/config/env-validation';
 
 import { CacheModule } from './core/infrastructure/cache/cache.module';
 import { BullConfigModule } from './core/config/bull-config';
@@ -94,8 +94,9 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
       load: [redisConfig, databaseConfig, r2Config],
       envFilePath: ['.env'],
       expandVariables: true,
-      validationSchema: envValidationSchema,
-      validationOptions: { abortEarly: false },
+      // validateEnv y no validationSchema: los errores de Joi traen el valor
+      // rechazado y terminaban en los logs (ver env-validation.ts).
+      validate: validateEnv,
     }),
 
     // ── Base de datos ─────────────────────────────────────────────────────
