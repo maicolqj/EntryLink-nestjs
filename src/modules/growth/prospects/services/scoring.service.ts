@@ -14,7 +14,6 @@ import {
 import { GrowthSettings } from '../entities/growth-settings.entity';
 import { Organization } from '../entities/organization.entity';
 import { Person } from '../entities/person.entity';
-import { Evidence } from '../entities/evidence.entity';
 import {
   GrowthEvidenceStatus,
   GrowthInterestSignal,
@@ -29,6 +28,7 @@ import {
 import {
   evaluateRule,
   ProspectFacts,
+  RuleLike,
   validateRuleParams,
 } from '../shared/scoring-rules';
 import { ProspectEventsService } from './prospect-events.service';
@@ -93,35 +93,17 @@ export class ScoringService {
         where: { active: true },
         order: { sortOrder: 'ASC' },
       });
-      const facts = await this.facts(manager, kind, record);
-      const breakdown: GrowthScoreItem[] = [];
-      for (const rule of rules.filter((r) => r.appliesTo.includes(kind))) {
-        const hit = evaluateRule(rule, facts);
-        if (hit) {
-          breakdown.push({
-            ruleKey: rule.key,
-            label: rule.label,
-            points: rule.points,
-            basis: hit.basis,
-            value: hit.value,
-          });
-        }
-      }
-      const score = Math.max(
-        0,
-        Math.min(
-          100,
-          breakdown.reduce((a, b) => a + b.points, 0),
-        ),
-      );
-      const priority =
-        score >= settings.scoringHighThreshold
-          ? GrowthPriority.HIGH
-          : score >= settings.scoringMediumThreshold
-            ? GrowthPriority.MEDIUM
-            : GrowthPriority.LOW;
-      const hasEstimates = breakdown.some(
-        (b) => b.basis === GrowthScoreBasis.ESTIMATED,
+      const facts = (
+        await this.factsFor(manager, kind, [toScorable(record)])
+      ).get(id);
+      const { score, priority, breakdown, hasEstimates } = computeScore(
+        rules,
+        {
+          high: settings.scoringHighThreshold,
+          medium: settings.scoringMediumThreshold,
+        },
+        kind,
+        facts,
       );
 
       await manager.query(
@@ -174,95 +156,114 @@ export class ScoringService {
   }
 
   /**
-   * Hechos del prospecto. Copropiedades y unidades: si todas las
-   * copropiedades administradas están VALIDATED, la base es VERIFIED; si
-   * alguna no, ESTIMATED; sin copropiedades registradas se usa el estimado
-   * declarado de la empresa (ESTIMATED).
+   * Hechos de varios prospectos del mismo tipo, en 4 consultas sin importar
+   * cuántos sean. Copropiedades y unidades: si todas las copropiedades
+   * administradas están VALIDATED, la base es VERIFIED; si alguna no,
+   * ESTIMATED; sin copropiedades registradas se usa el estimado declarado de
+   * la empresa (ESTIMATED). Lo usan el recálculo (un registro) y la
+   * simulación (todos): mismo cálculo en los dos casos.
    */
-  private async facts(
+  async factsFor(
     manager: EntityManager,
     kind: ScorableKind,
-    record: Organization | Person,
-  ): Promise<ProspectFacts> {
+    records: ScorableRecord[],
+  ): Promise<Map<string, ProspectFacts>> {
+    const out = new Map<string, ProspectFacts>();
+    if (records.length === 0) return out;
     const isOrg = kind === GrowthProspectKind.ORGANIZATION;
-    const [managed]: Array<{
+    const ids = records.map((r) => r.id);
+
+    const managedRows: Array<{
+      id: string;
       total: number;
       validated: number;
       units: number;
       units_validated: number;
     }> = await manager.query(
-      `SELECT count(*)::int AS total,
-                count(*) FILTER (WHERE p.validation_status = 'VALIDATED')::int AS validated,
-                coalesce(sum(p.estimated_units), 0)::int AS units,
-                count(*) FILTER (WHERE p.estimated_units IS NOT NULL AND p.validation_status <> 'VALIDATED')::int AS units_validated
-           FROM growth.property_managements m
-           JOIN growth.properties p ON p.id = m.property_id
-          WHERE m.status <> 'PAST' AND p.deleted_at IS NULL AND p.merged_into_id IS NULL
-            AND ${isOrg ? `m.organization_id = $1` : `m.person_id = $1 AND m.manager_type = 'PERSON'`}`,
-      [record.id],
+      `SELECT ${isOrg ? 'm.organization_id' : 'm.person_id'} AS id,
+              count(*)::int AS total,
+              count(*) FILTER (WHERE p.validation_status = 'VALIDATED')::int AS validated,
+              coalesce(sum(p.estimated_units), 0)::int AS units,
+              count(*) FILTER (WHERE p.estimated_units IS NOT NULL AND p.validation_status <> 'VALIDATED')::int AS units_validated
+         FROM growth.property_managements m
+         JOIN growth.properties p ON p.id = m.property_id
+        WHERE m.status <> 'PAST' AND p.deleted_at IS NULL AND p.merged_into_id IS NULL
+          AND ${isOrg ? `m.organization_id = ANY($1::uuid[])` : `m.person_id = ANY($1::uuid[]) AND m.manager_type = 'PERSON'`}
+        GROUP BY 1`,
+      [ids],
     );
-    const org = isOrg ? (record as Organization) : null;
-    const allVerified =
-      managed.total > 0 && managed.validated === managed.total;
+    const managedById = new Map(managedRows.map((m) => [m.id, m]));
 
-    const properties =
-      managed.total > 0
-        ? {
-            value: managed.total,
-            basis: allVerified
-              ? GrowthScoreBasis.VERIFIED
-              : GrowthScoreBasis.ESTIMATED,
-          }
-        : {
-            value: org?.estimatedProperties ?? 0,
-            basis: GrowthScoreBasis.ESTIMATED,
-          };
-    const units =
-      managed.total > 0 && managed.units > 0
-        ? {
-            value: managed.units,
-            basis:
-              managed.units_validated === 0 && allVerified
+    const channelRows: Array<{ id: string }> = await manager.query(
+      isOrg
+        ? `SELECT DISTINCT organization_id AS id FROM growth.organization_channels
+            WHERE organization_id = ANY($1::uuid[]) AND verified_at IS NOT NULL AND deleted_at IS NULL AND kind <> 'SOCIAL'`
+        : `SELECT DISTINCT person_id AS id FROM growth.person_channels
+            WHERE person_id = ANY($1::uuid[]) AND verified_at IS NOT NULL AND deleted_at IS NULL AND kind <> 'SOCIAL'
+              AND channel_class = 'PROFESSIONAL'`,
+      [ids],
+    );
+    const withChannel = new Set(channelRows.map((r) => r.id));
+
+    const interestRows: Array<{ id: string }> = await manager.query(
+      `SELECT DISTINCT entity_id AS id FROM growth.evidences
+        WHERE entity_type = $2 AND entity_id = ANY($1::uuid[])
+          AND field = 'interestSignal' AND verification_status = $3`,
+      [
+        ids,
+        isOrg ? GrowthEntityType.ORGANIZATION : GrowthEntityType.PERSON,
+        GrowthEvidenceStatus.VERIFIED,
+      ],
+    );
+    const interestVerified = new Set(interestRows.map((r) => r.id));
+
+    for (const record of records) {
+      const managed = managedById.get(record.id) ?? {
+        total: 0,
+        validated: 0,
+        units: 0,
+        units_validated: 0,
+      };
+      const allVerified =
+        managed.total > 0 && managed.validated === managed.total;
+      const properties =
+        managed.total > 0
+          ? {
+              value: managed.total,
+              basis: allVerified
                 ? GrowthScoreBasis.VERIFIED
                 : GrowthScoreBasis.ESTIMATED,
-          }
-        : {
-            value: org?.estimatedUnits ?? 0,
-            basis: GrowthScoreBasis.ESTIMATED,
-          };
-
-    const [channel]: Array<{ ok: boolean }> = await manager.query(
-      isOrg
-        ? `SELECT EXISTS (SELECT 1 FROM growth.organization_channels
-             WHERE organization_id = $1 AND verified_at IS NOT NULL AND deleted_at IS NULL AND kind <> 'SOCIAL') AS ok`
-        : `SELECT EXISTS (SELECT 1 FROM growth.person_channels
-             WHERE person_id = $1 AND verified_at IS NOT NULL AND deleted_at IS NULL AND kind <> 'SOCIAL'
-               AND channel_class = 'PROFESSIONAL') AS ok`,
-      [record.id],
-    );
-
-    const interestVerified = await manager.exists(Evidence, {
-      where: {
-        entityType: isOrg
-          ? GrowthEntityType.ORGANIZATION
-          : GrowthEntityType.PERSON,
-        entityId: record.id,
-        field: 'interestSignal',
-        verificationStatus: GrowthEvidenceStatus.VERIFIED,
-      },
-    });
-
-    return {
-      properties,
-      units,
-      verifiedChannel: channel.ok,
-      interestSignal: {
-        value: record.interestSignal ?? GrowthInterestSignal.NONE,
-        basis: interestVerified
-          ? GrowthScoreBasis.VERIFIED
-          : GrowthScoreBasis.ESTIMATED,
-      },
-    };
+            }
+          : {
+              value: (isOrg ? record.estimatedProperties : null) ?? 0,
+              basis: GrowthScoreBasis.ESTIMATED,
+            };
+      const units =
+        managed.total > 0 && managed.units > 0
+          ? {
+              value: managed.units,
+              basis:
+                managed.units_validated === 0 && allVerified
+                  ? GrowthScoreBasis.VERIFIED
+                  : GrowthScoreBasis.ESTIMATED,
+            }
+          : {
+              value: (isOrg ? record.estimatedUnits : null) ?? 0,
+              basis: GrowthScoreBasis.ESTIMATED,
+            };
+      out.set(record.id, {
+        properties,
+        units,
+        verifiedChannel: withChannel.has(record.id),
+        interestSignal: {
+          value: record.interestSignal ?? GrowthInterestSignal.NONE,
+          basis: interestVerified.has(record.id)
+            ? GrowthScoreBasis.VERIFIED
+            : GrowthScoreBasis.ESTIMATED,
+        },
+      });
+    }
+    return out;
   }
 
   // ── Configuración ──────────────────────────────────────────────────────────
@@ -445,4 +446,93 @@ function invalid(message: string): CustomError {
     statusCode: HttpStatus.BAD_REQUEST,
     errorCode: GrowthErrorCode.GROWTH_INVALID_INPUT,
   });
+}
+
+/** Lo mínimo de un registro que necesita el cálculo de hechos. */
+export interface ScorableRecord {
+  id: string;
+  estimatedProperties?: number | null;
+  estimatedUnits?: number | null;
+  interestSignal?: GrowthInterestSignal | null;
+}
+
+function toScorable(record: Organization | Person): ScorableRecord {
+  const org = record as Organization;
+  return {
+    id: record.id,
+    estimatedProperties: org.estimatedProperties ?? null,
+    estimatedUnits: org.estimatedUnits ?? null,
+    interestSignal: record.interestSignal ?? null,
+  };
+}
+
+export interface ScoreThresholds {
+  high: number;
+  medium: number;
+}
+
+export interface ComputedScore {
+  score: number;
+  priority: GrowthPriority;
+  breakdown: GrowthScoreItem[];
+  hasEstimates: boolean;
+}
+
+/**
+ * EL motor: reglas activas que aplican al tipo, en su orden, sumadas y
+ * acotadas a 0–100; la prioridad sale de los umbrales. El recálculo guardado
+ * y la simulación usan esta misma función.
+ */
+export function computeScore(
+  rules: Array<
+    Pick<
+      ScoringRule,
+      'key' | 'label' | 'points' | 'appliesTo' | 'active' | 'sortOrder'
+    > &
+      RuleLike
+  >,
+  thresholds: ScoreThresholds,
+  kind: ScorableKind,
+  facts: ProspectFacts,
+): ComputedScore {
+  const breakdown: GrowthScoreItem[] = [];
+  const applicable = rules
+    .filter((r) => r.active && r.appliesTo.includes(kind))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const rule of applicable) {
+    const hit = evaluateRule(rule, facts);
+    if (hit) {
+      breakdown.push({
+        ruleKey: rule.key,
+        label: rule.label,
+        points: rule.points,
+        basis: hit.basis,
+        value: hit.value,
+      });
+    }
+  }
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      breakdown.reduce((a, b) => a + b.points, 0),
+    ),
+  );
+  return {
+    score,
+    priority: priorityFor(score, thresholds),
+    breakdown,
+    hasEstimates: breakdown.some((b) => b.basis === GrowthScoreBasis.ESTIMATED),
+  };
+}
+
+export function priorityFor(
+  score: number,
+  thresholds: ScoreThresholds,
+): GrowthPriority {
+  return score >= thresholds.high
+    ? GrowthPriority.HIGH
+    : score >= thresholds.medium
+      ? GrowthPriority.MEDIUM
+      : GrowthPriority.LOW;
 }

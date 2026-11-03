@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { ValidPermissions } from '../../../permissions/enums/valid-permissions';
 import { JwtAccessPayload } from '../../../shared/interfaces/jwt-payload.interface';
 import { PaginationInput } from '../../../shared/dto/inputs/pagination.input';
+import { CustomError } from '../../../shared/utils/errors.utils';
 import { actorHas } from '../../shared/growth-actor';
+import { GrowthErrorCode } from '../../shared/growth-error-codes';
 import { GrowthEntityType } from '../../shared/growth.enums';
 import { ActivityEvent } from '../entities/activity-event.entity';
 import { GrowthActivityFilterInput } from '../dto/inputs/growth-activity-filter.input';
@@ -25,6 +27,11 @@ export interface GrowthActivityRecord {
  * `record` recibe el EntityManager de la transacción del cambio: si el cambio
  * se confirma, su registro también; si falla el registro, se revierte el
  * cambio. No hay escritura en la suite sin su evento.
+ *
+ * Cada evento es una operación COMPLETADA: se escribe en la misma transacción
+ * del cambio, así que un intento rechazado o fallido no deja rastro aquí
+ * (limitación conocida; registrar intentos es una evolución futura de la
+ * auditoría, ver docs/growth/ACTIVITY.md).
  */
 @Injectable()
 export class ActivityLogService {
@@ -85,6 +92,22 @@ export class ActivityLogService {
     }
     if (filter.entityId) {
       qb.andWhere('e.entityId = :entityId', { entityId: filter.entityId });
+    }
+    if (filter.actions?.length) {
+      qb.andWhere('e.action IN (:...actions)', { actions: filter.actions });
+    }
+    if (filter.from && filter.to && filter.from >= filter.to) {
+      throw new CustomError({
+        message: 'El periodo de actividad debe terminar después de empezar',
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: GrowthErrorCode.GROWTH_INVALID_INPUT,
+      });
+    }
+    if (filter.from) {
+      qb.andWhere('e.createdAt >= :from', { from: filter.from });
+    }
+    if (filter.to) {
+      qb.andWhere('e.createdAt < :to', { to: filter.to });
     }
 
     const [items, totalItems] = await qb.getManyAndCount();

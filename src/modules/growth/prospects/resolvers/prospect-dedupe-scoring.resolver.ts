@@ -14,6 +14,7 @@ import { GrowthSettings } from '../entities/growth-settings.entity';
 import {
   GrowthDuplicateFilterInput,
   GrowthMergeDuplicatesInput,
+  GrowthMergePreviewInput,
   GrowthScoringRuleInput,
   GrowthScoringThresholdsInput,
 } from '../dto/inputs/dedupe-scoring.inputs';
@@ -24,6 +25,10 @@ import { MergeService } from '../services/merge.service';
 import { ProspectGuardsService } from '../services/prospect-guards.service';
 import { ProspectEventsService } from '../services/prospect-events.service';
 import { ScoringService } from '../services/scoring.service';
+import { ScoringSimulationService } from '../services/scoring-simulation.service';
+import { GrowthScoringSimulationInput } from '../dto/inputs/scoring-simulation.inputs';
+import { GrowthScoringSimulation } from '../dto/responses/scoring-simulation.responses';
+import { GrowthMergePreview } from '../dto/responses/merge-preview.responses';
 
 /**
  * Deduplicación (siempre con decisión humana) y scoring configurable.
@@ -37,6 +42,7 @@ export class GrowthDedupeScoringResolver {
     private readonly scoring: ScoringService,
     private readonly guards: ProspectGuardsService,
     private readonly events: ProspectEventsService,
+    private readonly simulation: ScoringSimulationService,
   ) {}
 
   // ── Duplicados ─────────────────────────────────────────────────────────────
@@ -77,6 +83,19 @@ export class GrowthDedupeScoringResolver {
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<DuplicateCandidate> {
     return this.dedupe.dismiss(id, note, actor);
+  }
+
+  @Auth({ permissions: [P.MERGE_GROWTH_DUPLICATES] })
+  @Query(() => GrowthMergePreview, {
+    name: 'growthMergePreview',
+    description:
+      'Vista previa de growthMergeDuplicates con los datos reales y la misma lógica: campos, traslados y efectos. No modifica nada.',
+  })
+  growthMergePreview(
+    @Args('input') input: GrowthMergePreviewInput,
+    @CurrentUser() actor: JwtAccessPayload,
+  ): Promise<GrowthMergePreview> {
+    return this.mergeService.preview(input, actor);
   }
 
   @Auth({ permissions: [P.MERGE_GROWTH_DUPLICATES] })
@@ -128,6 +147,19 @@ export class GrowthDedupeScoringResolver {
   @Query(() => [ScoringRule], { name: 'growthScoringRules' })
   growthScoringRules(): Promise<ScoringRule[]> {
     return this.scoring.listRules();
+  }
+
+  @Auth({ permissions: [P.MANAGE_GROWTH_SCORING] })
+  @Query(() => GrowthScoringSimulation, {
+    name: 'growthSimulateScoring',
+    description:
+      'Calcula, sin guardar nada, cómo quedarían los puntajes con los cambios propuestos frente a la configuración vigente. Mismo motor que el recálculo.',
+  })
+  growthSimulateScoring(
+    @Args('input') input: GrowthScoringSimulationInput,
+    @CurrentUser() actor: JwtAccessPayload,
+  ): Promise<GrowthScoringSimulation> {
+    return this.simulation.simulate(input, actor);
   }
 
   @Auth({ permissions: [P.MANAGE_GROWTH_SCORING] })

@@ -198,6 +198,10 @@ describe('Autorización de la Growth Suite', () => {
         'growthSetImportRowDecision',
         'growthCommitImport',
         'growthCancelImport',
+        // Entrega 1E-0
+        'growthSimulateScoring',
+        'growthTeamWorkload',
+        'growthMergePreview',
       ].sort(),
     );
   });
@@ -279,11 +283,14 @@ describe('Autorización de la Growth Suite', () => {
           'growthSetPersonContactStatus',
           'growthUpdateSettings',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthDuplicateCandidates',
           'growthUpdateScoringRule',
           'growthImportBatches',
           'growthMapImportColumns',
           'growthCommitImport',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
       },
       [ValidRoles.GROWTH_RESEARCHER_ROL]: {
@@ -311,7 +318,10 @@ describe('Autorización de la Growth Suite', () => {
           'growthAssignProspect',
           'growthSetPersonContactStatus',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthCreateScoringRule',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
       },
       [ValidRoles.GROWTH_MANAGER_ROL]: {
@@ -329,12 +339,15 @@ describe('Autorización de la Growth Suite', () => {
           'growthVerifyEvidence',
           'growthAssignProspect',
           'growthMergeDuplicates',
+          'growthMergePreview',
           'growthDismissDuplicate',
           'growthUpdateScoringRule',
           'growthUpdateScoringThresholds',
           'growthImportBatches',
           'growthCommitImport',
           'growthCancelImport',
+          'growthSimulateScoring',
+          'growthTeamWorkload',
         ],
         cannot: [
           'growthLiftSuppression',

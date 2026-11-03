@@ -13,7 +13,10 @@ import { Auth } from '../../../shared/decorators/auth.decorator';
 import { CurrentUser } from '../../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../../shared/interfaces/jwt-payload.interface';
 import { actorHas } from '../../shared/growth-actor';
-import { GrowthEntityType } from '../../shared/growth.enums';
+import {
+  GrowthEntityType,
+  GrowthTeamMemberStatus,
+} from '../../shared/growth.enums';
 import {
   OrganizationChannel,
   PersonChannel,
@@ -57,6 +60,8 @@ import { LegalBasisService } from '../services/legal-basis.service';
 import { ProspectDashboardService } from '../services/prospect-dashboard.service';
 import { RelationshipsService } from '../services/relationships.service';
 import { ValidationService } from '../services/validation.service';
+import { TeamWorkloadService } from '../services/team-workload.service';
+import { GrowthTeamWorkload } from '../dto/responses/team-workload.responses';
 import { maskObservedValue } from '../shared/masking';
 import { ProspectEventsService } from '../services/prospect-events.service';
 
@@ -76,6 +81,7 @@ export class GrowthProspectOperationsResolver {
     private readonly legal: LegalBasisService,
     private readonly dashboard: ProspectDashboardService,
     private readonly events: ProspectEventsService,
+    private readonly workload: TeamWorkloadService,
   ) {}
 
   // ── Canales ────────────────────────────────────────────────────────────────
@@ -377,6 +383,19 @@ export class GrowthProspectOperationsResolver {
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<boolean> {
     return this.assignments.unassign(prospect, actor);
+  }
+
+  @Auth({ permissions: [P.ASSIGN_GROWTH_PROSPECTS] })
+  @Query(() => [GrowthTeamWorkload], {
+    name: 'growthTeamWorkload',
+    description:
+      'Asignaciones vigentes de prospectos vivos por integrante, con cortes por tipo, estado de validación y prioridad alta. Una sola consulta.',
+  })
+  growthTeamWorkload(
+    @Args('status', { type: () => GrowthTeamMemberStatus, nullable: true })
+    status?: GrowthTeamMemberStatus,
+  ): Promise<GrowthTeamWorkload[]> {
+    return this.workload.list(status);
   }
 
   @Auth({ permissions: [P.VIEW_GROWTH_PROSPECTS] })

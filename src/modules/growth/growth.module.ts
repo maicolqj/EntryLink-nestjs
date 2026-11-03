@@ -71,6 +71,8 @@ import {
 } from './prospects/services/prospect-events.service';
 import { ProspectJobsProcessor } from './prospects/services/prospect-jobs.processor';
 import { ScoringService } from './prospects/services/scoring.service';
+import { ScoringSimulationService } from './prospects/services/scoring-simulation.service';
+import { TeamWorkloadService } from './prospects/services/team-workload.service';
 import './prospects/prospects.enums';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 import {
@@ -186,6 +188,9 @@ import { ImportsService } from './imports/services/imports.service';
     ImportPurgeService,
     GrowthImportsResolver,
     GrowthImportRowResolver,
+    // Entrega 1E-0
+    ScoringSimulationService,
+    TeamWorkloadService,
   ],
 })
 export class GrowthModule {}

@@ -78,6 +78,21 @@ export class DuplicateCandidate {
   @Field()
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  // Sin columna: los llena `DedupeService.list` en una consulta por página.
+  @Field({
+    nullable: true,
+    description:
+      'Nombre del registro izquierdo (solo en growthDuplicateCandidates)',
+  })
+  leftName?: string | null;
+
+  @Field({
+    nullable: true,
+    description:
+      'Nombre del registro derecho (solo en growthDuplicateCandidates)',
+  })
+  rightName?: string | null;
 }
 
 /** Bitácora de fusiones (append-only en la base). */

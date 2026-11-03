@@ -51,6 +51,14 @@ conjuntos** y no toca datos de residentes.
 - `ImportPurgeService`: cierra lotes inactivos 7 días y purga a 30 días (ajuste D).
 - El estado del lote lo vigila un trigger; un lote purgado no cambia.
 
+## Ampliación de API (entrega 1E-0)
+
+- `growthSimulateScoring` (MANAGE_GROWTH_SCORING): `ScoringSimulationService` aplica los cambios en memoria y calcula el puntaje vigente y el propuesto con el mismo motor que el recálculo (`computeScore` + `ScoringService.factsFor`, hechos por lotes en 3 consultas por tipo). Corre en una transacción `READ ONLY`: no sube versión, no registra actividad, no encola recálculos. Los nombres de los prospectos solo salen con VIEW_ALL_GROWTH_PROSPECTS; sin él, solo agregados (`itemsHidden`).
+- `growthActivity` filtra además por `actions` (lista) y por periodo `from` (incluido) / `to` (excluido), con la misma paginación. Índices `(action, created_at)` y `(created_at)`.
+- `growthTeamWorkload` (ASSIGN_GROWTH_PROSPECTS): una consulta. Cuenta asignaciones vigentes (`ended_at IS NULL`), lo mismo que el tope de `assign`. Cortes por tipo, por estado de validación y de prioridad alta, más `staleAssignments` (vigentes sobre un registro borrado o fusionado). Las cifras suman al total.
+- `growthMergePreview` (MERGE_GROWTH_DUPLICATES): vista previa de la fusión con la misma lógica que `merge` — `loadPair`, `planMergeFields`, `needsRevalidation` y la lista de traslados `movesFor` (UPDATE en la fusión, count en la vista previa). Transacción `READ ONLY`, sin bloqueos. `merge_log.moved.candidatesClosed` ya no cuenta el par fusionado.
+- Ver `docs/growth/ACTIVITY.md`: qué representa un evento y la limitación de los intentos fallidos.
+
 ## Integridad
 
 - Toda escritura registra su evento en `growth.activity_events` dentro de la

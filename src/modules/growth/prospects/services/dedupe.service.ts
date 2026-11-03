@@ -163,6 +163,22 @@ export class DedupeService {
     if (filter.entityType)
       qb.andWhere('d.entity_type = :type', { type: filter.entityType });
     const [items, total] = await qb.getManyAndCount();
+    const ids = items.flatMap((c) => [c.leftId, c.rightId]);
+    if (ids.length) {
+      // Nombres de los dos lados en una sola consulta (no N+1).
+      const rows: Array<{ id: string; name: string }> =
+        await this.dataSource.query(
+          `SELECT id, legal_name AS name FROM growth.organizations WHERE id = ANY($1::uuid[])
+           UNION ALL SELECT id, full_name FROM growth.people WHERE id = ANY($1::uuid[])
+           UNION ALL SELECT id, name FROM growth.properties WHERE id = ANY($1::uuid[])`,
+          [ids],
+        );
+      const names = new Map(rows.map((r) => [r.id, r.name]));
+      for (const c of items) {
+        c.leftName = names.get(c.leftId) ?? null;
+        c.rightName = names.get(c.rightId) ?? null;
+      }
+    }
     return paginate(items, total, pagination);
   }
 
