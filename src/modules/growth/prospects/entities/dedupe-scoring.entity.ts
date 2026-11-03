@@ -248,6 +248,14 @@ export class ProspectScore {
   @Column({ name: 'rules_version', type: 'int' })
   rulesVersion: number;
 
+  @Field(() => ID, {
+    nullable: true,
+    description:
+      'Versión de reglas que calculó este puntaje (vacía si aún no se recalcula)',
+  })
+  @Column({ name: 'version_id', type: 'uuid', nullable: true })
+  versionId: string | null;
+
   @Field()
   @Column({ name: 'computed_at', type: 'timestamptz', default: () => 'now()' })
   computedAt: Date;

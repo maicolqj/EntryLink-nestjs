@@ -72,6 +72,13 @@ import {
 import { ProspectJobsProcessor } from './prospects/services/prospect-jobs.processor';
 import { ScoringService } from './prospects/services/scoring.service';
 import { ScoringSimulationService } from './prospects/services/scoring-simulation.service';
+import { ScoringVersionsService } from './prospects/services/scoring-versions.service';
+import {
+  ProspectScoreHistory,
+  ScoringVersion,
+} from './prospects/entities/scoring-version.entity';
+import { ScoringCatchupService } from './prospects/services/scoring-catchup.service';
+import { GrowthScoringVersionsResolver } from './prospects/resolvers/prospect-scoring-versions.resolver';
 import { TeamWorkloadService } from './prospects/services/team-workload.service';
 import './prospects/prospects.enums';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
@@ -133,6 +140,9 @@ import { ImportsService } from './imports/services/imports.service';
       ImportBatch,
       ImportRow,
       ImportMappingTemplate,
+      // Entrega 1E-C-0
+      ScoringVersion,
+      ProspectScoreHistory,
     ]),
     // Cola propia de la suite (Redis existente): duplicados y scoring.
     BullModule.registerQueue({ name: GROWTH_PROSPECTS_QUEUE }),
@@ -191,6 +201,10 @@ import { ImportsService } from './imports/services/imports.service';
     // Entrega 1E-0
     ScoringSimulationService,
     TeamWorkloadService,
+    // Entrega 1E-C-0
+    ScoringVersionsService,
+    ScoringCatchupService,
+    GrowthScoringVersionsResolver,
   ],
 })
 export class GrowthModule {}

@@ -30,6 +30,8 @@ export enum GrowthEntityType {
   // Entrega 1C
   IMPORT_BATCH = 'IMPORT_BATCH',
   IMPORT_TEMPLATE = 'IMPORT_TEMPLATE',
+  // Entrega 1E-C-0
+  SCORING_VERSION = 'SCORING_VERSION',
 }
 
 export enum GrowthTeamMemberStatus {

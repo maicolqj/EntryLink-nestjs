@@ -16,6 +16,8 @@ import {
   GROWTH_DEDUPE_ROLE_GRANTS,
 } from '../../../core/database/migrations/1781010700000-GrowthDedupeScoringPermissionsData';
 import { GROWTH_IMPORT_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781010900000-GrowthImportPermissionsEnum';
+import { GROWTH_SCORING_APPROVAL_ENUM_VALUES } from '../../../core/database/migrations/1781011500000-GrowthScoringApprovalPermissionEnum';
+import { GROWTH_SCORING_APPROVAL_PERMISSION_ROWS } from '../../../core/database/migrations/1781011600000-CreateGrowthScoringVersions';
 import {
   GROWTH_IMPORT_PERMISSION_ROWS,
   GROWTH_IMPORT_ROLE_GRANTS,
@@ -27,6 +29,7 @@ import {
 } from '../../../core/database/migrations/1781010400000-GrowthProspectPermissionsData';
 import {
   GROWTH_COMPLIANCE_PERMISSIONS,
+  GROWTH_MANUAL_ROLE_GRANTS,
   GROWTH_PERMISSIONS,
   GROWTH_ROLES,
   GROWTH_ROLE_NAMES,
@@ -43,6 +46,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
     ...GROWTH_PROSPECT_PERMISSION_ROWS,
     ...GROWTH_DEDUPE_PERMISSION_ROWS,
     ...GROWTH_IMPORT_PERMISSION_ROWS,
+    ...GROWTH_SCORING_APPROVAL_PERMISSION_ROWS,
   ];
 
   it('las migraciones de datos son copia fiel del catálogo (permisos)', () => {
@@ -83,6 +87,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
         ...GROWTH_PROSPECT_PERMISSION_ENUM_VALUES,
         ...GROWTH_DEDUPE_PERMISSION_ENUM_VALUES,
         ...GROWTH_IMPORT_PERMISSION_ENUM_VALUES,
+        ...GROWTH_SCORING_APPROVAL_ENUM_VALUES,
       ]),
     ).toEqual(sorted(GROWTH_PERMISSIONS.map((p) => p.name)));
   });
@@ -174,6 +179,38 @@ describe('Catálogo de acceso de la Growth Suite', () => {
           status: false,
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('permisos de activación manual', () => {
+    const manual = GROWTH_PERMISSIONS.filter((p) => p.manualActivation).map(
+      (p) => p.name,
+    );
+
+    it('existen y no están en ningún rol del seed ni de la suite', () => {
+      expect(manual).toContain(ValidPermissions.APPROVE_GROWTH_SCORING);
+      // El token toma los permisos del rol sin mirar su estado: un rol activo
+      // con el permiso lo tendría activo de hecho.
+      for (const role of [...ROLES_TO_SEED, ...GROWTH_ROLES]) {
+        for (const name of manual) expect(role.permissions).not.toContain(name);
+      }
+    });
+
+    it('el seed los crea inactivos y no les cambia el estado, ni con GROWTH_ENABLED=true', () => {
+      for (const name of manual) {
+        const seeded = PERMISSIONS_TO_SEED.find((p) => p.name === name) as {
+          status: boolean;
+          preserveStatus?: boolean;
+        };
+        expect(seeded.status).toBe(false);
+        expect(seeded.preserveStatus).toBe(true);
+      }
+    });
+
+    it('las asignaciones manuales solo usan permisos de activación manual', () => {
+      for (const perms of Object.values(GROWTH_MANUAL_ROLE_GRANTS)) {
+        for (const p of perms ?? []) expect(manual).toContain(p);
+      }
     });
   });
 });
