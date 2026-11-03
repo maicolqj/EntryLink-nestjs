@@ -68,6 +68,7 @@ import {
   GrowthImportRowResult as R,
   GrowthImportStatus as S,
   GrowthImportTarget as T,
+  GrowthImportTemplateScope as Scope,
 } from '../../src/modules/growth/imports/imports.enums';
 import { ImportCommitService } from '../../src/modules/growth/imports/services/import-commit.service';
 import { ImportJobsProcessor } from '../../src/modules/growth/imports/services/import-jobs.processor';
@@ -79,6 +80,7 @@ import {
 import { ImportRedactionService } from '../../src/modules/growth/imports/services/import-redaction.service';
 import { ImportValidationService } from '../../src/modules/growth/imports/services/import-validation.service';
 import { ImportsService } from '../../src/modules/growth/imports/services/imports.service';
+import { ImportTemplatesService } from '../../src/modules/growth/imports/services/import-templates.service';
 import { resetGrowthTestData } from './db-cleanup';
 
 const URL = process.env.GROWTH_IT_DATABASE_URL;
@@ -86,6 +88,7 @@ const describeDb = URL ? describe : describe.skip;
 
 const ADMIN = 'dddddddd-0000-4000-8000-000000000001';
 const LIMITED = 'dddddddd-0000-4000-8000-000000000002';
+const MANAGER = 'dddddddd-0000-4000-8000-000000000003';
 
 const actor = (
   sub: string,
@@ -130,6 +133,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
   let ds: DataSource;
   let sourceId: string;
   let imports: ImportsService;
+  let templates: ImportTemplatesService;
   let processor: ImportJobsProcessor;
   let purge: ImportPurgeService;
   let orgs: OrganizationsService;
@@ -206,6 +210,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
     for (const [id, n] of [
       [ADMIN, 1],
       [LIMITED, 2],
+      [MANAGER, 3],
     ] as const) {
       await ds.query(
         `INSERT INTO public.users (id, name, last_name, number_phone, email, password)
@@ -257,7 +262,15 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
     } as unknown as ImportQueueService;
 
     const redaction = new ImportRedactionService(suppressions);
-    imports = new ImportsService(ds, guards, activity, queue, redaction);
+    templates = new ImportTemplatesService(ds, activity, redaction);
+    imports = new ImportsService(
+      ds,
+      guards,
+      activity,
+      queue,
+      redaction,
+      templates,
+    );
     const validation = new ImportValidationService(ds, redaction, activity);
     const commit = new ImportCommitService(
       ds,
@@ -415,7 +428,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       });
       expect(at(50).mapped).not.toHaveProperty('email');
       expect(at(50).errors).toEqual([]);
-      const tpl = await imports.templates(T.ORGANIZATIONS);
+      const tpl = await templates.list(T.ORGANIZATIONS, admin);
       expect(tpl.map((t) => t.name)).toContain('Directorio IT');
     });
 
@@ -539,6 +552,260 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         [batch.id],
       );
       await imports.cancel(again.id, 'Archivo repetido', admin);
+    });
+  });
+
+  /**
+   * Plantillas personales y del equipo: solo encabezados y campos, nombres
+   * sin sobrescritura, archivado lógico y actividad sin datos.
+   */
+  describe('plantillas personales y del equipo', () => {
+    const manager = actor(
+      MANAGER,
+      [ValidRoles.GROWTH_MANAGER_ROL],
+      [P.IMPORT_GROWTH_DATA, P.MANAGE_GROWTH_IMPORT_TEMPLATES],
+    );
+    const mapping = [
+      { header: 'Razón social', field: F.LEGAL_NAME },
+      { header: 'NIT', field: F.NIT },
+    ];
+    const names = () =>
+      Promise.all([
+        templates.list(T.ORGANIZATIONS, limited),
+        templates.list(T.ORGANIZATIONS, manager),
+      ]).then(([l, m]) => [l.map((t) => t.name), m.map((t) => t.name)]);
+
+    it('una personal es solo de su dueño; nadie más la ve, la edita ni la archiva', async () => {
+      const mine = await templates.create(
+        { target: T.ORGANIZATIONS, name: 'Mía IT', columnMapping: mapping },
+        limited,
+      );
+      expect(mine.scope).toBe(Scope.PERSONAL);
+      expect(mine.ownerUserId).toBe(LIMITED);
+      const [ofLimited, ofManager] = await names();
+      expect(ofLimited).toContain('Mía IT');
+      expect(ofManager).not.toContain('Mía IT');
+      // Ni con permiso de gestión: responde NOT_FOUND, sin revelar que existe.
+      await expect(
+        templates.update({ id: mine.id, name: 'Ajena' }, manager),
+      ).rejects.toThrow(/no encontrada/);
+      await expect(
+        templates.archive(mine.id, 'No es mía', manager),
+      ).rejects.toThrow(/no encontrada/);
+      // Su dueño sí la edita.
+      const renamed = await templates.update(
+        { id: mine.id, name: 'Mía IT 2' },
+        limited,
+      );
+      expect(renamed.name).toBe('Mía IT 2');
+    });
+
+    it('un nombre repetido es un error, nunca una sobrescritura', async () => {
+      await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Repetida IT',
+          columnMapping: mapping,
+        },
+        limited,
+      );
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: '  repetida   it ',
+            columnMapping: [{ header: 'Otra', field: F.LEGAL_NAME }],
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/Ya tienes una plantilla con ese nombre/);
+      // El mismo nombre en la personal de otra persona sí se puede.
+      const other = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Repetida IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      expect(other.ownerUserId).toBe(MANAGER);
+      // La de la primera persona sigue intacta.
+      const [kept] = (await templates.list(T.ORGANIZATIONS, limited)).filter(
+        (t) => t.name === 'Repetida IT',
+      );
+      expect(kept.columnMapping).toEqual(mapping);
+      // Y la base también lo impide si el servicio se saltara.
+      await expectDbError(
+        ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, scope, owner_user_id, created_by_user_id)
+           VALUES ('ORGANIZATIONS', 'REPETIDA IT', '[{"header":"x","field":"legalName"}]', 'PERSONAL', $1, $1)`,
+          [LIMITED],
+        ),
+        /uq_growth_import_tpl_personal/,
+      );
+    });
+
+    it('guardar el mapeo de un lote crea una personal y no pisa la de nadie', async () => {
+      const shared = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        admin,
+      );
+      const b = await upload(
+        `Razón social;NIT\nAndes ${Date.now()};${nitOf(9100)}-${dv(nitOf(9100))}`,
+        T.ORGANIZATIONS,
+        manager,
+      );
+      const preview = await imports.preview(b.id, manager);
+      // Mismo nombre que una del equipo: queda como personal aparte.
+      await imports.map(
+        {
+          batchId: b.id,
+          mapping: preview.suggestedMapping,
+          saveAsTemplate: 'Equipo IT',
+        },
+        manager,
+      );
+      const visible = await templates.list(T.ORGANIZATIONS, manager);
+      const both = visible.filter((t) => t.name === 'Equipo IT');
+      expect(both.map((t) => t.scope).sort()).toEqual([
+        Scope.PERSONAL,
+        Scope.TEAM,
+      ]);
+      const team = both.find((t) => t.scope === Scope.TEAM)!;
+      expect(team.id).toBe(shared.id);
+      expect(team.columnMapping).toEqual(mapping);
+      // Repetir el nombre propio al mapear es un error y no cambia nada.
+      await expect(
+        imports.map(
+          {
+            batchId: b.id,
+            mapping: preview.suggestedMapping,
+            saveAsTemplate: 'Equipo IT',
+          },
+          manager,
+        ),
+      ).rejects.toThrow(/Ya tienes una plantilla/);
+      queued.length = 0;
+    });
+
+    it('las del equipo: todos las usan; solo la gestión las crea, comparte, edita o archiva', async () => {
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: 'Sin permiso IT',
+            scope: Scope.TEAM,
+            columnMapping: mapping,
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/permiso de gestión/);
+      const team = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      expect((await names())[0]).toContain('Del equipo IT');
+      expect(templates.canEdit(team, limited)).toBe(false);
+      await expect(
+        templates.update({ id: team.id, name: 'Cambio' }, limited),
+      ).rejects.toThrow(/permiso de gestión/);
+      await expect(
+        templates.archive(team.id, 'Ya no sirve', limited),
+      ).rejects.toThrow(/permiso de gestión/);
+
+      // Compartir: una personal propia pasa al equipo si el nombre está libre allí.
+      const draft = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Para compartir IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      await expect(templates.share(draft.id, limited)).rejects.toThrow(
+        /permiso de gestión/,
+      );
+      const shared = await templates.share(draft.id, manager);
+      expect(shared.scope).toBe(Scope.TEAM);
+      expect((await names())[0]).toContain('Para compartir IT');
+      const clash = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      await expect(templates.share(clash.id, manager)).rejects.toThrow(
+        /Ya hay una plantilla del equipo/,
+      );
+
+      // Archivar: deja de listarse, no se borra y no se puede editar.
+      const archived = await templates.archive(
+        team.id,
+        'Reemplazada por otra',
+        manager,
+      );
+      expect(archived.archivedAt).toBeTruthy();
+      expect((await names())[0]).not.toContain('Del equipo IT');
+      const [row] = await ds.query(
+        `SELECT archived_by_user_id FROM growth.import_mapping_templates WHERE id = $1`,
+        [team.id],
+      );
+      expect(row.archived_by_user_id).toBe(MANAGER);
+      await expect(
+        templates.update({ id: team.id, name: 'Otra vez' }, manager),
+      ).rejects.toThrow(/no encontrada/);
+      // Con la archivada fuera, el nombre vuelve a estar libre en el equipo.
+      await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        manager,
+      );
+    });
+
+    it('no guarda datos: rechaza correos o teléfonos como encabezado y la actividad no lleva encabezados', async () => {
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: 'Con datos IT',
+            columnMapping: [{ header: 'ana@andes.co', field: F.EMAIL }],
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/no puede ser un correo ni un teléfono/);
+      const t = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Limpia IT',
+          columnMapping: [
+            { header: 'Columna secreta Andes', field: F.LEGAL_NAME },
+          ],
+        },
+        limited,
+      );
+      const events: ActivityEvent[] = await ds
+        .getRepository(ActivityEvent)
+        .findBy({ entityId: t.id });
+      expect(events.map((e) => e.action)).toEqual(['IMPORT_TEMPLATE_CREATED']);
+      expect(JSON.stringify(events[0].changes)).not.toMatch(
+        /secreta|Andes|Limpia/,
+      );
     });
   });
 

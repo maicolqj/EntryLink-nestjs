@@ -95,6 +95,8 @@ import {
 } from './imports/services/import-queue.service';
 import { ImportValidationService } from './imports/services/import-validation.service';
 import { ImportsService } from './imports/services/imports.service';
+import { ImportTemplatesService } from './imports/services/import-templates.service';
+import { GrowthImportTemplatesResolver } from './imports/resolvers/growth-import-templates.resolver';
 
 /**
  * EntryLink Growth Suite (comercial de Alterna QJ). Se registra SOLO con
@@ -188,6 +190,9 @@ import { ImportsService } from './imports/services/imports.service';
     ImportPurgeService,
     GrowthImportsResolver,
     GrowthImportRowResolver,
+    // Plantillas personales y del equipo
+    ImportTemplatesService,
+    GrowthImportTemplatesResolver,
     // Entrega 1E-0
     ScoringSimulationService,
     TeamWorkloadService,
