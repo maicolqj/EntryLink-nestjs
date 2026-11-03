@@ -57,6 +57,7 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
   - mapeo nuevo contra trabajo viejo, cancelación durante la validación y `FAILED` tras reintentos;
   - personas (clase de canal obligatoria, base pendiente) y XLSX de copropiedades;
   - visibilidad por autor y enmascarado;
+  - plantillas personales y del equipo: solo su dueño ve y cambia una personal (ni con permiso de gestión); un nombre repetido es error y no sobrescribe (también lo impide un índice único); `saveAsTemplate` crea una personal aparte aunque el equipo tenga una con el mismo nombre; solo la gestión crea, comparte, edita y archiva las del equipo; archivar las saca de la lista sin borrarlas y libera el nombre; un correo o teléfono como encabezado se rechaza y la actividad no lleva encabezados;
   - purga a 30 días, con retención legal y lote purgado inmutable;
   - ajustes de la revisión:
     - un dato excluido, mapeado o dentro de un texto, no aparece en ninguna columna de texto del esquema ni en el informe;

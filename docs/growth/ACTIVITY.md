@@ -26,6 +26,17 @@ Orden: del más reciente al más antiguo. Paginación estándar (máx. 100 por
 página). Índices: `(actor_user_id, created_at)`, `(entity_type, entity_id,
 created_at)`, `(action, created_at)` y `(created_at)`.
 
+## Plantillas de importación
+
+| Acción | Cuándo | `changes` |
+|---|---|---|
+| `IMPORT_TEMPLATE_CREATED` | Se crea una plantilla (también al mapear con `saveAsTemplate`) | `target`, `scope`, `columns` |
+| `IMPORT_TEMPLATE_UPDATED` | Se renombra o cambia su mapeo | `target`, `scope`, `renamed?`, `columns?` |
+| `IMPORT_TEMPLATE_SHARED` | Una personal pasa al equipo | `target`, `scope` |
+| `IMPORT_TEMPLATE_ARCHIVED` | Se archiva | `target`, `scope` |
+
+Ni los encabezados, ni el nombre, ni el motivo del archivado van a la actividad: pueden nombrar personas.
+
 ## Limitación conocida: intentos fallidos
 
 Hoy **no se registran los intentos rechazados o fallidos** (por ejemplo, una
