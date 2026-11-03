@@ -27,6 +27,7 @@ import { BullConfigModule } from './core/config/bull-config';
 import { R2Module } from './core/infrastructure/r2/r2.module';
 
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { PermissionStatusModule } from './modules/permissions/permission-status.module';
 import { SharedModule } from './modules/shared/shared.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SeedModule } from './core/database/seeds/seed.module';
@@ -240,6 +241,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
     PermissionsModule,
+    PermissionStatusModule,
     RolesModule,
     SeedModule,
     UsersModule,

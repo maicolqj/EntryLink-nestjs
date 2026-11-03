@@ -11,12 +11,26 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { AUTH_STRATEGY_KEY } from '../decorators/auth.decorator';
+import { PermissionStatusService } from '../../permissions/services/permission-status.service';
 
+/**
+ * Roles y permisos de cada operación (GraphQL, REST y WebSocket).
+ *
+ * Los permisos del token no bastan: un permiso **inactivo** no autoriza
+ * aunque venga en un token emitido antes de desactivarlo (estado vigente en
+ * PermissionStatusService, 30 s de caché). SUPER_ADMIN conserva su paso,
+ * pero cada uso de un permiso inactivo queda en el log; este guard no salta
+ * ninguna otra verificación (sesión y versión del token se validan antes,
+ * en la estrategia JWT, y los demás guards siguen aplicando).
+ */
 @Injectable()
 export class UniversalRolePermissionGuard implements CanActivate {
   private readonly logger = new Logger(UniversalRolePermissionGuard.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly permissionStatus: PermissionStatusService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const ctx = GqlExecutionContext.create(context);
@@ -35,15 +49,6 @@ export class UniversalRolePermissionGuard implements CanActivate {
       throw new ForbiddenException('No autenticado');
     }
 
-    // 🔹 Super Admin bypass (sin cambios)
-    if (
-      Array.isArray(user.roles) &&
-      user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)
-    ) {
-      this.logger.debug(`SUPER_USER access granted for user: ${user.email}`);
-      return true;
-    }
-
     // 🔹 Leer metadata
     const requiredRoles = this.reflector.getAllAndOverride<ValidRoles[]>(
       'roles',
@@ -53,6 +58,29 @@ export class UniversalRolePermissionGuard implements CanActivate {
     const requiredPermissions = this.reflector.getAllAndOverride<
       ValidPermissions[]
     >('permissions', [context.getHandler(), context.getClass()]);
+
+    // 🔹 Estado vigente: solo se consulta si la operación exige permisos.
+    const inactive = requiredPermissions?.length
+      ? await this.permissionStatus.inactive()
+      : new Set<string>();
+    const inactiveRequired = (requiredPermissions ?? []).filter((p) =>
+      inactive.has(p),
+    );
+
+    // 🔹 Super Admin bypass (con traza si usa un permiso inactivo)
+    if (
+      Array.isArray(user.roles) &&
+      user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)
+    ) {
+      if (inactiveRequired.length) {
+        this.logger.warn(
+          `SUPER_ADMIN ${user.sub} usó ${context.getClass().name}.${context.getHandler().name} ` +
+            `con permisos inactivos: [${inactiveRequired.join(', ')}]`,
+        );
+      }
+      this.logger.debug(`SUPER_USER access granted for user: ${user.email}`);
+      return true;
+    }
 
     // 🔹 NUEVO: Leer la estrategia de validación
     const strategy =
@@ -71,8 +99,11 @@ export class UniversalRolePermissionGuard implements CanActivate {
       ? requiredRoles.some((role) => user.roles?.includes(role))
       : null; // null = no se configuró, no se evalúa
 
+    // Un permiso inactivo no cuenta aunque el token lo traiga.
     const hasValidPermission = requiredPermissions?.length
-      ? requiredPermissions.every((perm) => user.permissions?.includes(perm))
+      ? requiredPermissions.every(
+          (perm) => user.permissions?.includes(perm) && !inactive.has(perm),
+        )
       : null; // null = no se configuró, no se evalúa
 
     // 🔹 Aplicar estrategia
@@ -91,6 +122,11 @@ export class UniversalRolePermissionGuard implements CanActivate {
 
     // 🔹 Log en caso de denegación
     if (!granted) {
+      if (inactiveRequired.length) {
+        this.logger.warn(
+          `Permisos inactivos requeridos por ${context.getHandler().name}: [${inactiveRequired.join(', ')}]`,
+        );
+      }
       this.logger.warn(
         `Access denied (${strategy}): User ${user.email} | ` +
           `Roles required: [${requiredRoles?.join(', ') ?? 'none'}], has: [${user.roles?.join(', ')}] → ${hasValidRole} | ` +
