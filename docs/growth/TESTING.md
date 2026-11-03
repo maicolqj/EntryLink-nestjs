@@ -51,7 +51,7 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
   yarn test:growth:int
 ```
 
-**Una base para la suite y otra para probar a mano.** `growth-db` verifica el estado que dejan las migraciones (por ejemplo, roles y permisos de la suite inactivos). Si la misma base se usa para probar la web a mano, con permisos activados y datos sembrados, esa prueba falla con un mensaje que lo explica, y la confirmación de 500 filas se vuelve más lenta. En una base recién preparada tarda unos 40 ms por fila; en una base reutilizada, 110 a 130 ms. Para el navegador se usa otra base en el mismo contenedor (por ejemplo `growth_local`, con `DB_NAME=growth_local`).
+**Una base para la suite y otra para probar a mano.** `growth-db` verifica el estado que dejan las migraciones (por ejemplo, roles y permisos de la suite inactivos). Si la misma base se usa para probar la web a mano, con permisos activados y datos sembrados, esa prueba falla con un mensaje que lo explica, y la confirmación de 500 filas se vuelve más lenta. En una base recién preparada tarda unos 40 ms por fila; en una base reutilizada, 110 a 130 ms. Para el navegador se usa otra base en el mismo contenedor, `growth_e2e_test`: se prepara con el mismo `yarn test:growth:db` (cambiando el nombre en la URL) y luego `seed permissions/roles/users`, el SQL de `ACTIVATION.md` §4, el usuario sembrado en `active` y una fuente aprobada. La API local la usa con `DB_NAME=growth_e2e_test`.
 
 **Determinismo de `imports-db`:**
 - la cola se sustituye por una captura y los trabajos se ejecutan en el mismo hilo, así que no hay workers que terminar;
