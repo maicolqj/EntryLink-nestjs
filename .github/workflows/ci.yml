@@ -42,3 +42,76 @@ jobs:
 
       - name: Build
         run: yarn build
+
+  # Tipos de src y test juntos, migraciones desde una base vacía, rollback de
+  # las últimas e integración contra PostgreSQL real. Todo desechable: los
+  # servicios viven solo en el runner y las credenciales son de prueba (no
+  # hay secretos ni servicios de producción).
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-solo-pruebas
+          POSTGRES_DB: growth_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Base desechable del runner (el nombre debe contener "test": las
+      # pruebas y la limpieza abortan contra cualquier otra).
+      GROWTH_IT_DATABASE_URL: postgres://postgres:ci-solo-pruebas@localhost:5432/growth_test
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USERNAME: postgres
+      PASSDB_POSTGRES: ci-solo-pruebas
+      DB_NAME: growth_test
+      # Cuántas migraciones se revierten y se vuelven a aplicar.
+      MIGRATION_ROLLBACK_STEPS: '2'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # tsconfig.json deja fuera test/: así se escapó en #281 una prueba de
+      # integración que no compilaba.
+      - name: Tipos (src + test)
+        run: yarn tsc -p tsconfig.test.json
+
+      - name: Esquema base
+        run: npx ts-node -T test/growth/base-schema.ts
+
+      - name: Migraciones desde una base vacía
+        run: yarn migration:run
+
+      - name: Rollback de las últimas migraciones y vuelta a aplicar
+        run: |
+          for i in $(seq 1 "$MIGRATION_ROLLBACK_STEPS"); do yarn migration:revert; done
+          yarn migration:run
+
+      - name: Integración contra PostgreSQL real
+        run: yarn test:growth:int --ci
