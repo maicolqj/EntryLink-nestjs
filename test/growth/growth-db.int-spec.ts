@@ -158,6 +158,14 @@ describeDb('Growth Suite — base de datos real', () => {
       const [perms] = await ds.query(
         `SELECT count(*)::int AS n, bool_or(status) AS any_active FROM public.permissions WHERE "group" = 'GROWTH'`,
       );
+      if (perms.any_active) {
+        // La migración los deja inactivos; si están activos, la base se usó a
+        // mano (p. ej. para probar la web). No se relaja la aserción.
+        throw new Error(
+          'La base de prueba tiene permisos de Growth activados: se usó para probar a mano. ' +
+            'Recréala con `npx ts-node -T test/growth/prepare-db.ts` y usa otra base para las pruebas manuales.',
+        );
+      }
       expect(perms).toEqual({
         n: GROWTH_PERMISSIONS.length,
         any_active: false,
