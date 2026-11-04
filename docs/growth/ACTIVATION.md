@@ -62,7 +62,7 @@ BEGIN;
 
 UPDATE public.permissions SET status = true
  WHERE "group" = 'GROWTH'
-   AND name::text NOT IN ('APPROVE_GROWTH_SCORING'); -- activación manual: ver §13
+   AND name::text NOT IN ('MANAGE_GROWTH_IMPORT_TEMPLATES', 'APPROVE_GROWTH_SCORING'); -- activación manual: ver §13
 
 UPDATE public.roles SET status = true
  WHERE name IN ('GROWTH_MANAGER_ROL', 'SALES_ROL', 'GROWTH_RESEARCHER_ROL');
@@ -158,33 +158,6 @@ los contactos que la suite conoce en claro.
 - El scoring **solo ordena**: nunca autoriza ni bloquea un contacto. La autorización sigue dependiendo de la base jurídica, de los permisos y del estado de cada persona.
 - La fusión es siempre manual, con `MERGE_GROWTH_DUPLICATES`. No hay deshacer automático: `growth.merge_log` guarda qué se eligió y qué se trasladó.
 
-## 13. Permisos de activación manual
-
-Algunos permisos nacen **inactivos y sin asignar a ningún rol**, y no los activa ninguna migración ni seed:
-
-| Permiso | Para qué | Se asigna a |
-|---|---|---|
-| `APPROVE_GROWTH_SCORING` | Aprobar y activar una versión de reglas y umbrales del scoring | `GROWTH_MANAGER_ROL` (u otro rol que se decida, distinto de quien configura) |
-
-**Por qué no van en una migración ni en `GROWTH_ROLES`:** el token toma los permisos del rol **sin mirar `permissions.status`**. Asignar uno a un rol ya activo, como el de dirección comercial en producción, lo activaría de hecho al desplegar. Por eso el seed los crea con `status = false`, nunca les cambia el estado (`preserveStatus`) y el catálogo prueba que no estén en ningún rol. La lista vive en `GROWTH_MANUAL_ROLE_GRANTS` (`growth-access.catalog.ts`).
-
-Activarlo, cuando se decida (en una transacción):
-
-```sql
-BEGIN;
-UPDATE public.permissions SET status = true WHERE name::text = 'APPROVE_GROWTH_SCORING';
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM public.roles r
-  JOIN public.permissions p ON p.name::text = 'APPROVE_GROWTH_SCORING'
- WHERE r.name = 'GROWTH_MANAGER_ROL'
-ON CONFLICT DO NOTHING;
-COMMIT;
-```
-
-Quienes tengan sesión abierta lo reciben al renovar su token. Para quitarlo, se borra la fila de `role_permissions` (el `status` solo no basta, por lo dicho arriba).
-
-**Mientras no se active:** nadie, salvo SUPER_ADMIN, puede activar versiones nuevas. Si el mismo SUPER_ADMIN creó el borrador, solo lo aprueba con la excepción encendida, y queda auditado. El scoring sigue funcionando con la versión activa.
-
 ## 11. Importaciones (1C)
 
 - Permiso `IMPORT_GROWTH_DATA`: gerente e investigador. El oficial de cumplimiento no lo recibe.
@@ -195,36 +168,49 @@ Quienes tengan sesión abierta lo reciben al renovar su token. Para quitarlo, se
 - Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas. Un lock consultivo de Postgres por lote impide que dos trabajos lo confirmen a la vez (réplicas o trabajos dados por atascados).
 - Riesgo residual: si el proceso cae justo entre crear un registro y marcar su fila, al reanudar esa fila se crea otra vez (el NIT único lo evita en empresas con NIT). La deduplicación de 1B lo propondrá como duplicado.
 
-## 13. Permisos de activación manual
-
-Algunos permisos nacen **inactivos y sin asignar a ningún rol**, y no los activa ninguna migración ni seed:
-
-| Permiso | Para qué | Se asigna a |
-|---|---|---|
-| `MANAGE_GROWTH_IMPORT_TEMPLATES` | Crear, compartir, editar y archivar las plantillas de importación del **equipo** | `GROWTH_MANAGER_ROL` |
-
-**Por qué no van en una migración ni en `GROWTH_ROLES`:** el token toma los permisos del rol **sin mirar `permissions.status`**. Asignar uno a un rol ya activo, como el de dirección comercial en producción, lo activaría de hecho al desplegar. Por eso el seed los crea con `status = false`, nunca les cambia el estado (`preserveStatus`) y el catálogo prueba que no estén en ningún rol. La lista vive en `GROWTH_MANUAL_ROLE_GRANTS` (`growth-access.catalog.ts`).
-
-Activarlo, cuando se decida (en una transacción):
-
-```sql
-BEGIN;
-UPDATE public.permissions SET status = true WHERE name::text = 'MANAGE_GROWTH_IMPORT_TEMPLATES';
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM public.roles r
-  JOIN public.permissions p ON p.name::text = 'MANAGE_GROWTH_IMPORT_TEMPLATES'
- WHERE r.name = 'GROWTH_MANAGER_ROL'
-ON CONFLICT DO NOTHING;
-COMMIT;
-```
-
-Quienes tengan sesión abierta lo reciben al renovar su token. Para quitarlo, se borra la fila de `role_permissions` (el `status` solo no basta, por lo dicho arriba).
-
-**Mientras no se active:** todos siguen usando las plantillas del equipo que ya existían y crean las suyas como personales; nadie, salvo SUPER_ADMIN, puede crear, editar ni archivar plantillas del equipo.
-
 ## 12. Variables de la suite y errores de configuración
 
 - Con `GROWTH_ENABLED` apagada (o ausente), `GROWTH_SUPPRESSION_HMAC_KEYS` y `GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION` **no se validan y se descartan**: un error de formato en ellas ya no impide arrancar la API (caída del 2026-11-01, por `1=` en lugar de `1:`).
 - Con la suite encendida son obligatorias. El formato es `1:<base64 de 32 bytes>` (44 caracteres después de `1:`), sin comillas ni espacios. Para rotar: `1:<llave vieja>,2:<llave nueva>` y versión activa `2`.
 - Un error de configuración nombra la variable y el problema, **nunca el valor** (`validateEnv` en `src/core/config/env-validation.ts`). Sentry redacta además cualquier `with value "…"` (`src/core/config/redact.ts`).
 - Generar una llave: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Nunca pegarla en chats ni tickets.
+
+## 13. Permisos de activación manual
+
+Algunos permisos nacen **inactivos y sin asignar a ningún rol**. No los activa ninguna migración ni seed: el seed los crea con `status = false` y nunca les cambia el estado (`preserveStatus`).
+
+| Permiso | Para qué | Se asigna a |
+|---|---|---|
+| `MANAGE_GROWTH_IMPORT_TEMPLATES` | Crear, compartir, editar y archivar las plantillas de importación del **equipo** | `GROWTH_MANAGER_ROL` |
+| `APPROVE_GROWTH_SCORING` | Aprobar y activar una versión de reglas y umbrales del scoring | `GROWTH_MANAGER_ROL`, u otro rol que se decida, distinto de quien configura |
+
+**Por qué así:** desde la corrección de permisos (`docs/PERMISOS-ESTADO-ACTIVO.md`), un permiso inactivo no autoriza aunque esté asignado a un rol activo o venga en un token viejo. Aun así, como defensa adicional, ninguna migración ni seed los asigna, y el catálogo prueba que no estén en ningún rol. La lista de asignaciones vive en `GROWTH_MANUAL_ROLE_GRANTS` (`growth-access.catalog.ts`).
+
+Activarlos, cuando se decida (en una transacción, uno o los dos):
+
+```sql
+BEGIN;
+UPDATE public.permissions SET status = true
+ WHERE name::text IN ('MANAGE_GROWTH_IMPORT_TEMPLATES', 'APPROVE_GROWTH_SCORING');
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM public.roles r
+  JOIN public.permissions p
+    ON p.name::text IN ('MANAGE_GROWTH_IMPORT_TEMPLATES', 'APPROVE_GROWTH_SCORING')
+ WHERE r.name = 'GROWTH_MANAGER_ROL'
+ON CONFLICT DO NOTHING;
+-- Que quien lo recibe lo tenga sin esperar a que venza su token (15 min):
+UPDATE public.users u SET "tokenVersion" = u."tokenVersion" + 1
+ WHERE u.id IN (SELECT uhr.user_id FROM public.user_has_roles uhr
+                  JOIN public.roles r ON r.id = uhr.role_id
+                 WHERE r.name = 'GROWTH_MANAGER_ROL');
+COMMIT;
+```
+
+El estado lo toma el guard en 30 s como mucho. La versión del token vive 5 min en la caché de Redis, así que el token viejo puede durar hasta ese tiempo.
+
+**Desactivar:** `UPDATE public.permissions SET status = false WHERE name::text = '…'`. El guard lo niega en 30 s como mucho, aunque el permiso siga asignado y el token lo traiga.
+
+**Mientras no se activen:**
+- todos siguen usando las plantillas del equipo que ya existían y crean las suyas como personales;
+- nadie, salvo SUPER_ADMIN, puede cambiar plantillas del equipo ni activar versiones de scoring. Si el mismo SUPER_ADMIN creó el borrador, solo lo aprueba con la excepción encendida, y queda auditado. El uso de un permiso inactivo por un SUPER_ADMIN queda en el log;
+- el scoring sigue funcionando con la versión activa.

@@ -241,6 +241,17 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
     level: 'HIGH',
     dependsOn: [P.EDIT_GROWTH_PROSPECTS],
   },
+  // ── Plantillas de importación personales y del equipo ───────────────────
+  {
+    id: '5b0f2e8c-3c47-4b1e-9a7d-6e2f41c9d0a3',
+    name: P.MANAGE_GROWTH_IMPORT_TEMPLATES,
+    label: 'Administrar Plantillas de Importación',
+    description:
+      'Crear, compartir, editar y archivar las plantillas de importación del equipo',
+    level: 'MEDIUM',
+    dependsOn: [P.IMPORT_GROWTH_DATA],
+    manualActivation: true,
+  },
   // ── Entrega 1E-C-0: versiones de scoring con aprobación ─────────────────
   {
     id: '8c1d7e54-2a96-4f0b-b3e1-5d47a90c6f12',
@@ -261,7 +272,10 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
 export const GROWTH_MANUAL_ROLE_GRANTS: Partial<
   Record<ValidRoles, ValidPermissions[]>
 > = {
-  [ValidRoles.GROWTH_MANAGER_ROL]: [P.APPROVE_GROWTH_SCORING],
+  [ValidRoles.GROWTH_MANAGER_ROL]: [
+    P.MANAGE_GROWTH_IMPORT_TEMPLATES,
+    P.APPROVE_GROWTH_SCORING,
+  ],
 };
 
 export const GROWTH_ROLES: GrowthRoleDefinition[] = [
