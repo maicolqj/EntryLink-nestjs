@@ -82,8 +82,9 @@ jobs:
       DB_USERNAME: postgres
       PASSDB_POSTGRES: ci-solo-pruebas
       DB_NAME: growth_test
-      # Cuántas migraciones se revierten y se vuelven a aplicar.
-      MIGRATION_ROLLBACK_STEPS: '2'
+      # Cuántas migraciones se revierten y se vuelven a aplicar. 5 cubre las
+      # de #280 (3) y #281 (2), las últimas con `down` que descarta datos.
+      MIGRATION_ROLLBACK_STEPS: '5'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -115,3 +116,35 @@ jobs:
 
       - name: Integración contra PostgreSQL real
         run: yarn test:growth:int --ci
+
+      # src/schema.gql es el contrato que consume la web (push-schema.yml). Se
+      # genera arrancando la API: si alguien cambia un resolver, un tipo o un
+      # enum sin regenerarlo, este paso falla. Va después de la integración:
+      # arrancar no escribe en la base (synchronize: false), pero así no hay
+      # dudas. Redis con clave porque la API la exige.
+      - name: Contrato GraphQL (schema.gql versionado = el que genera la API)
+        env:
+          NODE_ENV: development
+          PORT: '3999'
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: '6380'
+          REDIS_PASSWORD: ci-solo-pruebas
+          JWT_ACCESS_SECRET: ci-solo-pruebas-access-000000000000
+          JWT_REFRESH_SECRET: ci-solo-pruebas-refresh-00000000000
+          JWT_ISSUER: ci
+          FINGERPRINT_SECRET: ci-solo-pruebas-fingerprint-0000000
+          GROWTH_ENABLED: 'false'
+        run: |
+          docker run -d --name redis-ci -p 6380:6379 redis:7-alpine redis-server --requirepass "$REDIS_PASSWORD"
+          cp src/schema.gql /tmp/schema.versionado.gql
+          yarn build
+          node dist/main > /tmp/api.log 2>&1 &
+          API_PID=$!
+          for i in $(seq 1 60); do
+            grep -q "Nest application successfully started" /tmp/api.log && break
+            if ! kill -0 "$API_PID" 2>/dev/null; then cat /tmp/api.log; exit 1; fi
+            sleep 2
+          done
+          kill "$API_PID" || true
+          grep -q "Nest application successfully started" /tmp/api.log || { tail -50 /tmp/api.log; exit 1; }
+          node test/ci/compare-schema.js /tmp/schema.versionado.gql src/schema.gql
