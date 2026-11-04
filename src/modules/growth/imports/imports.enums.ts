@@ -1,6 +1,14 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 /** Qué se importa. En la base: varchar + CHECK (ver la migración de 1C). */
+/** Alcance de una plantilla de mapeo. */
+export enum GrowthImportTemplateScope {
+  /** Solo la ve y la edita quien la creó. */
+  PERSONAL = 'PERSONAL',
+  /** La usa todo el equipo; solo MANAGE_GROWTH_IMPORT_TEMPLATES la cambia. */
+  TEAM = 'TEAM',
+}
+
 export enum GrowthImportTarget {
   ORGANIZATIONS = 'ORGANIZATIONS',
   PROPERTIES = 'PROPERTIES',
@@ -88,6 +96,11 @@ const enums: Array<[object, string, string]> = [
   ],
   [GrowthImportRowResult, 'GrowthImportRowResult', 'Resultado de una fila'],
   [GrowthImportField, 'GrowthImportField', 'Campo de destino de una columna'],
+  [
+    GrowthImportTemplateScope,
+    'GrowthImportTemplateScope',
+    'Alcance de una plantilla de mapeo: personal o del equipo',
+  ],
 ];
 for (const [e, name, description] of enums) {
   registerEnumType(e, { name, description });

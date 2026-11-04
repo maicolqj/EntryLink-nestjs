@@ -30,6 +30,12 @@ el nombre de la base no contiene `test`.
 docker run -d --name growth-pg-test -e POSTGRES_PASSWORD=<clave-local> \
   -e POSTGRES_DB=growth_test -p 127.0.0.1:55432:5432 postgis/postgis:17-3.5
 
+# 2-3. Atajo: recrea la base DESDE CERO (la borra, arma el esquema base y
+#      corre las migraciones). Úsalo antes de cada corrida completa. Solo
+#      acepta un Postgres local y un nombre que termine en _test.
+GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_test   yarn test:growth:db
+
+# O, paso a paso:
 # 2. Esquema base: las migraciones de main no corren desde una base vacía
 #    (la primera supone tablas existentes). El script crea public con
 #    synchronize (sin las entidades de growth) y marca como aplicadas las
@@ -48,7 +54,7 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
 Hay cinco suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
-- `imports-db.int-spec.ts` (entrega 1C, 23 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
+- `imports-db.int-spec.ts` (entrega 1C, 24 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
   - lote de 500 empresas con 40 filas con errores, NIT existentes (vincular), NIT repetidos en el archivo y correos excluidos;
   - la base rechaza `CREATE` en filas con errores, retroceder un lote terminado y borrarlo;
   - confirmación: todo nace `NEW` con evidencia de la fuente, el vínculo no cambia el registro y repetir no duplica;
@@ -57,6 +63,7 @@ Hay cinco suites, que comparten la base y el helper de limpieza `test/growth/db-
   - mapeo nuevo contra trabajo viejo, cancelación durante la validación y `FAILED` tras reintentos;
   - personas (clase de canal obligatoria, base pendiente) y XLSX de copropiedades;
   - visibilidad por autor y enmascarado;
+  - plantillas personales y del equipo: solo su dueño ve y cambia una personal (ni con permiso de gestión); un nombre repetido es error y no sobrescribe (también lo impide un índice único); `saveAsTemplate` crea una personal aparte aunque el equipo tenga una con el mismo nombre; solo la gestión crea, comparte, edita y archiva las del equipo; archivar las saca de la lista sin borrarlas y libera el nombre; un correo o teléfono como encabezado se rechaza y la actividad no lleva encabezados;
   - purga a 30 días, con retención legal y lote purgado inmutable;
   - ajustes de la revisión:
     - un dato excluido, mapeado o dentro de un texto, no aparece en ninguna columna de texto del esquema ni en el informe;

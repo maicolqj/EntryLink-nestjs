@@ -1,3 +1,4 @@
+import { previousBatchesQuery } from './previous-batches';
 import {
   IMPORT_MAX_BYTES as MIGRATION_MAX_BYTES,
   IMPORT_MAX_ROWS as MIGRATION_MAX_ROWS,
@@ -461,5 +462,23 @@ describe('ImportRedactionService', () => {
     const rows = [['Ana', 'ana@x.co']];
     expect(await service([]).redact(rows)).toBe(0);
     expect(rows[0]).toEqual(['Ana', 'ana@x.co']);
+  });
+});
+
+describe('previousBatchesQuery — lotes anteriores con el mismo archivo', () => {
+  it('sin VIEW_ALL filtra por quien creó el lote', () => {
+    const q = previousBatchesQuery('sha', 'lote-actual', 'user-1');
+    expect(q.sql).toContain('created_by_user_id = $3');
+    expect(q.params).toEqual(['sha', 'lote-actual', 'user-1']);
+  });
+
+  it('con VIEW_ALL ve los lotes de todos, sin parámetro de dueño', () => {
+    const q = previousBatchesQuery('sha', 'lote-actual', null);
+    expect(q.sql).not.toContain('created_by_user_id');
+    expect(q.params).toEqual(['sha', 'lote-actual']);
+  });
+
+  it('nunca incluye el lote que se está mirando', () => {
+    expect(previousBatchesQuery('sha', 'x', null).sql).toContain('id <> $2');
   });
 });

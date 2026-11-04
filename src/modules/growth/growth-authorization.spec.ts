@@ -32,6 +32,7 @@ import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect
 import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
 import { GrowthScoringVersionsResolver } from './prospects/resolvers/prospect-scoring-versions.resolver';
 import { GrowthImportsResolver } from './imports/resolvers/growth-imports.resolver';
+import { GrowthImportTemplatesResolver } from './imports/resolvers/growth-import-templates.resolver';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 
 /**
@@ -51,6 +52,7 @@ const RESOLVERS = [
   GrowthDedupeScoringResolver,
   GrowthScoringVersionsResolver,
   GrowthImportsResolver,
+  GrowthImportTemplatesResolver,
 ];
 
 type Operation = {

@@ -25,11 +25,7 @@ import {
   PaginatedGrowthImportBatches,
   PaginatedGrowthImportRows,
 } from '../dto/responses/import.responses';
-import {
-  ImportBatch,
-  ImportMappingTemplate,
-  ImportRow,
-} from '../entities/import.entities';
+import { ImportBatch, ImportRow } from '../entities/import.entities';
 import {
   GrowthImportDecision as D,
   GrowthImportField as F,
@@ -38,6 +34,7 @@ import {
 } from '../imports.enums';
 import { mappingProblems, suggestMapping } from '../shared/field-catalog';
 import { ImportFileError, readSpreadsheet } from '../shared/file-reader';
+import { previousBatchesQuery } from '../shared/previous-batches';
 import { buildImportReport, maskRawRow } from '../shared/report';
 import { TARGET_KIND } from './import-commit.service';
 import {
@@ -46,6 +43,7 @@ import {
   toJobActor,
 } from './import-queue.service';
 import { ImportRedactionService } from './import-redaction.service';
+import { ImportTemplatesService } from './import-templates.service';
 import { mappingKeyOf } from './import-validation.service';
 
 const PREVIEW_ROWS = 20;
@@ -83,6 +81,7 @@ export class ImportsService {
     private readonly activity: ActivityLogService,
     private readonly queue: ImportQueueService,
     private readonly redaction: ImportRedactionService,
+    private readonly templatesService: ImportTemplatesService,
   ) {}
 
   // ── Subir ────────────────────────────────────────────────────────────────
@@ -225,9 +224,15 @@ export class ImportsService {
           order: { rowNumber: 'ASC' },
           take: PREVIEW_ROWS,
         });
+    // Solo los lotes que el actor podría abrir: sin VIEW_ALL, los propios.
+    const query = previousBatchesQuery(
+      batch.fileSha256,
+      id,
+      this.guards.canSeeAll(actor) ? null : actor.sub,
+    );
     const previous: Array<{ id: string }> = await this.dataSource.query(
-      `SELECT id FROM growth.import_batches WHERE file_sha256 = $1 AND id <> $2 ORDER BY created_at`,
-      [batch.fileSha256, id],
+      query.sql,
+      query.params,
     );
     return {
       headers: batch.headers,
@@ -262,14 +267,6 @@ export class ImportsService {
     return actorHas(actor, ValidPermissions.VIEW_GROWTH_CONTACT_DATA)
       ? raw
       : maskRawRow(raw);
-  }
-
-  templates(target: T): Promise<ImportMappingTemplate[]> {
-    return this.dataSource.manager.find(ImportMappingTemplate, {
-      where: { target },
-      order: { name: 'ASC' },
-      take: 100,
-    });
   }
 
   // ── Mapear (y validar en cola) ───────────────────────────────────────────
@@ -341,10 +338,17 @@ export class ImportsService {
         },
       );
       if (input.saveAsTemplate) {
-        await this.saveTemplate(
+        // Personal y sin sobrescribir: un nombre propio repetido es un error.
+        await this.templatesService.saveFromBatch(
           manager,
-          batch,
-          input.saveAsTemplate.trim(),
+          {
+            target: batch.target,
+            name: input.saveAsTemplate,
+            mapping: (batch.columnMapping ?? []).map((m) => ({
+              header: batch.headers[m.column],
+              field: m.field,
+            })),
+          },
           actor,
         );
       }
@@ -365,43 +369,6 @@ export class ImportsService {
       actor: toJobActor(actor),
     });
     return batch;
-  }
-
-  private async saveTemplate(
-    manager: EntityManager,
-    batch: ImportBatch,
-    name: string,
-    actor: JwtAccessPayload,
-  ): Promise<void> {
-    const columnMapping = (batch.columnMapping ?? []).map((m) => ({
-      header: batch.headers[m.column],
-      field: m.field,
-    }));
-    const [existing]: Array<{ id: string }> = await manager.query(
-      `SELECT id FROM growth.import_mapping_templates WHERE target = $1 AND lower(name) = lower($2)`,
-      [batch.target, name],
-    );
-    let id = existing?.id;
-    if (id) {
-      await manager.update(ImportMappingTemplate, id, { columnMapping });
-    } else {
-      id = (
-        await manager.save(
-          manager.create(ImportMappingTemplate, {
-            target: batch.target,
-            name,
-            columnMapping,
-            createdByUserId: actor.sub,
-          }),
-        )
-      ).id;
-    }
-    await this.activity.record(manager, actor, {
-      action: existing ? 'IMPORT_TEMPLATE_UPDATED' : 'IMPORT_TEMPLATE_CREATED',
-      entityType: GrowthEntityType.IMPORT_TEMPLATE,
-      entityId: id,
-      changes: { target: batch.target, name },
-    });
   }
 
   // ── Decidir por fila ─────────────────────────────────────────────────────
