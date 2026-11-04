@@ -75,3 +75,14 @@ Por eso los respaldos no quedaron expuestos por esta llave. El script, tal como 
    - opcional: purgar o rotar en Coolify los logs de despliegues anteriores al 2026-08-01, si siguen guardados.
 
 **Orden mínimo seguro:** 2 → 3 → 4 → 5 → 6 → 7. No revocar antes de probar: si se revoca primero, la API y el respaldo fallan hasta terminar.
+
+## 5. Registro de la rotación (2026-11-04)
+
+- **Paso 1:** token identificado. Su alcance era solo el bucket de archivos, así que los respaldos no quedaron expuestos por esa llave. En Coolify no existen `R2_BACKUP_BUCKET` ni tareas programadas: hoy **no hay respaldo automático**.
+- **Paso 2:** se creó solo el token API `entrylink-api-2026-11` (*Object Read & Write*, solo el bucket de archivos). El token de respaldo se crea cuando se programe el respaldo.
+- **Paso 3:** variables reemplazadas en Coolify y **Redeploy** con la imagen de #280 (sin código nuevo).
+  - El primer intento dio `SignatureDoesNotMatch` al subir un anexo (HTTP 500): el *Access Key ID* era válido, pero el *Secret* no correspondía (mal copiado). Se corrigió el valor y se volvió a redesplegar. El log `Cloudflare R2 configurado correctamente` no valida las llaves: solo la primera operación contra R2 lo hace.
+- **Paso 4:** OK. `/health` en 200; subida de un anexo de comunicado (`entrylink/_platform/announcements/attachments/`) y descarga; lectura de archivos anteriores; subida y borrado de una imagen.
+- **Paso 5:** no aplica hasta programar el respaldo.
+- **Paso 6:** token viejo revocado. Todo sigue funcionando.
+- **Paso 7:** pendiente buscar en el log los últimos 4 caracteres de la llave nueva.
