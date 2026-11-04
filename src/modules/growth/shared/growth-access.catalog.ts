@@ -21,6 +21,13 @@ export interface GrowthPermissionDefinition {
   description: string;
   level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   dependsOn: ValidPermissions[];
+  /**
+   * Se activa solo a mano (SQL de docs/growth/ACTIVATION.md): el seed lo crea
+   * inactivo y nunca le cambia el estado, ni con GROWTH_ENABLED=true. Tampoco
+   * va en GROWTH_ROLES: el token toma los permisos del rol sin mirar su
+   * estado, así que asignarlo a un rol ya activo lo activaría de hecho.
+   */
+  manualActivation?: true;
 }
 
 export interface GrowthRoleDefinition {
@@ -234,7 +241,28 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
     level: 'HIGH',
     dependsOn: [P.EDIT_GROWTH_PROSPECTS],
   },
+  // ── Plantillas de importación personales y del equipo ───────────────────
+  {
+    id: '5b0f2e8c-3c47-4b1e-9a7d-6e2f41c9d0a3',
+    name: P.MANAGE_GROWTH_IMPORT_TEMPLATES,
+    label: 'Administrar Plantillas de Importación',
+    description:
+      'Crear, compartir, editar y archivar las plantillas de importación del equipo',
+    level: 'MEDIUM',
+    dependsOn: [P.IMPORT_GROWTH_DATA],
+    manualActivation: true,
+  },
 ];
+
+/**
+ * Asignaciones que NO hace ninguna migración ni seed: se aplican al activar
+ * el permiso, con el SQL de docs/growth/ACTIVATION.md.
+ */
+export const GROWTH_MANUAL_ROLE_GRANTS: Partial<
+  Record<ValidRoles, ValidPermissions[]>
+> = {
+  [ValidRoles.GROWTH_MANAGER_ROL]: [P.MANAGE_GROWTH_IMPORT_TEMPLATES],
+};
 
 export const GROWTH_ROLES: GrowthRoleDefinition[] = [
   {

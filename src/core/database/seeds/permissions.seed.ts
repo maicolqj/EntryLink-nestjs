@@ -41,8 +41,15 @@ export const seedPermissions = async (
         );
         console.log(`  ✓ Created: ${data.name}`);
       } else {
-        // Actualizamos por si cambiaron labels o descripciones en el archivo seed
-        await permissionRepository.update(data.id, permissionData);
+        // Actualizamos por si cambiaron labels o descripciones en el archivo seed.
+        // Un permiso de activación manual conserva el estado que tenga.
+        const { status, ...rest } = permissionData;
+        await permissionRepository.update(
+          data.id,
+          'preserveStatus' in data && data.preserveStatus
+            ? rest
+            : { ...rest, status },
+        );
       }
     }
 

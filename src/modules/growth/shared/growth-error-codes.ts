@@ -38,4 +38,8 @@ export enum GrowthErrorCode {
   GROWTH_IMPORT_INVALID_STATE = 'GROWTH_IMPORT_INVALID_STATE',
   /** El archivo y las filas crudas ya se purgaron (30 días). */
   GROWTH_IMPORT_PURGED = 'GROWTH_IMPORT_PURGED',
+  /** Ya hay una plantilla vigente con ese nombre en el mismo alcance. */
+  GROWTH_IMPORT_TEMPLATE_NAME_TAKEN = 'GROWTH_IMPORT_TEMPLATE_NAME_TAKEN',
+  /** Cambiar plantillas del equipo exige MANAGE_GROWTH_IMPORT_TEMPLATES. */
+  GROWTH_IMPORT_TEMPLATE_FORBIDDEN = 'GROWTH_IMPORT_TEMPLATE_FORBIDDEN',
 }

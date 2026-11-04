@@ -31,6 +31,7 @@ import {
 import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
 import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
 import { GrowthImportsResolver } from './imports/resolvers/growth-imports.resolver';
+import { GrowthImportTemplatesResolver } from './imports/resolvers/growth-import-templates.resolver';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 
 /**
@@ -49,6 +50,7 @@ const RESOLVERS = [
   GrowthProspectOperationsResolver,
   GrowthDedupeScoringResolver,
   GrowthImportsResolver,
+  GrowthImportTemplatesResolver,
 ];
 
 type Operation = {
@@ -202,6 +204,11 @@ describe('Autorización de la Growth Suite', () => {
         'growthSimulateScoring',
         'growthTeamWorkload',
         'growthMergePreview',
+        // Plantillas personales y del equipo
+        'growthCreateImportTemplate',
+        'growthUpdateImportTemplate',
+        'growthShareImportTemplate',
+        'growthArchiveImportTemplate',
       ].sort(),
     );
   });

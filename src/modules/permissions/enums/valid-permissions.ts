@@ -489,6 +489,9 @@ export enum ValidPermissions {
   /** Importar empresas, personas y copropiedades desde CSV o XLSX. ➜ Nivel: [HIGH] | Requiere: [EDIT_GROWTH_PROSPECTS] */
   IMPORT_GROWTH_DATA = 'IMPORT_GROWTH_DATA',
 
+  /** Crear, compartir, editar y archivar plantillas de importación del equipo. ➜ Nivel: [MEDIUM] | Requiere: [IMPORT_GROWTH_DATA] */
+  MANAGE_GROWTH_IMPORT_TEMPLATES = 'MANAGE_GROWTH_IMPORT_TEMPLATES',
+
   /** PERMISO MAESTRO. ➜ Nivel: [CRITICAL] | Requiere: [TODOS] */
   SUPERADMIN = 'SUPERADMIN',
 }

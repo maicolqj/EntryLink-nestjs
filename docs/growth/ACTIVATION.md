@@ -60,7 +60,9 @@ Se ejecuta en una transacción. Es idempotente.
 ```sql
 BEGIN;
 
-UPDATE public.permissions SET status = true WHERE "group" = 'GROWTH';
+UPDATE public.permissions SET status = true
+ WHERE "group" = 'GROWTH'
+   AND name::text NOT IN ('MANAGE_GROWTH_IMPORT_TEMPLATES'); -- activación manual: ver §13
 
 UPDATE public.roles SET status = true
  WHERE name IN ('GROWTH_MANAGER_ROL', 'SALES_ROL', 'GROWTH_RESEARCHER_ROL');
@@ -81,6 +83,7 @@ SELECT r.id, p.id
 ON CONFLICT DO NOTHING;
 
 -- Verificación: debe devolver 3 roles activos y 24 permisos activos (13 de la fase 0 + 8 de 1A + 2 de 1B + 1 de 1C).
+-- Los permisos de activación manual (§13) quedan fuera de esta cuenta.
 SELECT name, status FROM public.roles WHERE name::text LIKE '%GROWTH%' OR name = 'SALES_ROL';
 SELECT count(*) FILTER (WHERE status) AS activos FROM public.permissions WHERE "group" = 'GROWTH';
 
@@ -149,11 +152,39 @@ los contactos que la suite conoce en claro.
 ## 11. Importaciones (1C)
 
 - Permiso `IMPORT_GROWTH_DATA`: gerente e investigador. El oficial de cumplimiento no lo recibe.
+- Plantillas de mapeo: **personales** (solo su dueño las ve y las cambia) y **del equipo** (las usa todo quien importa; solo `MANAGE_GROWTH_IMPORT_TEMPLATES`, ver §13, las crea, comparte, edita o archiva). Guardan solo encabezados y su campo, nunca valores. Un nombre repetido en el mismo alcance es un error, nunca una sobrescritura. Se archivan, no se borran. Las que existían antes de este cambio quedaron como del equipo, con su autor como dueño.
 - Cola BullMQ `growth-imports` (Redis existente; validación y confirmación), visible en Bull Board. Solo se registra con la suite encendida.
 - Subida: `POST /api/v1/growth/imports` (multipart en memoria; máx. 5 MB, 5.000 filas y 15 millones de caracteres en total). **El archivo original no se guarda** en ninguna parte: no hace falta configurar nada en Cloudflare.
 - Cron `growth-import-purge` a las 3:45 (Bogotá): cierra los lotes sin cambios en 7 días y, 30 días después de terminado un lote, borra sus filas crudas. Un lote con retención legal (`entity_type = 'IMPORT_BATCH'`) no se purga.
 - Si un lote queda en `COMMITTING` porque Redis falló al encolar, repetir `growthCommitImport` lo vuelve a encolar; el trabajo no duplica filas ya procesadas. Un lock consultivo de Postgres por lote impide que dos trabajos lo confirmen a la vez (réplicas o trabajos dados por atascados).
 - Riesgo residual: si el proceso cae justo entre crear un registro y marcar su fila, al reanudar esa fila se crea otra vez (el NIT único lo evita en empresas con NIT). La deduplicación de 1B lo propondrá como duplicado.
+
+## 13. Permisos de activación manual
+
+Algunos permisos nacen **inactivos y sin asignar a ningún rol**, y no los activa ninguna migración ni seed:
+
+| Permiso | Para qué | Se asigna a |
+|---|---|---|
+| `MANAGE_GROWTH_IMPORT_TEMPLATES` | Crear, compartir, editar y archivar las plantillas de importación del **equipo** | `GROWTH_MANAGER_ROL` |
+
+**Por qué no van en una migración ni en `GROWTH_ROLES`:** el token toma los permisos del rol **sin mirar `permissions.status`**. Asignar uno a un rol ya activo, como el de dirección comercial en producción, lo activaría de hecho al desplegar. Por eso el seed los crea con `status = false`, nunca les cambia el estado (`preserveStatus`) y el catálogo prueba que no estén en ningún rol. La lista vive en `GROWTH_MANUAL_ROLE_GRANTS` (`growth-access.catalog.ts`).
+
+Activarlo, cuando se decida (en una transacción):
+
+```sql
+BEGIN;
+UPDATE public.permissions SET status = true WHERE name::text = 'MANAGE_GROWTH_IMPORT_TEMPLATES';
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM public.roles r
+  JOIN public.permissions p ON p.name::text = 'MANAGE_GROWTH_IMPORT_TEMPLATES'
+ WHERE r.name = 'GROWTH_MANAGER_ROL'
+ON CONFLICT DO NOTHING;
+COMMIT;
+```
+
+Quienes tengan sesión abierta lo reciben al renovar su token. Para quitarlo, se borra la fila de `role_permissions` (el `status` solo no basta, por lo dicho arriba).
+
+**Mientras no se active:** todos siguen usando las plantillas del equipo que ya existían y crean las suyas como personales; nadie, salvo SUPER_ADMIN, puede crear, editar ni archivar plantillas del equipo.
 
 ## 12. Variables de la suite y errores de configuración
 
