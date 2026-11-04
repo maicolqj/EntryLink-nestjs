@@ -141,6 +141,8 @@ export enum RolesErrorCode {
 export enum PermissionErrorCode {
   // Errores de registro y creación de usuario
   PERMISSION_ALREADY_EXISTS = 'PERMISSION_ALREADY_EXISTS',
+  /** No se pudo verificar el estado de los permisos (base sin responder): se niega. */
+  PERMISSION_STATUS_UNAVAILABLE = 'PERMISSION_STATUS_UNAVAILABLE',
   PERMISSION_NOT_EXISTS = 'PERMISSION_NOT_EXISTS',
   PERMISSION_CREATION_FAILED = 'PERMISSION_CREATION_FAILED',
   PERMISSION_IS_NOT_ACTIVE = 'PERMISSION_IS_NOT_ACTIVE',

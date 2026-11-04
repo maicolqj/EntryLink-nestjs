@@ -1,58 +1,108 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheService } from '../../../core/infrastructure/cache/cache.service';
 import { AUTH_CONSTANTS } from '../../auth/constants/auth.constants';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { PermissionErrorCode } from '../../shared/constans/error-codes.constants';
+import { CustomError } from '../../shared/utils/errors.utils';
 import {
   inactivePermissions,
-  inactivePermissionsLoaded,
-  inactivePermissionsLoadedAt,
-  markInactivePermissionsStale,
+  permissionStatusCheckedAt,
+  permissionStatusRefreshRequested,
+  permissionStatusTrusted,
+  permissionStatusVerifiedAt,
+  PERMISSION_STATUS_MAX_STALE_MS,
+  recordFailedCheck,
+  requestPermissionStatusRefresh,
   setInactivePermissions,
-  touchInactivePermissions,
 } from '../../shared/permission-status/permission-status.registry';
 
-/** Cada cuánto se vuelve a leer el estado de los permisos (por proceso). */
+/** Edad máxima del estado antes de volver a leerlo (por proceso). */
 export const PERMISSION_STATUS_TTL_MS = 30_000;
+/** Tras un fallo, cuánto esperar antes de reintentar (no en cada petición). */
+export const PERMISSION_STATUS_RETRY_MS = 5_000;
+/** Una lectura que tarda más que esto cuenta como fallo (base sin responder). */
+export const PERMISSION_STATUS_QUERY_TIMEOUT_MS = 5_000;
+export { PERMISSION_STATUS_MAX_STALE_MS };
 
 /**
  * Estado vigente (activo o inactivo) de los permisos.
  *
- * - El guard lo consulta en cada operación: un permiso inactivo no autoriza
- *   aunque venga en un token emitido antes de desactivarlo.
- * - Se lee de `public.permissions` y se guarda 30 s por proceso; un cambio
- *   hecho con PermissionsService invalida la caché al momento, y uno hecho
- *   por SQL se ve, como mucho, a los 30 s.
- * - Si la base falla al refrescar, se sigue con el último estado conocido;
- *   si nunca se pudo leer, falla cerrado (la operación no se autoriza).
+ * - El guard lo consulta en cada operación con permisos: uno inactivo no
+ *   autoriza aunque venga en un token emitido antes de desactivarlo.
+ * - Se lee de `public.permissions`; vale 30 s por proceso. Un cambio hecho
+ *   con PermissionsService pide releer al momento (en ese proceso); uno
+ *   hecho por SQL, o en otra réplica, se ve como mucho a los 30 s. Un
+ *   temporizador lo relee cada 30 s aunque no haya peticiones (trabajos en
+ *   cola y crons también usan `actorHas`).
+ * - **Antigüedad máxima.** Si la base falla o no responde en 5 s, se sigue
+ *   con el último estado verificado solo mientras tenga menos de 120 s;
+ *   pasado eso (o si nunca se pudo leer), toda operación con permisos se
+ *   niega con 503 `PERMISSION_STATUS_UNAVAILABLE`, también para SUPER_ADMIN.
+ *   No hay ventana indefinida con datos viejos. Mientras falla, se reintenta
+ *   cada 5 s, no en cada petición.
  */
 @Injectable()
-export class PermissionStatusService {
+export class PermissionStatusService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PermissionStatusService.name);
-  private loading: Promise<ReadonlySet<string>> | null = null;
+  private loading: Promise<void> | null = null;
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly cache: CacheService,
   ) {}
 
-  /** Nombres de los permisos inactivos, al día dentro del TTL. */
-  async inactive(now = Date.now()): Promise<ReadonlySet<string>> {
-    const loadedAt = inactivePermissionsLoadedAt();
-    if (loadedAt && now - loadedAt < PERMISSION_STATUS_TTL_MS) {
-      return inactivePermissions();
-    }
-    // Una sola lectura a la vez aunque lleguen muchas peticiones juntas.
-    this.loading ??= this.load(now).finally(() => {
-      this.loading = null;
-    });
-    return this.loading;
+  onModuleInit(): void {
+    // Primera lectura al arrancar: el estado existe antes de la primera petición.
+    void this.refresh(Date.now()).catch(() => undefined);
+    this.timer = setInterval(() => {
+      void this.refresh(Date.now()).catch(() => undefined);
+    }, PERMISSION_STATUS_TTL_MS);
+    this.timer.unref?.();
   }
 
-  /** Olvida lo cargado: la próxima consulta lee la base. */
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * Nombres de los permisos inactivos, verificados hace menos de 120 s.
+   * Lanza PERMISSION_STATUS_UNAVAILABLE si no hay un estado confiable.
+   */
+  async inactive(now = Date.now()): Promise<ReadonlySet<string>> {
+    const verifiedAt = permissionStatusVerifiedAt();
+    const fresh =
+      verifiedAt > 0 &&
+      now - verifiedAt < PERMISSION_STATUS_TTL_MS &&
+      !permissionStatusRefreshRequested();
+    if (!fresh) {
+      const recentlyFailed =
+        permissionStatusCheckedAt() > verifiedAt &&
+        now - permissionStatusCheckedAt() < PERMISSION_STATUS_RETRY_MS;
+      if (!recentlyFailed) await this.refresh(now);
+    }
+    if (!permissionStatusTrusted(now)) {
+      throw new CustomError({
+        message:
+          'No se pudo verificar el estado de los permisos. Intenta de nuevo en unos minutos.',
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        errorCode: PermissionErrorCode.PERMISSION_STATUS_UNAVAILABLE,
+      });
+    }
+    return inactivePermissions();
+  }
+
+  /** Pide releer: la próxima consulta va a la base (sin perder lo conocido). */
   invalidate(): void {
-    markInactivePermissionsStale();
+    requestPermissionStatusRefresh();
   }
 
   /**
@@ -109,27 +159,44 @@ export class PermissionStatusService {
     this.invalidate();
   }
 
-  private async load(now: number): Promise<ReadonlySet<string>> {
+  /** Una sola lectura a la vez; nunca lanza (el resultado va al registro). */
+  private refresh(now: number): Promise<void> {
+    this.loading ??= this.read(now).finally(() => {
+      this.loading = null;
+    });
+    return this.loading;
+  }
+
+  private async read(now: number): Promise<void> {
+    let timeout: NodeJS.Timeout | undefined;
     try {
-      const result: Array<{ name: string }> = await this.dataSource.query(
-        `SELECT name::text AS name FROM public.permissions WHERE status = false`,
-      );
+      const result = await Promise.race([
+        this.dataSource.query<{ name: string }[]>(
+          `SELECT name::text AS name FROM public.permissions WHERE status = false`,
+        ),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('la base no respondió a tiempo')),
+            PERMISSION_STATUS_QUERY_TIMEOUT_MS,
+          );
+        }),
+      ]);
       setInactivePermissions(
         result.map((r) => r.name),
         now,
       );
     } catch (error) {
-      if (!inactivePermissionsLoaded()) {
-        // Sin ningún dato no se puede saber qué está inactivo: falla cerrado.
-        throw error;
-      }
-      // Se reintenta al vencer el TTL, no en cada petición.
-      touchInactivePermissions(now);
+      recordFailedCheck(now);
+      const age = permissionStatusVerifiedAt()
+        ? `${Math.round((now - permissionStatusVerifiedAt()) / 1000)} s`
+        : 'nunca verificado';
       this.logger.error(
-        `No se pudo leer el estado de los permisos; sigue el último conocido: ${String(error)}`,
+        `No se pudo leer el estado de los permisos (último estado verificado: ${age}; ` +
+          `pasados ${PERMISSION_STATUS_MAX_STALE_MS / 1000} s se niega todo): ${String(error)}`,
       );
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
-    return inactivePermissions();
   }
 }
 

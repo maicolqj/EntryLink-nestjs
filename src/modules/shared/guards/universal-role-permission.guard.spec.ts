@@ -4,7 +4,14 @@ jest.mock('@nestjs/passport', () => ({
   PassportStrategy: () => class {},
 }));
 
-import { ForbiddenException, Logger, SetMetadata } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpStatus,
+  Logger,
+  SetMetadata,
+} from '@nestjs/common';
+import { CustomError } from '../utils/errors.utils';
+import { PermissionErrorCode } from '../constans/error-codes.constants';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { ValidPermissions as P } from '../../permissions/enums/valid-permissions';
@@ -165,13 +172,25 @@ describe('UniversalRolePermissionGuard — estado vigente de los permisos', () =
     expect(status.inactive).not.toHaveBeenCalled();
   });
 
-  it('si no se puede saber el estado, falla cerrado', async () => {
-    (status.inactive as jest.Mock).mockRejectedValueOnce(
-      new Error('base caída'),
-    );
-    await expect(gql('importar', user([P.IMPORT_GROWTH_DATA]))).rejects.toThrow(
-      'base caída',
-    );
+  it('si no se puede verificar el estado (base caída > 120 s), se niega con 503, también a SUPER_ADMIN', async () => {
+    const unavailable = new CustomError({
+      message: 'No se pudo verificar el estado de los permisos.',
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      errorCode: PermissionErrorCode.PERMISSION_STATUS_UNAVAILABLE,
+    });
+    (status.inactive as jest.Mock)
+      .mockRejectedValueOnce(unavailable)
+      .mockRejectedValueOnce(unavailable);
+    await expect(
+      gql('importar', user([P.IMPORT_GROWTH_DATA])),
+    ).rejects.toMatchObject({
+      errorCode: 'PERMISSION_STATUS_UNAVAILABLE',
+    });
+    await expect(gql('importar', admin)).rejects.toMatchObject({
+      errorCode: 'PERMISSION_STATUS_UNAVAILABLE',
+    });
+    // Una operación sin permisos exigidos no depende del estado.
+    await expect(gql('libre', user([]))).resolves.toBe(true);
   });
 
   it('la verificación de servicio (actorHas) también ignora un permiso inactivo; SUPER_ADMIN pasa', () => {
