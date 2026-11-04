@@ -138,7 +138,9 @@ export class TokenService {
       relations: ['permissions'],
     });
 
+    // Un permiso inactivo no entra al token aunque el rol lo tenga asignado.
     const permissions: ValidPermissions[] = (complexRole?.permissions ?? [])
+      .filter((p) => p.status !== false)
       .map((p) => p.name)
       .filter((p) => Object.values(ValidPermissions).includes(p));
 
@@ -195,9 +197,14 @@ export class TokenService {
     overrides: readonly UserPermissionOverride[] = [],
   ): ValidPermissions[] {
     const perms = new Set<ValidPermissions>();
+    // Un permiso inactivo no entra al token, ni por un rol (aunque esté
+    // asignado) ni por una excepción GRANT. DENY sigue quitando siempre.
     this.scopedUserRoles(user, roleScope).forEach((ur) => {
       ur.role?.permissions?.forEach((p) => {
-        if (Object.values(ValidPermissions).includes(p.name)) {
+        if (
+          p.status !== false &&
+          Object.values(ValidPermissions).includes(p.name)
+        ) {
           perms.add(p.name);
         }
       });
@@ -207,7 +214,7 @@ export class TokenService {
       const name = o.permission?.name;
       if (!name || !Object.values(ValidPermissions).includes(name)) continue;
       if (o.effect === PermissionOverrideEffect.DENY) perms.delete(name);
-      else if (!roleScope) perms.add(name);
+      else if (!roleScope && o.permission?.status !== false) perms.add(name);
     }
     return Array.from(perms);
   }

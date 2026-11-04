@@ -13,6 +13,7 @@ import { ValidRoles } from '../roles/enums/valid-roles';
 import { ROLES_TO_SEED } from '../../core/database/seeds/datas/roles.data.seed';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { UniversalRolePermissionGuard } from '../shared/guards/universal-role-permission.guard';
+import { PermissionStatusService } from '../permissions/services/permission-status.service';
 import { GrowthActivityResolver } from './activity/resolvers/growth-activity.resolver';
 import { ActivityLogService } from './activity/services/activity-log.service';
 import { GrowthComplianceResolver } from './compliance/resolvers/growth-compliance.resolver';
@@ -85,7 +86,10 @@ const operations: Operation[] = RESOLVERS.flatMap((resolver) =>
 const permissionsOf = (role: ValidRoles): P[] =>
   ROLES_TO_SEED.find((r) => r.name === role)?.permissions ?? [];
 
-const guard = new UniversalRolePermissionGuard(new Reflector());
+// Todos los permisos activos: aquí se prueba la matriz rol × operación.
+const guard = new UniversalRolePermissionGuard(new Reflector(), {
+  inactive: () => Promise.resolve(new Set<string>()),
+} as unknown as PermissionStatusService);
 
 async function allowed(
   op: Operation,

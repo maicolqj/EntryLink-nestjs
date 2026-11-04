@@ -1,6 +1,6 @@
 {
   "name": "phone-dialer-nestjs",
-  "version": "0.41.0",
+  "version": "0.42.0",
   "description": "",
   "author": "",
   "private": true,
@@ -144,6 +144,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "setupFiles": [
+      "<rootDir>/../test/setup/permission-status.ts"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": [
