@@ -34,6 +34,7 @@ import {
 } from '../imports.enums';
 import { mappingProblems, suggestMapping } from '../shared/field-catalog';
 import { ImportFileError, readSpreadsheet } from '../shared/file-reader';
+import { previousBatchesQuery } from '../shared/previous-batches';
 import { buildImportReport, maskRawRow } from '../shared/report';
 import { TARGET_KIND } from './import-commit.service';
 import {
@@ -223,9 +224,15 @@ export class ImportsService {
           order: { rowNumber: 'ASC' },
           take: PREVIEW_ROWS,
         });
+    // Solo los lotes que el actor podría abrir: sin VIEW_ALL, los propios.
+    const query = previousBatchesQuery(
+      batch.fileSha256,
+      id,
+      this.guards.canSeeAll(actor) ? null : actor.sub,
+    );
     const previous: Array<{ id: string }> = await this.dataSource.query(
-      `SELECT id FROM growth.import_batches WHERE file_sha256 = $1 AND id <> $2 ORDER BY created_at`,
-      [batch.fileSha256, id],
+      query.sql,
+      query.params,
     );
     return {
       headers: batch.headers,
