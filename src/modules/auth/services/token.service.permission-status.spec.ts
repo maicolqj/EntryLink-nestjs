@@ -37,6 +37,7 @@ describe('TokenService — permisos inactivos', () => {
       id: 'user-1',
       email: 'ana@example.com',
       tokenVersion: 3,
+      status: 'active',
       complexId: 'complex-1',
       userRoles: [
         {

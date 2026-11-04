@@ -39,6 +39,7 @@ describe('TokenService — alcance de roles de la sesión', () => {
     id: 'user-1',
     email: 'ana@example.com',
     tokenVersion: 0,
+    status: 'active',
     complexId: 'complex-1',
     userRoles: [
       {
@@ -282,6 +283,56 @@ describe('TokenService — alcance de roles de la sesión', () => {
     expect(rows[0].roleScope).toBeNull();
   });
 
+  describe('renovación de una cuenta que ya no está activa', () => {
+    const stored = (status: string, extra: Record<string, unknown> = {}) =>
+      ({
+        id: 'rt-1',
+        user: { ...user, status, ...extra },
+        sessionId: 'sess-1',
+        deviceFingerprint: 'fp-1',
+        rememberMe: true,
+        refreshExpiry: '180d',
+        roleScope: null,
+      }) as any;
+
+    it.each([
+      'suspended',
+      'BANNED',
+      'inactive',
+      'pending_verification',
+      'deleted',
+    ])('estado %s: no entrega tokens y revoca la familia', async (status) => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(stored(status));
+
+      await expect(
+        service.rotateRefreshToken('rt-viejo', device),
+      ).rejects.toMatchObject({ errorCode: 'SESSION_TERMINATED' });
+
+      expect(signed).toHaveLength(0);
+      expect(rows).toHaveLength(0);
+      expect(refreshTokenRepo.update).toHaveBeenCalledWith(
+        { tokenFamily: 'fam-1', isRevoked: false },
+        { isRevoked: true, revokedReason: 'user_not_active' },
+      );
+    });
+
+    it('cuenta borrada (deletedAt): tampoco renueva', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(
+        stored('active', { deletedAt: new Date() }),
+      );
+      await expect(
+        service.rotateRefreshToken('rt-viejo', device),
+      ).rejects.toMatchObject({ errorCode: 'SESSION_TERMINATED' });
+    });
+
+    it('cuenta activa: renueva como siempre', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(stored('active'));
+      await expect(
+        service.rotateRefreshToken('rt-viejo', device),
+      ).resolves.toMatchObject({ sessionId: 'sess-1' });
+    });
+  });
+
   describe('cerrar sesiones al cambiar la contraseña', () => {
     type UpdateCall = [
       { userId: string; isRevoked: boolean; sessionId?: { value?: string } },
@@ -359,12 +410,17 @@ describe('TokenService — alcance de roles de la sesión', () => {
 
       await service.generateTokenPair(user, device);
 
-      expect(accessPayload().permissions).toEqual([ValidPermissions.SUPERADMIN]);
+      expect(accessPayload().permissions).toEqual([
+        ValidPermissions.SUPERADMIN,
+      ]);
     });
 
     it('un GRANT suma un permiso que ningún rol le da', async () => {
       overrideRepo.find.mockResolvedValueOnce([
-        override(ValidPermissions.EDIT_RESIDENTS, PermissionOverrideEffect.GRANT),
+        override(
+          ValidPermissions.EDIT_RESIDENTS,
+          PermissionOverrideEffect.GRANT,
+        ),
       ]);
 
       await service.generateTokenPair(user, device);
@@ -376,7 +432,10 @@ describe('TokenService — alcance de roles de la sesión', () => {
 
     it('un GRANT no aplica en una sesión acotada a residente; un DENY sí', async () => {
       overrideRepo.find.mockResolvedValueOnce([
-        override(ValidPermissions.EDIT_RESIDENTS, PermissionOverrideEffect.GRANT),
+        override(
+          ValidPermissions.EDIT_RESIDENTS,
+          PermissionOverrideEffect.GRANT,
+        ),
         override(ValidPermissions.VIEW_PACKAGES, PermissionOverrideEffect.DENY),
       ]);
 

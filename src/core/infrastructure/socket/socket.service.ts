@@ -41,4 +41,14 @@ export class SocketService {
     this.server?.to(`unit:${unitId}`).emit(event, data);
     this.logger.debug(`emit ${event} → unit:${unitId}`);
   }
+
+  /**
+   * Cierra todos los sockets del usuario, en todas las instancias (el
+   * adaptador de Redis reparte la orden). Al reconectar, el handshake vuelve a
+   * validar el token y una cuenta suspendida ya no entra.
+   */
+  disconnectUser(userId: string): void {
+    this.server?.in(`user:${userId}`).disconnectSockets(true);
+    this.logger.debug(`disconnect → user:${userId}`);
+  }
 }

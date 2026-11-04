@@ -11,7 +11,7 @@ import {
 import { Logger, UseFilters } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { TokenService } from '../../../modules/auth/services/token.service';
-import { SessionService } from '../../../modules/auth/services/session.service';
+import { AccessTokenValidatorService } from '../../../modules/auth/services/access-token-validator.service';
 import { UnitService } from '../../../modules/residential-complex/services/unit.service';
 import { SocketService } from './socket.service';
 import { WsExceptionFilter } from './ws-exception.filter';
@@ -34,7 +34,7 @@ export class SocketGateway
 
   constructor(
     private readonly tokenService: TokenService,
-    private readonly sessionService: SessionService,
+    private readonly accessTokenValidator: AccessTokenValidatorService,
     private readonly socketService: SocketService,
     private readonly unitService: UnitService,
   ) {}
@@ -56,11 +56,13 @@ export class SocketGateway
 
         if (!token) return next(new Error('No autorizado'));
 
-        const payload = await this.tokenService.verifyAccessToken(token);
-        const isActive = await this.sessionService.isSessionActive(
-          payload.sessionId,
+        // Firma, vigencia y lista negra; después, la misma validación que HTTP:
+        // versión del token, cuenta activa y sesión viva. Antes solo se miraba
+        // la sesión, así que un token anterior a una suspensión o a un cambio
+        // de rol seguía abriendo el socket hasta vencer (15 min).
+        const payload = await this.accessTokenValidator.validate(
+          await this.tokenService.verifyAccessToken(token),
         );
-        if (!isActive) return next(new Error('No autorizado'));
 
         client.data.user = payload;
 

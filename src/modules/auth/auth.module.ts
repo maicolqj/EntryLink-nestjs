@@ -15,6 +15,7 @@ import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.contro
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
+import { AccessTokenValidatorService } from './services/access-token-validator.service';
 import { RefreshTokensCleanupCron } from './cron/refresh-tokens-cleanup.cron';
 import { OtpService } from './services/otp.service';
 import { ResidentDeviceService } from './services/resident-device.service';
@@ -91,6 +92,7 @@ import { AuditModule } from '../audit/audit.module';
     AuthService,
     TokenService,
     SessionService,
+    AccessTokenValidatorService,
     OtpService,
     ResidentDeviceService,
     WhatsAppService,
@@ -114,6 +116,7 @@ import { AuditModule } from '../audit/audit.module';
     AuthService,
     TokenService,
     SessionService,
+    AccessTokenValidatorService,
     JwtModule,
     PassportModule,
   ],
