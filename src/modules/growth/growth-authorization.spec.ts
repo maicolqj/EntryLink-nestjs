@@ -210,6 +210,11 @@ describe('Autorización de la Growth Suite', () => {
         'growthSimulateScoring',
         'growthTeamWorkload',
         'growthMergePreview',
+        // Plantillas personales y del equipo
+        'growthCreateImportTemplate',
+        'growthUpdateImportTemplate',
+        'growthShareImportTemplate',
+        'growthArchiveImportTemplate',
         // Entrega 1E-C-0
         'growthScoringVersions',
         'growthScoringVersion',

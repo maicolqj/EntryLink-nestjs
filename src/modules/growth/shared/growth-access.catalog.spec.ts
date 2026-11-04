@@ -16,6 +16,8 @@ import {
   GROWTH_DEDUPE_ROLE_GRANTS,
 } from '../../../core/database/migrations/1781010700000-GrowthDedupeScoringPermissionsData';
 import { GROWTH_IMPORT_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781010900000-GrowthImportPermissionsEnum';
+import { GROWTH_TEMPLATE_PERMISSION_ENUM_VALUES } from '../../../core/database/migrations/1781011300000-GrowthImportTemplatesPermissionEnum';
+import { GROWTH_TEMPLATE_PERMISSION_ROWS } from '../../../core/database/migrations/1781011400000-GrowthImportTemplatesScope';
 import { GROWTH_SCORING_APPROVAL_ENUM_VALUES } from '../../../core/database/migrations/1781011500000-GrowthScoringApprovalPermissionEnum';
 import { GROWTH_SCORING_APPROVAL_PERMISSION_ROWS } from '../../../core/database/migrations/1781011600000-CreateGrowthScoringVersions';
 import {
@@ -46,6 +48,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
     ...GROWTH_PROSPECT_PERMISSION_ROWS,
     ...GROWTH_DEDUPE_PERMISSION_ROWS,
     ...GROWTH_IMPORT_PERMISSION_ROWS,
+    ...GROWTH_TEMPLATE_PERMISSION_ROWS,
     ...GROWTH_SCORING_APPROVAL_PERMISSION_ROWS,
   ];
 
@@ -87,6 +90,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
         ...GROWTH_PROSPECT_PERMISSION_ENUM_VALUES,
         ...GROWTH_DEDUPE_PERMISSION_ENUM_VALUES,
         ...GROWTH_IMPORT_PERMISSION_ENUM_VALUES,
+        ...GROWTH_TEMPLATE_PERMISSION_ENUM_VALUES,
         ...GROWTH_SCORING_APPROVAL_ENUM_VALUES,
       ]),
     ).toEqual(sorted(GROWTH_PERMISSIONS.map((p) => p.name)));
@@ -188,6 +192,7 @@ describe('Catálogo de acceso de la Growth Suite', () => {
     );
 
     it('existen y no están en ningún rol del seed ni de la suite', () => {
+      expect(manual).toContain(ValidPermissions.MANAGE_GROWTH_IMPORT_TEMPLATES);
       expect(manual).toContain(ValidPermissions.APPROVE_GROWTH_SCORING);
       // El token toma los permisos del rol sin mirar su estado: un rol activo
       // con el permiso lo tendría activo de hecho.
