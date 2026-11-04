@@ -12,6 +12,12 @@ Este documento no contiene ningún valor secreto. **Nada de esto se ha ejecutado
 | Migración de carpetas (`scripts/migrate-r2-layout.ts`) | las mismas de la API | Script manual de una sola vez. Imprime bucket y conteos, no las llaves |
 | `docker-compose.prod.yml` / Coolify | referencias `${R2_…}` | Inyección al contenedor; no hay valores en el repositorio |
 
+**Confirmado en Cloudflare y Coolify (2026-11-04):**
+- el token de la API tiene alcance **solo sobre el bucket de archivos**;
+- en Coolify no existen `R2_BACKUP_BUCKET` ni Scheduled Tasks: hoy no hay respaldo en R2.
+
+Por eso los respaldos no quedaron expuestos por esta llave. El script, tal como está, usaría las mismas llaves que la API; por eso el plan crea un token propio para el respaldo.
+
 **Las mismas llaves (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`) sirven a la API y al respaldo.** Si el token de R2 tiene alcance sobre los dos buckets (no se puede saber desde el repositorio: se ve en Cloudflare → R2 → *Manage API tokens*), quien tenga la llave puede leer y borrar los respaldos de la base completa.
 
 ## 2. Cómo se expusieron
@@ -37,7 +43,7 @@ Este documento no contiene ningún valor secreto. **Nada de esto se ha ejecutado
 ## 3. Qué se considera comprometido
 
 1. **El par `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` que estaba vigente entre el 2026-05-16 y hoy.** Quitar el log no lo invalida. Mientras no se revoque, quien haya visto un log de esa época puede leer, escribir y borrar en los buckets de su alcance.
-2. **Los respaldos en `R2_BACKUP_BUCKET`**, si el token también los alcanza: tienen la base completa, con datos personales de residentes. Hay que tratar su confidencialidad como no garantizada y revisar su integridad (que no se hayan borrado o reemplazado).
+2. ~~Los respaldos en `R2_BACKUP_BUCKET`~~: **descartado** (el token solo alcanza el bucket de archivos y no hay bucket de respaldos configurado). Era el riesgo si el token también los alcanzaba: tienen la base completa, con datos personales de residentes. Hay que tratar su confidencialidad como no garantizada y revisar su integridad (que no se hayan borrado o reemplazado).
 3. `R2_ACCOUNT_ID` no es una credencial por sí solo (identifica la cuenta en el endpoint), pero también se imprimió. No hace falta cambiarlo. Basta con saber que es público.
 
 ## 4. Plan de rotación (cada paso requiere autorización)
