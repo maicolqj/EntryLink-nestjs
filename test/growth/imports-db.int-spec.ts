@@ -645,6 +645,28 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       );
     });
 
+    it('el código anterior (sin dueño) sigue guardando: queda del equipo y su autor es el dueño', async () => {
+      // Lo que hace la imagen anterior si se vuelve atrás sin revertir la migración.
+      const name = `Vieja IT ${Date.now()}`;
+      const [row]: Array<{ scope: string; owner_user_id: string }> =
+        await ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, created_by_user_id)
+         VALUES ('ORGANIZATIONS', $1, '[{"header":"x","field":"legalName"}]', $2)
+         RETURNING scope, owner_user_id`,
+          [name, LIMITED],
+        );
+      expect(row).toEqual({ scope: 'TEAM', owner_user_id: LIMITED });
+      // El código nuevo, que siempre manda el dueño, no lo toca.
+      const [own]: Array<{ scope: string; owner_user_id: string }> =
+        await ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, scope, owner_user_id, created_by_user_id)
+         VALUES ('ORGANIZATIONS', $1, '[{"header":"x","field":"legalName"}]', 'PERSONAL', $2, $2)
+         RETURNING scope, owner_user_id`,
+          [`${name} propia`, MANAGER],
+        );
+      expect(own).toEqual({ scope: 'PERSONAL', owner_user_id: MANAGER });
+    });
+
     it('guardar el mapeo de un lote crea una personal y no pisa la de nadie', async () => {
       const shared = await templates.create(
         {
