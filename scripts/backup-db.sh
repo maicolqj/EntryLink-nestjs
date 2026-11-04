@@ -47,11 +47,17 @@ docker exec -e PGPASSWORD="$PASSDB_POSTGRES" "$PG_CONTAINER" \
   | gzip -9 > "$tmp"
 echo "[backup] dump generado: $(du -h "$tmp" | cut -f1)"
 
+# Las llaves pasan por el entorno, no por la línea de comandos: `-e NOMBRE`
+# sin valor las toma del entorno de este script. Con `-e NOMBRE=valor` el
+# secreto quedaba visible en `ps` y en el historial del host mientras corría.
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+
 run_aws() {
   docker run --rm \
     -v "$(dirname "$tmp"):/data" \
-    -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
-    -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+    -e AWS_ACCESS_KEY_ID \
+    -e AWS_SECRET_ACCESS_KEY \
     -e AWS_DEFAULT_REGION=auto \
     amazon/aws-cli:latest \
     --endpoint-url "$ENDPOINT" "$@"
