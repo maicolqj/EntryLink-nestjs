@@ -140,7 +140,12 @@ export class TokenService {
     });
 
     // Un permiso inactivo no entra al token aunque el rol lo tenga asignado.
-    const permissions: ValidPermissions[] = (complexRole?.permissions ?? [])
+    // COMPLEX_ROL no se puede inactivar (RolesService); si lo estuviera por
+    // SQL, la cuenta sale sin rol ni permisos, igual que un usuario.
+    const complexRoleActive = !!complexRole && complexRole.status !== false;
+    const permissions: ValidPermissions[] = (
+      complexRoleActive ? complexRole.permissions : []
+    )
       .filter((p) => p.status !== false)
       .map((p) => p.name)
       .filter((p) => Object.values(ValidPermissions).includes(p));
@@ -152,7 +157,7 @@ export class TokenService {
       entityType: 'complex',
       tokenVersion: complex.tokenVersion ?? 0,
       sessionId,
-      roles: [ValidRoles.COMPLEX_ROL],
+      roles: complexRoleActive ? [ValidRoles.COMPLEX_ROL] : [],
       permissions,
       complexId: complex.id,
     };
@@ -220,12 +225,17 @@ export class TokenService {
     return Array.from(perms);
   }
 
-  /** Roles del usuario ya filtrados por el alcance de la sesión. */
+  /**
+   * Roles del usuario ya filtrados por el alcance de la sesión. Un rol
+   * inactivo no entra: ni su nombre ni sus permisos van en el token (al
+   * emitir ni al renovar). Una excepción GRANT no lo reactiva: solo agrega su
+   * propio permiso, si está activo.
+   */
   private scopedUserRoles(user: User, roleScope?: readonly ValidRoles[]) {
     if (!user.userRoles?.length) return [];
 
     return user.userRoles
-      .filter((ur) => ur.role)
+      .filter((ur) => ur.role && ur.role.status !== false)
       .filter(
         (ur) => !roleScope || roleScope.includes(ur.role.name as ValidRoles),
       );

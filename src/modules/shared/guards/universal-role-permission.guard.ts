@@ -59,19 +59,25 @@ export class UniversalRolePermissionGuard implements CanActivate {
       ValidPermissions[]
     >('permissions', [context.getHandler(), context.getClass()]);
 
-    // 🔹 Estado vigente: solo se consulta si la operación exige permisos.
-    const inactive = requiredPermissions?.length
+    // 🔹 Estado vigente: solo se consulta si la operación exige roles o
+    // permisos (una sola lectura trae los dos; 30 s de caché por proceso).
+    const restricted = !!(requiredPermissions?.length || requiredRoles?.length);
+    const inactive = restricted
       ? await this.permissionStatus.inactive()
+      : new Set<string>();
+    const inactiveRoles = restricted
+      ? await this.permissionStatus.inactiveRoleNames()
       : new Set<string>();
     const inactiveRequired = (requiredPermissions ?? []).filter((p) =>
       inactive.has(p),
     );
+    // Un rol inactivo no cuenta aunque venga en un token emitido antes.
+    const activeRoles: string[] = (
+      Array.isArray(user.roles) ? (user.roles as string[]) : []
+    ).filter((r) => !inactiveRoles.has(r));
 
     // 🔹 Super Admin bypass (con traza si usa un permiso inactivo)
-    if (
-      Array.isArray(user.roles) &&
-      user.roles.includes(ValidRoles.SUPER_ADMIN_ROL)
-    ) {
+    if (activeRoles.includes(ValidRoles.SUPER_ADMIN_ROL)) {
       if (inactiveRequired.length) {
         this.logger.warn(
           `SUPER_ADMIN ${user.sub} usó ${context.getClass().name}.${context.getHandler().name} ` +
@@ -96,7 +102,7 @@ export class UniversalRolePermissionGuard implements CanActivate {
 
     // 🔹 Evaluar cada condición por separado
     const hasValidRole = requiredRoles?.length
-      ? requiredRoles.some((role) => user.roles?.includes(role))
+      ? requiredRoles.some((role) => activeRoles.includes(role))
       : null; // null = no se configuró, no se evalúa
 
     // Un permiso inactivo no cuenta aunque el token lo traiga.

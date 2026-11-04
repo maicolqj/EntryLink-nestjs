@@ -49,6 +49,11 @@ const status = {
       await import('../permission-status/permission-status.registry');
     return inactivePermissions();
   }),
+  inactiveRoleNames: jest.fn(async () => {
+    const { inactiveRoles } =
+      await import('../permission-status/permission-status.registry');
+    return inactiveRoles();
+  }),
 } as unknown as PermissionStatusService;
 
 const guard = new UniversalRolePermissionGuard(new Reflector(), status);
@@ -164,12 +169,53 @@ describe('UniversalRolePermissionGuard — estado vigente de los permisos', () =
     });
   }
 
-  it('sin permisos exigidos no consulta el estado (sin costo por operación libre)', async () => {
+  it('una operación libre no consulta el estado (sin costo)', async () => {
     await expect(gql('libre', user([]))).resolves.toBe(true);
-    await expect(
-      gql('soloRol', user([], [ValidRoles.GROWTH_MANAGER_ROL])),
-    ).resolves.toBe(true);
+    await expect(gql('libre', admin)).resolves.toBe(true);
     expect(status.inactive).not.toHaveBeenCalled();
+  });
+
+  describe('roles inactivos', () => {
+    it('rol activo: la operación que lo exige pasa', async () => {
+      setInactivePermissions([], Date.now(), []);
+      await expect(
+        gql('soloRol', user([], [ValidRoles.GROWTH_MANAGER_ROL])),
+      ).resolves.toBe(true);
+    });
+
+    it('rol inactivo aunque venga en el token: no pasa', async () => {
+      setInactivePermissions([], Date.now(), [ValidRoles.GROWTH_MANAGER_ROL]);
+      await expect(
+        gql('soloRol', user([], [ValidRoles.GROWTH_MANAGER_ROL])),
+      ).resolves.toBe(false);
+      await expect(
+        rest('soloRol', user([], [ValidRoles.GROWTH_MANAGER_ROL])),
+      ).resolves.toBe(false);
+    });
+
+    it('al reactivarlo, el mismo token vuelve a pasar', async () => {
+      setInactivePermissions([], Date.now(), [ValidRoles.GROWTH_MANAGER_ROL]);
+      const u = user([], [ValidRoles.GROWTH_MANAGER_ROL]);
+      await expect(gql('soloRol', u)).resolves.toBe(false);
+      setInactivePermissions([], Date.now(), []);
+      await expect(gql('soloRol', u)).resolves.toBe(true);
+    });
+
+    it('SUPER_ADMIN_ROL inactivo (solo posible por SQL): no da el paso de administrador', async () => {
+      setInactivePermissions([], Date.now(), [ValidRoles.SUPER_ADMIN_ROL]);
+      await expect(gql('importar', admin)).resolves.toBe(false);
+      await expect(gql('soloRol', admin)).resolves.toBe(false);
+    });
+
+    it('un rol inactivo no tapa a otro activo del mismo usuario', async () => {
+      setInactivePermissions([], Date.now(), [ValidRoles.SALES_ROL]);
+      await expect(
+        gql(
+          'soloRol',
+          user([], [ValidRoles.SALES_ROL, ValidRoles.GROWTH_MANAGER_ROL]),
+        ),
+      ).resolves.toBe(true);
+    });
   });
 
   it('si no se puede verificar el estado (base caída > 120 s), se niega con 503, también a SUPER_ADMIN', async () => {

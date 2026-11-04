@@ -89,6 +89,7 @@ const permissionsOf = (role: ValidRoles): P[] =>
 // Todos los permisos activos: aquí se prueba la matriz rol × operación.
 const guard = new UniversalRolePermissionGuard(new Reflector(), {
   inactive: () => Promise.resolve(new Set<string>()),
+  inactiveRoleNames: () => Promise.resolve(new Set<string>()),
 } as unknown as PermissionStatusService);
 
 async function allowed(

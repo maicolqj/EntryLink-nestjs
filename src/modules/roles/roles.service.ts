@@ -36,6 +36,19 @@ import {
 } from '../shared/constans/error-codes.constants';
 import { PaginationReponse } from '../shared/dto/responses/pagination-object.response';
 import { UserRole } from '../users/entities/user_has_roles.entity';
+import { UserStatus } from '../users/enums/user.enums';
+import { PermissionStatusService } from '../permissions/services/permission-status.service';
+
+/**
+ * Roles que nunca se inactivan: sin SUPER_ADMIN_ROL el sistema queda sin
+ * administración, y RESIDENT_ROL y COMPLEX_ROL son la base de toda cuenta de
+ * residente y de complejo.
+ */
+export const NON_DEACTIVATABLE_ROLES: readonly ValidRoles[] = [
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.RESIDENT_ROL,
+  ValidRoles.COMPLEX_ROL,
+];
 
 @Injectable()
 export class RolesService {
@@ -50,6 +63,7 @@ export class RolesService {
     private readonly permissionsRepository: Repository<Permission>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly permissionStatus: PermissionStatusService,
   ) {}
 
   async onModuleInit() {
@@ -1500,12 +1514,14 @@ export class RolesService {
       // 1. Verificar si el rol existe
       const existingRole = await queryRunner.manager.findOne(Role, {
         where: { id },
+        // `userRoles` (antes 'UserRoles', que no existe: TypeORM rechazaba la
+        // consulta y ningún rol se podía inactivar).
         relations: [
           'parent',
           'children',
           'permissions',
-          'UserRoles',
-          'UserRoles.user',
+          'userRoles',
+          'userRoles.user',
         ],
       });
 
@@ -1533,7 +1549,10 @@ export class RolesService {
       }
 
       // 3. Verificar si es un rol del sistema crítico
-      if (existingRole.isSystem) {
+      if (
+        existingRole.isSystem ||
+        NON_DEACTIVATABLE_ROLES.includes(existingRole.name)
+      ) {
         this.logger.warn(
           `Intento de eliminar rol crítico del sistema: ${existingRole.name}`,
         );
@@ -1565,9 +1584,11 @@ export class RolesService {
       }
 
       // 5. Verificar si hay usuarios activos asignados a este rol
+      // Cuenta solo quien está activo: `user.status` es un texto y antes
+      // cualquier estado (también 'suspended') contaba como activo.
       const activeUserAssignments =
         existingRole.userRoles?.filter(
-          (UserRole) => UserRole.user.status && UserRole.role.status,
+          (ur) => ur.user?.status === UserStatus.ACTIVE,
         ) || [];
 
       if (activeUserAssignments.length > 0) {
@@ -1632,7 +1653,14 @@ export class RolesService {
         relations: ['parent', 'permissions'],
       });
 
+      // Quien lo tenga (aunque no esté activo) renueva sin él.
+      const holders = await this.permissionStatus.bumpRoleHolders(
+        id,
+        queryRunner.manager,
+      );
+
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Rol eliminado exitosamente (soft delete): ${deletedRole.id} - ${deletedRole.name}`,
@@ -1788,7 +1816,15 @@ export class RolesService {
         await this.updateParentRolesWithInheritedPermissions(restoredRole);
       }
 
+      // Reactivar no reactiva sesiones: quien lo tenga lo recibe en el token
+      // siguiente, con los permisos activos que tenga el rol hoy.
+      const holders = await this.permissionStatus.bumpRoleHolders(
+        id,
+        queryRunner.manager,
+      );
+
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Rol restaurado exitosamente: ${restoredRole.id} - ${restoredRole.name}`,

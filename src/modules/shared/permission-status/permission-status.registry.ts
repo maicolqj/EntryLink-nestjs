@@ -1,5 +1,5 @@
 /**
- * Permisos inactivos conocidos por este proceso, para consultas síncronas
+ * Permisos y roles inactivos conocidos por este proceso, para consultas síncronas
  * (`actorHas` de la Growth Suite y el guard). Lo mantiene
  * PermissionStatusService; aquí solo se guarda y se lee.
  *
@@ -15,6 +15,8 @@
 export const PERMISSION_STATUS_MAX_STALE_MS = 120_000;
 
 let inactive: ReadonlySet<string> = new Set<string>();
+/** Roles inactivos: su nombre no cuenta aunque venga en un token viejo. */
+let inactiveRoleNames: ReadonlySet<string> = new Set<string>();
 /** Última lectura exitosa de la base (0 = nunca). */
 let verifiedAt = 0;
 /** Último intento, exitoso o no (para no reintentar en cada petición). */
@@ -25,8 +27,10 @@ let refreshRequested = false;
 export function setInactivePermissions(
   names: Iterable<string>,
   at = Date.now(),
+  roleNames: Iterable<string> = [],
 ): void {
   inactive = new Set(names);
+  inactiveRoleNames = new Set(roleNames);
   verifiedAt = at;
   checkedAt = at;
   refreshRequested = false;
@@ -47,6 +51,10 @@ export function permissionStatusRefreshRequested(): boolean {
 
 export function inactivePermissions(): ReadonlySet<string> {
   return inactive;
+}
+
+export function inactiveRoles(): ReadonlySet<string> {
+  return inactiveRoleNames;
 }
 
 export function permissionStatusVerifiedAt(): number {
@@ -73,6 +81,15 @@ export function isPermissionInactive(name: string, now = Date.now()): boolean {
 }
 
 /**
+ * Para comprobaciones síncronas de rol: un rol inactivo, o cualquier rol si el
+ * estado no es confiable, no cuenta.
+ */
+export function isRoleInactive(name: string, now = Date.now()): boolean {
+  if (!permissionStatusTrusted(now)) return true;
+  return inactiveRoleNames.has(name);
+}
+
+/**
  * Solo para pruebas (setupFiles de jest): todos los permisos activos y un
  * estado que no vence, sin levantar PermissionStatusService. Las pruebas del
  * estado lo reinician con `resetInactivePermissions()`. Nunca en producción.
@@ -82,6 +99,7 @@ export function trustPermissionStatusForTests(): void {
     throw new Error('trustPermissionStatusForTests no se usa en producción');
   }
   inactive = new Set<string>();
+  inactiveRoleNames = new Set<string>();
   verifiedAt = Number.MAX_SAFE_INTEGER;
   checkedAt = Number.MAX_SAFE_INTEGER;
   refreshRequested = false;
@@ -90,6 +108,7 @@ export function trustPermissionStatusForTests(): void {
 /** Solo para pruebas: vuelve al estado inicial (nada cargado). */
 export function resetInactivePermissions(): void {
   inactive = new Set<string>();
+  inactiveRoleNames = new Set<string>();
   verifiedAt = 0;
   checkedAt = 0;
   refreshRequested = false;

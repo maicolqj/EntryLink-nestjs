@@ -191,6 +191,140 @@ describe('TokenService — permisos inactivos', () => {
     );
   });
 
+  describe('roles inactivos', () => {
+    const withRoles = (
+      roles: Array<{ name: ValidRoles; status: boolean; perms: P[] }>,
+    ) =>
+      ({
+        id: 'user-1',
+        email: 'ana@example.com',
+        tokenVersion: 3,
+        complexId: 'complex-1',
+        userRoles: roles.map((r) => ({
+          role: {
+            name: r.name,
+            status: r.status,
+            permissions: r.perms.map((n) => perm(n)),
+          },
+        })),
+      }) as unknown as User;
+
+    it('un rol inactivo no entra al token: ni su nombre ni sus permisos', async () => {
+      await service.generateTokenPair(
+        withRoles([
+          {
+            name: ValidRoles.GROWTH_MANAGER_ROL,
+            status: false,
+            perms: [P.IMPORT_GROWTH_DATA],
+          },
+          {
+            name: ValidRoles.RESIDENT_ROL,
+            status: true,
+            perms: [P.VIEW_PACKAGES],
+          },
+        ]),
+        device,
+      );
+      expect(access().roles).toEqual([ValidRoles.RESIDENT_ROL]);
+      expect(access().permissions).toEqual([P.VIEW_PACKAGES]);
+    });
+
+    it('un permiso que también da otro rol activo se conserva', async () => {
+      await service.generateTokenPair(
+        withRoles([
+          {
+            name: ValidRoles.GROWTH_MANAGER_ROL,
+            status: false,
+            perms: [P.IMPORT_GROWTH_DATA],
+          },
+          {
+            name: ValidRoles.GROWTH_RESEARCHER_ROL,
+            status: true,
+            perms: [P.IMPORT_GROWTH_DATA],
+          },
+        ]),
+        device,
+      );
+      expect(access().roles).toEqual([ValidRoles.GROWTH_RESEARCHER_ROL]);
+      expect(access().permissions).toEqual([P.IMPORT_GROWTH_DATA]);
+    });
+
+    it('GRANT agrega solo su permiso (activo) y no reactiva el rol; DENY sigue mandando', async () => {
+      overrideRepo.find.mockResolvedValueOnce([
+        {
+          effect: PermissionOverrideEffect.GRANT,
+          permission: { name: P.VIEW_GROWTH_TEAM, status: true } as never,
+        },
+        {
+          effect: PermissionOverrideEffect.DENY,
+          permission: { name: P.VIEW_PACKAGES, status: true } as never,
+        },
+      ]);
+      await service.generateTokenPair(
+        withRoles([
+          {
+            name: ValidRoles.GROWTH_MANAGER_ROL,
+            status: false,
+            perms: [P.IMPORT_GROWTH_DATA],
+          },
+          {
+            name: ValidRoles.RESIDENT_ROL,
+            status: true,
+            perms: [P.VIEW_PACKAGES],
+          },
+        ]),
+        device,
+      );
+      expect(access().roles).toEqual([ValidRoles.RESIDENT_ROL]);
+      expect(access().permissions).toEqual([P.VIEW_GROWTH_TEAM]);
+    });
+
+    it('la renovación aplica la misma regla, y al reactivarlo vuelve', async () => {
+      const stored = (status: boolean) => ({
+        id: 'rt-1',
+        user: {
+          ...withRoles([
+            {
+              name: ValidRoles.GROWTH_MANAGER_ROL,
+              status,
+              perms: [P.IMPORT_GROWTH_DATA],
+            },
+          ]),
+          status: 'active',
+        },
+        sessionId: 'sess-1',
+        deviceFingerprint: 'fp-1',
+        rememberMe: true,
+        refreshExpiry: '180d',
+        roleScope: null,
+      });
+      refreshTokenRepo.findOne.mockResolvedValueOnce(stored(false));
+      await service.rotateRefreshToken('rt-viejo', device);
+      expect(access().roles).toEqual([]);
+      expect(access().permissions).toEqual([]);
+
+      signed = [];
+      refreshTokenRepo.findOne.mockResolvedValueOnce(stored(true));
+      await service.rotateRefreshToken('rt-viejo-2', device);
+      expect(access().roles).toEqual([ValidRoles.GROWTH_MANAGER_ROL]);
+      expect(access().permissions).toEqual([P.IMPORT_GROWTH_DATA]);
+    });
+
+    it('cuenta del complejo con COMPLEX_ROL inactivo (por SQL): sin rol ni permisos', async () => {
+      roleRepo.findOne.mockResolvedValueOnce({
+        name: ValidRoles.COMPLEX_ROL,
+        status: false,
+        permissions: [perm(P.VIEW_PACKAGES)],
+      });
+      await service.generateTokenPairForComplex(
+        { id: 'complex-1', email: 'c@example.com', tokenVersion: 0 } as never,
+        device,
+      );
+      expect(access().roles).toEqual([]);
+      expect(access().permissions).toEqual([]);
+    });
+  });
+
   it('el token lleva la versión vigente del usuario (base de la invalidación)', async () => {
     await service.generateTokenPair(userWith([]), device);
     expect(access().tokenVersion).toBe(3);
