@@ -698,9 +698,7 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
         /ck_growth_settings_thresholds/,
       );
       // La mutación de 1B ya no aplica cambios al instante.
-      await expect(
-        s.scoring.updateThresholds({ high: 60, medium: 20 }, admin),
-      ).rejects.toThrow(/borrador/);
+      await expect(s.scoring.updateThresholds()).rejects.toThrow(/borrador/);
     });
 
     it('reglas: parámetros validados por predicado en el borrador; predicado desconocido rechazado por la base', async () => {
@@ -768,22 +766,17 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
         ).length,
       ).toBe(0);
       // Las mutaciones de 1B ya no aplican cambios al instante.
-      await expect(
-        s.scoring.updateRule(rule.id, { points: 30 }, admin),
-      ).rejects.toThrow(/borrador/);
-      await expect(
-        s.scoring.createRule(
-          {
-            key: 'IT_OTRA',
-            label: 'Otra',
-            predicate: GrowthScoringPredicate.PROPERTIES_GTE,
-            params: { min: 2 },
-            points: 5,
-            appliesTo: [K.ORGANIZATION],
-          },
-          admin,
+      const before = await ds.query(
+        `SELECT key, points, active FROM growth.scoring_rules ORDER BY key`,
+      );
+      await expect(s.scoring.updateRule()).rejects.toThrow(/borrador/);
+      await expect(s.scoring.createRule()).rejects.toThrow(/borrador/);
+      // Y no cambió nada.
+      expect(
+        await ds.query(
+          `SELECT key, points, active FROM growth.scoring_rules ORDER BY key`,
         ),
-      ).rejects.toThrow(/borrador/);
+      ).toEqual(before);
     });
 
     it('un cambio en una copropiedad recalcula a quien la administra (trabajo de cola)', async () => {

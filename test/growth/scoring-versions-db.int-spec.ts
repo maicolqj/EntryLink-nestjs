@@ -605,12 +605,9 @@ describeDb('Prospect 1E-C-0 — versiones de scoring (base real)', () => {
   });
 
   it('las mutaciones de 1B ya no cambian reglas ni umbrales al instante', async () => {
-    const [rule] = await ds.getRepository(ScoringRule).find({ take: 1 });
-    await expect(
-      scoring.updateRule(rule.id, { points: 1 }, manager),
-    ).rejects.toThrow(/borrador/);
-    await expect(
-      scoring.updateThresholds({ high: 70, medium: 20 }, manager),
-    ).rejects.toThrow(/borrador/);
+    // El resolver conserva los argumentos de 1B (contrato), pero ya no aplica nada.
+    await expect(scoring.updateRule()).rejects.toThrow(/borrador/);
+    await expect(scoring.updateThresholds()).rejects.toThrow(/borrador/);
+    await expect(scoring.createRule()).rejects.toThrow(/borrador/);
   });
 });
