@@ -7,7 +7,8 @@
  * Recorre los casos de la corrección: permiso activo, inactivo y nuevo
  * inactivo en un rol activo; desactivar y volver a activar con
  * PermissionsService (versión del token, caché y estado); tokens emitidos
- * antes del cambio; renovación; SUPER_ADMIN; y acceso sin autorización.
+ * antes del cambio; renovación; SUPER_ADMIN (sin paso con permisos
+ * inactivos); y acceso sin autorización.
  */
 jest.mock('@nestjs/passport', () => ({
   AuthGuard: () => class {},
@@ -234,10 +235,10 @@ describeDb('Permisos: el estado activo manda (base real)', () => {
     await expect(allowed('usaB', token)).resolves.toBe(true);
   });
 
-  it('8. SUPER_ADMIN pasa aunque el permiso esté inactivo (queda en el log)', async () => {
-    await expect(
-      allowed('usaC', { roles: [ValidRoles.SUPER_ADMIN_ROL], permissions: [] }),
-    ).resolves.toBe(true);
+  it('8. SUPER_ADMIN: pasa con el permiso activo; con el inactivo, no (apagado para todos)', async () => {
+    const superAdmin = { roles: [ValidRoles.SUPER_ADMIN_ROL], permissions: [] };
+    await expect(allowed('usaA', superAdmin)).resolves.toBe(true);
+    await expect(allowed('usaC', superAdmin)).resolves.toBe(false);
   });
 
   it('10. sin el permiso o con otro rol, no pasa', async () => {

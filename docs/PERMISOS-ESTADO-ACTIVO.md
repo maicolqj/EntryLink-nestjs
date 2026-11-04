@@ -1,6 +1,6 @@
 # Estado activo de los permisos
 
-Un permiso con `public.permissions.status = false` **no autoriza nada**, para nadie salvo SUPER_ADMIN (con traza), aunque esté asignado a un rol activo, aunque haya una excepción GRANT y aunque venga en un token emitido antes de desactivarlo.
+Un permiso con `public.permissions.status = false` **no autoriza nada, a nadie, tampoco a SUPER_ADMIN** (desde 0.43.0; ver `docs/SUPER-ADMIN-POLITICA.md`), aunque esté asignado a un rol activo, aunque haya una excepción GRANT y aunque venga en un token emitido antes de desactivarlo.
 
 ## Problema que corrige (2026-11-03)
 
@@ -18,7 +18,7 @@ Un permiso con `public.permissions.status = false` **no autoriza nada**, para na
 | `PermissionStatusService` | Lee `SELECT name FROM permissions WHERE status = false`; vale 30 s por proceso, con una sola lectura aunque lleguen muchas peticiones. Si la base falla, sigue con lo último **verificado** solo hasta 120 s; después **niega todo con 503** (ver «Antigüedad máxima») |
 | `PermissionsService.update/remove/restore` | Si cambia el estado, en la misma transacción sube `tokenVersion` a quien tiene el permiso (por rol o por excepción, y a las cuentas de complejo si lo tiene `COMPLEX_ROL`). Después del commit borra la versión en caché y vence el estado |
 | `actorHas` (Growth Suite) | Igual que el guard: el permiso tiene que estar en el token y activo |
-| SUPER_ADMIN | Pasa el guard sin tener el permiso asignado, **también con permisos inactivos** (queda un `WARN` en el log). Ver «Excepción de SUPER_ADMIN» para lo que salta y lo que no |
+| SUPER_ADMIN | Pasa el guard sin tener el permiso asignado, **solo si el permiso está activo**. Con uno inactivo se niega, como a cualquiera. Ver `docs/SUPER-ADMIN-POLITICA.md` |
 
 **Cuándo se ve un cambio:**
 - **Desactivar con el servicio:** al momento. El guard deja de aceptarlo y el token viejo muere por la versión; el cliente renueva sin cerrar sesión, con los permisos recalculados.
@@ -63,51 +63,16 @@ Pruebas: los 7 escenarios están en `permission-status.service.spec.ts` (tiempo 
 
 En pruebas, `test/setup/permission-status.ts` (setupFiles de jest) declara un estado verificado sin levantar el servicio. `trustPermissionStatusForTests` se niega a correr con `NODE_ENV=production`.
 
-## Excepción de SUPER_ADMIN: qué salta y qué no
+## Excepción de SUPER_ADMIN
 
-**Puede omitir** (todo depende de tener `SUPER_ADMIN_ROL` en el token, que sale de `user_has_roles` en la base):
-
-| Control | Dónde | Registro |
-|---|---|---|
-| Roles y permisos exigidos por `@Auth`, **incluidos los permisos inactivos** | `UniversalRolePermissionGuard` | Solo si el permiso está inactivo: `WARN` en el log de la app (`SUPER_ADMIN <id> usó <Clase>.<método> con permisos inactivos: [...]`). El uso normal no se registra |
-| Permisos en las verificaciones de servicio de la Growth Suite (`actorHas`: `VIEW_ALL`, datos de contacto, plantillas del equipo, aprobación de scoring…) | `growth-actor.ts` | No |
-| Módulos apagados del conjunto | `ComplexModuleGuard` | No |
-| Bloqueo por suscripción vencida o suspendida (es «rol de plataforma», igual que `COMPILANCE_OFFICER_ROL`) | `SubscriptionGuard` | No |
-| Separación de funciones de Growth (validar lo que registró, aprobar el scoring que propuso o editó) | `ProspectGuardsService.assertSegregation`, `approvalDecision` | **Solo** con `growth.settings.allow_super_admin_self_validation = true`, y queda en `growth.activity_events` (append-only): `SELF_VALIDATION_EXCEPTION` o `SCORING_SELF_APPROVAL_EXCEPTION`, con el actor, la entidad y la fecha |
-
-**Nunca omite:**
-- firma, vencimiento y emisor del JWT;
-- `tokenVersion`, sesión activa y lista negra de logout (`JwtAccessStrategy`);
-- el 503 por estado de permisos no verificable;
-- el login exige un usuario `active`;
-- las restricciones de la base: CHECK, triggers append-only, inmutabilidad de las versiones de scoring, nombres únicos, `PENDING_LEGAL_REVIEW` sin contacto, lista de exclusión;
-- la bandera `GROWTH_ENABLED`;
-- la validación de entradas (DTO);
-- el throttling REST.
-
-**¿Ejecuta operaciones protegidas por permisos desactivados? Sí.** Mientras el estado se pueda verificar, SUPER_ADMIN pasa una operación aunque el permiso que exige esté inactivo. Queda solo un `WARN` en los logs de la app: no hay registro persistente en una tabla de auditoría, y no incluye IP ni argumentos.
-
-**Qué impide que sea una vía para saltarse controles:**
-- el rol no se puede fabricar: viaja firmado en el token y sale de la base;
-- todo lo de la lista «nunca omite» le aplica;
-- la excepción de separación de funciones exige una bandera explícita y deja rastro inmutable.
-
-**Lo que NO lo impide hoy:** el uso de permisos inactivos solo deja un log de texto, y el bypass de módulos y suscripción no deja ninguno.
-
-### Recomendación (no implementada: requiere tu decisión)
-
-1. **Que «inactivo» signifique apagado para todos, también para SUPER_ADMIN.** Si necesita algo, primero lo activa, y eso queda registrado por `PermissionsService` y el SQL de activación.
-   - Impacto: SUPER_ADMIN no podrá aprobar versiones de scoring ni administrar plantillas del equipo hasta activar esos permisos.
-   - Antes de cambiarlo, la consulta 1 del inventario dice qué permisos inactivos existen hoy en producción.
-2. **Persistir en la tabla de auditoría** (`AuditService`) cada uso de SUPER_ADMIN de un permiso inactivo, con actor, operación, fecha, IP y sesión, en lugar de solo un log. Si se adopta el punto 1, ya no hace falta para permisos inactivos, pero sigue siendo útil para el bypass de módulos y suscripción.
-3. **Mantener** el bypass de `ComplexModuleGuard` y `SubscriptionGuard`: es lo que permite reencender módulos y renovar. Registrar su uso si se quiere trazabilidad completa.
+Reemplazada por la política de `docs/SUPER-ADMIN-POLITICA.md`, que incluye la matriz completa. En resumen: SUPER_ADMIN ya no pasa con permisos inactivos, ni en el guard ni en `actorHas`. Conserva el paso ordinario con permisos activos y los pasos explícitos de `SubscriptionGuard` y `ComplexModuleGuard`, que se justifican en esa matriz. La única excepción es la separación de funciones de Growth, explícita y auditada en `growth.activity_events`.
 
 ## Pruebas
 
 - `universal-role-permission.guard.spec.ts`, en GraphQL y REST:
   - permiso activo, inactivo y nuevo inactivo;
   - activar y desactivar con un token emitido antes;
-  - SUPER_ADMIN con traza;
+  - SUPER_ADMIN: pasa con permisos activos y no con uno inactivo;
   - sin permiso, sin usuario u otro rol;
   - sin consulta cuando la operación no exige permisos;
   - falla cerrado;
