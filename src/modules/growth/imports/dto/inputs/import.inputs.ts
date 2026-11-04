@@ -26,6 +26,7 @@ import {
   GrowthImportRowResult,
   GrowthImportStatus,
   GrowthImportTarget,
+  GrowthImportTemplateScope,
 } from '../../imports.enums';
 
 /**
@@ -96,7 +97,8 @@ export class GrowthMapImportInput {
 
   @Field({
     nullable: true,
-    description: 'Guardar este mapeo como plantilla con este nombre',
+    description:
+      'Guardar este mapeo como plantilla PERSONAL con este nombre. Un nombre que ya tienes es un error: nunca sobrescribe',
   })
   @IsOptional()
   @IsString()
@@ -158,4 +160,67 @@ export class GrowthImportRowFilterInput {
   @IsOptional()
   @IsEnum(GrowthImportRowResult)
   result?: GrowthImportRowResult;
+}
+
+@InputType()
+export class GrowthImportHeaderMappingInput {
+  @Field({ description: 'Encabezado de la columna (nunca un valor)' })
+  @IsString()
+  @Length(1, 200)
+  header: string;
+
+  @Field(() => GrowthImportField)
+  @IsEnum(GrowthImportField)
+  field: GrowthImportField;
+}
+
+@InputType()
+export class GrowthCreateImportTemplateInput {
+  @Field(() => GrowthImportTarget)
+  @IsEnum(GrowthImportTarget)
+  target: GrowthImportTarget;
+
+  @Field()
+  @IsString()
+  @Length(2, 80)
+  name: string;
+
+  @Field(() => GrowthImportTemplateScope, {
+    nullable: true,
+    description:
+      'PERSONAL por defecto; TEAM exige MANAGE_GROWTH_IMPORT_TEMPLATES',
+  })
+  @IsOptional()
+  @IsEnum(GrowthImportTemplateScope)
+  scope?: GrowthImportTemplateScope;
+
+  @Field(() => [GrowthImportHeaderMappingInput])
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => GrowthImportHeaderMappingInput)
+  columnMapping: GrowthImportHeaderMappingInput[];
+}
+
+@InputType()
+export class GrowthUpdateImportTemplateInput {
+  @Field(() => ID)
+  @IsUUID()
+  id: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  name?: string;
+
+  @Field(() => [GrowthImportHeaderMappingInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => GrowthImportHeaderMappingInput)
+  columnMapping?: GrowthImportHeaderMappingInput[];
 }

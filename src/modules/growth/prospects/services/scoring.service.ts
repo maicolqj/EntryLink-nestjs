@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager } from 'typeorm';
-import { JwtAccessPayload } from '../../../shared/interfaces/jwt-payload.interface';
 import { CustomError } from '../../../shared/utils/errors.utils';
 import { ActivityLogService } from '../../activity/services/activity-log.service';
 import { GrowthErrorCode } from '../../shared/growth-error-codes';
@@ -21,16 +20,8 @@ import {
   GrowthProspectKind,
   GrowthScoreBasis,
 } from '../prospects.enums';
-import {
-  GrowthScoringRuleInput,
-  GrowthScoringThresholdsInput,
-} from '../dto/inputs/dedupe-scoring.inputs';
-import {
-  evaluateRule,
-  ProspectFacts,
-  RuleLike,
-  validateRuleParams,
-} from '../shared/scoring-rules';
+import { evaluateRule, ProspectFacts, RuleLike } from '../shared/scoring-rules';
+import { activeScoringVersion, scoreChanged } from '../shared/scoring-versions';
 import { ProspectEventsService } from './prospect-events.service';
 
 export type ScorableKind =
@@ -65,6 +56,11 @@ export class ScoringService {
         kind === GrowthProspectKind.ORGANIZATION
           ? 'organization_id'
           : 'person_id';
+      // Un recálculo a la vez por prospecto: el historial no se duplica.
+      await manager.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+        [`growth-score:${kind}:${id}`],
+      );
       const record =
         kind === GrowthProspectKind.ORGANIZATION
           ? await manager.findOne(Organization, {
@@ -79,6 +75,7 @@ export class ScoringService {
         (kind === GrowthProspectKind.ORGANIZATION ||
           (record as Person).isIndependentAdmin);
       if (!scorable) {
+        // El historial se conserva: solo deja de haber puntaje vigente.
         await manager.query(
           `DELETE FROM growth.prospect_scores WHERE ${column} = $1`,
           [id],
@@ -86,48 +83,66 @@ export class ScoringService {
         return null;
       }
 
+      // Siempre la versión ACTIVE: la misma fuente que usa la simulación.
+      const version = await activeScoringVersion(manager);
       const settings = await manager.findOneOrFail(GrowthSettings, {
         where: { id: 1 },
-      });
-      const rules = await manager.find(ScoringRule, {
-        where: { active: true },
-        order: { sortOrder: 'ASC' },
       });
       const facts = (
         await this.factsFor(manager, kind, [toScorable(record)])
       ).get(id);
-      const { score, priority, breakdown, hasEstimates } = computeScore(
-        rules,
-        {
-          high: settings.scoringHighThreshold,
-          medium: settings.scoringMediumThreshold,
-        },
+      const computed = computeScore(
+        version.rules,
+        version.thresholds,
         kind,
         facts,
       );
+      const where =
+        kind === GrowthProspectKind.ORGANIZATION
+          ? { organizationId: id }
+          : { personId: id };
+      const previous = await manager.findOne(ProspectScore, { where });
 
       await manager.query(
-        `INSERT INTO growth.prospect_scores (${column}, score, priority, breakdown, has_estimates, rules_version, computed_at)
-         VALUES ($1, $2, $3, $4::jsonb, $5, $6, now())
+        `INSERT INTO growth.prospect_scores (${column}, score, priority, breakdown, has_estimates, rules_version, version_id, computed_at)
+         VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, now())
          ON CONFLICT (${column}) WHERE ${column} IS NOT NULL DO UPDATE
            SET score = EXCLUDED.score, priority = EXCLUDED.priority, breakdown = EXCLUDED.breakdown,
                has_estimates = EXCLUDED.has_estimates, rules_version = EXCLUDED.rules_version,
-               computed_at = EXCLUDED.computed_at`,
+               version_id = EXCLUDED.version_id, computed_at = EXCLUDED.computed_at`,
         [
           id,
-          score,
-          priority,
-          JSON.stringify(breakdown),
-          hasEstimates,
+          computed.score,
+          computed.priority,
+          JSON.stringify(computed.breakdown),
+          computed.hasEstimates,
           settings.scoringVersion,
+          version.id,
         ],
       );
-      return manager.findOneOrFail(ProspectScore, {
-        where:
-          kind === GrowthProspectKind.ORGANIZATION
-            ? { organizationId: id }
-            : { personId: id },
-      });
+      if (
+        scoreChanged(previous, {
+          score: computed.score,
+          priority: computed.priority,
+          breakdown: computed.breakdown,
+          versionId: version.id,
+        })
+      ) {
+        await manager.query(
+          `INSERT INTO growth.prospect_score_history (${column}, score, priority, breakdown, has_estimates, version_id, rules_version)
+           VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)`,
+          [
+            id,
+            computed.score,
+            computed.priority,
+            JSON.stringify(computed.breakdown),
+            computed.hasEstimates,
+            version.id,
+            settings.scoringVersion,
+          ],
+        );
+      }
+      return manager.findOneOrFail(ProspectScore, { where });
     });
   }
 
@@ -274,177 +289,31 @@ export class ScoringService {
     });
   }
 
-  async createRule(
-    input: GrowthScoringRuleInput,
-    actor: JwtAccessPayload,
-  ): Promise<ScoringRule> {
-    if (
-      !input.key ||
-      !input.label ||
-      !input.predicate ||
-      input.points === undefined ||
-      !input.appliesTo
-    ) {
-      throw invalid(
-        'Crear una regla exige key, label, predicate, points y appliesTo',
-      );
-    }
-    this.assertParams(input.predicate, input.params ?? {});
-    return this.changeRules(actor, async (manager) => {
-      const exists = await manager.exists(ScoringRule, {
-        where: { key: input.key },
-      });
-      if (exists) throw invalid(`Ya existe la regla ${input.key}`);
-      const rule = await manager.save(
-        manager.create(ScoringRule, {
-          key: input.key,
-          label: input.label.trim(),
-          predicate: input.predicate,
-          params: input.params ?? {},
-          points: input.points,
-          appliesTo: input.appliesTo,
-          active: input.active ?? true,
-          sortOrder: input.sortOrder ?? 100,
-          updatedByUserId: actor.sub,
-        }),
-      );
-      return {
-        rule,
-        action: 'SCORING_RULE_CREATED',
-        changes: {
-          key: rule.key,
-          predicate: rule.predicate,
-          points: rule.points,
-        },
-      };
-    });
+  /**
+   * Desde 1E-C-0 las reglas y los umbrales solo cambian en un borrador de
+   * versión que alguien distinto aprueba (ScoringVersionsService). Estas
+   * operaciones de 1B siguen en la API para no romper el contrato, pero ya
+   * no aplican cambios al instante.
+   */
+  createRule(): Promise<never> {
+    return Promise.reject(requiresApproval());
   }
 
-  async updateRule(
-    id: string,
-    input: GrowthScoringRuleInput,
-    actor: JwtAccessPayload,
-  ): Promise<ScoringRule> {
-    if (input.key) throw invalid('La clave de una regla no se cambia');
-    return this.changeRules(actor, async (manager) => {
-      const rule = await manager.findOne(ScoringRule, {
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!rule) {
-        throw new CustomError({
-          message: 'Regla no encontrada',
-          statusCode: HttpStatus.NOT_FOUND,
-          errorCode: GrowthErrorCode.GROWTH_NOT_FOUND,
-        });
-      }
-      const before = {
-        points: rule.points,
-        active: rule.active,
-        params: rule.params,
-        predicate: rule.predicate,
-      };
-      if (input.label) rule.label = input.label.trim();
-      if (input.predicate) rule.predicate = input.predicate;
-      if (input.params) rule.params = input.params;
-      if (input.points !== undefined) rule.points = input.points;
-      if (input.appliesTo) rule.appliesTo = input.appliesTo;
-      if (input.active !== undefined) rule.active = input.active;
-      if (input.sortOrder !== undefined) rule.sortOrder = input.sortOrder;
-      this.assertParams(rule.predicate, rule.params);
-      rule.updatedByUserId = actor.sub;
-      const saved = await manager.save(rule);
-      return {
-        rule: saved,
-        action: 'SCORING_RULE_UPDATED',
-        changes: {
-          key: saved.key,
-          before,
-          after: {
-            points: saved.points,
-            active: saved.active,
-            params: saved.params,
-            predicate: saved.predicate,
-          },
-        },
-      };
-    });
+  updateRule(): Promise<never> {
+    return Promise.reject(requiresApproval());
   }
 
-  async updateThresholds(
-    input: GrowthScoringThresholdsInput,
-    actor: JwtAccessPayload,
-  ): Promise<GrowthSettings> {
-    if (input.high <= input.medium)
-      throw invalid('El umbral alto debe ser mayor que el medio');
-    let settings!: GrowthSettings;
-    await this.changeRules(actor, async (manager) => {
-      const s = await manager.findOneOrFail(GrowthSettings, {
-        where: { id: 1 },
-        lock: { mode: 'pessimistic_write' },
-      });
-      const before = {
-        high: s.scoringHighThreshold,
-        medium: s.scoringMediumThreshold,
-      };
-      s.scoringHighThreshold = input.high;
-      s.scoringMediumThreshold = input.medium;
-      settings = await manager.save(s);
-      return {
-        rule: null,
-        action: 'SCORING_THRESHOLDS_UPDATED',
-        changes: { before, after: input },
-      };
-    });
-    return this.dataSource.manager.findOneOrFail(GrowthSettings, {
-      where: { id: settings.id },
-    });
-  }
-
-  /** Cualquier cambio de reglas sube la versión y recalcula todo en segundo plano. */
-  private async changeRules<T extends ScoringRule | null>(
-    actor: JwtAccessPayload,
-    apply: (
-      manager: EntityManager,
-    ) => Promise<{ rule: T; action: string; changes: Record<string, unknown> }>,
-  ): Promise<T> {
-    const result = await this.dataSource.transaction(async (manager) => {
-      const out = await apply(manager);
-      await manager.query(
-        `UPDATE growth.settings SET scoring_version = scoring_version + 1, updated_at = now(), updated_by_user_id = $1 WHERE id = 1`,
-        [actor.sub],
-      );
-      await this.activity.record(manager, actor, {
-        action: out.action,
-        entityType: out.rule
-          ? GrowthEntityType.SCORING_RULE
-          : GrowthEntityType.SETTINGS,
-        entityId: out.rule
-          ? out.rule.id
-          : '00000000-0000-0000-0000-000000000001',
-        changes: out.changes,
-      });
-      return out.rule;
-    });
-    await this.events?.rescoreAll();
-    return result;
-  }
-
-  private assertParams(
-    predicate: ScoringRule['predicate'],
-    params: Record<string, unknown>,
-  ): void {
-    const problem = validateRuleParams({ predicate, params });
-    if (problem)
-      throw invalid(`Parámetros inválidos para ${predicate}: ${problem}`);
+  updateThresholds(): Promise<never> {
+    return Promise.reject(requiresApproval());
   }
 }
 
-function invalid(message: string): CustomError {
+function requiresApproval(): CustomError {
   return new CustomError({
-    message,
-    statusCode: HttpStatus.BAD_REQUEST,
-    errorCode: GrowthErrorCode.GROWTH_INVALID_INPUT,
+    message:
+      'Las reglas y los umbrales se cambian en un borrador de versión, que otra persona aprueba',
+    statusCode: HttpStatus.CONFLICT,
+    errorCode: GrowthErrorCode.GROWTH_SCORING_REQUIRES_APPROVAL,
   });
 }
 

@@ -31,7 +31,6 @@ import {
 import {
   ImportBatch,
   ImportDuplicateHint,
-  ImportMappingTemplate,
   ImportRow,
 } from '../entities/import.entities';
 import { GrowthImportTarget } from '../imports.enums';
@@ -108,15 +107,6 @@ export class GrowthImportsResolver {
       filter ?? {},
       pagination ?? { page: 1, limit: 25 },
     );
-  }
-
-  @Auth({ permissions: [P.IMPORT_GROWTH_DATA] })
-  @Query(() => [ImportMappingTemplate], { name: 'growthImportTemplates' })
-  growthImportTemplates(
-    @Args('target', { type: () => GrowthImportTarget })
-    target: GrowthImportTarget,
-  ): Promise<ImportMappingTemplate[]> {
-    return this.imports.templates(target);
   }
 
   @Auth({ permissions: [P.IMPORT_GROWTH_DATA] })

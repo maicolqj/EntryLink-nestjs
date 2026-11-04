@@ -862,7 +862,9 @@ export const PERMISSIONS_TO_SEED = [
     label: p.label,
     group: GROWTH_PERMISSION_GROUP,
     isSystem: false,
-    status: process.env.GROWTH_ENABLED === 'true',
+    // Los de activación manual nacen inactivos y el seed no les toca el estado.
+    status: p.manualActivation ? false : process.env.GROWTH_ENABLED === 'true',
+    preserveStatus: p.manualActivation === true,
     description: p.description,
     level: p.level,
     dependsOn: p.dependsOn,
