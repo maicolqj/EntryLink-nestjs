@@ -64,6 +64,11 @@ import { ProspectJobsProcessor } from '../../src/modules/growth/prospects/servic
 import { RelationshipsService } from '../../src/modules/growth/prospects/services/relationships.service';
 import { ScoringService } from '../../src/modules/growth/prospects/services/scoring.service';
 import { ScoringSimulationService } from '../../src/modules/growth/prospects/services/scoring-simulation.service';
+import { ScoringVersionsService } from '../../src/modules/growth/prospects/services/scoring-versions.service';
+import {
+  ProspectScoreHistory,
+  ScoringVersion,
+} from '../../src/modules/growth/prospects/entities/scoring-version.entity';
 import { TeamWorkloadService } from '../../src/modules/growth/prospects/services/team-workload.service';
 import { ValidPermissions } from '../../src/modules/permissions/enums/valid-permissions';
 import { GrowthTeamMemberStatus } from '../../src/modules/growth/shared/growth.enums';
@@ -105,6 +110,7 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
     processor: ProspectJobsProcessor;
     dashboard: ProspectDashboardService;
     simulation: ScoringSimulationService;
+    versions: ScoringVersionsService;
     workload: TeamWorkloadService;
     activity: ActivityLogService;
   };
@@ -144,6 +150,8 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
         MergeLog,
         ScoringRule,
         ProspectScore,
+        ScoringVersion,
+        ProspectScoreHistory,
       ],
       synchronize: false,
     });
@@ -176,6 +184,7 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
     const suppressions = new SuppressionsService(ds, hashes, activity);
     const dedupe = new DedupeService(ds, activity);
     const scoring = new ScoringService(ds, activity);
+    const simulation = new ScoringSimulationService(ds, scoring);
     s = {
       orgs: new OrganizationsService(ds, guards, evidences, activity),
       people: new PeopleService(ds, guards, evidences, activity),
@@ -194,7 +203,14 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
       scoring,
       processor: new ProspectJobsProcessor(ds, dedupe, scoring),
       dashboard: new ProspectDashboardService(ds, activity),
-      simulation: new ScoringSimulationService(ds, scoring),
+      simulation,
+      versions: new ScoringVersionsService(
+        ds,
+        activity,
+        guards,
+        scoring,
+        simulation,
+      ),
       workload: new TeamWorkloadService(ds),
       activity,
     };
@@ -654,39 +670,63 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
       ).toBe('NEW');
     });
 
-    it('cambiar umbrales sube la versión y cambia la prioridad al recalcular', async () => {
+    it('cambiar umbrales (borrador aprobado) sube la versión y cambia la prioridad al recalcular', async () => {
       const before = await ds
         .getRepository(GrowthSettings)
         .findOneByOrFail({ id: 1 });
-      await s.scoring.updateThresholds({ high: 80, medium: 30 }, admin);
+      // 1E-C-0: se cambian en un borrador que se aprueba y se activa. Aquí lo
+      // aprueba el mismo SUPER_ADMIN por la excepción auditada.
+      const draft = await s.versions.createDraft({}, admin);
+      await s.versions.updateDraft(
+        { id: draft.id, thresholds: { high: 80, medium: 30 } },
+        admin,
+      );
+      await s.versions.activate(draft.id, admin);
       const after = await ds
         .getRepository(GrowthSettings)
         .findOneByOrFail({ id: 1 });
       expect(after.scoringVersion).toBe(before.scoringVersion + 1);
+      expect(after.scoringHighThreshold).toBe(80);
       const score = (await s.scoring.recompute(K.ORGANIZATION, orgId))!;
       expect(score.priority).toBe(GrowthPriority.MEDIUM);
       expect(score.rulesVersion).toBe(after.scoringVersion);
+      expect(score.versionId).toBe(draft.id);
       await expectDbError(
         ds.query(
           `UPDATE growth.settings SET scoring_high_threshold = 10, scoring_medium_threshold = 20`,
         ),
         /ck_growth_settings_thresholds/,
       );
+      // La mutación de 1B ya no aplica cambios al instante.
+      await expect(s.scoring.updateThresholds()).rejects.toThrow(/borrador/);
     });
 
-    it('reglas: parámetros validados por predicado; predicado desconocido rechazado por la base', async () => {
+    it('reglas: parámetros validados por predicado en el borrador; predicado desconocido rechazado por la base', async () => {
+      const draft = await s.versions.createDraft({}, admin);
+      const withRule = (
+        change: (
+          r: (typeof draft.rules)[number],
+        ) => (typeof draft.rules)[number],
+      ) => draft.rules.map((r) => (r.key === 'UNITS_500_PLUS' ? change(r) : r));
+      await expect(
+        s.versions.updateDraft(
+          {
+            id: draft.id,
+            rules: withRule((r) => ({ ...r, params: { value: -3 } })),
+          },
+          admin,
+        ),
+      ).rejects.toThrow('parámetros inválidos');
+      const updated = await s.versions.updateDraft(
+        { id: draft.id, rules: withRule((r) => ({ ...r, points: 25 })) },
+        admin,
+      );
+      expect(
+        updated.rules.find((r) => r.key === 'UNITS_500_PLUS')!.points,
+      ).toBe(25);
       const [rule] = await ds
         .getRepository(ScoringRule)
         .findBy({ key: 'UNITS_500_PLUS' });
-      await expect(
-        s.scoring.updateRule(rule.id, { params: { value: -3 } }, admin),
-      ).rejects.toThrow('Parámetros inválidos');
-      const updated = await s.scoring.updateRule(
-        rule.id,
-        { points: 25 },
-        admin,
-      );
-      expect(updated.points).toBe(25);
       await expectDbError(
         ds.query(
           `UPDATE growth.scoring_rules SET predicate = 'SQL_LIBRE' WHERE id = $1`,
@@ -694,18 +734,49 @@ describeDb('Prospect 1B — duplicados, fusión y scoring (base real)', () => {
         ),
         /ck_growth_rules_predicate/,
       );
-      const created = await s.scoring.createRule(
+      const withNew = await s.versions.updateDraft(
         {
-          key: 'IT_PROPERTIES_20_PLUS',
-          label: 'Más de 20 copropiedades',
-          predicate: GrowthScoringPredicate.PROPERTIES_GTE,
-          params: { min: 20 },
-          points: 10,
-          appliesTo: [K.ORGANIZATION],
+          id: draft.id,
+          rules: [
+            ...updated.rules,
+            {
+              key: 'IT_PROPERTIES_20_PLUS',
+              label: 'Más de 20 copropiedades',
+              predicate: GrowthScoringPredicate.PROPERTIES_GTE,
+              params: { min: 20 },
+              points: 10,
+              appliesTo: [K.ORGANIZATION],
+              active: true,
+              sortOrder: 900,
+            },
+          ],
         },
         admin,
       );
-      expect(created.active).toBe(true);
+      expect(withNew.rules.map((r) => r.key)).toContain(
+        'IT_PROPERTIES_20_PLUS',
+      );
+      // Descartado: no se aplicó nada a la versión activa.
+      await s.versions.discardDraft(draft.id, 'Prueba de reglas IT', admin);
+      expect(
+        (
+          await ds
+            .getRepository(ScoringRule)
+            .findBy({ key: 'IT_PROPERTIES_20_PLUS' })
+        ).length,
+      ).toBe(0);
+      // Las mutaciones de 1B ya no aplican cambios al instante.
+      const before = await ds.query(
+        `SELECT key, points, active FROM growth.scoring_rules ORDER BY key`,
+      );
+      await expect(s.scoring.updateRule()).rejects.toThrow(/borrador/);
+      await expect(s.scoring.createRule()).rejects.toThrow(/borrador/);
+      // Y no cambió nada.
+      expect(
+        await ds.query(
+          `SELECT key, points, active FROM growth.scoring_rules ORDER BY key`,
+        ),
+      ).toEqual(before);
     });
 
     it('un cambio en una copropiedad recalcula a quien la administra (trabajo de cola)', async () => {

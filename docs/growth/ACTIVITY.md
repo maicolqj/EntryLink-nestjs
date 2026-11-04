@@ -26,6 +26,19 @@ Orden: del más reciente al más antiguo. Paginación estándar (máx. 100 por
 página). Índices: `(actor_user_id, created_at)`, `(entity_type, entity_id,
 created_at)`, `(action, created_at)` y `(created_at)`.
 
+## Versiones del scoring (1E-C-0)
+
+| Acción | Cuándo | `changes` |
+|---|---|---|
+| `SCORING_DRAFT_CREATED` | Se crea un borrador | `number`, `basedOn` |
+| `SCORING_DRAFT_UPDATED` | Se editan reglas, umbrales o notas | `number`, `rules`, `thresholds` |
+| `SCORING_DRAFT_DISCARDED` | Se descarta un borrador | `number` |
+| `SCORING_VERSION_ACTIVATED` | Se aprueba y activa | `number`, `previous`, `thresholds`, `rules` |
+| `SCORING_VERSION_RETIRED` | La versión anterior queda retirada | `number`, `replacedBy` |
+| `SCORING_SELF_APPROVAL_EXCEPTION` | Un SUPER_ADMIN aprobó un borrador en el que participó, con la excepción encendida | `number` |
+
+El motivo de un descarte no va a la actividad (queda en la versión, `retired_reason`).
+
 ## Limitación conocida: intentos fallidos
 
 Hoy **no se registran los intentos rechazados o fallidos** (por ejemplo, una

@@ -17,6 +17,7 @@ import {
   GrowthImportRowResult,
   GrowthImportStatus,
   GrowthImportTarget,
+  GrowthImportTemplateScope,
 } from '../imports.enums';
 
 /** Una columna del archivo (por posición) asignada a un campo. */
@@ -305,13 +306,35 @@ export class ImportMappingTemplate {
   @Column({ type: 'varchar', length: 80 })
   name: string;
 
-  @Field(() => [ImportHeaderMapping])
+  @Field(() => [ImportHeaderMapping], {
+    description: 'Solo encabezados y su campo: nunca valores del archivo',
+  })
   @Column({ name: 'column_mapping', type: 'jsonb' })
   columnMapping: ImportHeaderMapping[];
+
+  @Field(() => GrowthImportTemplateScope)
+  @Column({ type: 'varchar', length: 10 })
+  scope: GrowthImportTemplateScope;
+
+  @Field(() => ID, {
+    description: 'Dueño: en PERSONAL, quien la usa; en TEAM, su autor',
+  })
+  @Column({ name: 'owner_user_id', type: 'uuid' })
+  ownerUserId: string;
 
   @Field(() => ID)
   @Column({ name: 'created_by_user_id', type: 'uuid' })
   createdByUserId: string;
+
+  @Column({ name: 'updated_by_user_id', type: 'uuid', nullable: true })
+  updatedByUserId: string | null;
+
+  @Field({ nullable: true })
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt: Date | null;
+
+  @Column({ name: 'archived_by_user_id', type: 'uuid', nullable: true })
+  archivedByUserId: string | null;
 
   @Field()
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

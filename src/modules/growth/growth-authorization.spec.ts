@@ -13,6 +13,7 @@ import { ValidRoles } from '../roles/enums/valid-roles';
 import { ROLES_TO_SEED } from '../../core/database/seeds/datas/roles.data.seed';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { UniversalRolePermissionGuard } from '../shared/guards/universal-role-permission.guard';
+import { PermissionStatusService } from '../permissions/services/permission-status.service';
 import { GrowthActivityResolver } from './activity/resolvers/growth-activity.resolver';
 import { ActivityLogService } from './activity/services/activity-log.service';
 import { GrowthComplianceResolver } from './compliance/resolvers/growth-compliance.resolver';
@@ -30,7 +31,9 @@ import {
 } from './prospects/resolvers/prospect-records.resolver';
 import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
 import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
+import { GrowthScoringVersionsResolver } from './prospects/resolvers/prospect-scoring-versions.resolver';
 import { GrowthImportsResolver } from './imports/resolvers/growth-imports.resolver';
+import { GrowthImportTemplatesResolver } from './imports/resolvers/growth-import-templates.resolver';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
 
 /**
@@ -48,7 +51,9 @@ const RESOLVERS = [
   GrowthPropertiesResolver,
   GrowthProspectOperationsResolver,
   GrowthDedupeScoringResolver,
+  GrowthScoringVersionsResolver,
   GrowthImportsResolver,
+  GrowthImportTemplatesResolver,
 ];
 
 type Operation = {
@@ -81,7 +86,10 @@ const operations: Operation[] = RESOLVERS.flatMap((resolver) =>
 const permissionsOf = (role: ValidRoles): P[] =>
   ROLES_TO_SEED.find((r) => r.name === role)?.permissions ?? [];
 
-const guard = new UniversalRolePermissionGuard(new Reflector());
+// Todos los permisos activos: aquí se prueba la matriz rol × operación.
+const guard = new UniversalRolePermissionGuard(new Reflector(), {
+  inactive: () => Promise.resolve(new Set<string>()),
+} as unknown as PermissionStatusService);
 
 async function allowed(
   op: Operation,
@@ -202,6 +210,16 @@ describe('Autorización de la Growth Suite', () => {
         'growthSimulateScoring',
         'growthTeamWorkload',
         'growthMergePreview',
+        // Entrega 1E-C-0
+        'growthScoringVersions',
+        'growthScoringVersion',
+        'growthScoringStatus',
+        'growthCompareScoringVersion',
+        'growthProspectScoreHistory',
+        'growthCreateScoringDraft',
+        'growthUpdateScoringDraft',
+        'growthDiscardScoringDraft',
+        'growthActivateScoringVersion',
       ].sort(),
     );
   });

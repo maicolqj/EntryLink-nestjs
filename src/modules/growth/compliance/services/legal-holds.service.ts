@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ScoringVersion } from '../../prospects/entities/scoring-version.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityTarget, IsNull, ObjectLiteral } from 'typeorm';
 import { JwtAccessPayload } from '../../../shared/interfaces/jwt-payload.interface';
@@ -64,6 +65,7 @@ const HOLDABLE: Record<GrowthEntityType, EntityTarget<ObjectLiteral>> = {
   [GrowthEntityType.SCORING_RULE]: ScoringRule,
   [GrowthEntityType.IMPORT_BATCH]: ImportBatch,
   [GrowthEntityType.IMPORT_TEMPLATE]: ImportMappingTemplate,
+  [GrowthEntityType.SCORING_VERSION]: ScoringVersion,
 };
 
 const MAX_YEARS = 10;

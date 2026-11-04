@@ -68,6 +68,7 @@ import {
   GrowthImportRowResult as R,
   GrowthImportStatus as S,
   GrowthImportTarget as T,
+  GrowthImportTemplateScope as Scope,
 } from '../../src/modules/growth/imports/imports.enums';
 import { ImportCommitService } from '../../src/modules/growth/imports/services/import-commit.service';
 import { ImportJobsProcessor } from '../../src/modules/growth/imports/services/import-jobs.processor';
@@ -79,6 +80,7 @@ import {
 import { ImportRedactionService } from '../../src/modules/growth/imports/services/import-redaction.service';
 import { ImportValidationService } from '../../src/modules/growth/imports/services/import-validation.service';
 import { ImportsService } from '../../src/modules/growth/imports/services/imports.service';
+import { ImportTemplatesService } from '../../src/modules/growth/imports/services/import-templates.service';
 import { resetGrowthTestData } from './db-cleanup';
 
 const URL = process.env.GROWTH_IT_DATABASE_URL;
@@ -86,6 +88,7 @@ const describeDb = URL ? describe : describe.skip;
 
 const ADMIN = 'dddddddd-0000-4000-8000-000000000001';
 const LIMITED = 'dddddddd-0000-4000-8000-000000000002';
+const MANAGER = 'dddddddd-0000-4000-8000-000000000003';
 
 const actor = (
   sub: string,
@@ -121,6 +124,20 @@ function dv(nit: string): string {
 }
 const nitOf = (i: number) => String(800000000 + i);
 
+/**
+ * Presupuesto de la confirmación del lote de 500 filas. Cada fila creada abre
+ * varias transacciones (registro y evidencias, dos canales con consulta a la
+ * lista de exclusión, actividad): son miles de viajes a Postgres. Medido con
+ * Postgres en Docker sobre Windows: ~40 ms por fila sobre una base recién
+ * preparada (`test/growth/prepare-db.ts`) y 110–130 ms sobre una base
+ * reutilizada a mano, que quedaba al filo del límite global de 60 s. 300 ms
+ * por fila deja margen sin esconder una regresión grande; la prueba imprime
+ * lo medido.
+ */
+const COMMIT_ROWS = 500;
+const COMMIT_MS_PER_ROW = 300;
+const COMMIT_BUDGET_MS = COMMIT_ROWS * COMMIT_MS_PER_ROW;
+
 async function expectDbError(promise: Promise<unknown>, pattern: RegExp) {
   await expect(promise).rejects.toBeInstanceOf(QueryFailedError);
   await expect(promise).rejects.toThrow(pattern);
@@ -130,6 +147,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
   let ds: DataSource;
   let sourceId: string;
   let imports: ImportsService;
+  let templates: ImportTemplatesService;
   let processor: ImportJobsProcessor;
   let purge: ImportPurgeService;
   let orgs: OrganizationsService;
@@ -206,6 +224,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
     for (const [id, n] of [
       [ADMIN, 1],
       [LIMITED, 2],
+      [MANAGER, 3],
     ] as const) {
       await ds.query(
         `INSERT INTO public.users (id, name, last_name, number_phone, email, password)
@@ -257,7 +276,15 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
     } as unknown as ImportQueueService;
 
     const redaction = new ImportRedactionService(suppressions);
-    imports = new ImportsService(ds, guards, activity, queue, redaction);
+    templates = new ImportTemplatesService(ds, activity, redaction);
+    imports = new ImportsService(
+      ds,
+      guards,
+      activity,
+      queue,
+      redaction,
+      templates,
+    );
     const validation = new ImportValidationService(ds, redaction, activity);
     const commit = new ImportCommitService(
       ds,
@@ -415,7 +442,7 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       });
       expect(at(50).mapped).not.toHaveProperty('email');
       expect(at(50).errors).toEqual([]);
-      const tpl = await imports.templates(T.ORGANIZATIONS);
+      const tpl = await templates.list(T.ORGANIZATIONS, admin);
       expect(tpl.map((t) => t.name)).toContain('Directorio IT');
     });
 
@@ -433,91 +460,153 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
       ).rejects.toThrow(/errores/);
     });
 
-    it('confirma: crea en NEW con evidencia de la fuente, vincula sin cambiar y es idempotente', async () => {
-      await imports.commit(batch.id, admin);
+    it(
+      'confirma: crea en NEW con evidencia de la fuente, vincula sin cambiar y es idempotente',
+      async () => {
+        const started = Date.now();
+        await imports.commit(batch.id, admin);
+        await drain();
+        const ms = Date.now() - started;
+        process.stdout.write(
+          `confirmación de ${COMMIT_ROWS} filas: ${ms} ms (${Math.round(ms / COMMIT_ROWS)} ms por fila; presupuesto ${COMMIT_MS_PER_ROW})\n`,
+        );
+        const b = await imports.get(batch.id, admin);
+        expect(b.status).toBe(S.COMMITTED);
+        expect(b.finishedAt).toBeTruthy();
+        // 500 − 40 con errores − 5 vinculadas − 1 repetida en el archivo (fila 100, la 2.ª aparición del NIT de 45..49 es la 46ª…)
+        const rows = await rowsOf(batch.id);
+        const created = rows.filter((r) => r.result === R.CREATED);
+        expect(b.createdRows).toBe(created.length);
+        expect(b.linkedRows).toBe(5);
+        expect(b.failedRows).toBe(0);
+        expect(b.createdRows + b.linkedRows + b.skippedRows).toBe(500);
+
+        const createdOrgs = await ds
+          .getRepository(Organization)
+          .findBy(created.map((r) => ({ id: r.resultEntityId! })));
+        expect(createdOrgs.every((o) => o.validationStatus === 'NEW')).toBe(
+          true,
+        );
+        const ev = await ds
+          .getRepository(Evidence)
+          .findBy({ entityId: created[0].resultEntityId! });
+        expect(ev.length).toBeGreaterThan(0);
+        expect(ev.every((e) => e.sourceId === sourceId)).toBe(true);
+
+        // Excluido: la empresa existe, pero sin ese correo.
+        const suppressedRow = rows[50];
+        expect(suppressedRow.result).toBe(R.CREATED);
+        const ch = await ds
+          .getRepository(OrganizationChannel)
+          .findBy({ organizationId: suppressedRow.resultEntityId! });
+        expect(ch.map((c) => c.kind)).toEqual([GrowthChannelKind.PHONE]);
+
+        // Vinculada: el registro no cambia de nombre; solo gana evidencias.
+        const linked = await ds
+          .getRepository(Organization)
+          .findOneByOrFail({ id: existing[0] });
+        expect(linked.legalName).toBe('Existente 0');
+        const linkEv = await ds
+          .getRepository(Evidence)
+          .findBy({ entityId: existing[0], field: 'legalName' });
+        expect(linkEv.map((e) => e.observedValue)).toContain(
+          'Administraciones Prueba 40 SAS',
+        );
+
+        // Duplicados y scoring encolados para cada creado.
+        expect(changed.filter((c) => c.kind === K.ORGANIZATION)).toHaveLength(
+          created.length,
+        );
+
+        // Repetir la confirmación no duplica.
+        const before = await ds.getRepository(Organization).count();
+        await processor.process({
+          name: 'commit',
+          data: { batchId: batch.id, actor: admin },
+        } as never);
+        expect(await ds.getRepository(Organization).count()).toBe(before);
+      },
+      COMMIT_BUDGET_MS,
+    );
+
+    it('un archivo repetido se avisa con los lotes anteriores', async () => {
+      const again = await upload(csvText);
+      expect((await imports.preview(again.id, admin)).previousBatchIds).toEqual(
+        [batch.id],
+      );
+      await imports.cancel(again.id, 'Archivo repetido', admin);
+    });
+  });
+
+  /**
+   * Un lote confirmado propio, pequeño: estas pruebas no dependen de que la
+   * confirmación de 500 filas termine. Si aquella falla, falla sola.
+   */
+  describe('lote confirmado (independiente del de 500)', () => {
+    let small: ImportBatch;
+
+    beforeAll(async () => {
+      const lines = [
+        'Razón social;NIT;Correo;Teléfono;Localidad;Columna libre',
+      ];
+      for (let i = 0; i < 3; i++) {
+        const nit = nitOf(7000 + i);
+        lines.push(
+          [
+            i === 1 ? '' : `Pequeña ${i} SAS`, // la fila 2 tiene un error
+            `${nit}-${dv(nit)}`,
+            `pequena${i}@pequena${i}.co`,
+            `311${String(2000000 + i)}`,
+            'Suba',
+            '=HYPERLINK("http://malo")',
+          ].join(';'),
+        );
+      }
+      small = await upload(
+        lines.join('\r\n'),
+        T.ORGANIZATIONS,
+        admin,
+        'pequeno.csv',
+      );
+      const preview = await imports.preview(small.id, admin);
+      await imports.map(
+        { batchId: small.id, mapping: preview.suggestedMapping },
+        admin,
+      );
       await drain();
-      const b = await imports.get(batch.id, admin);
-      expect(b.status).toBe(S.COMMITTED);
-      expect(b.finishedAt).toBeTruthy();
-      // 500 − 40 con errores − 5 vinculadas − 1 repetida en el archivo (fila 100, la 2.ª aparición del NIT de 45..49 es la 46ª…)
-      const rows = await rowsOf(batch.id);
-      const created = rows.filter((r) => r.result === R.CREATED);
-      expect(b.createdRows).toBe(created.length);
-      expect(b.linkedRows).toBe(5);
-      expect(b.failedRows).toBe(0);
-      expect(b.createdRows + b.linkedRows + b.skippedRows).toBe(500);
-
-      const createdOrgs = await ds
-        .getRepository(Organization)
-        .findBy(created.map((r) => ({ id: r.resultEntityId! })));
-      expect(createdOrgs.every((o) => o.validationStatus === 'NEW')).toBe(true);
-      const ev = await ds
-        .getRepository(Evidence)
-        .findBy({ entityId: created[0].resultEntityId! });
-      expect(ev.length).toBeGreaterThan(0);
-      expect(ev.every((e) => e.sourceId === sourceId)).toBe(true);
-
-      // Excluido: la empresa existe, pero sin ese correo.
-      const suppressedRow = rows[50];
-      expect(suppressedRow.result).toBe(R.CREATED);
-      const ch = await ds
-        .getRepository(OrganizationChannel)
-        .findBy({ organizationId: suppressedRow.resultEntityId! });
-      expect(ch.map((c) => c.kind)).toEqual([GrowthChannelKind.PHONE]);
-
-      // Vinculada: el registro no cambia de nombre; solo gana evidencias.
-      const linked = await ds
-        .getRepository(Organization)
-        .findOneByOrFail({ id: existing[0] });
-      expect(linked.legalName).toBe('Existente 0');
-      const linkEv = await ds
-        .getRepository(Evidence)
-        .findBy({ entityId: existing[0], field: 'legalName' });
-      expect(linkEv.map((e) => e.observedValue)).toContain(
-        'Administraciones Prueba 40 SAS',
-      );
-
-      // Duplicados y scoring encolados para cada creado.
-      expect(changed.filter((c) => c.kind === K.ORGANIZATION)).toHaveLength(
-        created.length,
-      );
-
-      // Repetir la confirmación no duplica.
-      const before = await ds.getRepository(Organization).count();
-      await processor.process({
-        name: 'commit',
-        data: { batchId: batch.id, actor: admin },
-      } as never);
-      expect(await ds.getRepository(Organization).count()).toBe(before);
+      await imports.commit(small.id, admin);
+      await drain();
+      small = await imports.get(small.id, admin);
+      expect(small.status).toBe(S.COMMITTED);
     });
 
     it('la base no deja retroceder un lote terminado ni borrarlo', async () => {
       await expectDbError(
         ds.query(
           `UPDATE growth.import_batches SET status = 'MAPPED' WHERE id = $1`,
-          [batch.id],
+          [small.id],
         ),
         /transición COMMITTED -> MAPPED/,
       );
       await expectDbError(
-        ds.query(`DELETE FROM growth.import_batches WHERE id = $1`, [batch.id]),
+        ds.query(`DELETE FROM growth.import_batches WHERE id = $1`, [small.id]),
         /append-only|no se permite|modific/i,
       );
     });
 
     it('el informe neutraliza fórmulas y deja actividad sin datos', async () => {
-      const { content } = await imports.report(batch.id, admin);
+      const { content } = await imports.report(small.id, admin);
       const ExcelJS = await import('exceljs');
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(content as unknown as ArrayBuffer);
       const filas = wb.getWorksheet('Filas')!;
-      expect(filas.rowCount).toBe(501);
+      expect(filas.rowCount).toBe(small.totalRows + 1);
       const free = filas.getRow(2).getCell(4 + 6);
       expect(free.formula).toBeUndefined();
       expect(String(free.value)).toMatch(/^'=HYPERLINK/);
       const events: ActivityEvent[] = await ds
         .getRepository(ActivityEvent)
-        .findBy({ entityId: batch.id });
+        .findBy({ entityId: small.id });
       expect(events.map((e) => e.action)).toEqual(
         expect.arrayContaining([
           'IMPORT_UPLOADED',
@@ -532,13 +621,281 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         /@admin|empresas\.csv|Prueba/,
       );
     });
+  });
 
-    it('un archivo repetido se avisa con los lotes anteriores', async () => {
-      const again = await upload(csvText);
-      expect((await imports.preview(again.id, admin)).previousBatchIds).toEqual(
-        [batch.id],
+  /**
+   * Plantillas personales y del equipo: solo encabezados y campos, nombres
+   * sin sobrescritura, archivado lógico y actividad sin datos.
+   */
+  describe('plantillas personales y del equipo', () => {
+    const manager = actor(
+      MANAGER,
+      [ValidRoles.GROWTH_MANAGER_ROL],
+      [P.IMPORT_GROWTH_DATA, P.MANAGE_GROWTH_IMPORT_TEMPLATES],
+    );
+    const mapping = [
+      { header: 'Razón social', field: F.LEGAL_NAME },
+      { header: 'NIT', field: F.NIT },
+    ];
+    const names = () =>
+      Promise.all([
+        templates.list(T.ORGANIZATIONS, limited),
+        templates.list(T.ORGANIZATIONS, manager),
+      ]).then(([l, m]) => [l.map((t) => t.name), m.map((t) => t.name)]);
+
+    it('una personal es solo de su dueño; nadie más la ve, la edita ni la archiva', async () => {
+      const mine = await templates.create(
+        { target: T.ORGANIZATIONS, name: 'Mía IT', columnMapping: mapping },
+        limited,
       );
-      await imports.cancel(again.id, 'Archivo repetido', admin);
+      expect(mine.scope).toBe(Scope.PERSONAL);
+      expect(mine.ownerUserId).toBe(LIMITED);
+      const [ofLimited, ofManager] = await names();
+      expect(ofLimited).toContain('Mía IT');
+      expect(ofManager).not.toContain('Mía IT');
+      // Ni con permiso de gestión: responde NOT_FOUND, sin revelar que existe.
+      await expect(
+        templates.update({ id: mine.id, name: 'Ajena' }, manager),
+      ).rejects.toThrow(/no encontrada/);
+      await expect(
+        templates.archive(mine.id, 'No es mía', manager),
+      ).rejects.toThrow(/no encontrada/);
+      // Su dueño sí la edita.
+      const renamed = await templates.update(
+        { id: mine.id, name: 'Mía IT 2' },
+        limited,
+      );
+      expect(renamed.name).toBe('Mía IT 2');
+    });
+
+    it('un nombre repetido es un error, nunca una sobrescritura', async () => {
+      await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Repetida IT',
+          columnMapping: mapping,
+        },
+        limited,
+      );
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: '  repetida   it ',
+            columnMapping: [{ header: 'Otra', field: F.LEGAL_NAME }],
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/Ya tienes una plantilla con ese nombre/);
+      // El mismo nombre en la personal de otra persona sí se puede.
+      const other = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Repetida IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      expect(other.ownerUserId).toBe(MANAGER);
+      // La de la primera persona sigue intacta.
+      const [kept] = (await templates.list(T.ORGANIZATIONS, limited)).filter(
+        (t) => t.name === 'Repetida IT',
+      );
+      expect(kept.columnMapping).toEqual(mapping);
+      // Y la base también lo impide si el servicio se saltara.
+      await expectDbError(
+        ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, scope, owner_user_id, created_by_user_id)
+           VALUES ('ORGANIZATIONS', 'REPETIDA IT', '[{"header":"x","field":"legalName"}]', 'PERSONAL', $1, $1)`,
+          [LIMITED],
+        ),
+        /uq_growth_import_tpl_personal/,
+      );
+    });
+
+    it('el código anterior (sin dueño) sigue guardando: queda del equipo y su autor es el dueño', async () => {
+      // Lo que hace la imagen anterior si se vuelve atrás sin revertir la migración.
+      const name = `Vieja IT ${Date.now()}`;
+      const [row]: Array<{ scope: string; owner_user_id: string }> =
+        await ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, created_by_user_id)
+         VALUES ('ORGANIZATIONS', $1, '[{"header":"x","field":"legalName"}]', $2)
+         RETURNING scope, owner_user_id`,
+          [name, LIMITED],
+        );
+      expect(row).toEqual({ scope: 'TEAM', owner_user_id: LIMITED });
+      // El código nuevo, que siempre manda el dueño, no lo toca.
+      const [own]: Array<{ scope: string; owner_user_id: string }> =
+        await ds.query(
+          `INSERT INTO growth.import_mapping_templates (target, name, column_mapping, scope, owner_user_id, created_by_user_id)
+         VALUES ('ORGANIZATIONS', $1, '[{"header":"x","field":"legalName"}]', 'PERSONAL', $2, $2)
+         RETURNING scope, owner_user_id`,
+          [`${name} propia`, MANAGER],
+        );
+      expect(own).toEqual({ scope: 'PERSONAL', owner_user_id: MANAGER });
+    });
+
+    it('guardar el mapeo de un lote crea una personal y no pisa la de nadie', async () => {
+      const shared = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        admin,
+      );
+      const b = await upload(
+        `Razón social;NIT\nAndes ${Date.now()};${nitOf(9100)}-${dv(nitOf(9100))}`,
+        T.ORGANIZATIONS,
+        manager,
+      );
+      const preview = await imports.preview(b.id, manager);
+      // Mismo nombre que una del equipo: queda como personal aparte.
+      await imports.map(
+        {
+          batchId: b.id,
+          mapping: preview.suggestedMapping,
+          saveAsTemplate: 'Equipo IT',
+        },
+        manager,
+      );
+      const visible = await templates.list(T.ORGANIZATIONS, manager);
+      const both = visible.filter((t) => t.name === 'Equipo IT');
+      expect(both.map((t) => t.scope).sort()).toEqual([
+        Scope.PERSONAL,
+        Scope.TEAM,
+      ]);
+      const team = both.find((t) => t.scope === Scope.TEAM)!;
+      expect(team.id).toBe(shared.id);
+      expect(team.columnMapping).toEqual(mapping);
+      // Repetir el nombre propio al mapear es un error y no cambia nada.
+      await expect(
+        imports.map(
+          {
+            batchId: b.id,
+            mapping: preview.suggestedMapping,
+            saveAsTemplate: 'Equipo IT',
+          },
+          manager,
+        ),
+      ).rejects.toThrow(/Ya tienes una plantilla/);
+      queued.length = 0;
+    });
+
+    it('las del equipo: todos las usan; solo la gestión las crea, comparte, edita o archiva', async () => {
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: 'Sin permiso IT',
+            scope: Scope.TEAM,
+            columnMapping: mapping,
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/permiso de gestión/);
+      const team = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      expect((await names())[0]).toContain('Del equipo IT');
+      expect(templates.canEdit(team, limited)).toBe(false);
+      await expect(
+        templates.update({ id: team.id, name: 'Cambio' }, limited),
+      ).rejects.toThrow(/permiso de gestión/);
+      await expect(
+        templates.archive(team.id, 'Ya no sirve', limited),
+      ).rejects.toThrow(/permiso de gestión/);
+
+      // Compartir: una personal propia pasa al equipo si el nombre está libre allí.
+      const draft = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Para compartir IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      await expect(templates.share(draft.id, limited)).rejects.toThrow(
+        /permiso de gestión/,
+      );
+      const shared = await templates.share(draft.id, manager);
+      expect(shared.scope).toBe(Scope.TEAM);
+      expect((await names())[0]).toContain('Para compartir IT');
+      const clash = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          columnMapping: mapping,
+        },
+        manager,
+      );
+      await expect(templates.share(clash.id, manager)).rejects.toThrow(
+        /Ya hay una plantilla del equipo/,
+      );
+
+      // Archivar: deja de listarse, no se borra y no se puede editar.
+      const archived = await templates.archive(
+        team.id,
+        'Reemplazada por otra',
+        manager,
+      );
+      expect(archived.archivedAt).toBeTruthy();
+      expect((await names())[0]).not.toContain('Del equipo IT');
+      const [row] = await ds.query(
+        `SELECT archived_by_user_id FROM growth.import_mapping_templates WHERE id = $1`,
+        [team.id],
+      );
+      expect(row.archived_by_user_id).toBe(MANAGER);
+      await expect(
+        templates.update({ id: team.id, name: 'Otra vez' }, manager),
+      ).rejects.toThrow(/no encontrada/);
+      // Con la archivada fuera, el nombre vuelve a estar libre en el equipo.
+      await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Del equipo IT',
+          scope: Scope.TEAM,
+          columnMapping: mapping,
+        },
+        manager,
+      );
+    });
+
+    it('no guarda datos: rechaza correos o teléfonos como encabezado y la actividad no lleva encabezados', async () => {
+      await expect(
+        templates.create(
+          {
+            target: T.ORGANIZATIONS,
+            name: 'Con datos IT',
+            columnMapping: [{ header: 'ana@andes.co', field: F.EMAIL }],
+          },
+          limited,
+        ),
+      ).rejects.toThrow(/no puede ser un correo ni un teléfono/);
+      const t = await templates.create(
+        {
+          target: T.ORGANIZATIONS,
+          name: 'Limpia IT',
+          columnMapping: [
+            { header: 'Columna secreta Andes', field: F.LEGAL_NAME },
+          ],
+        },
+        limited,
+      );
+      const events: ActivityEvent[] = await ds
+        .getRepository(ActivityEvent)
+        .findBy({ entityId: t.id });
+      expect(events.map((e) => e.action)).toEqual(['IMPORT_TEMPLATE_CREATED']);
+      expect(JSON.stringify(events[0].changes)).not.toMatch(
+        /secreta|Andes|Limpia/,
+      );
     });
   });
 
@@ -760,6 +1117,38 @@ describeDb('Prospect 1C — importaciones (base real)', () => {
         'Ana',
         '3001234567',
       ]);
+    });
+
+    it('el aviso de archivo repetido solo nombra lotes que el actor puede abrir', async () => {
+      // Mismo archivo: primero quien no ve todo, luego el admin, luego otra vez
+      // quien no ve todo. El contenido es único para no cruzarse con otras pruebas.
+      const csv = `Razón social\nRepetida ${Date.now()}`;
+      const first = await upload(csv, T.ORGANIZATIONS, limited);
+      const others = await upload(csv, T.ORGANIZATIONS, admin);
+      const again = await upload(csv, T.ORGANIZATIONS, limited);
+
+      // Sin VIEW_ALL: detecta su propio lote anterior, nunca el ajeno.
+      const own = await imports.preview(again.id, limited);
+      expect(own.previousBatchIds).toEqual([first.id]);
+      expect(own.previousBatchIds).not.toContain(others.id);
+
+      // Con permiso global (sin ser SUPER_ADMIN) y como SUPER_ADMIN: todos.
+      const manager = actor(
+        'dddddddd-0000-4000-8000-000000000003',
+        [ValidRoles.GROWTH_MANAGER_ROL],
+        [P.IMPORT_GROWTH_DATA, P.VIEW_ALL_GROWTH_PROSPECTS],
+      );
+      expect(
+        (await imports.preview(again.id, manager)).previousBatchIds,
+      ).toEqual([first.id, others.id]);
+      expect(
+        (await imports.preview(others.id, admin)).previousBatchIds,
+      ).toEqual([first.id, again.id]);
+
+      // El lote ajeno sigue cerrado para quien no ve todo.
+      await expect(imports.preview(others.id, limited)).rejects.toThrow(
+        /no encontrado/,
+      );
     });
   });
 

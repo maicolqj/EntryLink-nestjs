@@ -30,6 +30,12 @@ el nombre de la base no contiene `test`.
 docker run -d --name growth-pg-test -e POSTGRES_PASSWORD=<clave-local> \
   -e POSTGRES_DB=growth_test -p 127.0.0.1:55432:5432 postgis/postgis:17-3.5
 
+# 2-3. Atajo: recrea la base DESDE CERO (la borra, arma el esquema base y
+#      corre las migraciones). Úsalo antes de cada corrida completa. Solo
+#      acepta un Postgres local y un nombre que termine en _test.
+GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_test   yarn test:growth:db
+
+# O, paso a paso:
 # 2. Esquema base: las migraciones de main no corren desde una base vacía
 #    (la primera supone tablas existentes). El script crea public con
 #    synchronize (sin las entidades de growth) y marca como aplicadas las
@@ -45,10 +51,10 @@ GROWTH_IT_DATABASE_URL=postgres://postgres:<clave-local>@127.0.0.1:55432/growth_
   yarn test:growth:int
 ```
 
-Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
+Hay cinco suites, que comparten la base y el helper de limpieza `test/growth/db-cleanup.ts`:
 
 - `growth-db.int-spec.ts` (fase 0, 23 pruebas);
-- `imports-db.int-spec.ts` (entrega 1C, 23 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
+- `imports-db.int-spec.ts` (entrega 1C, 24 pruebas). La cola se sustituye por una captura y los trabajos se ejecutan con el mismo procesador:
   - lote de 500 empresas con 40 filas con errores, NIT existentes (vincular), NIT repetidos en el archivo y correos excluidos;
   - la base rechaza `CREATE` en filas con errores, retroceder un lote terminado y borrarlo;
   - confirmación: todo nace `NEW` con evidencia de la fuente, el vínculo no cambia el registro y repetir no duplica;
@@ -57,6 +63,7 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
   - mapeo nuevo contra trabajo viejo, cancelación durante la validación y `FAILED` tras reintentos;
   - personas (clase de canal obligatoria, base pendiente) y XLSX de copropiedades;
   - visibilidad por autor y enmascarado;
+  - plantillas personales y del equipo: solo su dueño ve y cambia una personal (ni con permiso de gestión); un nombre repetido es error y no sobrescribe (también lo impide un índice único); `saveAsTemplate` crea una personal aparte aunque el equipo tenga una con el mismo nombre; solo la gestión crea, comparte, edita y archiva las del equipo; archivar las saca de la lista sin borrarlas y libera el nombre; un correo o teléfono como encabezado se rechaza y la actividad no lleva encabezados;
   - purga a 30 días, con retención legal y lote purgado inmutable;
   - ajustes de la revisión:
     - un dato excluido, mapeado o dentro de un texto, no aparece en ninguna columna de texto del esquema ni en el informe;
@@ -65,7 +72,18 @@ Hay cuatro suites, que comparten la base y el helper de limpieza `test/growth/db
     - un XLSX amplificado se rechaza antes de guardar;
     - los lotes abandonados se cierran a los 7 días y luego se purgan;
     - la purga se aplica a COMMITTED, FAILED y CANCELLED, también con retención liberada o vencida.
-- `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas):
+- `scoring-versions-db.int-spec.ts` (entrega 1E-C-0, 11 pruebas):
+  - estado inicial: versión 1 con las reglas y umbrales de antes; `APPROVE_GROWTH_SCORING` inactivo y sin rol;
+  - el borrador copia la activa y solo él cambia; comparar no guarda nada;
+  - separación de funciones: sin APPROVE no se activa, quien propuso o editó no aprueba, un descartado no se activa; excepción de SUPER_ADMIN con y sin la opción, auditada;
+  - **simulación idéntica al cálculo definitivo:** lo que predice `growthCompareScoringVersion` (puntaje, prioridad y distribución) es lo que queda guardado al activar y recalcular;
+  - el scoring no toca personas, canales, exclusiones ni la vista de contactables;
+  - activar retira la anterior y refleja reglas y umbrales en las tablas de 1B; actividad completa;
+  - historial: una entrada por cambio, nada nuevo al recalcular sin cambios; la base lo hace append-only;
+  - la base protege las versiones: inmutables fuera del borrador, sin borrado, una sola activa y nunca activa sin aprobador;
+  - **recuperación:** un recálculo que se cae a mitad se retoma sin duplicar historial, y el cron no corre si otra réplica tiene el lock;
+  - las mutaciones de 1B ya no cambian reglas ni umbrales.
+- `dedupe-scoring-db.int-spec.ts` (entrega 1B, 14 pruebas; desde 1E-C-0, los cambios de reglas y umbrales van por borrador y activación):
   - señales de duplicado (correo, nombre, matrícula, dominio);
   - homónimos sin contexto común no se proponen;
   - un par descartado no se reabre;

@@ -21,6 +21,13 @@ export interface GrowthPermissionDefinition {
   description: string;
   level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   dependsOn: ValidPermissions[];
+  /**
+   * Se activa solo a mano (SQL de docs/growth/ACTIVATION.md): el seed lo crea
+   * inactivo y nunca le cambia el estado, ni con GROWTH_ENABLED=true. Tampoco
+   * va en GROWTH_ROLES: el token toma los permisos del rol sin mirar su
+   * estado, así que asignarlo a un rol ya activo lo activaría de hecho.
+   */
+  manualActivation?: true;
 }
 
 export interface GrowthRoleDefinition {
@@ -234,7 +241,28 @@ export const GROWTH_PERMISSIONS: GrowthPermissionDefinition[] = [
     level: 'HIGH',
     dependsOn: [P.EDIT_GROWTH_PROSPECTS],
   },
+  // ── Entrega 1E-C-0: versiones de scoring con aprobación ─────────────────
+  {
+    id: '8c1d7e54-2a96-4f0b-b3e1-5d47a90c6f12',
+    name: P.APPROVE_GROWTH_SCORING,
+    label: 'Aprobar Scoring',
+    description:
+      'Aprobar y activar una versión de reglas y umbrales del scoring comercial',
+    level: 'HIGH',
+    dependsOn: [P.VIEW_GROWTH_PROSPECTS],
+    manualActivation: true,
+  },
 ];
+
+/**
+ * Asignaciones que NO hace ninguna migración ni seed: se aplican al activar
+ * el permiso, con el SQL de docs/growth/ACTIVATION.md.
+ */
+export const GROWTH_MANUAL_ROLE_GRANTS: Partial<
+  Record<ValidRoles, ValidPermissions[]>
+> = {
+  [ValidRoles.GROWTH_MANAGER_ROL]: [P.APPROVE_GROWTH_SCORING],
+};
 
 export const GROWTH_ROLES: GrowthRoleDefinition[] = [
   {

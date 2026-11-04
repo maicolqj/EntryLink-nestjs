@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { ValidPermissions } from '../../../permissions/enums/valid-permissions';
 import { JwtAccessPayload } from '../../../shared/interfaces/jwt-payload.interface';
 import { CustomError } from '../../../shared/utils/errors.utils';
@@ -98,107 +98,135 @@ export class ScoringSimulationService {
         throw invalid('El umbral alto debe ser mayor que el medio');
       }
 
-      const scored: Array<{
-        kind: ScorableKind;
-        row: Row;
-        current: ComputedScore;
-        proposed: ComputedScore;
-      }> = [];
-      for (const kind of [
-        GrowthProspectKind.ORGANIZATION,
-        GrowthProspectKind.PERSON,
-      ] as ScorableKind[]) {
-        const rows: Row[] = await manager.query(
-          kind === GrowthProspectKind.ORGANIZATION
-            ? `SELECT id, legal_name AS display_name, estimated_properties, estimated_units, interest_signal
-                 FROM growth.organizations WHERE deleted_at IS NULL AND merged_into_id IS NULL`
-            : `SELECT id, full_name AS display_name, NULL::int AS estimated_properties, NULL::int AS estimated_units, interest_signal
-                 FROM growth.people WHERE deleted_at IS NULL AND merged_into_id IS NULL AND is_independent_admin`,
-        );
-        const facts = await this.scoring.factsFor(
-          manager,
-          kind,
-          rows.map((r) => ({
-            id: r.id,
-            estimatedProperties: r.estimated_properties,
-            estimatedUnits: r.estimated_units,
-            interestSignal: r.interest_signal,
-          })),
-        );
-        for (const row of rows) {
-          const f = facts.get(row.id);
-          scored.push({
-            kind,
-            row,
-            current: computeScore(currentRules, currentT, kind, f),
-            proposed: computeScore(proposedRules, proposedT, kind, f),
-          });
-        }
-      }
-
-      const changed = scored.filter(
-        (s) =>
-          s.current.score !== s.proposed.score ||
-          s.current.priority !== s.proposed.priority,
-      );
-      const canSeeAll = actorHas(
+      return this.compare(
+        manager,
+        { rules: currentRules, thresholds: currentT },
+        { rules: proposedRules, thresholds: proposedT },
         actor,
-        ValidPermissions.VIEW_ALL_GROWTH_PROSPECTS,
+        input.sampleLimit ?? 25,
+        settings.scoringVersion,
       );
-      const items: GrowthScoringSimulationItem[] = canSeeAll
-        ? changed
-            .map((s) => ({
-              kind: s.kind,
-              id: s.row.id,
-              displayName: s.row.display_name,
-              currentScore: s.current.score,
-              proposedScore: s.proposed.score,
-              delta: s.proposed.score - s.current.score,
-              currentPriority: s.current.priority,
-              proposedPriority: s.proposed.priority,
-              currentBreakdown: s.current.breakdown,
-              proposedBreakdown: s.proposed.breakdown,
-            }))
-            .sort(
-              (a, b) =>
-                Math.abs(b.delta) - Math.abs(a.delta) ||
-                b.proposedScore - a.proposedScore ||
-                a.id.localeCompare(b.id),
-            )
-            .slice(0, input.sampleLimit ?? 25)
-        : [];
-
-      const transitions: GrowthScoringTransition[] = [];
-      for (const from of PRIORITIES) {
-        for (const to of PRIORITIES) {
-          const count = scored.filter(
-            (s) => s.current.priority === from && s.proposed.priority === to,
-          ).length;
-          if (count > 0) transitions.push({ from, to, count });
-        }
-      }
-
-      return {
-        scoringVersion: settings.scoringVersion,
-        evaluated: scored.length,
-        changedScore: scored.filter((s) => s.current.score !== s.proposed.score)
-          .length,
-        changedPriority: scored.filter(
-          (s) => s.current.priority !== s.proposed.priority,
-        ).length,
-        current: distribution(
-          scored.map((s) => s.current),
-          currentT,
-        ),
-        proposed: distribution(
-          scored.map((s) => s.proposed),
-          proposedT,
-        ),
-        transitions,
-        items,
-        itemsHidden: !canSeeAll,
-      };
     });
+  }
+
+  /**
+   * Compara un conjunto vigente con uno propuesto sobre la misma foto de
+   * datos y con el mismo motor (`computeScore` + `factsFor`). Lo usan la
+   * simulación de cambios (1E-0) y la comparación de un borrador de versión
+   * (1E-C-0). Debe correr dentro de una transacción de solo lectura.
+   */
+  async compare(
+    manager: EntityManager,
+    currentSet: { rules: SimRule[]; thresholds: ScoreThresholds },
+    proposedSet: { rules: SimRule[]; thresholds: ScoreThresholds },
+    actor: JwtAccessPayload,
+    sampleLimit: number,
+    scoringVersion: number,
+  ): Promise<GrowthScoringSimulation> {
+    const currentRules = currentSet.rules;
+    const currentT = currentSet.thresholds;
+    const proposedRules = proposedSet.rules;
+    const proposedT = proposedSet.thresholds;
+    const scored: Array<{
+      kind: ScorableKind;
+      row: Row;
+      current: ComputedScore;
+      proposed: ComputedScore;
+    }> = [];
+    for (const kind of [
+      GrowthProspectKind.ORGANIZATION,
+      GrowthProspectKind.PERSON,
+    ] as ScorableKind[]) {
+      const rows: Row[] = await manager.query(
+        kind === GrowthProspectKind.ORGANIZATION
+          ? `SELECT id, legal_name AS display_name, estimated_properties, estimated_units, interest_signal
+               FROM growth.organizations WHERE deleted_at IS NULL AND merged_into_id IS NULL`
+          : `SELECT id, full_name AS display_name, NULL::int AS estimated_properties, NULL::int AS estimated_units, interest_signal
+               FROM growth.people WHERE deleted_at IS NULL AND merged_into_id IS NULL AND is_independent_admin`,
+      );
+      const facts = await this.scoring.factsFor(
+        manager,
+        kind,
+        rows.map((r) => ({
+          id: r.id,
+          estimatedProperties: r.estimated_properties,
+          estimatedUnits: r.estimated_units,
+          interestSignal: r.interest_signal,
+        })),
+      );
+      for (const row of rows) {
+        const f = facts.get(row.id);
+        scored.push({
+          kind,
+          row,
+          current: computeScore(currentRules, currentT, kind, f),
+          proposed: computeScore(proposedRules, proposedT, kind, f),
+        });
+      }
+    }
+
+    const changed = scored.filter(
+      (s) =>
+        s.current.score !== s.proposed.score ||
+        s.current.priority !== s.proposed.priority,
+    );
+    const canSeeAll = actorHas(
+      actor,
+      ValidPermissions.VIEW_ALL_GROWTH_PROSPECTS,
+    );
+    const items: GrowthScoringSimulationItem[] = canSeeAll
+      ? changed
+          .map((s) => ({
+            kind: s.kind,
+            id: s.row.id,
+            displayName: s.row.display_name,
+            currentScore: s.current.score,
+            proposedScore: s.proposed.score,
+            delta: s.proposed.score - s.current.score,
+            currentPriority: s.current.priority,
+            proposedPriority: s.proposed.priority,
+            currentBreakdown: s.current.breakdown,
+            proposedBreakdown: s.proposed.breakdown,
+          }))
+          .sort(
+            (a, b) =>
+              Math.abs(b.delta) - Math.abs(a.delta) ||
+              b.proposedScore - a.proposedScore ||
+              a.id.localeCompare(b.id),
+          )
+          .slice(0, sampleLimit)
+      : [];
+
+    const transitions: GrowthScoringTransition[] = [];
+    for (const from of PRIORITIES) {
+      for (const to of PRIORITIES) {
+        const count = scored.filter(
+          (s) => s.current.priority === from && s.proposed.priority === to,
+        ).length;
+        if (count > 0) transitions.push({ from, to, count });
+      }
+    }
+
+    return {
+      scoringVersion,
+      evaluated: scored.length,
+      changedScore: scored.filter((s) => s.current.score !== s.proposed.score)
+        .length,
+      changedPriority: scored.filter(
+        (s) => s.current.priority !== s.proposed.priority,
+      ).length,
+      current: distribution(
+        scored.map((s) => s.current),
+        currentT,
+      ),
+      proposed: distribution(
+        scored.map((s) => s.proposed),
+        proposedT,
+      ),
+      transitions,
+      items,
+      itemsHidden: !canSeeAll,
+    };
   }
 }
 

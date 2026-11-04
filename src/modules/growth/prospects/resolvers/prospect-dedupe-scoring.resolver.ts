@@ -168,7 +168,10 @@ export class GrowthDedupeScoringResolver {
     @Args('input') input: GrowthScoringRuleInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<ScoringRule> {
-    return this.scoring.createRule(input, actor);
+    // Contrato de 1B intacto; desde 1E-C-0 se cambia con borradores aprobados.
+    void input;
+    void actor;
+    return this.scoring.createRule();
   }
 
   @Auth({ permissions: [P.MANAGE_GROWTH_SCORING] })
@@ -182,7 +185,11 @@ export class GrowthDedupeScoringResolver {
     @Args('input') input: GrowthScoringRuleInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<ScoringRule> {
-    return this.scoring.updateRule(id, input, actor);
+    // Contrato de 1B intacto; desde 1E-C-0 se cambia con borradores aprobados.
+    void id;
+    void input;
+    void actor;
+    return this.scoring.updateRule();
   }
 
   @Auth({ permissions: [P.MANAGE_GROWTH_SCORING] })
@@ -191,7 +198,10 @@ export class GrowthDedupeScoringResolver {
     @Args('input') input: GrowthScoringThresholdsInput,
     @CurrentUser() actor: JwtAccessPayload,
   ): Promise<GrowthSettings> {
-    return this.scoring.updateThresholds(input, actor);
+    // Contrato de 1B intacto; desde 1E-C-0 se cambia con borradores aprobados.
+    void input;
+    void actor;
+    return this.scoring.updateThresholds();
   }
 
   @Auth({ permissions: [P.MANAGE_GROWTH_SCORING] })
