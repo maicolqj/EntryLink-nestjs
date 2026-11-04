@@ -30,6 +30,7 @@ import {
 } from './prospects/resolvers/prospect-records.resolver';
 import { GrowthProspectOperationsResolver } from './prospects/resolvers/prospect-operations.resolver';
 import { GrowthDedupeScoringResolver } from './prospects/resolvers/prospect-dedupe-scoring.resolver';
+import { GrowthScoringVersionsResolver } from './prospects/resolvers/prospect-scoring-versions.resolver';
 import { GrowthImportsResolver } from './imports/resolvers/growth-imports.resolver';
 import { GrowthImportTemplatesResolver } from './imports/resolvers/growth-import-templates.resolver';
 import { GrowthImportsController } from './imports/controllers/growth-imports.controller';
@@ -49,6 +50,7 @@ const RESOLVERS = [
   GrowthPropertiesResolver,
   GrowthProspectOperationsResolver,
   GrowthDedupeScoringResolver,
+  GrowthScoringVersionsResolver,
   GrowthImportsResolver,
   GrowthImportTemplatesResolver,
 ];
@@ -204,11 +206,16 @@ describe('Autorización de la Growth Suite', () => {
         'growthSimulateScoring',
         'growthTeamWorkload',
         'growthMergePreview',
-        // Plantillas personales y del equipo
-        'growthCreateImportTemplate',
-        'growthUpdateImportTemplate',
-        'growthShareImportTemplate',
-        'growthArchiveImportTemplate',
+        // Entrega 1E-C-0
+        'growthScoringVersions',
+        'growthScoringVersion',
+        'growthScoringStatus',
+        'growthCompareScoringVersion',
+        'growthProspectScoreHistory',
+        'growthCreateScoringDraft',
+        'growthUpdateScoringDraft',
+        'growthDiscardScoringDraft',
+        'growthActivateScoringVersion',
       ].sort(),
     );
   });

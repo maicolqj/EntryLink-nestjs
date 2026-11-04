@@ -151,6 +151,20 @@ export enum GrowthScoringPredicate {
   INTEREST_SIGNAL_IN = 'INTEREST_SIGNAL_IN',
 }
 
+/** Estado de una versión de reglas y umbrales del scoring. */
+export enum GrowthScoringVersionStatus {
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  RETIRED = 'RETIRED',
+}
+
+/** De dónde salió una versión del scoring. */
+export enum GrowthScoringVersionOrigin {
+  USER = 'USER',
+  /** La versión 1, creada al introducir el versionado con lo vigente. */
+  MIGRATION = 'MIGRATION',
+}
+
 /** Si una regla se evaluó con datos verificados o con estimados. */
 export enum GrowthScoreBasis {
   VERIFIED = 'VERIFIED',
@@ -224,6 +238,16 @@ const enums: Array<[object, string, string]> = [
     'Condición evaluable de una regla de scoring',
   ],
   [GrowthScoreBasis, 'GrowthScoreBasis', 'Dato verificado o estimado'],
+  [
+    GrowthScoringVersionStatus,
+    'GrowthScoringVersionStatus',
+    'Estado de una versión de scoring: borrador, activa o retirada',
+  ],
+  [
+    GrowthScoringVersionOrigin,
+    'GrowthScoringVersionOrigin',
+    'Origen de una versión de scoring',
+  ],
   [
     GrowthMergeSide,
     'GrowthMergeSide',

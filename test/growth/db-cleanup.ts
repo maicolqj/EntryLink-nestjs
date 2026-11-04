@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { SEED_SCORING_RULES } from '../../src/core/database/migrations/1781010800000-CreateGrowthDedupeAndScoring';
+import { SEED_INITIAL_SCORING_VERSION_SQL } from '../../src/core/database/migrations/1781011600000-CreateGrowthScoringVersions';
 
 /**
  * Limpieza de la base DESECHABLE de integración. Desactiva triggers solo en
@@ -7,7 +8,13 @@ import { SEED_SCORING_RULES } from '../../src/core/database/migrations/178101080
  * prueba) para poder vaciar tablas append-only. Nunca se usa fuera de test.
  */
 /** Prefijos de los ids de usuarios de prueba de las cuatro suites. */
-const IT_USER_PREFIXES = ['aaaaaaaa-', 'bbbbbbbb-', 'cccccccc-', 'dddddddd-'];
+const IT_USER_PREFIXES = [
+  'aaaaaaaa-',
+  'bbbbbbbb-',
+  'cccccccc-',
+  'dddddddd-',
+  'eeeeeeee-',
+];
 
 export async function resetGrowthTestData(
   ds: DataSource,
@@ -21,6 +28,9 @@ export async function resetGrowthTestData(
 
   await ds.query(`SET session_replication_role = replica`);
   for (const table of [
+    // Entrega 1E-C-0 (append-only: solo se limpian en modo réplica)
+    'prospect_score_history',
+    'scoring_versions',
     // Entrega 1C
     'import_rows',
     'import_batches',
@@ -71,6 +81,8 @@ export async function resetGrowthTestData(
   await ds.query(
     `UPDATE growth.settings SET scoring_high_threshold = 50, scoring_medium_threshold = 25, scoring_version = 1`,
   );
+  // Versión 1 ACTIVE con lo sembrado, como la deja la migración (1E-C-0).
+  await ds.query(SEED_INITIAL_SCORING_VERSION_SQL);
   await ds.query(`DELETE FROM growth.data_sources WHERE code LIKE 'IT_%'`);
   await ds.query(
     `UPDATE growth.data_sources SET status = 'PENDING_APPROVAL', legal_review_status = 'PENDING',

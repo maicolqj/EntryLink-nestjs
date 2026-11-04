@@ -38,8 +38,12 @@ export enum GrowthErrorCode {
   GROWTH_IMPORT_INVALID_STATE = 'GROWTH_IMPORT_INVALID_STATE',
   /** El archivo y las filas crudas ya se purgaron (30 días). */
   GROWTH_IMPORT_PURGED = 'GROWTH_IMPORT_PURGED',
-  /** Ya hay una plantilla vigente con ese nombre en el mismo alcance. */
-  GROWTH_IMPORT_TEMPLATE_NAME_TAKEN = 'GROWTH_IMPORT_TEMPLATE_NAME_TAKEN',
-  /** Cambiar plantillas del equipo exige MANAGE_GROWTH_IMPORT_TEMPLATES. */
-  GROWTH_IMPORT_TEMPLATE_FORBIDDEN = 'GROWTH_IMPORT_TEMPLATE_FORBIDDEN',
+  /** Las reglas y umbrales se cambian en un borrador que se aprueba. */
+  GROWTH_SCORING_REQUIRES_APPROVAL = 'GROWTH_SCORING_REQUIRES_APPROVAL',
+  /** La operación no aplica al estado de la versión de scoring. */
+  GROWTH_SCORING_VERSION_STATE = 'GROWTH_SCORING_VERSION_STATE',
+  /** Quien propuso o editó un borrador no lo aprueba (salvo la excepción auditada). */
+  GROWTH_SCORING_SELF_APPROVAL_FORBIDDEN = 'GROWTH_SCORING_SELF_APPROVAL_FORBIDDEN',
+  /** Falta el permiso de configurar o aprobar el scoring. */
+  GROWTH_SCORING_FORBIDDEN = 'GROWTH_SCORING_FORBIDDEN',
 }
