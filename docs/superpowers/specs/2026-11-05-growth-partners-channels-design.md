@@ -1,6 +1,6 @@
 # EntryLink Growth Suite — Partners & Channels (diseño, sin implementar)
 
-_2026-11-05 · Estado: **propuesta para aprobación**. No hay código, migraciones, SQL ni permisos nuevos. Growth sigue como está y `GROWTH_ENABLED` no se toca._
+_2026-11-05 · Estado: **propuesta para aprobación** (ajustada por `2026-11-05-growth-auditoria-integral.md`: I-04, I-05, I-10). No hay código, migraciones, SQL ni permisos nuevos. Growth sigue como está y `GROWTH_ENABLED` no se toca._
 
 Cómo colaboran comercialmente con Alterna QJ Services SAS las empresas de seguridad y vigilancia privada que quieren llevar EntryLink a los complejos residenciales donde prestan servicio. Hay **dos modalidades independientes**: **RESELLER** (revendedor) y **REFERRAL_PARTNER** (referenciador). Además, el **co-branding** es una configuración aparte, que no depende de la modalidad.
 
@@ -196,7 +196,7 @@ erDiagram
 | `commission_rules` | `agreement_id`, `basis` (C-8), `rate_bps` o `amount`, `currency`, `duration_months`, `clawback_days`, `min_payment_cents`, `caps jsonb` | Solo aplica a REFERRAL_PARTNER (y a un margen RESELLER, si se aprueba P-05) |
 | `cobranding_profiles` | `partner_id`, `status` (C-11), `valid_from/to`, `partner_logo_r2_key`, `palette jsonb`, `partner_authorization_r2_key`, `entrylink_authorization_r2_key`, `allowed_uses` (C-12) | Archivos privados en R2. Sin vigencia y sin las dos autorizaciones no se pasa a APPROVED |
 | `cobranding_materials` | `profile_id`, `kind` (C-12), `template_version`, `status`, `approved_by/at` | Plantillas aprobadas, una por versión |
-| `opportunities` | `property_id`, `channel` (C-5: DIRECT/REFERRAL/RESELLER), `stage` (C-6), `owner_user_id`, `expected_units`, `expected_mrr_cents`, `lost_reason?`, `converted_complex_id?` (lógico) | Es el CRM del roadmap (diseño base §4). El canal es **una sola** decisión por oportunidad |
+| `opportunities` | **La define y es dueña de ella la fase CRM** (auditoría I-04). Partners solo le agrega `channel` (C-5: DIRECT/REFERRAL/RESELLER) | No se crea otra tabla de oportunidades. El canal es **una sola** decisión por oportunidad |
 | `opportunity_registrations` | `partner_id`, `agreement_id`, `property_id?`, `submitted_property jsonb` (lo que mandó el aliado), `status` (C-7), `registered_at`, `decision_reason`, `opportunity_id?` | Lo que el aliado presenta. Se valida antes de crear o atar la oportunidad |
 | `opportunity_attributions` | `opportunity_id`, `partner_id`, `agreement_id`, `type` (REFERRAL/RESELLER), `status` (C-9), `valid_from`, `valid_until`, `extended_once` | **Máximo una ACTIVE por oportunidad** (índice único parcial) |
 | `attribution_conflicts` | `property_id`, `registration_ids uuid[]`, `opportunity_id?`, `status` (OPEN/RESOLVED), `resolution` (C-10), `resolved_by/at`, `reason` | Cola de resolución manual |
@@ -289,6 +289,8 @@ Los catálogos van como `varchar` + `CHECK`, igual que el resto de Growth: no se
 ## 6. Matriz de permisos y responsabilidades
 
 Permisos **nuevos y propuestos**, que nacen **inactivos y sin rol**, igual que los de 1E (`manualActivation`, `ACTIVATION.md` §13). Ninguno se asigna en una migración.
+
+> `MANAGE_GROWTH_PIPELINE` y `VIEW_GROWTH_ANALYTICS` **todavía no existen** (auditoría I-05): los crean las fases CRM y Analytics. Mientras tanto, estas dependencias son un requisito de esas fases, no de Partners.
 
 | Permiso propuesto | Nivel | Requiere |
 |---|---|---|
