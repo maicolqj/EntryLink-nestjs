@@ -10,14 +10,19 @@ import * as helmet from 'helmet';
 import compression from 'compression';
 import { UniversalExceptionFilter } from './modules/shared/filters/custom-errors.filters';
 import { SocketIoRedisAdapter } from './core/infrastructure/socket/socket.adapter';
+import { ScrubbingConsoleLogger } from './core/config/secret-scrubber';
 
 async function bootstrap() {
   const isProd = process.env.NODE_ENV === 'production';
 
+  // El logger nunca imprime el valor de una variable secreta (R2, JWT, base,
+  // tokens…): ver src/core/config/secret-scrubber.ts.
   const app = await NestFactory.create(AppModule, {
-    logger: isProd
-      ? ['error', 'warn', 'log']
-      : ['debug', 'error', 'fatal', 'log', 'verbose', 'warn'],
+    logger: new ScrubbingConsoleLogger({
+      logLevels: isProd
+        ? ['error', 'warn', 'log']
+        : ['debug', 'error', 'fatal', 'log', 'verbose', 'warn'],
+    }),
   });
 
   // VULN-05 fix: configurar cuántos proxies de confianza hay delante del servidor

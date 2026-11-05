@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nestjs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { redactValues } from './core/config/redact';
+import { scrubSecrets } from './core/config/secret-scrubber';
 
 /**
  * Sentry arranca antes que Nest (primer import de main.ts) para instrumentar
@@ -56,11 +57,16 @@ Sentry.init({
   tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
   beforeSend(event) {
     // Defensa adicional: un mensaje con «with value "…"» (estilo Joi) nunca
-    // sale con el valor, venga de donde venga.
+    // sale con el valor, y ningún texto lleva el valor de una variable
+    // secreta (R2, JWT, base, tokens…), venga de donde venga.
     for (const ex of event.exception?.values ?? []) {
-      if (ex.value) ex.value = redactValues(ex.value);
+      if (ex.value) ex.value = scrubSecrets(redactValues(ex.value));
     }
-    if (event.message) event.message = redactValues(event.message);
+    if (event.message)
+      event.message = scrubSecrets(redactValues(event.message));
+    for (const crumb of event.breadcrumbs ?? []) {
+      if (crumb.message) crumb.message = scrubSecrets(crumb.message);
+    }
     const request = event.request;
     if (request) {
       delete request.cookies;
@@ -70,5 +76,10 @@ Sentry.init({
       }
     }
     return event;
+  },
+  // Las migas (logs de consola, peticiones) también pasan por el depurador.
+  beforeBreadcrumb(crumb) {
+    if (crumb.message) crumb.message = scrubSecrets(crumb.message);
+    return crumb;
   },
 });
