@@ -14,6 +14,7 @@ import { PermissionErrorCode } from '../../shared/constans/error-codes.constants
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   inactivePermissions,
+  inactiveRoles,
   permissionStatusCheckedAt,
   permissionStatusRefreshRequested,
   permissionStatusTrusted,
@@ -100,6 +101,15 @@ export class PermissionStatusService implements OnModuleInit, OnModuleDestroy {
     return inactivePermissions();
   }
 
+  /**
+   * Nombres de los roles inactivos, con la misma frescura y el mismo fallo
+   * cerrado que `inactive()` (una sola lectura trae los dos).
+   */
+  async inactiveRoleNames(now = Date.now()): Promise<ReadonlySet<string>> {
+    await this.inactive(now);
+    return inactiveRoles();
+  }
+
   /** Pide releer: la próxima consulta va a la base (sin perder lo conocido). */
   invalidate(): void {
     requestPermissionStatusRefresh();
@@ -146,6 +156,36 @@ export class PermissionStatusService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Tras activar o desactivar un rol, dentro de la misma transacción: sube
+   * `tokenVersion` a quien lo tiene asignado (y a las cuentas de complejo si
+   * es COMPLEX_ROL). El token siguiente sale sin el rol, o con él.
+   */
+  async bumpRoleHolders(
+    roleId: string,
+    manager: EntityManager = this.dataSource.manager,
+  ): Promise<string[]> {
+    const users = rows(
+      await manager.query(
+        `UPDATE public.users u SET "tokenVersion" = u."tokenVersion" + 1
+          WHERE u.id IN (SELECT uhr.user_id FROM public.user_has_roles uhr
+                          WHERE uhr.role_id = $1)
+          RETURNING u.id`,
+        [roleId],
+      ),
+    );
+    const complexes = rows(
+      await manager.query(
+        `UPDATE public.residential_complexes c SET "tokenVersion" = c."tokenVersion" + 1
+          WHERE EXISTS (SELECT 1 FROM public.roles r
+                         WHERE r.id = $1 AND r.name::text = $2)
+          RETURNING c.id`,
+        [roleId, ValidRoles.COMPLEX_ROL],
+      ),
+    );
+    return [...users, ...complexes].map((r) => r.id);
+  }
+
+  /**
    * Después del commit: borra la versión en caché (vive 5 min) para que los
    * tokens viejos mueran ya, y vence el estado de los permisos. Antes del
    * commit, otra petición podría volver a guardar la versión vieja.
@@ -171,8 +211,12 @@ export class PermissionStatusService implements OnModuleInit, OnModuleDestroy {
     let timeout: NodeJS.Timeout | undefined;
     try {
       const result = await Promise.race([
-        this.dataSource.query<{ name: string }[]>(
-          `SELECT name::text AS name FROM public.permissions WHERE status = false`,
+        this.dataSource.query<{ name: string; kind?: string }[]>(
+          `SELECT name::text AS name, 'permission' AS kind
+             FROM public.permissions WHERE status = false
+           UNION ALL
+           SELECT name::text AS name, 'role' AS kind
+             FROM public.roles WHERE status = false`,
         ),
         new Promise<never>((_, reject) => {
           timeout = setTimeout(
@@ -182,8 +226,9 @@ export class PermissionStatusService implements OnModuleInit, OnModuleDestroy {
         }),
       ]);
       setInactivePermissions(
-        result.map((r) => r.name),
+        result.filter((r) => r.kind !== 'role').map((r) => r.name),
         now,
+        result.filter((r) => r.kind === 'role').map((r) => r.name),
       );
     } catch (error) {
       recordFailedCheck(now);

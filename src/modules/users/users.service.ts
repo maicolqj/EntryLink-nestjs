@@ -1668,9 +1668,12 @@ export class UsersService {
     return role;
   }
 
-  /** Los roles de la Growth Suite no se asignan mientras estén inactivos. */
+  /**
+   * Un rol inactivo no se asigna (antes solo se cuidaban los de la Growth
+   * Suite). Aunque se asignara por SQL, el token no lo incluiría.
+   */
   private assertGrowthRoleActive(role: Role): void {
-    if (isInactiveGrowthRole(role)) {
+    if (isInactiveGrowthRole(role) || role.status === false) {
       throw new CustomError({
         message: `El rol '${role.name}' está inactivo y no se puede asignar`,
         statusCode: HttpStatus.FORBIDDEN,

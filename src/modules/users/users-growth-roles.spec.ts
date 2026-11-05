@@ -111,12 +111,19 @@ describe('Roles de la Growth Suite inactivos', () => {
     );
   });
 
-  it('los roles existentes no cambian de comportamiento aunque estén inactivos', async () => {
+  it('cualquier rol inactivo, no solo los de Growth, se rechaza al asignar', async () => {
+    // Antes solo se cuidaban los de la Growth Suite; ahora un rol inactivo
+    // no se asigna, y aunque se asignara por SQL el token no lo incluiría.
     const h = build({ SECURITY_ROL: false });
+    await expect(findRoleOrFail(h.service, 'SECURITY_ROL')).rejects.toThrow(
+      /inactivo/,
+    );
+  });
+
+  it('un rol activo se asigna como siempre', async () => {
+    const h = build({ SECURITY_ROL: true });
     await expect(
       findRoleOrFail(h.service, 'SECURITY_ROL'),
-    ).resolves.toMatchObject({
-      name: 'SECURITY_ROL',
-    });
+    ).resolves.toMatchObject({ name: 'SECURITY_ROL' });
   });
 });
