@@ -5,58 +5,105 @@ on:
     workflows: ["Build & Push Docker Image"]
     types: [completed]
     branches: [main]
+  # Para volver a disparar a mano el último build de main (p. ej. para probar
+  # este workflow) sin fusionar nada.
+  workflow_dispatch:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      # La versión que debe quedar corriendo: la del commit que se construyó.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Versión esperada
+        id: expected
+        run: |
+          VERSION=$(jq -r .version package.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Se espera que producción quede en $VERSION"
+
       - name: Trigger Coolify Deploy
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           # Coolify 4.6 solo acepta POST en /api/v1/deploy (GET responde 405).
-          # El cuerpo va vacío y explícito: algunos proxies exigen Content-Length en un POST.
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_APP_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            -H "Content-Length: 0")
+          # Un 200 no basta: la respuesta tiene que traer el deployment creado.
+          # Sin eso, Coolify aceptó la llamada pero no desplegó nada (pasó el
+          # 2026-11-05 con #292 y #285).
+          trigger() {
+            curl -s -o body.json -w "%{http_code}" -X POST "$@" \
+              -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              -H "Accept: application/json"
+          }
 
-          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-            echo "Deploy triggered successfully (HTTP $HTTP_STATUS)"
-          else
-            echo "Deploy trigger failed (HTTP $HTTP_STATUS)"
-            if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
-              echo "::error::Coolify rechazó el token: revisar en Keys & Tokens que tenga permiso de deploy."
-            elif [ "$HTTP_STATUS" = "405" ]; then
-              echo "::error::Coolify cambió el método del endpoint de deploy: revisar su API."
-            fi
-            exit 1
+          report() {
+            echo "Respuesta de Coolify (HTTP $1):"
+            jq '{message, deployments: [.deployments[]? | {message, resource_uuid, deployment_uuid}]}' body.json 2>/dev/null \
+              || head -c 500 body.json
+            echo
+          }
+
+          has_deployment() {
+            jq -e '[.deployments[]? | .deployment_uuid | select(. != null and . != "")] | length > 0' body.json >/dev/null 2>&1
+          }
+
+          # 1.º intento: uuid y force en la query, cuerpo vacío.
+          STATUS=$(trigger "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false" -H "Content-Length: 0")
+          report "$STATUS"
+
+          # 2.º intento: los mismos datos en un cuerpo JSON.
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ] && ! has_deployment; then
+            echo "Coolify respondió sin deployment; se reintenta con el uuid en el cuerpo JSON."
+            STATUS=$(trigger "$COOLIFY_URL/api/v1/deploy" -H "Content-Type: application/json" \
+              -d "{\"uuid\":\"$COOLIFY_APP_UUID\",\"force\":false}")
+            report "$STATUS"
           fi
 
-      - name: Verificar que el contenedor quedó sano
+          if [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
+            echo "::error::Coolify rechazó el token: revisar en Keys & Tokens que tenga permiso de deploy."
+            exit 1
+          elif [ "$STATUS" = "405" ]; then
+            echo "::error::Coolify cambió el método del endpoint de deploy: revisar su API."
+            exit 1
+          elif [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "::error::Deploy trigger failed (HTTP $STATUS)"
+            exit 1
+          elif ! has_deployment; then
+            echo "::error::Coolify respondió $STATUS pero no creó ningún deployment. Hacer Redeploy manual y revisar la respuesta de arriba."
+            exit 1
+          fi
+          echo "Deploy creado en Coolify."
+
+      - name: Verificar que corre la versión nueva
         env:
           HEALTH_URL: ${{ secrets.PRODUCTION_HEALTH_URL || 'https://api.alternaqj.com/health' }}
+          EXPECTED: ${{ steps.expected.outputs.version }}
         run: |
-          # Coolify levanta el contenedor nuevo y recién después retira el viejo.
-          # Se espera antes de la primera sonda para no leer al que ya se va.
-          echo "Dando 45s a Coolify para reemplazar el contenedor…"
-          sleep 45
-
-          echo "Sondeando $HEALTH_URL hasta que responda 200…"
+          # Un 200 solo no prueba nada: mientras Coolify no retire el
+          # contenedor viejo, ese sigue respondiendo 200. Se espera hasta que
+          # /health informe la versión del commit construido.
+          echo "Sondeando $HEALTH_URL hasta que informe la versión $EXPECTED…"
           for attempt in $(seq 1 40); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" || echo "000")
+            BODY=$(curl -s --max-time 10 "$HEALTH_URL" || true)
+            VERSION=$(echo "$BODY" | jq -r '.version // "sin-version"' 2>/dev/null || echo "no-json")
 
-            if [ "$STATUS" = "200" ]; then
-              echo "Producción responde 200 tras $attempt sondeo(s)."
+            if [ "$VERSION" = "$EXPECTED" ]; then
+              echo "Producción corre $VERSION tras $attempt sondeo(s)."
               exit 0
             fi
 
-            echo "Sondeo $attempt/40: HTTP $STATUS — se reintenta en 15s."
+            echo "Sondeo $attempt/40: versión $VERSION — se reintenta en 15s."
             sleep 15
           done
 
-          echo "::error::Producción no respondió 200 en 10 minutos tras el despliegue."
-          echo "El contenedor no logró arrancar o no pasa su health check."
-          echo "Revisar los logs de la aplicación en Coolify: un fallo al importar"
-          echo "módulos o una migración caída dejan a Traefik sin instancia sana,"
-          echo "y entonces toda la API responde 503."
+          echo "::error::En 10 minutos producción no pasó a $EXPECTED."
+          echo "Revisar en Coolify si el deployment terminó y los logs del contenedor nuevo:"
+          echo "un fallo al importar módulos o una migración caída dejan corriendo"
+          echo "el contenedor viejo, o a Traefik sin instancia sana (503)."
           exit 1
