@@ -46,6 +46,16 @@ const build = () => {
   const userRepo = {
     findOne: jest.fn(async () => ({ ...user })),
     findOneOrFail: jest.fn(async () => ({ ...user })),
+    // La cuenta suspendida no es SUPER_ADMIN: la consulta de roles da 0.
+    createQueryBuilder: jest.fn(() => {
+      const qb: any = {
+        innerJoin: () => qb,
+        where: () => qb,
+        andWhere: () => qb,
+        getCount: async () => 0,
+      };
+      return qb;
+    }),
     update: jest.fn(async (_id: string, patch: Record<string, unknown>) => {
       for (const [k, v] of Object.entries(patch)) {
         if (k === 'tokenVersion' && typeof v === 'function') {
