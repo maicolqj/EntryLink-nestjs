@@ -27,6 +27,7 @@ import {
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { v4 as uuidv4 } from 'uuid';
+import { isUserStatusOperable } from '../utils/user-status.util';
 
 @Injectable()
 export class TokenService {
@@ -391,13 +392,30 @@ export class TokenService {
       });
     }
 
+    const entityType = payload.entityType ?? 'user';
+
+    // La renovación mira el estado vigente de la cuenta, igual que el login:
+    // sin esto, un usuario suspendido seguía renovando su sesión hasta que el
+    // refresh token vencía (hasta 180 días).
+    if (
+      entityType !== 'complex' &&
+      (!storedToken.user ||
+        storedToken.user.deletedAt ||
+        !isUserStatusOperable(storedToken.user.status))
+    ) {
+      await this.revokeTokenFamily(payload.tokenFamily, 'user_not_active');
+      throw new CustomError({
+        message: 'Tu cuenta no está activa. Contacta al administrador',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_TERMINATED,
+      });
+    }
+
     await this.refreshTokenRepo.update(storedToken.id, {
       isRevoked: true,
       revokedReason: 'rotated',
       lastUsedAt: new Date(),
     });
-
-    const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
 
     // La vigencia con la que nació la sesión manda sobre el default: rotar no

@@ -68,6 +68,8 @@ import { AuditAction } from '../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
 import { NotificationsService } from '../notifications/services/notifications.service';
 import { TokenService } from '../auth/services/token.service';
+import { SessionService } from '../auth/services/session.service';
+import { SocketService } from '../../core/infrastructure/socket/socket.service';
 import { SetPasswordResponse } from '../auth/dto/responses/set-password.response';
 
 /** Roles que inician sesión con email + contraseña */
@@ -145,6 +147,8 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
     private readonly tokenService: TokenService,
     private readonly configService: ConfigService,
+    private readonly sessionService: SessionService,
+    private readonly socketService: SocketService,
   ) {}
 
   // ── Consultas ────────────────────────────────────────────────────────────
@@ -1134,18 +1138,35 @@ export class UsersService {
       });
     }
 
-    user.status = UserStatus.SUSPENDED;
-    user.suspensionReason = reason;
-    const updated = await this.userRepo.save(user);
-    this.logger.warn(`Usuario suspendido: ${userId} — motivo: ${reason}`);
+    const previousStatus = user.status;
+    // Estado y versión del token en una sola escritura: desde aquí ningún
+    // access token anterior pasa (la versión no coincide) y la renovación ve
+    // la cuenta suspendida.
+    await this.userRepo.update(userId, {
+      status: UserStatus.SUSPENDED,
+      suspensionReason: reason,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+    const sessions = await this.cutUserAccess(userId, 'user_suspended');
+    const updated = await this.userRepo.findOneOrFail({
+      where: { id: userId },
+    });
+    this.logger.warn(
+      `Usuario suspendido: ${userId} — sesiones cerradas: ${sessions.closed}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
         entityType: AuditEntityType.User,
         entityId: userId,
         action: AuditAction.SUSPEND,
-        previousValue: { status: UserStatus.ACTIVE },
-        newValue: { status: UserStatus.SUSPENDED, reason },
+        previousValue: { status: previousStatus },
+        newValue: {
+          status: UserStatus.SUSPENDED,
+          reason,
+          sessionsClosed: sessions.closed,
+          sessionsCutComplete: sessions.complete,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -1155,6 +1176,48 @@ export class UsersService {
     }
 
     return updated;
+  }
+
+  /**
+   * Corta todo acceso vivo de una cuenta: cierra sus sesiones (y con ellas los
+   * refresh tokens), revoca los que queden, borra la versión cacheada del token
+   * y desconecta sus sockets en todas las instancias.
+   *
+   * No lanza: el estado y la versión del token ya se guardaron, y con eso
+   * ningún token viejo pasa. Si Redis falla aquí, la versión cacheada vence
+   * sola en 5 minutos; queda registrado en la auditoría (`complete: false`).
+   */
+  private async cutUserAccess(
+    userId: string,
+    reason: string,
+  ): Promise<{ closed: number; complete: boolean }> {
+    let closed = 0;
+    let complete = true;
+    try {
+      closed = await this.sessionService.terminateAllUserSessions(userId);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron cerrar las sesiones de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    try {
+      await this.tokenService.invalidateUserSessions(userId, reason);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron revocar los tokens de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    try {
+      this.socketService.disconnectUser(userId);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron cerrar los sockets de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    return { closed, complete };
   }
 
   async reactivateUser(
@@ -1188,9 +1251,19 @@ export class UsersService {
       });
     }
 
-    user.status = UserStatus.ACTIVE;
-    user.suspensionReason = null;
-    const updated = await this.userRepo.save(user);
+    // Reactivar no devuelve las sesiones viejas: se cerraron al suspender y la
+    // versión del token sube otra vez, así que solo sirve un login nuevo.
+    await this.userRepo.update(userId, {
+      status: UserStatus.ACTIVE,
+      suspensionReason: null,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+    await this.tokenService
+      .clearUserTokenVersionCache(userId)
+      .catch(() => undefined);
+    const updated = await this.userRepo.findOneOrFail({
+      where: { id: userId },
+    });
     this.logger.log(`Usuario reactivado: ${userId}`);
 
     if (currentUser) {
