@@ -13,14 +13,22 @@ jobs:
     steps:
       - name: Trigger Coolify Deploy
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+          # Coolify 4.6 solo acepta POST en /api/v1/deploy (GET responde 405).
+          # El cuerpo va vacío y explícito: algunos proxies exigen Content-Length en un POST.
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_APP_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Length: 0")
 
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "Deploy triggered successfully (HTTP $HTTP_STATUS)"
           else
             echo "Deploy trigger failed (HTTP $HTTP_STATUS)"
+            if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
+              echo "::error::Coolify rechazó el token: revisar en Keys & Tokens que tenga permiso de deploy."
+            elif [ "$HTTP_STATUS" = "405" ]; then
+              echo "::error::Coolify cambió el método del endpoint de deploy: revisar su API."
+            fi
             exit 1
           fi
 
