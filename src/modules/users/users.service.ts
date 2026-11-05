@@ -1154,7 +1154,11 @@ export class UsersService {
       });
     }
 
-    await this.assertSuperAdminCanBeSuspended(userId, callerIsSuperAdmin);
+    await this.assertSuperAdminCanBeRemoved(
+      userId,
+      callerIsSuperAdmin,
+      'suspender',
+    );
 
     const previousStatus = user.status;
     // Estado y versión del token en una sola escritura: desde aquí ningún
@@ -1207,12 +1211,14 @@ export class UsersService {
   }
 
   /**
-   * Un SUPER_ADMIN solo lo suspende otro SUPER_ADMIN, y nunca el último activo:
-   * sin ninguno, nadie puede reactivar cuentas ni administrar la plataforma.
+   * Un SUPER_ADMIN solo lo suspende o elimina otro SUPER_ADMIN, y nunca al
+   * último activo: sin ninguno, nadie puede reactivar cuentas ni administrar
+   * la plataforma.
    */
-  private async assertSuperAdminCanBeSuspended(
+  private async assertSuperAdminCanBeRemoved(
     userId: string,
     callerIsSuperAdmin: boolean,
+    action: 'suspender' | 'eliminar',
   ): Promise<void> {
     const superAdmins = () =>
       this.userRepo
@@ -1229,7 +1235,7 @@ export class UsersService {
 
     if (!callerIsSuperAdmin) {
       throw new CustomError({
-        message: 'Solo un SUPER_ADMIN puede suspender a otro SUPER_ADMIN',
+        message: `Solo un SUPER_ADMIN puede ${action} a otro SUPER_ADMIN`,
         statusCode: HttpStatus.FORBIDDEN,
         errorCode: UserErrorCode.CANNOT_SUSPEND_SUPER_ADMIN,
       });
@@ -1242,8 +1248,7 @@ export class UsersService {
       .getCount();
     if (otherActive === 0) {
       throw new CustomError({
-        message:
-          'No se puede suspender al último SUPER_ADMIN activo: la plataforma quedaría sin administrador',
+        message: `No se puede ${action} al último SUPER_ADMIN activo: la plataforma quedaría sin administrador`,
         statusCode: HttpStatus.CONFLICT,
         errorCode: UserErrorCode.LAST_SUPER_ADMIN,
       });
@@ -1420,6 +1425,14 @@ export class UsersService {
       });
     }
 
+    if (currentUser?.sub === userId) {
+      throw new CustomError({
+        message: 'No puedes eliminar tu propia cuenta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_DELETE_SELF,
+      });
+    }
+
     if (user.status === UserStatus.DELETED) {
       throw new CustomError({
         message: 'El usuario ya fue eliminado',
@@ -1428,11 +1441,23 @@ export class UsersService {
       });
     }
 
+    await this.assertSuperAdminCanBeRemoved(
+      userId,
+      this.isSuperAdminCaller(currentUser),
+      'eliminar',
+    );
+
+    const previousStatus = user.status;
     user.status = UserStatus.DELETED;
     user.deletedAt = new Date();
 
     const updated = await this.dataSource.transaction(async (manager) => {
       const saved = await manager.save(User, user);
+      // Como al suspender: ningún token anterior pasa desde aquí. Se sube en
+      // SQL para no depender de que la entidad cargada traiga la versión.
+      await manager.update(User, userId, {
+        tokenVersion: () => '"tokenVersion" + 1',
+      });
 
       // Limpiar legalRepresentativeId solo si el complejo aún apunta a este usuario.
       // Si el frontend ya asignó un nuevo representante antes de llamar deleteUser,
@@ -1446,15 +1471,24 @@ export class UsersService {
       return saved;
     });
 
-    this.logger.warn(`Usuario eliminado (soft): ${userId}`);
+    // Una cuenta eliminada no conserva sesiones, refresh tokens ni sockets.
+    const sessions = await this.cutUserAccess(userId, 'user_deleted');
+    this.logger.warn(
+      `Usuario eliminado (soft): ${userId} — sesiones cerradas: ${sessions.closed}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
         entityType: AuditEntityType.User,
         entityId: userId,
         action: AuditAction.DELETE,
-        previousValue: { status: user.status },
-        newValue: { status: UserStatus.DELETED, deletedAt: updated.deletedAt },
+        previousValue: { status: previousStatus },
+        newValue: {
+          status: UserStatus.DELETED,
+          deletedAt: updated.deletedAt,
+          sessionsClosed: sessions.closed,
+          sessionsCutComplete: sessions.complete,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',

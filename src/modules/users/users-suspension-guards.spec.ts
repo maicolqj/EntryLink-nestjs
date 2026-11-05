@@ -47,20 +47,49 @@ const build = (target: Target, otherActiveSuperAdmins: number) => {
     }),
   };
 
+  // deleteUser guarda dentro de una transacción.
+  const manager = {
+    save: jest.fn(async (_entity: unknown, u: Record<string, unknown>) => {
+      Object.assign(row, u);
+      return { ...row };
+    }),
+    update: jest.fn(
+      async (
+        entity: unknown,
+        _crit: unknown,
+        patch: Record<string, unknown>,
+      ) => {
+        if (typeof patch.tokenVersion === 'function') row.tokenVersion += 1;
+      },
+    ),
+  };
+  const dataSource = {
+    transaction: jest.fn(async (fn: (m: typeof manager) => unknown) =>
+      fn(manager),
+    ),
+  };
+
+  const disconnected: string[] = [];
+  const sessionService = { terminateAllUserSessions: jest.fn(async () => 1) };
+  const audit: any[] = [];
+
   const service = Object.create(UsersService.prototype) as UsersService;
   Object.assign(service, {
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
     userRepo,
+    dataSource,
     tokenService: {
       invalidateUserSessions: jest.fn(async () => undefined),
       clearUserTokenVersionCache: jest.fn(async () => undefined),
     },
-    sessionService: { terminateAllUserSessions: jest.fn(async () => 1) },
-    socketService: { disconnectUser: jest.fn() },
-    auditService: { log: jest.fn() },
+    sessionService,
+    socketService: {
+      disconnectUser: jest.fn((id: string) => disconnected.push(id)),
+    },
+    auditService: { log: jest.fn((e: unknown) => audit.push(e)) },
   });
 
-  return { service, row, userRepo };
+  return { service, row, userRepo, sessionService, disconnected, audit };
 };
 
 const superAdmin = (sub: string, complexId?: string) =>
@@ -226,5 +255,73 @@ describe('reactivateUser: SUPER_ADMIN no queda atado al complejo de su sesión',
         service.reactivateUser('res-1', 'cx-1', complexAccount('cx-1')),
       ),
     ).toBe('FORBIDDEN');
+  });
+});
+
+describe('deleteUser: protecciones y corte de acceso', () => {
+  it('nadie puede eliminar su propia cuenta', async () => {
+    const { service, row } = build(adminTarget('sa-1'), 1);
+
+    const code = await codeOf(service.deleteUser('sa-1', superAdmin('sa-1')));
+
+    expect(code).toBe(UserErrorCode.CANNOT_DELETE_SELF);
+    expect(row.status).toBe(UserStatus.ACTIVE);
+  });
+
+  it('no se puede eliminar al último SUPER_ADMIN activo', async () => {
+    const { service, row } = build(adminTarget('sa-2'), 0);
+
+    const code = await codeOf(service.deleteUser('sa-2', superAdmin('sa-1')));
+
+    expect(code).toBe(UserErrorCode.LAST_SUPER_ADMIN);
+    expect(row.status).toBe(UserStatus.ACTIVE);
+  });
+
+  it('con otro SUPER_ADMIN activo, sí se elimina a un SUPER_ADMIN', async () => {
+    const { service, row } = build(adminTarget('sa-2'), 1);
+
+    await service.deleteUser('sa-2', superAdmin('sa-1'));
+
+    expect(row.status).toBe(UserStatus.DELETED);
+  });
+
+  it('eliminar sube la versión del token, cierra sesiones y corta sockets', async () => {
+    const { service, row, sessionService, disconnected } = build(
+      {
+        id: 'res-1',
+        email: 'r@example.com',
+        status: UserStatus.ACTIVE,
+        complexId: 'cx-1',
+        isSuperAdmin: false,
+      },
+      0,
+    );
+
+    await service.deleteUser('res-1', superAdmin('sa-1'));
+
+    expect(row.status).toBe(UserStatus.DELETED);
+    expect(row.tokenVersion).toBe(1);
+    expect(sessionService.terminateAllUserSessions).toHaveBeenCalledWith(
+      'res-1',
+    );
+    expect(disconnected).toEqual(['res-1']);
+  });
+
+  it('la auditoría guarda el estado anterior real, no DELETED', async () => {
+    const { service, audit } = build(
+      {
+        id: 'res-1',
+        email: 'r@example.com',
+        status: UserStatus.SUSPENDED,
+        complexId: 'cx-1',
+        isSuperAdmin: false,
+      },
+      0,
+    );
+
+    await service.deleteUser('res-1', superAdmin('sa-1'));
+
+    expect(audit[0].previousValue).toEqual({ status: UserStatus.SUSPENDED });
+    expect(audit[0].newValue.sessionsClosed).toBe(1);
   });
 });
