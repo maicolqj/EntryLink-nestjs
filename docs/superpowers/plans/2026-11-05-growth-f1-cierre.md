@@ -182,12 +182,13 @@ Columnas de C3 confirmadas contra las entidades (`user_permission_overrides.effe
   - `VIEW_GROWTH_PROSPECTS`, `VIEW_ALL_GROWTH_PROSPECTS`, `EDIT_GROWTH_PROSPECTS`;
   - `VALIDATE_GROWTH_PROSPECTS`, `MERGE_GROWTH_DUPLICATES`, `IMPORT_GROWTH_DATA`;
   - `VIEW_GROWTH_ACTIVITY`, `VIEW_GROWTH_TEAM`, `VIEW_GROWTH_SOURCES`.
-- **Solo si P3 muestra uso y el usuario lo aprueba:** `VIEW_GROWTH_CONTACT_DATA` (CRITICAL: ver correos y teléfonos), `ASSIGN_GROWTH_PROSPECTS`, `MANAGE_GROWTH_SCORING`.
+- **Incluido por decisión D-2 (2026-11-05):** `VIEW_GROWTH_CONTACT_DATA` (CRITICAL: ver correos y teléfonos de contactos; su uso queda auditado).
+- **Solo si P3 muestra uso y el usuario lo aprueba:** `ASSIGN_GROWTH_PROSPECTS`, `MANAGE_GROWTH_SCORING`.
 - **Quedan inactivos, sin excepción para nadie:**
   - `APPROVE_GROWTH_PAID_SOURCES` (gasto), `APPROVE_GROWTH_SCORING` y `MANAGE_GROWTH_IMPORT_TEMPLATES` (activación manual);
   - `LIFT_GROWTH_SUPPRESSIONS`, `MANAGE_GROWTH_PRIVACY_REQUESTS`, `MANAGE_GROWTH_LEGAL_HOLDS`, `REVIEW_GROWTH_*`, `AUTHORIZE_GROWTH_CONTACT` y `MANAGE_GROWTH_TEAM`/`SOURCES`.
   - Se activan cuando haya pantalla y un dueño (F2-2), y quedan registrados al activarse.
-- **Separación de funciones:** con #287 y `APPROVE_GROWTH_SCORING` activo, el SUPER_ADMIN podría aprobar su propio borrador de scoring. **Decisión pendiente D-1:** mantenerlo inactivo hasta que haya un segundo aprobador (recomendado).
+- **Separación de funciones:** con #287 y `APPROVE_GROWTH_SCORING` activo, el SUPER_ADMIN podría aprobar su propio borrador de scoring. **Decisión D-1 (2026-11-05): se mantiene inactivo** hasta que haya un segundo aprobador.
 
 ### 3.5 SQL de activación (🔒, solo con orden; se muestra para revisión)
 ```sql
@@ -243,8 +244,12 @@ F1 está cerrada cuando existe evidencia de:
 5. la prueba de suspensión con un usuario de prueba;
 6. la higiene: `.dump` borrados, paso 7 de R2, HMAC revisada, decisión sobre Coolify y #188/#291 resueltos (fusionados o descartados).
 
-**Decisiones pendientes para F1:**
-- D-1: `APPROVE_GROWTH_SCORING` inactivo hasta que haya un segundo aprobador.
-- D-2: incluir o no `VIEW_GROWTH_CONTACT_DATA` en S.
-- D-3: un despliegue o dos para #298 y #299.
-- D-4: actualización automática de Coolify.
+**Decisiones de F1 (tomadas por el usuario el 2026-11-05):**
+- **D-1 ✅** `APPROVE_GROWTH_SCORING` queda inactivo hasta que exista un segundo aprobador.
+- **D-2 ✅** `VIEW_GROWTH_CONTACT_DATA` entra en el conjunto S.
+- **D-3 ✅** #298 y #299 salen en **un solo despliegue**: se fusiona #298, se rebasa #299 sobre él y se despliega una vez. #297 va antes, en su propio despliegue, por la migración.
+- **D-4 ✅ Desactivar la actualización automática de Coolify** (delegado al criterio técnico).
+  - **Por qué:** el 2026-11-05 Coolify se actualizó solo a 4.6 y rompió el deploy dos veces sin avisar (GET → 405; la validación nueva de nombres de variables frenó todo deployment). #293 lo detecta ahora, pero no lo evita. En un servidor con un único operador, una actualización que llega sola es un cambio de producción sin orden ni ventana.
+  - **Costo:** las actualizaciones (y sus parches de seguridad) pasan a ser manuales.
+  - **Mitigación:** revisar una vez al mes las *release notes* de Coolify; actualizar en una ventana con poco uso, justo después del respaldo diario; tras actualizar, hacer un redeploy de prueba y comprobar `/health.version`. Un parche de seguridad crítico de Coolify se aplica sin esperar al mes.
+  - **Cómo (👤, en el panel):** Coolify → **Settings** → **Auto Update** (o *Update*): apagar «Auto Update Enabled» → Save. Evidencia: captura del ajuste apagado y la versión actual de Coolify.
