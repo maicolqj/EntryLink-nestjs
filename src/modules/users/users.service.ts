@@ -1119,7 +1119,23 @@ export class UsersService {
       });
     }
 
-    if (callerComplexId && user.complexId !== callerComplexId) {
+    // Suspenderse a uno mismo cierra la sesión desde la que se podría
+    // deshacer. El 2026-11-05 el único SUPER_ADMIN se suspendió a sí mismo y
+    // hubo que reactivarlo por SQL.
+    if (currentUser?.sub === userId) {
+      throw new CustomError({
+        message: 'No puedes suspender tu propia cuenta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SELF,
+      });
+    }
+
+    const callerIsSuperAdmin = this.isSuperAdminCaller(currentUser);
+    if (
+      !callerIsSuperAdmin &&
+      callerComplexId &&
+      user.complexId !== callerComplexId
+    ) {
       throw new CustomError({
         message: 'No tienes permisos para suspender usuarios de otro complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -1137,6 +1153,8 @@ export class UsersService {
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
+
+    await this.assertSuperAdminCanBeSuspended(userId, callerIsSuperAdmin);
 
     const previousStatus = user.status;
     // Estado y versión del token en una sola escritura: desde aquí ningún
@@ -1176,6 +1194,60 @@ export class UsersService {
     }
 
     return updated;
+  }
+
+  /**
+   * SUPER_ADMIN opera sobre toda la plataforma: el chequeo de complejo no le
+   * aplica. Su sesión puede traer el `complexId` de su ficha de residente,
+   * mientras que `users.complex_id` de una cuenta de administración es NULL;
+   * sin esta excepción no podía reactivar a otro SUPER_ADMIN (ni a sí mismo).
+   */
+  private isSuperAdminCaller(currentUser?: JwtAccessPayload): boolean {
+    return !!currentUser?.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+  }
+
+  /**
+   * Un SUPER_ADMIN solo lo suspende otro SUPER_ADMIN, y nunca el último activo:
+   * sin ninguno, nadie puede reactivar cuentas ni administrar la plataforma.
+   */
+  private async assertSuperAdminCanBeSuspended(
+    userId: string,
+    callerIsSuperAdmin: boolean,
+  ): Promise<void> {
+    const superAdmins = () =>
+      this.userRepo
+        .createQueryBuilder('u')
+        .innerJoin('u.userRoles', 'ur')
+        .innerJoin('ur.role', 'r')
+        .where('r.name = :role', { role: ValidRoles.SUPER_ADMIN_ROL })
+        .andWhere('r.status = true');
+
+    const targetIsSuperAdmin =
+      (await superAdmins().andWhere('u.id = :userId', { userId }).getCount()) >
+      0;
+    if (!targetIsSuperAdmin) return;
+
+    if (!callerIsSuperAdmin) {
+      throw new CustomError({
+        message: 'Solo un SUPER_ADMIN puede suspender a otro SUPER_ADMIN',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SUPER_ADMIN,
+      });
+    }
+
+    const otherActive = await superAdmins()
+      .andWhere('u.id != :userId', { userId })
+      .andWhere('u.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere('u.deletedAt IS NULL')
+      .getCount();
+    if (otherActive === 0) {
+      throw new CustomError({
+        message:
+          'No se puede suspender al último SUPER_ADMIN activo: la plataforma quedaría sin administrador',
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: UserErrorCode.LAST_SUPER_ADMIN,
+      });
+    }
   }
 
   /**
@@ -1235,7 +1307,11 @@ export class UsersService {
       });
     }
 
-    if (callerComplexId && user.complexId !== callerComplexId) {
+    if (
+      !this.isSuperAdminCaller(currentUser) &&
+      callerComplexId &&
+      user.complexId !== callerComplexId
+    ) {
       throw new CustomError({
         message: 'No tienes permisos para reactivar usuarios de otro complejo',
         statusCode: HttpStatus.FORBIDDEN,
