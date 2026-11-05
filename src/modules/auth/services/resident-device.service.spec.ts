@@ -611,7 +611,9 @@ describe('ResidentDeviceService', () => {
       user.accessCodeFailedAttempts = 5;
       user.accessCodeLockedUntil = new Date(Date.now() + 900_000);
 
-      await expect(service.clearAccessCode('user-1', staff)).resolves.toBe(true);
+      await expect(service.clearAccessCode('user-1', staff)).resolves.toBe(
+        true,
+      );
 
       expect(userRepo.update).toHaveBeenCalledWith('user-1', {
         accessCodeHash: null,
@@ -641,5 +643,4 @@ describe('ResidentDeviceService', () => {
       expect(notificationsService.notify).toHaveBeenCalled();
     });
   });
-
 });

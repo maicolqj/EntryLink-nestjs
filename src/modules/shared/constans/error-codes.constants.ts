@@ -65,6 +65,8 @@ export enum AuthErrorCode {
   // Estado del complejo en login
   COMPLEX_INACTIVE = 'COMPLEX_INACTIVE',
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
+  // Residencia del usuario suspendida en el único conjunto donde vive
+  RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',

@@ -1,9 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import { Resident } from '../../residents/entities/resident.entity';
 import { ResidentStatus } from '../../residents/enums/resident-status.enum';
+import { CustomError } from '../../shared/utils/errors.utils';
+import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
 
 /**
  * Resuelve en qué complejo entra alguien cuando inicia sesión como residente.
@@ -51,6 +53,24 @@ export class ResidentTenancyService {
     });
 
     if (!residence) {
+      // Si su única residencia está suspendida, no entra como residente: sin
+      // esto entraba sin conjunto y la app quedaba vacía, sin explicación.
+      const suspended = await this.residentRepo.count({
+        where: {
+          userId,
+          status: ResidentStatus.SUSPENDED,
+          deletedAt: IsNull(),
+        },
+      });
+      if (suspended > 0) {
+        throw new CustomError({
+          message:
+            'Tu residencia en este conjunto está suspendida. Contacta a la administración',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.RESIDENCE_SUSPENDED,
+        });
+      }
+
       // No es un error: un miembro del personal sin apartamento entra sin
       // complejo de residencia, igual que antes.
       this.logger.debug(`Sin residencia activa — userId: ${userId}`);
@@ -58,5 +78,25 @@ export class ResidentTenancyService {
     }
 
     return residence.complexId;
+  }
+
+  /**
+   * Si el usuario sigue siendo residente activo en ese complejo. La renovación
+   * de una sesión de residente lo exige: una residencia suspendida no puede
+   * seguir viendo los datos de su conjunto con un refresh token viejo.
+   */
+  async hasActiveResidence(
+    userId: string,
+    complexId: string,
+  ): Promise<boolean> {
+    const n = await this.residentRepo.count({
+      where: {
+        userId,
+        complexId,
+        status: ResidentStatus.ACTIVE,
+        deletedAt: IsNull(),
+      },
+    });
+    return n > 0;
   }
 }
