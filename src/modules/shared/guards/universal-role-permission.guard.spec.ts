@@ -143,18 +143,18 @@ describe('UniversalRolePermissionGuard — estado vigente de los permisos', () =
         await expect(call('importar', oldToken)).resolves.toBe(false);
       });
 
-      it('8. SUPER_ADMIN pasa, y si usa un permiso inactivo queda en el log', async () => {
-        const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      it('8. SUPER_ADMIN pasa con permisos activos; con uno inactivo no pasa (apagado para todos)', async () => {
         await expect(call('importar', admin)).resolves.toBe(true);
-        expect(warn).not.toHaveBeenCalled();
+        await expect(call('soloRol', admin)).resolves.toBe(true);
         setInactivePermissions([P.IMPORT_GROWTH_DATA]);
+        await expect(call('importar', admin)).resolves.toBe(false);
+        // Basta con que uno de los exigidos esté inactivo.
+        await expect(call('dos', admin)).resolves.toBe(false);
+        // Lo que no exige ese permiso sigue igual.
+        await expect(call('soloRol', admin)).resolves.toBe(true);
+        // Al activarlo, vuelve a pasar sin cambiar de token.
+        setInactivePermissions([]);
         await expect(call('importar', admin)).resolves.toBe(true);
-        expect(warn).toHaveBeenCalledWith(
-          expect.stringMatching(
-            /SUPER_ADMIN u1 usó Ops\.importar con permisos inactivos: \[IMPORT_GROWTH_DATA\]/,
-          ),
-        );
-        warn.mockRestore();
       });
 
       it('10. sin el permiso, sin usuario o con otro rol: no pasa', async () => {
@@ -239,16 +239,27 @@ describe('UniversalRolePermissionGuard — estado vigente de los permisos', () =
     await expect(gql('libre', user([]))).resolves.toBe(true);
   });
 
-  it('la verificación de servicio (actorHas) también ignora un permiso inactivo; SUPER_ADMIN pasa', () => {
+  it('la verificación de servicio (actorHas) también ignora un permiso inactivo, también para SUPER_ADMIN', () => {
     const actor = {
       sub: 'u1',
       roles: [],
       permissions: [P.VIEW_ALL_GROWTH_PROSPECTS],
     } as never;
+    const superAdmin = {
+      sub: 'a',
+      roles: [ValidRoles.SUPER_ADMIN_ROL],
+      permissions: [],
+    } as never;
     expect(actorHas(actor, P.VIEW_ALL_GROWTH_PROSPECTS)).toBe(true);
+    expect(actorHas(superAdmin, P.VIEW_ALL_GROWTH_PROSPECTS)).toBe(true);
     setInactivePermissions([P.VIEW_ALL_GROWTH_PROSPECTS]);
     expect(isPermissionInactive(P.VIEW_ALL_GROWTH_PROSPECTS)).toBe(true);
     expect(actorHas(actor, P.VIEW_ALL_GROWTH_PROSPECTS)).toBe(false);
+    expect(actorHas(superAdmin, P.VIEW_ALL_GROWTH_PROSPECTS)).toBe(false);
+  });
+
+  it('actorHas: con SUPER_ADMIN_ROL inactivo no hay paso de administrador', () => {
+    setInactivePermissions([], Date.now(), [ValidRoles.SUPER_ADMIN_ROL]);
     expect(
       actorHas(
         {
@@ -258,6 +269,6 @@ describe('UniversalRolePermissionGuard — estado vigente de los permisos', () =
         } as never,
         P.VIEW_ALL_GROWTH_PROSPECTS,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

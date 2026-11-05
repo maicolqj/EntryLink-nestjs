@@ -212,5 +212,5 @@ El estado lo toma el guard en 30 s como mucho. La versión del token vive 5 min 
 
 **Mientras no se activen:**
 - todos siguen usando las plantillas del equipo que ya existían y crean las suyas como personales;
-- nadie, salvo SUPER_ADMIN, puede cambiar plantillas del equipo ni activar versiones de scoring. Si el mismo SUPER_ADMIN creó el borrador, solo lo aprueba con la excepción encendida, y queda auditado. El uso de un permiso inactivo por un SUPER_ADMIN queda en el log;
+- nadie, **tampoco SUPER_ADMIN**, puede cambiar plantillas del equipo ni activar versiones de scoring (`docs/SUPER-ADMIN-POLITICA.md`). Ya activado, si el mismo SUPER_ADMIN creó el borrador, solo lo aprueba con la excepción encendida, y queda auditado;
 - el scoring sigue funcionando con la versión activa.
