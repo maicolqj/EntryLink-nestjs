@@ -13,7 +13,7 @@ import { User } from '../entities/user.entity';
 import { UserStatus } from '../enums/user.enums';
 import { UserRole } from '../entities/user_has_roles.entity';
 import { Role } from '../../roles/entities/role.entity';
-import { ValidRoles } from '../../roles/enums/valid-roles';
+import { findResidentRole } from '../../roles/utils/resident-base-role.util';
 import { Unit } from '../../residential-complex/entities/unit.entity';
 import { Resident } from '../../residents/entities/resident.entity';
 import { ResidentStatus } from '../../residents/enums/resident-status.enum';
@@ -114,9 +114,7 @@ export class ExcelImportService {
     let successCount = 0;
 
     // Cargar rol RESIDENT_ROL una sola vez
-    const residentRole = await this.roleRepo.findOne({
-      where: { name: ValidRoles.RESIDENT_ROL },
-    });
+    const residentRole = await findResidentRole(this.roleRepo.manager);
 
     if (!residentRole) {
       throw new BadRequestException(

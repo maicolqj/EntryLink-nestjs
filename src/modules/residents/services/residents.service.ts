@@ -48,7 +48,10 @@ import {
 import { AccountAccessService } from '../../auth/services/account-access.service';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
-import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
+import {
+  ensureResidentRole,
+  findResidentRole,
+} from '../../roles/utils/resident-base-role.util';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
@@ -206,9 +209,7 @@ export class ResidentsService {
 
       // El rol se necesita en las dos ramas: tanto el usuario nuevo como el que
       // ya existía tienen que quedar con RESIDENT_ROL.
-      const residentRole = await queryRunner.manager.findOne(Role, {
-        where: { name: ValidRoles.RESIDENT_ROL },
-      });
+      const residentRole = await findResidentRole(queryRunner.manager);
 
       if (!residentRole) {
         throw new CustomError({
