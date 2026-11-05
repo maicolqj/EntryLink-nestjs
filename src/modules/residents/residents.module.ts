@@ -16,6 +16,7 @@ import { RESIDENTS_IMPORT_QUEUE } from './queues/residents-import.constants';
 import { ResidentialComplexModule } from '../residential-complex/residential-complex.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuthModule } from '../auth/auth.module';
 
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../users/entities/user_has_roles.entity';
@@ -38,6 +39,9 @@ try {
     ResidentialComplexModule,
     AuditModule,
     forwardRef(() => NotificationsModule),
+    // AccountAccessService: suspender una ficha cierra las sesiones del residente.
+    // forwardRef: AuthModule → NotificationsModule → ResidentsModule.
+    forwardRef(() => AuthModule),
   ],
   controllers: [ResidentsController],
   providers: [

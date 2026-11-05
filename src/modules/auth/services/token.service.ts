@@ -1,5 +1,5 @@
 // modules/auth/services/token.service.ts
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, Optional } from '@nestjs/common';
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   AuthErrorCode,
@@ -28,6 +28,7 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { v4 as uuidv4 } from 'uuid';
 import { isUserStatusOperable } from '../utils/user-status.util';
+import { ResidentTenancyService } from './resident-tenancy.service';
 
 @Injectable()
 export class TokenService {
@@ -45,6 +46,10 @@ export class TokenService {
     private readonly roleRepo: Repository<Role>,
     @InjectRepository(UserPermissionOverride)
     private readonly permissionOverrideRepo: Repository<UserPermissionOverride>,
+    // Opcional para no obligar a las pruebas que arman TokenService a mano;
+    // en la app siempre está (mismo módulo).
+    @Optional()
+    private readonly residentTenancy?: ResidentTenancyService,
   ) {}
 
   /**
@@ -416,6 +421,28 @@ export class TokenService {
       await this.revokeTokenFamily(payload.tokenFamily, 'user_not_active');
       throw new CustomError({
         message: 'Tu cuenta no está activa. Contacta al administrador',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_TERMINATED,
+      });
+    }
+
+    // Una sesión de residente solo se renueva mientras su residencia en ese
+    // conjunto siga activa: suspender la ficha corta el acceso a ese conjunto
+    // aunque el refresh token sea anterior a la suspensión.
+    if (
+      entityType !== 'complex' &&
+      storedToken.roleScope &&
+      payload.complexId &&
+      this.residentTenancy &&
+      !(await this.residentTenancy.hasActiveResidence(
+        storedToken.user.id,
+        payload.complexId,
+      ))
+    ) {
+      await this.revokeTokenFamily(payload.tokenFamily, 'residence_not_active');
+      throw new CustomError({
+        message:
+          'Tu residencia en este conjunto está suspendida. Contacta a la administración',
         statusCode: HttpStatus.UNAUTHORIZED,
         errorCode: AuthErrorCode.SESSION_TERMINATED,
       });

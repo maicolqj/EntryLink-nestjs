@@ -16,6 +16,7 @@ import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { AccessTokenValidatorService } from './services/access-token-validator.service';
+import { AccountAccessService } from './services/account-access.service';
 import { RefreshTokensCleanupCron } from './cron/refresh-tokens-cleanup.cron';
 import { OtpService } from './services/otp.service';
 import { ResidentDeviceService } from './services/resident-device.service';
@@ -93,6 +94,7 @@ import { AuditModule } from '../audit/audit.module';
     TokenService,
     SessionService,
     AccessTokenValidatorService,
+    AccountAccessService,
     OtpService,
     ResidentDeviceService,
     WhatsAppService,
@@ -117,6 +119,7 @@ import { AuditModule } from '../audit/audit.module';
     TokenService,
     SessionService,
     AccessTokenValidatorService,
+    AccountAccessService,
     JwtModule,
     PassportModule,
   ],

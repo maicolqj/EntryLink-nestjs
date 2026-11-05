@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ResidentTenancyService } from './resident-tenancy.service';
 import { Resident } from '../../residents/entities/resident.entity';
 import { ResidentStatus } from '../../residents/enums/resident-status.enum';
+import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
 
 /**
  * En qué conjunto entra quien inicia sesión como residente.
@@ -21,6 +22,8 @@ describe('ResidentTenancyService', () => {
       lastQuery = opts;
       return null;
     }),
+    // Fichas suspendidas (sin activas) o activas en un conjunto concreto.
+    count: jest.fn(async (): Promise<number> => 0),
   };
 
   beforeEach(async () => {
@@ -72,5 +75,50 @@ describe('ResidentTenancyService', () => {
     // Es el caso del personal sin apartamento: entra sin complejo de
     // residencia, igual que antes de este cambio.
     await expect(service.resolveComplexId('user-1')).resolves.toBeUndefined();
+  });
+
+  it('si su única residencia está suspendida, el login como residente se rechaza', async () => {
+    residentRepo.count.mockResolvedValueOnce(1);
+
+    await expect(service.resolveComplexId('user-1')).rejects.toMatchObject({
+      errorCode: AuthErrorCode.RESIDENCE_SUSPENDED,
+    });
+    expect(residentRepo.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        userId: 'user-1',
+        status: ResidentStatus.SUSPENDED,
+      }),
+    });
+  });
+
+  it('con una suspendida y otra activa entra al conjunto habilitado', async () => {
+    residentRepo.findOne.mockResolvedValueOnce({
+      id: 'res-2',
+      complexId: 'conjunto-habilitado',
+    } as any);
+
+    await expect(service.resolveComplexId('user-1')).resolves.toBe(
+      'conjunto-habilitado',
+    );
+    expect(residentRepo.count).not.toHaveBeenCalled();
+  });
+
+  it('hasActiveResidence mira solo fichas ACTIVE de ese conjunto', async () => {
+    residentRepo.count.mockResolvedValueOnce(1);
+
+    await expect(
+      service.hasActiveResidence('user-1', 'complex-1'),
+    ).resolves.toBe(true);
+    expect(residentRepo.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        userId: 'user-1',
+        complexId: 'complex-1',
+        status: ResidentStatus.ACTIVE,
+      }),
+    });
+
+    await expect(
+      service.hasActiveResidence('user-1', 'complex-1'),
+    ).resolves.toBe(false);
   });
 });

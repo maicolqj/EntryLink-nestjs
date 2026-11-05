@@ -43,7 +43,9 @@ import {
   ResidentErrorCode,
   GeneralErrorCode,
   ComplexErrorCode,
+  UserErrorCode,
 } from '../../shared/constans/error-codes.constants';
+import { AccountAccessService } from '../../auth/services/account-access.service';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
@@ -86,6 +88,8 @@ export class ResidentsService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => AccountAccessService))
+    private readonly accountAccess: AccountAccessService,
   ) {}
 
   // ================================================================
@@ -674,6 +678,16 @@ export class ResidentsService {
   ): Promise<Resident> {
     const resident = await this.findById(residentId, currentUser);
 
+    // Nadie suspende su propia ficha: le cerraría la sesión desde la que
+    // podría deshacerlo.
+    if (resident.userId && resident.userId === currentUser.sub) {
+      throw new CustomError({
+        message: 'No puedes suspender tu propia ficha de residente',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SELF,
+      });
+    }
+
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
         message: 'Solo se pueden suspender residentes activos',
@@ -689,12 +703,27 @@ export class ResidentsService {
       BK.resident.prefix(resident.complexId),
     );
 
+    // La ficha suspendida deja de dar acceso a este conjunto: se cierran las
+    // sesiones y, al volver a entrar, la residencia suspendida ya no se elige
+    // (si vive en otro conjunto, entra a ese; si no, el login lo rechaza).
+    const access = resident.userId
+      ? await this.accountAccess.forceRelogin(
+          resident.userId,
+          'resident_suspended',
+        )
+      : { closed: 0, complete: true };
+
     void this.auditService.log({
       entityType: AuditEntityType.Resident,
       entityId: residentId,
       action: AuditAction.SUSPEND,
       previousValue: { status: ResidentStatus.ACTIVE },
-      newValue: { status: ResidentStatus.SUSPENDED, reason },
+      newValue: {
+        status: ResidentStatus.SUSPENDED,
+        reason,
+        sessionsClosed: access.closed,
+        sessionsCutComplete: access.complete,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',
