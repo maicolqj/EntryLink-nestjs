@@ -183,10 +183,11 @@ Columnas de C3 confirmadas contra las entidades (`user_permission_overrides.effe
   - `VALIDATE_GROWTH_PROSPECTS`, `MERGE_GROWTH_DUPLICATES`, `IMPORT_GROWTH_DATA`;
   - `VIEW_GROWTH_ACTIVITY`, `VIEW_GROWTH_TEAM`, `VIEW_GROWTH_SOURCES`.
 - **Incluido por decisión D-2 (2026-11-05):** `VIEW_GROWTH_CONTACT_DATA` (CRITICAL: ver correos y teléfonos de contactos; su uso queda auditado).
+- **Incluidos por decisión D-5 (2026-11-05), para operar la pantalla `/growth/fuentes` (web #211):** `MANAGE_GROWTH_SOURCES` (alta, edición y activación) y `REVIEW_GROWTH_SOURCES_LEGAL` (revisión jurídica con referencia). `APPROVE_GROWTH_PAID_SOURCES` **sigue fuera**: Google Places no se aprueba.
 - **Solo si P3 muestra uso y el usuario lo aprueba:** `ASSIGN_GROWTH_PROSPECTS`, `MANAGE_GROWTH_SCORING`.
 - **Quedan inactivos, sin excepción para nadie:**
   - `APPROVE_GROWTH_PAID_SOURCES` (gasto), `APPROVE_GROWTH_SCORING` y `MANAGE_GROWTH_IMPORT_TEMPLATES` (activación manual);
-  - `LIFT_GROWTH_SUPPRESSIONS`, `MANAGE_GROWTH_PRIVACY_REQUESTS`, `MANAGE_GROWTH_LEGAL_HOLDS`, `REVIEW_GROWTH_*`, `AUTHORIZE_GROWTH_CONTACT` y `MANAGE_GROWTH_TEAM`/`SOURCES`.
+  - `LIFT_GROWTH_SUPPRESSIONS`, `MANAGE_GROWTH_PRIVACY_REQUESTS`, `MANAGE_GROWTH_LEGAL_HOLDS`, `REVIEW_GROWTH_LEGAL_BASIS`, `AUTHORIZE_GROWTH_CONTACT` y `MANAGE_GROWTH_TEAM`.
   - Se activan cuando haya pantalla y un dueño (F2-2), y quedan registrados al activarse.
 - **Separación de funciones:** con #287 y `APPROVE_GROWTH_SCORING` activo, el SUPER_ADMIN podría aprobar su propio borrador de scoring. **Decisión D-1 (2026-11-05): se mantiene inactivo** hasta que haya un segundo aprobador.
 
@@ -248,6 +249,7 @@ F1 está cerrada cuando existe evidencia de:
 - **D-1 ✅** `APPROVE_GROWTH_SCORING` queda inactivo hasta que exista un segundo aprobador.
 - **D-2 ✅** `VIEW_GROWTH_CONTACT_DATA` entra en el conjunto S.
 - **D-3 ✅** #298 y #299 salen en **un solo despliegue**: se fusiona #298, se rebasa #299 sobre él y se despliega una vez. #297 va antes, en su propio despliegue, por la migración.
+- **D-5 ✅** El SUPER_ADMIN gestiona y valida fuentes: `MANAGE_GROWTH_SOURCES` y `REVIEW_GROWTH_SOURCES_LEGAL` entran en S (web #211).
 - **D-4 ✅ Desactivar la actualización automática de Coolify** (delegado al criterio técnico).
   - **Por qué:** el 2026-11-05 Coolify se actualizó solo a 4.6 y rompió el deploy dos veces sin avisar (GET → 405; la validación nueva de nombres de variables frenó todo deployment). #293 lo detecta ahora, pero no lo evita. En un servidor con un único operador, una actualización que llega sola es un cambio de producción sin orden ni ventana.
   - **Costo:** las actualizaciones (y sus parches de seguridad) pasan a ser manuales.
