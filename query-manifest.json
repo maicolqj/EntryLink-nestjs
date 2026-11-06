@@ -1058,5 +1058,7 @@
   "42d8a25cbeda883ad44c016485ff7f57b56fcee0": "mutation ArchivePlatformAnnouncements($archived: Boolean!, $ids: [ID!]!) { __typename archivePlatformAnnouncements(ids: $ids, archived: $archived) { __typename affected noticesRemoved } }",
   "189e2c7615852e1f1d11e313e5691cb734c5b1de": "mutation TrashPlatformAnnouncements($ids: [ID!]!) { __typename trashPlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }",
   "6b010df5199dadedcca55a303d5bca94d716c8fa": "mutation RestorePlatformAnnouncements($ids: [ID!]!) { __typename restorePlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }",
-  "1a617c2e8418c744330f42084d1ebb0cfb0ee123": "mutation PurgePlatformAnnouncements($ids: [ID!]!) { __typename purgePlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }"
+  "1a617c2e8418c744330f42084d1ebb0cfb0ee123": "mutation PurgePlatformAnnouncements($ids: [ID!]!) { __typename purgePlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }",
+  "4a20fdec4a64e0a232a128d7886cfdfbdb0b8958": "mutation RestoreRole($id: String!) { __typename restoreRole(id: $id) { __typename id message name status } }",
+  "75876eb655ebaeea85d9db8de2e98f411cce1d16": "mutation RestorePermission($id: String!) { __typename restorePermission(id: $id) { __typename id name status } }"
 }
