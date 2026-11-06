@@ -1,0 +1,11 @@
+[Unit]
+Description=EntryLink: verificación semanal del respaldo (restauración de prueba)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/root/.entrylink-backup.env
+ExecStart=/opt/entrylink-backup/verify-backup.sh
+Nice=10
+TimeoutStartSec=1h

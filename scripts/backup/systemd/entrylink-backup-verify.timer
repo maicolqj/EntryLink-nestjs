@@ -1,0 +1,10 @@
+[Unit]
+Description=EntryLink: verificación semanal del respaldo (domingo 04:15 Bogotá)
+
+[Timer]
+OnCalendar=Sun *-*-* 09:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target
