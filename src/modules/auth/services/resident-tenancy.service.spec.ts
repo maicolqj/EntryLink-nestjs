@@ -13,6 +13,10 @@ import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
  * cuenta de trabajo, y para quien administra viene vacío aunque tenga su
  * apartamento registrado.
  */
+// Compila un TestingModule de Nest por prueba; bajo la carga de la suite
+// completa eso pasaba de los 5 s por defecto (intermitente).
+jest.setTimeout(30_000);
+
 describe('ResidentTenancyService', () => {
   let service: ResidentTenancyService;
   let lastQuery: any;

@@ -21,6 +21,27 @@ import { AuditService } from '../../audit/services/audit.service';
  * deviceId + fingerprint), no se puede fuerza-brutear cambiando de equipo, y no
  * sobrevive a una cuenta suspendida.
  */
+// bcrypt real, pero con 4 rondas en vez de las 12 de producción: cada hash o
+// compare de 12 rondas cuesta ~250 ms, y con la suite completa compitiendo por
+// CPU las pruebas de intentos (5 compares seguidos) pasaban de cualquier
+// límite razonable. El costo no cambia lo que se prueba; que producción siga
+// en 12 lo fija la prueba «rondas de producción» de abajo.
+const PRODUCTION_ROUNDS = jest.requireActual<
+  typeof import('../constants/auth.constants')
+>('../constants/auth.constants').AUTH_CONSTANTS.ACCESS_CODE_BCRYPT_ROUNDS;
+
+jest.mock('../constants/auth.constants', () => {
+  const actual = jest.requireActual<
+    typeof import('../constants/auth.constants')
+  >('../constants/auth.constants');
+  return {
+    ...actual,
+    AUTH_CONSTANTS: { ...actual.AUTH_CONSTANTS, ACCESS_CODE_BCRYPT_ROUNDS: 4 },
+  };
+});
+
+jest.setTimeout(30_000);
+
 describe('ResidentDeviceService', () => {
   let service: ResidentDeviceService;
 
@@ -216,6 +237,9 @@ describe('ResidentDeviceService', () => {
 
     expect(user.accessCodeHash).not.toBe(VALID_CODE);
     expect(await bcrypt.compare(VALID_CODE, user.accessCodeHash)).toBe(true);
+    expect(bcrypt.getRounds(user.accessCodeHash)).toBe(
+      AUTH_CONSTANTS.ACCESS_CODE_BCRYPT_ROUNDS,
+    );
     expect(rows[0].pinHash).toBeUndefined();
   });
 
@@ -447,8 +471,6 @@ describe('ResidentDeviceService', () => {
     ).rejects.toMatchObject({
       errorCode: 'ACCESS_CODE_LOCKED',
     });
-    // Timeout ampliado: cada intento paga un bcrypt.compare de 12 rondas y en
-    // la corrida completa los workers de jest compiten por CPU.
   }, 30_000);
 
   it('cambiar de equipo no regala intentos: el conteo es de la cuenta', async () => {
@@ -611,7 +633,9 @@ describe('ResidentDeviceService', () => {
       user.accessCodeFailedAttempts = 5;
       user.accessCodeLockedUntil = new Date(Date.now() + 900_000);
 
-      await expect(service.clearAccessCode('user-1', staff)).resolves.toBe(true);
+      await expect(service.clearAccessCode('user-1', staff)).resolves.toBe(
+        true,
+      );
 
       expect(userRepo.update).toHaveBeenCalledWith('user-1', {
         accessCodeHash: null,
@@ -642,4 +666,7 @@ describe('ResidentDeviceService', () => {
     });
   });
 
+  it('rondas de producción: la clave se guarda con al menos 12 rondas', () => {
+    expect(PRODUCTION_ROUNDS).toBeGreaterThanOrEqual(12);
+  });
 });
