@@ -282,7 +282,7 @@ describeDb('Prospect 1E-C-0 — versiones de scoring (base real)', () => {
     await ds?.destroy();
   });
 
-  it('estado inicial: la versión 1 es la vigente, con las reglas y umbrales de antes, sin aprobador; el permiso de aprobar nace inactivo y sin rol', async () => {
+  it('estado inicial: la versión 1 es la vigente, con las reglas y umbrales de antes, sin aprobador; el permiso de aprobar queda activo (1781011700000) y sin rol', async () => {
     const [v1] = await versions.list([Status.ACTIVE]);
     expect(v1.number).toBe(1);
     expect(v1.origin).toBe(GrowthScoringVersionOrigin.MIGRATION);
@@ -298,7 +298,7 @@ describeDb('Prospect 1E-C-0 — versiones de scoring (base real)', () => {
     const [perm] = await ds.query(
       `SELECT status FROM public.permissions WHERE name::text = 'APPROVE_GROWTH_SCORING'`,
     );
-    expect(perm.status).toBe(false);
+    expect(perm.status).toBe(true);
     const [{ n }] = await ds.query(
       `SELECT count(*)::int AS n FROM public.role_permissions rp JOIN public.permissions p ON p.id = rp.permission_id
         WHERE p.name::text = 'APPROVE_GROWTH_SCORING'`,

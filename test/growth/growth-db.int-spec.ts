@@ -147,7 +147,7 @@ describeDb('Growth Suite — base de datos real', () => {
   });
 
   describe('roles y permisos de la migración', () => {
-    it('los roles y permisos de la suite existen inactivos', async () => {
+    it('los roles de la suite existen inactivos y sus permisos quedan activos (1781011700000)', async () => {
       const roles = await ds.query(
         `SELECT name::text, status FROM public.roles WHERE name::text IN ('GROWTH_MANAGER_ROL','SALES_ROL','GROWTH_RESEARCHER_ROL')`,
       );
@@ -155,20 +155,14 @@ describeDb('Growth Suite — base de datos real', () => {
       expect(roles.every((r: { status: boolean }) => r.status === false)).toBe(
         true,
       );
+      // Todos activos para que SUPER_ADMIN opere la suite; los roles de la
+      // suite siguen inactivos, así que nadie más los recibe por ellos.
       const [perms] = await ds.query(
-        `SELECT count(*)::int AS n, bool_or(status) AS any_active FROM public.permissions WHERE "group" = 'GROWTH'`,
+        `SELECT count(*)::int AS n, bool_and(status) AS all_active FROM public.permissions WHERE "group" = 'GROWTH'`,
       );
-      if (perms.any_active) {
-        // La migración los deja inactivos; si están activos, la base se usó a
-        // mano (p. ej. para probar la web). No se relaja la aserción.
-        throw new Error(
-          'La base de prueba tiene permisos de Growth activados: se usó para probar a mano. ' +
-            'Recréala con `npx ts-node -T test/growth/prepare-db.ts` y usa otra base para las pruebas manuales.',
-        );
-      }
       expect(perms).toEqual({
         n: GROWTH_PERMISSIONS.length,
-        any_active: false,
+        all_active: true,
       });
     });
 
