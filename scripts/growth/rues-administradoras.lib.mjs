@@ -35,7 +35,7 @@ export const GROUPS = [
   {
     key: 'nombre-ph',
     label: 'Nombre con PROPIEDAD HORIZONTAL',
-    where: `${BASE} AND upper(razon_social) like '%PROPIEDAD HORIZONTAL%' AND cod_ciiu_act_econ_pri != '8110' AND (cod_ciiu_act_econ_sec != '8110' OR cod_ciiu_act_econ_sec IS NULL)`,
+    where: `${BASE} AND upper(razon_social) like '%PROPIEDAD HORIZONTAL%' AND (cod_ciiu_act_econ_pri != '8110' OR cod_ciiu_act_econ_pri IS NULL) AND (cod_ciiu_act_econ_sec != '8110' OR cod_ciiu_act_econ_sec IS NULL)`,
   },
 ];
 
@@ -43,6 +43,8 @@ export const GROUPS = [
 const SELECT = [
   'razon_social',
   'nit',
+  // Hay filas activas con `nit` NULL: el número viene en numero_identificacion.
+  'numero_identificacion',
   'digito_verificacion',
   'cod_ciiu_act_econ_pri',
   'cod_ciiu_act_econ_sec',
@@ -55,16 +57,40 @@ export function buildUrl(where, offset, limit = PAGE_SIZE) {
   const url = new URL(RUES_ENDPOINT);
   url.searchParams.set('$select', SELECT);
   url.searchParams.set('$where', where);
-  url.searchParams.set('$order', 'nit');
+  // :id es único: con `nit` habría empates (filas sin NIT) y el offset podría saltar filas.
+  url.searchParams.set('$order', ':id');
   url.searchParams.set('$limit', String(limit));
   url.searchParams.set('$offset', String(offset));
   return url.toString();
 }
 
+/** Cuántas filas tiene el grupo, para comprobar que la descarga quedó completa. */
+export function buildCountUrl(where) {
+  const url = new URL(RUES_ENDPOINT);
+  url.searchParams.set('$select', 'count(*) AS n');
+  url.searchParams.set('$where', where);
+  return url.toString();
+}
+
+export function assertComplete(label, expected, got) {
+  if (expected === 0) throw new Error(`«${label}» devolvió 0 filas: revisa el filtro o la API`);
+  if (got !== expected) {
+    throw new Error(`Descarga incompleta de «${label}»: la API dice ${expected} y llegaron ${got}`);
+  }
+}
+
+export function assertRecords(page) {
+  page.forEach((rec, i) => {
+    if (!rec || typeof rec !== 'object' || typeof rec.razon_social !== 'string') {
+      throw new Error(`La API devolvió un registro sin razón social (posición ${i})`);
+    }
+  });
+}
+
 const clean = (v) => (typeof v === 'string' ? v.trim() : '');
 
 export function toRow(rec, groupLabel) {
-  const nit = clean(rec.nit);
+  const nit = clean(rec.nit) || clean(rec.numero_identificacion);
   const dv = clean(rec.digito_verificacion);
   const pri = clean(rec.cod_ciiu_act_econ_pri) || '—';
   const sec = clean(rec.cod_ciiu_act_econ_sec) || '—';
@@ -77,13 +103,16 @@ export function toRow(rec, groupLabel) {
   };
 }
 
+/** Por NIT base (sin dígito). Las filas sin identificador no se colapsan entre sí. */
 export function dedupeAcrossGroups(groups) {
   const seen = new Set();
   return groups.map((g) => ({
     ...g,
     rows: g.rows.filter((row) => {
-      if (seen.has(row.NIT)) return false;
-      seen.add(row.NIT);
+      const base = String(row.NIT ?? '').split('-')[0];
+      if (!base) return true;
+      if (seen.has(base)) return false;
+      seen.add(base);
       return true;
     }),
   }));

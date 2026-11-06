@@ -15,6 +15,9 @@ import {
   PAGE_SIZE,
   MAX_ROWS_PER_FILE,
   buildUrl,
+  buildCountUrl,
+  assertComplete,
+  assertRecords,
   toRow,
   dedupeAcrossGroups,
   toCsv,
@@ -38,12 +41,18 @@ async function fetchPage(url) {
 }
 
 async function fetchGroup(group) {
+  const [{ n } = {}] = await fetchPage(buildCountUrl(group.where));
+  const expected = Number(n);
+  if (!Number.isInteger(expected)) throw new Error(`No se pudo contar «${group.label}»`);
   const rows = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const page = await fetchPage(buildUrl(group.where, offset));
+    assertRecords(page);
     rows.push(...page.map((rec) => toRow(rec, group.label)));
-    if (page.length < PAGE_SIZE) return rows;
+    if (page.length < PAGE_SIZE) break;
   }
+  assertComplete(group.label, expected, rows.length);
+  return rows;
 }
 
 function chunks(rows) {

@@ -29,7 +29,7 @@ El RUES **no trae** dirección, teléfono ni correo. Esos datos se buscan aparte
 
 Un NIT aparece solo en el primer archivo que lo trae. `resumen.txt` tiene los conteos y la fecha de la consulta.
 
-Columnas: `Razón social`, `NIT` (con dígito de verificación), `Ciudad` y `Observaciones`. El importador reconoce las tres primeras solo. `Observaciones` lleva el CIIU, el grupo y el año de renovación; en el mapeo se deja sin usar o se guarda como nota.
+Columnas: `Razón social`, `NIT` (con dígito de verificación), `Ciudad` y `Observaciones`. El importador reconoce las tres primeras solo. `Observaciones` lleva el CIIU, el grupo y el año de renovación, para leerlo en Excel; el importador no tiene campo de notas para organizaciones, así que en el mapeo queda sin usar.
 
 ## Antes de importar
 
