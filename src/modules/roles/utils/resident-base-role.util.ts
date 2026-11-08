@@ -71,13 +71,41 @@ export async function ensureResidentRole(
   return true;
 }
 
+/**
+ * Id fijo de RESIDENT_ROL en el seed (`roles.data.seed.ts`). Producción tiene
+ * dos filas con ese nombre: la del seed y una vacía («Usuario») que
+ * `RolesService.onModuleInit` creó segundos antes de que corriera el seed. Un
+ * `findOne({ name })` sin orden puede devolver cualquiera de las dos, y la
+ * vacía deja al residente sin permisos. Por eso se busca primero por id.
+ */
+export const RESIDENT_ROLE_ID = 'd8e9f0a1-b2c3-4d4e-af6a-7b8c9d0e1f2c';
+
+/**
+ * La fila de RESIDENT_ROL: la del seed si existe; si no (una base sin seed),
+ * la activa más antigua con ese nombre. Nunca depende del orden físico.
+ */
+export async function findResidentRole(
+  manager: EntityManager,
+  relations: string[] = [],
+): Promise<Role | null> {
+  const seeded = await manager.findOne(Role, {
+    where: { id: RESIDENT_ROLE_ID, name: ValidRoles.RESIDENT_ROL },
+    relations,
+  });
+  if (seeded) return seeded;
+
+  return manager.findOne(Role, {
+    where: { name: ValidRoles.RESIDENT_ROL },
+    order: { status: 'DESC', createdAt: 'ASC' },
+    relations,
+  });
+}
+
 /** El id de RESIDENT_ROL, o un error claro si el seed de roles no corrió. */
 export async function resolveResidentRoleId(
   manager: EntityManager,
 ): Promise<string> {
-  const role = await manager.findOne(Role, {
-    where: { name: ValidRoles.RESIDENT_ROL },
-  });
+  const role = await findResidentRole(manager);
 
   if (!role) {
     throw new Error(

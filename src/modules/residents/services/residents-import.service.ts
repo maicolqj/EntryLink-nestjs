@@ -20,8 +20,10 @@ import { User } from '../../users/entities/user.entity';
 import { UserRole } from '../../users/entities/user_has_roles.entity';
 import { UserStatus } from '../../users/enums/user.enums';
 import { Role } from '../../roles/entities/role.entity';
-import { ValidRoles } from '../../roles/enums/valid-roles';
-import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
+import {
+  ensureResidentRole,
+  findResidentRole,
+} from '../../roles/utils/resident-base-role.util';
 import { Unit } from '../../residential-complex/entities/unit.entity';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
 import { Building } from '../../residential-complex/entities/building.entity';
@@ -226,9 +228,7 @@ export class ResidentsImportService {
     approvedByUserId: string | null,
     onProgress: ProgressCallback,
   ): Promise<ImportProcessResult> {
-    const residentRole = await this.roleRepo.findOne({
-      where: { name: ValidRoles.RESIDENT_ROL },
-    });
+    const residentRole = await findResidentRole(this.roleRepo.manager);
 
     if (!residentRole) {
       throw new Error('El rol RESIDENT_ROL no está configurado en el sistema');
@@ -510,10 +510,7 @@ export class ResidentsImportService {
     );
   }
 
-  private rowError(
-    row: ResidentImportRowData,
-    err: any,
-  ): ResidentImportError {
+  private rowError(row: ResidentImportRowData, err: any): ResidentImportError {
     const identifier = row.email || row.name || `fila ${row.rowIndex}`;
     this.logger.warn(
       `Error fila ${row.rowIndex} (${identifier}): ${err?.message}`,
