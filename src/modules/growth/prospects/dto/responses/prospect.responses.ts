@@ -69,6 +69,9 @@ export class GrowthChecklistItem {
 
   @Field()
   ok: boolean;
+
+  /** Interno: un ítem opcional sin cumplir no impide validar. */
+  optional?: boolean;
 }
 
 @ObjectType('GrowthValidationChecklist')
