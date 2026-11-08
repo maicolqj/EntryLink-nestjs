@@ -8,7 +8,7 @@ Este documento no contiene ningún valor secreto. **Nada de esto se ha ejecutado
 |---|---|---|
 | API (`src/core/config/r2.config.ts` → `R2StorageService`) | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Subir, leer (URL firmada) y borrar los archivos de la plataforma: fotos, documentos privados (DPA, documentos del conjunto), adjuntos de comunicados, soportes de pago |
 | Validación del entorno (`env-validation.ts`) | las cuatro primeras, obligatorias en producción | Los errores nombran la variable, nunca el valor (#276) |
-| Respaldo (`scripts/backup-db.sh`) | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET` | Sube el `pg_dump` diario a `s3://$R2_BACKUP_BUCKET/daily/` y borra los de más de `RETENTION_DAYS` |
+| Respaldo (`scripts/backup/`, ver `docs/RESPALDO-AUTOMATICO.md`) | `R2_ACCOUNT_ID`, `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET` (token propio, solo el bucket de respaldos) | Timer de systemd en el host: dump diario a `daily/`, semanal y mensual, verificado cada domingo |
 | Migración de carpetas (`scripts/migrate-r2-layout.ts`) | las mismas de la API | Script manual de una sola vez. Imprime bucket y conteos, no las llaves |
 | `docker-compose.prod.yml` / Coolify | referencias `${R2_…}` | Inyección al contenedor; no hay valores en el repositorio |
 

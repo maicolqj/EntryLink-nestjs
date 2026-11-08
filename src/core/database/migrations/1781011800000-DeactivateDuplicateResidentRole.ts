@@ -20,8 +20,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 const SEED_ID = 'd8e9f0a1-b2c3-4d4e-af6a-7b8c9d0e1f2c';
 const MARK = 'duplicateResidentRoleDeactivated';
 
-export class DeactivateDuplicateResidentRole1781011700000 implements MigrationInterface {
-  name = 'DeactivateDuplicateResidentRole1781011700000';
+export class DeactivateDuplicateResidentRole1781011800000 implements MigrationInterface {
+  name = 'DeactivateDuplicateResidentRole1781011800000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
