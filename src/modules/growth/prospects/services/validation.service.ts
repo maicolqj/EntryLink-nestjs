@@ -40,6 +40,9 @@ import {
   ProspectGuardsService,
 } from './prospect-guards.service';
 
+/** Marca de una empresa validada sin copropiedad administrada conocida. */
+const NO_CONFIRMED_PROPERTY = 'Sin conjunto confirmado';
+
 /**
  * Validación humana. La base vigila las transiciones (trigger); aquí se
  * aplican además la separación de funciones y la lista de requisitos para
@@ -122,6 +125,7 @@ export class ValidationService {
       `VALIDATION_${input.decision}`,
       async (record, manager) => {
         this.assertTaker(record, actor);
+        let note = input.note?.trim() ?? null;
         await this.guards.assertSegregation(manager, actor, {
           registeredByUserId: record.createdByUserId,
           operation: `VALIDATION_${input.decision}`,
@@ -136,13 +140,16 @@ export class ValidationService {
           );
           if (!checklist.ready) {
             const missing = checklist.items
-              .filter((i) => !i.ok)
+              .filter((i) => !i.ok && !i.optional)
               .map((i) => i.label);
             throw new CustomError({
               message: `Faltan requisitos: ${missing.join('; ')}`,
               statusCode: HttpStatus.CONFLICT,
               errorCode: GrowthErrorCode.GROWTH_VALIDATION_INCOMPLETE,
             });
+          }
+          if (checklist.items.some((i) => !i.ok && i.optional)) {
+            note = [note, NO_CONFIRMED_PROPERTY].filter(Boolean).join(' · ');
           }
           record.validatedByUserId = actor.sub;
           record.validatedAt = new Date();
@@ -155,7 +162,7 @@ export class ValidationService {
           });
         }
         record.validationStatus = input.decision as unknown as S;
-        record.validationNote = input.note?.trim() ?? null;
+        record.validationNote = note;
         record.validationTakenByUserId = null;
       },
     );
@@ -278,8 +285,9 @@ export class ValidationService {
 
   /**
    * Requisitos de VALIDATED por tipo (prospecto validado de la meta):
-   *  - Empresa: razón social y NIT con evidencia verificada, un canal
-   *    corporativo verificado y al menos una copropiedad administrada.
+   *  - Empresa: razón social y NIT con evidencia verificada y un canal
+   *    corporativo verificado. La copropiedad administrada es opcional: sin
+   *    ella la empresa se valida con la marca «Sin conjunto confirmado».
    *  - Administrador independiente: nombre con evidencia verificada, al menos
    *    una copropiedad administrada y un canal PROFESSIONAL verificado, o un
    *    canal DIRECT verificado con base jurídica válida y documentada.
@@ -293,8 +301,8 @@ export class ValidationService {
     record: ValidatableRecord,
   ): Promise<GrowthValidationChecklist> {
     const items: GrowthChecklistItem[] = [];
-    const add = (key: string, label: string, ok: boolean) =>
-      items.push({ key, label, ok });
+    const add = (key: string, label: string, ok: boolean, optional = false) =>
+      items.push({ key, label, ok, optional });
     const verified = (type: GrowthEntityType, field: string) =>
       this.evidences.hasVerified(manager, type, record.id, field);
 
@@ -321,15 +329,19 @@ export class ValidationService {
           },
         }),
       );
+      const managesProperty = await manager.exists(PropertyManagement, {
+        where: {
+          organizationId: org.id,
+          status: Not(GrowthRelationStatus.PAST),
+        },
+      });
       add(
         'managedProperty',
-        'Al menos una copropiedad administrada',
-        await manager.exists(PropertyManagement, {
-          where: {
-            organizationId: org.id,
-            status: Not(GrowthRelationStatus.PAST),
-          },
-        }),
+        managesProperty
+          ? 'Al menos una copropiedad administrada'
+          : `${NO_CONFIRMED_PROPERTY} (opcional)`,
+        managesProperty,
+        true,
       );
     } else if (kind === GrowthProspectKind.PERSON) {
       const person = record as Person;
@@ -414,7 +426,12 @@ export class ValidationService {
         }),
       );
     }
-    return { kind, id: record.id, ready: items.every((i) => i.ok), items };
+    return {
+      kind,
+      id: record.id,
+      ready: items.every((i) => i.ok || i.optional),
+      items,
+    };
   }
 }
 
