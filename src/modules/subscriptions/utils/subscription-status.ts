@@ -67,6 +67,32 @@ export function computeSubscriptionStatus(
 }
 
 /**
+ * Las automatizaciones del conjunto se pausan cuando termina la gracia: es el
+ * mismo instante en que la administración queda en solo lectura. Con la fecha
+ * vacía no se pausa nada.
+ */
+export function isAutomationPaused(
+  endsAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return computeSubscriptionStatus(endsAt, now) === SubscriptionStatus.SUSPENDED;
+}
+
+/** Días completos o parciales del rango que cayeron dentro de una pausa. */
+export function pausedDaysBetween(
+  from: Date,
+  to: Date,
+  windows: { pausedAt: Date; resumedAt: Date }[],
+): number {
+  const pausedMs = windows.reduce((total, { pausedAt, resumedAt }) => {
+    const start = Math.max(from.getTime(), pausedAt.getTime());
+    const end = Math.min(to.getTime(), resumedAt.getTime());
+    return total + Math.max(0, end - start);
+  }, 0);
+  return Math.ceil(pausedMs / DAY_MS);
+}
+
+/**
  * Suma un mes o un año calendario. Si el día no existe en el mes destino
  * (31 de enero + 1 mes) se queda en el último día de ese mes, no se desborda
  * a marzo.

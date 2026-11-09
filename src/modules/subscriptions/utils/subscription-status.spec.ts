@@ -4,6 +4,8 @@ import {
   computeSubscriptionStatus,
   currentReminderMilestone,
   daysUntil,
+  isAutomationPaused,
+  pausedDaysBetween,
 } from './subscription-status';
 
 const NOW = new Date('2026-10-01T13:00:00.000Z');
@@ -124,5 +126,43 @@ describe('daysUntil', () => {
   it('el día del vencimiento es 0 ("vence hoy") y después es negativo', () => {
     expect(daysUntil(endsAt, new Date('2026-10-30T14:00:00.000Z'))).toBe(0);
     expect(daysUntil(endsAt, new Date('2026-11-01T14:00:00.000Z'))).toBe(-2);
+  });
+});
+
+describe('isAutomationPaused', () => {
+  it('no pausa con la fecha vacía', () => {
+    expect(isAutomationPaused(null, NOW)).toBe(false);
+  });
+
+  it('no pausa durante la gracia', () => {
+    expect(isAutomationPaused(inDays(-4), NOW)).toBe(false);
+  });
+
+  it('pausa desde el quinto día después de vencer', () => {
+    expect(isAutomationPaused(inDays(-5), NOW)).toBe(true);
+  });
+});
+
+describe('pausedDaysBetween', () => {
+  const windows = [{ pausedAt: inDays(-20), resumedAt: inDays(-10) }];
+
+  it('cuenta solo los días que se cruzan con la pausa', () => {
+    expect(pausedDaysBetween(inDays(-15), NOW, windows)).toBe(5);
+  });
+
+  it('cuenta la pausa completa si el rango la contiene', () => {
+    expect(pausedDaysBetween(inDays(-30), NOW, windows)).toBe(10);
+  });
+
+  it('da cero si el rango empieza después de la pausa', () => {
+    expect(pausedDaysBetween(inDays(-5), NOW, windows)).toBe(0);
+  });
+
+  it('suma varias pausas', () => {
+    const two = [
+      ...windows,
+      { pausedAt: inDays(-8), resumedAt: inDays(-6) },
+    ];
+    expect(pausedDaysBetween(inDays(-30), NOW, two)).toBe(12);
   });
 });
