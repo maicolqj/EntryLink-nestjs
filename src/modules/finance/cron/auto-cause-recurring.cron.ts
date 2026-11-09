@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { RecurringCharge } from '../entities/recurring-charge.entity';
 import { AccountingService } from '../services/accounting.service';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /** Usuario de sistema para las causaciones automáticas (sin FK; solo trazabilidad). */
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -47,6 +48,7 @@ export class AutoCauseRecurringCron {
         { period },
       )
       .andWhere('complex.status = :status', { status: ComplexStatus.ACTIVE })
+      .andWhere(operableComplexSql('complex.id'))
       .select('DISTINCT rc."complexId"', 'complexId')
       .getRawMany<{ complexId: string }>();
 

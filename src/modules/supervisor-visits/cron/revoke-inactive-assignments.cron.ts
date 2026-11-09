@@ -11,6 +11,7 @@ import { ValidRoles } from '../../roles/enums/valid-roles';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { NotificationType } from '../../notifications/enums/notification-type.enum';
 import { NotificationPriority } from '../../notifications/enums/notification-priority.enum';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 interface ExpiredRow {
   id: string;
@@ -55,6 +56,7 @@ export class RevokeInactiveAssignmentsCron {
        JOIN residential_complexes c ON c.id = a.complex_id
        WHERE a.role   = $1
          AND a.status = $2
+         AND ${operableComplexSql('a.complex_id')}
          AND (
            (
              a.assigned_at < NOW() - make_interval(days => c.supervisor_inactivity_days)
