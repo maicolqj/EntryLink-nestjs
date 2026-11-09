@@ -4,6 +4,11 @@ import { BillingCycle } from '../enums/billing-cycle.enum';
 import { SubscriptionPeriodKind } from '../enums/subscription-period-kind.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { FreePeriodReason } from '../enums/free-period-reason.enum';
+import { recordResumeIfNeeded } from './subscription-resume.helper';
+
+jest.mock('./subscription-resume.helper', () => ({
+  recordResumeIfNeeded: jest.fn(async () => null),
+}));
 
 const COMPLEX_ID = '11111111-1111-1111-1111-111111111111';
 const DAY = 86_400_000;
@@ -732,5 +737,73 @@ describe('SubscriptionsService — cortesía por recomendación', () => {
 
     await service.renew(renewInput, 'admin');
     expect(grant).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SubscriptionsService — reanudación', () => {
+  const resume = recordResumeIfNeeded as jest.Mock;
+  const previous = new Date(Date.now() - 40 * DAY);
+
+  beforeEach(() => resume.mockClear());
+
+  it('renovar informa el vencimiento anterior y el nuevo', async () => {
+    const { service, saved } = build({
+      endsAt: previous,
+      price: { monthlyPrice: 100_000 },
+    });
+
+    await service.renew(
+      {
+        complexId: COMPLEX_ID,
+        plan: ComplexPlan.BASIC,
+        cycle: BillingCycle.MONTHLY,
+      },
+      'admin',
+    );
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(resume.mock.calls[0].slice(1, 4)).toEqual([
+      COMPLEX_ID,
+      previous,
+      saved[0].endsAt,
+    ]);
+  });
+
+  it('otorgar días gratis informa el vencimiento anterior y el nuevo', async () => {
+    const { service, saved } = build({ endsAt: previous });
+
+    await service.grantTrial({ complexId: COMPLEX_ID }, 'admin');
+
+    expect(resume.mock.calls[0].slice(1, 4)).toEqual([
+      COMPLEX_ID,
+      previous,
+      saved[0].endsAt,
+    ]);
+  });
+
+  it('ajustar la fecha informa el vencimiento anterior y el nuevo', async () => {
+    const { service } = build({ endsAt: previous });
+    const endsAt = new Date(Date.now() + 30 * DAY);
+    Object.assign(service, {
+      periodRepo: {
+        findOne: jest.fn(async () => ({
+          startsAt: new Date(Date.now() - 70 * DAY),
+          endsAt: previous,
+          notes: null,
+        })),
+      },
+      getSummary: jest.fn(async () => ({})),
+    });
+
+    await service.adjustEndsAt(
+      { complexId: COMPLEX_ID, endsAt, reason: 'prueba' },
+      'admin',
+    );
+
+    expect(resume.mock.calls[0].slice(1, 4)).toEqual([
+      COMPLEX_ID,
+      previous,
+      endsAt,
+    ]);
   });
 });
