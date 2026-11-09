@@ -57,6 +57,11 @@ export class RevokeInactiveAssignmentsCron {
        WHERE a.role   = $1
          AND a.status = $2
          AND ${operableComplexSql('a.complex_id')}
+         AND NOT EXISTS (
+           SELECT 1 FROM subscription_pauses p
+           WHERE p.complex_id = a.complex_id
+             AND p.resumed_at > NOW() - make_interval(days => c.supervisor_inactivity_days)
+         )
          AND (
            (
              a.assigned_at < NOW() - make_interval(days => c.supervisor_inactivity_days)

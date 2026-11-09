@@ -31,6 +31,8 @@ import { RevokeInactiveAssignmentsCron } from '../../src/modules/supervisor-visi
 import { UserComplexAssignment } from '../../src/modules/users/entities/user-complex-assignment.entity';
 import { VehiclesService } from '../../src/modules/vehicles/services/vehicles.service';
 import { ParkingRotationConfig } from '../../src/modules/vehicles/entities/parking-rotation-config.entity';
+import { SubscriptionPause } from '../../src/modules/subscriptions/entities/subscription-pause.entity';
+import { recordResumeIfNeeded } from '../../src/modules/subscriptions/services/subscription-resume.helper';
 
 const URL = process.env.GROWTH_IT_DATABASE_URL;
 const describeDb = URL ? describe : describe.skip;
@@ -186,7 +188,17 @@ describeDb('Suscripción vencida: automatizaciones (base real)', () => {
         () =>
           withDeps(AutoCauseRecurringCron, {
             recurringRepo: repo(RecurringCharge),
+            pauseRepo: repo(SubscriptionPause),
           }).run(),
+      ],
+      [
+        'finanzas: recurrentes de la pausa',
+        1,
+        () =>
+          withDeps(AutoCauseRecurringCron, {
+            recurringRepo: repo(RecurringCharge),
+            pauseRepo: repo(SubscriptionPause),
+          }).catchUpPausedPeriods(),
       ],
       [
         'finanzas: emisión de cobros',
@@ -302,6 +314,214 @@ describeDb('Suscripción vencida: automatizaciones (base real)', () => {
         Object.values(COMPLEX).includes(c.complexId),
       );
       expect(mine.map((c) => c.complexId)).toEqual([COMPLEX.vigente]);
+    });
+  });
+
+  describe('reanudación al renovar', () => {
+    const RESUMED = 'cccccccc-0000-4000-8000-000000000005';
+    const DAY = 86_400_000;
+    const now = new Date();
+    const inDays = (d: number) => new Date(now.getTime() + d * DAY);
+    const previousEndsAt = inDays(-40);
+    const newEndsAt = inDays(30);
+    const pausedAt = inDays(-35);
+
+    const resume = () =>
+      ds.transaction((m) =>
+        recordResumeIfNeeded(m, RESUMED, previousEndsAt, newEndsAt, now),
+      );
+
+    const seedPqrf = (consecutive: number, createdAt: Date, dueAt: Date) =>
+      ds.getRepository(Pqrf).insert({
+        complexId: RESUMED,
+        code: `IT-${consecutive}`,
+        consecutive,
+        type: 'PETICION',
+        addressee: 'ADMINISTRACION',
+        subject: 'IT',
+        description: 'IT',
+        createdAt,
+        dueAt,
+      } as never);
+
+    const dueOf = async (consecutive: number): Promise<number> => {
+      const rows = await ds.query(
+        `SELECT due_at FROM public.pqrf_requests
+          WHERE complex_id = $1 AND consecutive = $2`,
+        [RESUMED, consecutive],
+      );
+      return new Date(rows[0].due_at).getTime();
+    };
+
+    const seedBooking = (endAt: Date) =>
+      ds.transaction(async (m) => {
+        await m.query(`SET LOCAL session_replication_role = replica`);
+        const rows = await m.query(
+          `INSERT INTO public.amenity_bookings
+             (amenity_id, unit_id, complex_id, start_at, end_at, blocked_until_at, status)
+           VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $2, $2, 'APPROVED')
+           RETURNING id`,
+          [RESUMED, endAt],
+        );
+        return rows[0].id as string;
+      });
+
+    const statusOf = async (id: string): Promise<string> =>
+      (
+        await ds.query(
+          `SELECT status FROM public.amenity_bookings WHERE id = $1`,
+          [id],
+        )
+      )[0].status;
+
+    const cleanup = async () => {
+      await ds.query(
+        `DELETE FROM public.amenity_bookings WHERE complex_id = $1`,
+        [RESUMED],
+      );
+      await ds.query(`DELETE FROM public.pqrf_requests WHERE complex_id = $1`, [
+        RESUMED,
+      ]);
+      await ds.query(
+        `DELETE FROM public.subscription_pauses WHERE complex_id = $1`,
+        [RESUMED],
+      );
+      await ds.query(`DELETE FROM public.residential_complexes WHERE id = $1`, [
+        RESUMED,
+      ]);
+    };
+
+    beforeEach(async () => {
+      await cleanup();
+      await seedComplex(RESUMED, 'renovado', '40 days');
+    });
+    afterAll(cleanup);
+
+    it('deja una sola pausa desde el fin de la gracia', async () => {
+      const pause = await resume();
+
+      expect(pause?.pausedAt.getTime()).toBe(pausedAt.getTime());
+      expect(pause?.days).toBe(35);
+      expect(pause?.recurringCaughtUpAt).toBeNull();
+    });
+
+    it('extiende un PQRF anterior por toda la pausa', async () => {
+      const due = inDays(2);
+      await seedPqrf(920001, inDays(-50), due);
+
+      await resume();
+
+      expect(await dueOf(920001)).toBe(due.getTime() + 35 * DAY);
+    });
+
+    it('extiende un PQRF creado en la pausa solo desde su creación', async () => {
+      const due = inDays(2);
+      await seedPqrf(920002, inDays(-10), due);
+
+      await resume();
+
+      expect(await dueOf(920002)).toBe(due.getTime() + 10 * DAY);
+    });
+
+    it('la segunda reanudación no extiende otra vez', async () => {
+      const due = inDays(2);
+      await seedPqrf(920003, inDays(-50), due);
+
+      await resume();
+      await expect(resume()).resolves.toBeNull();
+
+      expect(await dueOf(920003)).toBe(due.getTime() + 35 * DAY);
+      const rows = await ds.query(
+        `SELECT count(*)::int AS n FROM public.subscription_pauses WHERE complex_id = $1`,
+        [RESUMED],
+      );
+      expect(rows[0].n).toBe(1);
+    });
+
+    it('cierra como EXPIRED la reserva que terminó durante la pausa', async () => {
+      const id = await seedBooking(inDays(-3));
+
+      await resume();
+
+      expect(await statusOf(id)).toBe('EXPIRED');
+    });
+
+    it('no toca la reserva que terminó antes de la pausa', async () => {
+      const id = await seedBooking(inDays(-36));
+
+      await resume();
+
+      expect(await statusOf(id)).toBe('APPROVED');
+    });
+  });
+
+  describe('supervisores tras una pausa', () => {
+    const ID = 'cccccccc-0000-4000-8000-000000000006';
+    const USER = 'cccccccc-0000-4000-8000-0000000000a6';
+
+    const cron = () =>
+      withDeps(RevokeInactiveAssignmentsCron, {
+        assignmentRepo: ds.getRepository(UserComplexAssignment),
+        notificationsService: { notify: () => Promise.resolve([]) },
+      });
+
+    const cleanup = async () => {
+      await ds.query(
+        `DELETE FROM public.user_complex_assignments WHERE complex_id = $1`,
+        [ID],
+      );
+      await ds.query(
+        `DELETE FROM public.subscription_pauses WHERE complex_id = $1`,
+        [ID],
+      );
+      await ds.query(`DELETE FROM public.residential_complexes WHERE id = $1`, [
+        ID,
+      ]);
+    };
+
+    const seedPause = (resumedDaysAgo: number) =>
+      ds.query(
+        `INSERT INTO public.subscription_pauses (complex_id, paused_at, resumed_at, days)
+         VALUES ($1, now() - interval '90 days', now() - make_interval(days => $2::int), 10)`,
+        [ID, resumedDaysAgo],
+      );
+
+    const statusNow = async (): Promise<string> =>
+      (
+        await ds.query(
+          `SELECT status FROM public.user_complex_assignments WHERE complex_id = $1`,
+          [ID],
+        )
+      )[0].status;
+
+    beforeEach(async () => {
+      await cleanup();
+      await seedComplex(ID, 'supervisor', '-10 days');
+      await ds.transaction(async (m) => {
+        await m.query(`SET LOCAL session_replication_role = replica`);
+        await m.query(
+          `INSERT INTO public.user_complex_assignments (user_id, complex_id, role, status, assigned_at)
+           VALUES ($1, $2, 'SUPERVISOR_ROL', 'ACTIVE', now() - interval '60 days')`,
+          [USER, ID],
+        );
+      });
+    });
+    afterAll(cleanup);
+
+    it('no revoca antes de cumplir el plazo desde la reanudación', async () => {
+      await seedPause(5);
+
+      await cron().run();
+
+      expect(await statusNow()).toBe('ACTIVE');
+    });
+
+    it('revoca si ya pasó el plazo desde la reanudación', async () => {
+      await seedPause(40);
+
+      await cron().run();
+
+      expect(await statusNow()).toBe('REMOVED');
     });
   });
 });

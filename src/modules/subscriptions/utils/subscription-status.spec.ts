@@ -5,6 +5,7 @@ import {
   currentReminderMilestone,
   daysUntil,
   isAutomationPaused,
+  pausedBillingDates,
   pausedDaysBetween,
 } from './subscription-status';
 
@@ -159,10 +160,44 @@ describe('pausedDaysBetween', () => {
   });
 
   it('suma varias pausas', () => {
-    const two = [
-      ...windows,
-      { pausedAt: inDays(-8), resumedAt: inDays(-6) },
-    ];
+    const two = [...windows, { pausedAt: inDays(-8), resumedAt: inDays(-6) }];
     expect(pausedDaysBetween(inDays(-30), NOW, two)).toBe(12);
+  });
+});
+
+describe('pausedBillingDates', () => {
+  it('va del día siguiente a la pausa hasta el día de reanudar', () => {
+    const dates = pausedBillingDates(
+      new Date('2026-09-20T13:00:00.000Z'),
+      new Date('2026-10-02T13:00:00.000Z'),
+    );
+
+    expect(dates[0]).toEqual({ period: '2026-09', day: 21 });
+    expect(dates[dates.length - 1]).toEqual({ period: '2026-10', day: 2 });
+    expect(dates).toHaveLength(12);
+  });
+
+  it('usa el calendario de Colombia', () => {
+    // 11:30 p. m. del 20 en Bogotá: en UTC ya es 21.
+    const dates = pausedBillingDates(
+      new Date('2026-09-21T04:30:00.000Z'),
+      new Date('2026-09-22T13:00:00.000Z'),
+    );
+
+    expect(dates).toEqual([
+      { period: '2026-09', day: 21 },
+      { period: '2026-09', day: 22 },
+    ]);
+  });
+
+  it('no recupera más de 12 meses', () => {
+    const dates = pausedBillingDates(
+      new Date('2024-01-15T13:00:00.000Z'),
+      new Date('2026-10-02T13:00:00.000Z'),
+    );
+
+    const periods = new Set(dates.map((d) => d.period));
+    expect(periods.size).toBe(12);
+    expect(dates[0]).toEqual({ period: '2025-11', day: 1 });
   });
 });
