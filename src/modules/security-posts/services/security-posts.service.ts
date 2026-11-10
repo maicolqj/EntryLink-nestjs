@@ -116,6 +116,7 @@ export class SecurityPostsService {
 
     if (!securityPostId) {
       await this.guardRepo.delete({ userId: currentUser.sub });
+      this.notifyChanged(complexId);
       return null;
     }
 
@@ -141,6 +142,8 @@ export class SecurityPostsService {
     this.logger.log(
       `Vigilante ${currentUser.sub} en ${post.name} (${complexId})`,
     );
+    // La administración ve en vivo cuántos vigilantes hay en cada portería.
+    this.notifyChanged(complexId);
     return post;
   }
 

@@ -72,8 +72,10 @@ function setup(options?: { found?: SecurityPost | null; taken?: number }) {
 
 describe('SecurityPostsService', () => {
   describe('select (el vigilante dice en qué portería está)', () => {
-    it('guarda la portería de su conjunto', async () => {
-      const { service, postRepo, guardRepo } = setup({ found: post() });
+    it('guarda la portería de su conjunto y avisa a la web', async () => {
+      const { service, postRepo, guardRepo, socketService } = setup({
+        found: post(),
+      });
 
       await service.select('post-1', user(GUARD_ID, [ValidRoles.SECURITY_ROL]));
 
@@ -91,6 +93,11 @@ describe('SecurityPostsService', () => {
           securityPostId: 'post-1',
         }),
         ['userId'],
+      );
+      expect(socketService.emitToComplex).toHaveBeenCalledWith(
+        COMPLEX_ID,
+        SocketEvent.SECURITY_POSTS_UPDATED,
+        { complexId: COMPLEX_ID },
       );
     });
 
