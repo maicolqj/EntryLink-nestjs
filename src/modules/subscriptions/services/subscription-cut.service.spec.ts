@@ -30,6 +30,7 @@ const build = (opts: {
   };
   const complexRepo = {
     createQueryBuilder: () => qb,
+    findOne: jest.fn(async () => complex),
     update: jest.fn(async () => undefined),
   };
   const reminderRepo = {
@@ -209,6 +210,60 @@ describe('SubscriptionCutService', () => {
     expect(complexRepo.update).toHaveBeenCalledWith('c1', {
       subscriptionAccessCutAt: accessCutAt,
       subscriptionPanicCutAt: NOW,
+    });
+  });
+
+  describe('communityAccess', () => {
+    it('sin corte y sin avisos no anuncia fecha', async () => {
+      const { service } = build({ mode: 'access', overdueDays: 2 });
+
+      await expect(service.communityAccess('c1', NOW)).resolves.toEqual({
+        accessCut: false,
+        panicAvailable: true,
+        cutAt: null,
+      });
+    });
+
+    it('con un aviso enviado anuncia la fecha para el banner', async () => {
+      const { service } = build({
+        mode: 'access',
+        overdueDays: 10,
+        rows: [{ milestone: 'ACCESS_N1', sentAt: NOW }],
+      });
+
+      const access = await service.communityAccess('c1', NOW);
+
+      expect(access.accessCut).toBe(false);
+      expect(access.cutAt).toEqual(new Date(NOW.getTime() + 20 * DAY));
+    });
+
+    it('con el modo apagado no informa corte aunque exista la marca', async () => {
+      const { service } = build({
+        mode: 'off',
+        overdueDays: 40,
+        accessCutAt: daysAgo(1),
+      });
+
+      await expect(service.communityAccess('c1', NOW)).resolves.toEqual({
+        accessCut: false,
+        panicAvailable: true,
+        cutAt: null,
+      });
+    });
+
+    it('cortado en modo access mantiene disponible el pánico', async () => {
+      const cutAt = daysAgo(1);
+      const { service } = build({
+        mode: 'access',
+        overdueDays: 40,
+        accessCutAt: cutAt,
+      });
+
+      await expect(service.communityAccess('c1', NOW)).resolves.toEqual({
+        accessCut: true,
+        panicAvailable: true,
+        cutAt,
+      });
     });
   });
 });

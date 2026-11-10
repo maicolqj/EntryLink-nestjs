@@ -568,6 +568,10 @@ export enum NotificationActionErrorCode {
 export enum SubscriptionErrorCode {
   /** Pasó la gracia: la administración queda en solo lectura hasta renovar. */
   SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED',
+  /** Tras los tres avisos, la comunidad perdió el acceso hasta renovar. */
+  SUBSCRIPTION_ACCESS_CUT = 'SUBSCRIPTION_ACCESS_CUT',
+  /** Tras tres avisos que lo anunciaban, se apagó el botón de pánico. */
+  SUBSCRIPTION_PANIC_CUT = 'SUBSCRIPTION_PANIC_CUT',
   /** El plan FREE es solo la prueba gratis: no se renueva pagando. */
   SUBSCRIPTION_FREE_NOT_RENEWABLE = 'SUBSCRIPTION_FREE_NOT_RENEWABLE',
   /** La prueba gratis se otorga una sola vez por complejo. */

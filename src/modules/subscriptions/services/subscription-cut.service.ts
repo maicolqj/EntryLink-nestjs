@@ -12,6 +12,7 @@ import { NotificationType } from '../../notifications/enums/notification-type.en
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { CommunityAccess } from '../dto/responses/community-access.response';
 import { SubscriptionReminder } from '../entities/subscription-reminder.entity';
 import { formatBogotaDate } from '../utils/format-date';
 import {
@@ -92,6 +93,60 @@ export class SubscriptionCutService {
     return advanced;
   }
 
+  /** Lo que la app de la comunidad necesita saber del corte de su conjunto. */
+  async communityAccess(
+    complexId: string,
+    now: Date = new Date(),
+  ): Promise<CommunityAccess> {
+    const open = { accessCut: false, panicAvailable: true, cutAt: null };
+    const mode = parseCutMode(
+      this.configService.get<string>('SUBSCRIPTION_CUT_MODE'),
+    );
+    if (mode === 'off') return open;
+
+    const complex = await this.complexRepo.findOne({
+      where: { id: complexId },
+    });
+    if (!complex?.subscriptionEndsAt) return open;
+
+    const withPanic = mode === 'access_and_panic';
+    const panicAvailable = !(withPanic && complex.subscriptionPanicCutAt);
+    if (complex.subscriptionAccessCutAt) {
+      return {
+        accessCut: true,
+        panicAvailable,
+        cutAt: complex.subscriptionAccessCutAt,
+      };
+    }
+
+    const endsAt = new Date(complex.subscriptionEndsAt);
+    const sent = await this.sentNotices(
+      complexId,
+      endsAt,
+      withPanic ? 'PANIC' : 'ACCESS',
+    );
+    if (!sent.some(Boolean)) return open;
+    return {
+      accessCut: false,
+      panicAvailable,
+      cutAt: earliestCutDate(endsAt, sent, now),
+    };
+  }
+
+  private async sentNotices(
+    complexId: string,
+    endsAt: Date,
+    prefix: string,
+  ): Promise<(Date | null)[]> {
+    const rows = await this.reminderRepo.find({
+      where: { complexId, endsAt },
+    });
+    return Array.from({ length: NOTICE_COUNT }, (_, i) => {
+      const row = rows.find((r) => r.milestone === `${prefix}_N${i + 1}`);
+      return row ? new Date(row.sentAt) : null;
+    });
+  }
+
   private async advance(
     complex: ResidentialComplex,
     withPanic: boolean,
@@ -99,13 +154,7 @@ export class SubscriptionCutService {
   ): Promise<boolean> {
     const endsAt = new Date(complex.subscriptionEndsAt);
     const prefix = withPanic ? 'PANIC' : 'ACCESS';
-    const rows = await this.reminderRepo.find({
-      where: { complexId: complex.id, endsAt },
-    });
-    const sent = Array.from({ length: NOTICE_COUNT }, (_, i) => {
-      const row = rows.find((r) => r.milestone === `${prefix}_N${i + 1}`);
-      return row ? new Date(row.sentAt) : null;
-    });
+    const sent = await this.sentNotices(complex.id, endsAt, prefix);
 
     const step = nextCutStep(endsAt, sent, now);
     if (!step) return false;
