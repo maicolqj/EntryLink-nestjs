@@ -43,7 +43,11 @@ import { AnswerIntercomCallInput } from '../dto/inputs/answer-call.input';
 import { IntercomSignalInput } from '../dto/inputs/intercom-signal.input';
 import { UpdateIntercomSettingsInput } from '../dto/inputs/intercom-settings.input';
 import { IntercomCallSession } from '../dto/responses/intercom-call-session.response';
-import { IntercomSecurityContact } from '../dto/responses/intercom-security-contact.response';
+import {
+  findGuardSecurityPost,
+  findSecurityUserIds,
+  resolveSecurityPostTarget,
+} from '../../security-posts/security-post-routing';
 import {
   IntercomAdoption,
   IntercomUnitAdoption,
@@ -72,6 +76,7 @@ export const INTERCOM_PUSH = {
   ENDED: 'INTERCOM_CALL_ENDED',
 } as const;
 
+const SECURITY_LABEL = 'PORTERÍA';
 const MOBILE_PLATFORMS = [PushPlatform.ANDROID, PushPlatform.IOS];
 
 type Side = 'agent' | 'resident';
@@ -81,9 +86,10 @@ type Side = 'agent' | 'resident';
  *
  * Portería → residente: se llama a UNA persona (la elegida en la unidad) y solo
  * a ella le suena, igual que con la SIM. Residente → portería (opcional por
- * conjunto): lo mismo al revés; si el conjunto tiene varias porterías, el
- * residente elige a cuál llama y solo esa timbra. Cada portería es la cuenta
- * de vigilante con la que está abierta EntryLink en ese puesto.
+ * conjunto): si el conjunto tiene varias porterías (`security_posts`), el
+ * residente elige a cuál llama y solo timbra en los vigilantes que están en
+ * esa; el primero que contesta se queda con la llamada. Sin porterías
+ * creadas, el conjunto tiene una sola y timbra en todo el personal.
  *
  * La llamada vive en `call_logs` (canal INTERNET) desde que empieza a sonar:
  * el historial es uno solo y los cambios de estado son un UPDATE condicionado
@@ -165,6 +171,11 @@ export class VoiceCallsService implements OnModuleDestroy {
     await this.assertNotBusy(currentUser.sub);
     await this.assertNotBusy(input.residentUserId);
 
+    const post = await findGuardSecurityPost(
+      this.callRepo.manager,
+      currentUser.sub,
+    );
+
     const call = await this.callRepo.save(
       this.callRepo.create({
         complexId: input.complexId,
@@ -176,6 +187,8 @@ export class VoiceCallsService implements OnModuleDestroy {
         phoneNumber: residentUser?.phoneNumber ?? '',
         agentUserId: currentUser.sub,
         agentName: await this.displayName(currentUser),
+        securityPostId: post?.id ?? null,
+        securityPostName: post?.name ?? null,
         residentId: resident.id,
         residentUserId: input.residentUserId,
         residentName: this.fullName(residentUser),
@@ -227,27 +240,28 @@ export class VoiceCallsService implements OnModuleDestroy {
       input.unitId,
     );
 
-    // Solo a la portería elegida, y solo si es de este conjunto y tiene la
-    // app: que no conteste un puesto que no corresponde.
-    const contacts = await this.findSecurityContacts(input.complexId);
-    if (
-      input.securityUserId === currentUser.sub ||
-      !contacts.some((c) => c.userId === input.securityUserId)
-    ) {
+    // Solo a la portería elegida: que no conteste un puesto que no
+    // corresponde. Con varias porterías hay que elegir (strict).
+    const target = await resolveSecurityPostTarget(
+      this.callRepo.manager,
+      input.complexId,
+      input.securityPostId,
+      { strict: true },
+    );
+    const guardIds = await this.withMobileApp(
+      target.guardUserIds.filter((id) => id !== currentUser.sub),
+    );
+    if (guardIds.length === 0) {
       throw this.error(
-        'Esa portería no está disponible para llamadas por la app',
-        HttpStatus.NOT_FOUND,
-        IntercomErrorCode.INTERCOM_SECURITY_NOT_FOUND,
+        target.post
+          ? `En ${target.post.name} no hay nadie con la app abierta; prueba con otra portería`
+          : 'La portería no tiene la app activa en este momento',
+        HttpStatus.CONFLICT,
+        IntercomErrorCode.INTERCOM_NO_SECURITY,
       );
     }
 
     await this.assertNotBusy(currentUser.sub);
-    await this.assertNotBusy(input.securityUserId);
-
-    const securityUser = await this.userRepo.findOne({
-      where: { id: input.securityUserId },
-      select: ['id', 'name', 'lastName'],
-    });
 
     const residentUser = await this.userRepo.findOne({
       where: { id: currentUser.sub },
@@ -262,8 +276,11 @@ export class VoiceCallsService implements OnModuleDestroy {
         direction: CallDirection.INCOMING,
         outcome: CallOutcome.MISSED,
         phoneNumber: residentUser?.phoneNumber ?? '',
-        agentUserId: input.securityUserId,
-        agentName: this.fullName(securityUser),
+        // Quién atiende se sabe al contestar.
+        agentUserId: null,
+        agentName: target.post?.name ?? SECURITY_LABEL,
+        securityPostId: target.post?.id ?? null,
+        securityPostName: target.post?.name ?? null,
         residentId: resident.id,
         residentUserId: currentUser.sub,
         residentName: this.fullName(residentUser),
@@ -276,20 +293,20 @@ export class VoiceCallsService implements OnModuleDestroy {
     );
 
     const payload = this.incomingPayload(call, call.residentName ?? '');
-    this.socketService.emitToUser(
-      input.securityUserId,
+    this.socketService.emitToUsers(
+      guardIds,
       SocketEvent.INTERCOM_CALL_INCOMING,
       payload,
     );
     void this.notificationsService.sendCallPush(
-      [input.securityUserId],
+      guardIds,
       { type: INTERCOM_PUSH.INCOMING, ...payload },
       RING_TIMEOUT_MS,
     );
 
     this.scheduleRingTimeout(call.id);
     this.logger.log(
-      `Citofonía: residente ${currentUser.sub} → portería ${input.securityUserId} | llamada ${call.id}`,
+      `Citofonía: residente ${currentUser.sub} → ${target.post?.name ?? 'portería'} (${guardIds.length} equipos) | llamada ${call.id}`,
     );
 
     return this.session(call, currentUser.sub);
@@ -304,7 +321,7 @@ export class VoiceCallsService implements OnModuleDestroy {
     currentUser: JwtAccessPayload,
   ): Promise<IntercomCallSession> {
     const call = await this.findCall(input.callId);
-    if (!this.isCallee(call, currentUser)) throw this.callNotFound();
+    if (!(await this.isCallee(call, currentUser))) throw this.callNotFound();
 
     const now = new Date();
     const patch: Partial<CallLog> = {
@@ -312,6 +329,11 @@ export class VoiceCallsService implements OnModuleDestroy {
       outcome: CallOutcome.ANSWERED,
       answeredAt: now,
     };
+    // Residente → portería: el vigilante que contesta queda como el agente.
+    if (call.direction === CallDirection.INCOMING) {
+      patch.agentUserId = currentUser.sub;
+      patch.agentName = await this.displayName(currentUser);
+    }
     const result = await this.callRepo.update(
       { id: call.id, voiceState: VoiceCallState.RINGING },
       patch,
@@ -331,11 +353,17 @@ export class VoiceCallsService implements OnModuleDestroy {
       answeredByUserId: currentUser.sub,
       deviceId: input.deviceId ?? '',
     };
-    this.emitToParties(answered, SocketEvent.INTERCOM_CALL_ACCEPTED, data);
-    // Otro celular de la misma cuenta puede estar sonando con la app cerrada:
-    // el socket no le llega.
+    const ringing = await this.ringingUserIds(call);
+    this.emitToParties(
+      answered,
+      SocketEvent.INTERCOM_CALL_ACCEPTED,
+      data,
+      ringing,
+    );
+    // Los otros equipos que estaban sonando (otro celular de la misma cuenta u
+    // otro vigilante de esa portería) pueden tener la app cerrada.
     void this.notificationsService.sendCallPush(
-      this.calleeUserIds(call),
+      ringing,
       { type: INTERCOM_PUSH.ANSWERED, ...data },
       RING_TIMEOUT_MS,
     );
@@ -348,12 +376,18 @@ export class VoiceCallsService implements OnModuleDestroy {
     currentUser: JwtAccessPayload,
   ): Promise<CallLog> {
     const call = await this.findCall(callId);
-    if (!this.isCallee(call, currentUser)) throw this.callNotFound();
+    if (!(await this.isCallee(call, currentUser))) throw this.callNotFound();
     if (call.voiceState !== VoiceCallState.RINGING) return call;
 
     return this.finish(
       call,
-      { outcome: CallOutcome.REJECTED },
+      {
+        outcome: CallOutcome.REJECTED,
+        ...(call.direction === CallDirection.INCOMING && {
+          agentUserId: currentUser.sub,
+          agentName: await this.displayName(currentUser),
+        }),
+      },
       IntercomEndReason.REJECTED,
       currentUser.sub,
     );
@@ -361,7 +395,7 @@ export class VoiceCallsService implements OnModuleDestroy {
 
   async end(callId: string, currentUser: JwtAccessPayload): Promise<CallLog> {
     const call = await this.findCall(callId);
-    const side = this.sideOf(call, currentUser);
+    const side = await this.sideOf(call, currentUser);
     if (!side) throw this.callNotFound();
 
     if (call.voiceState === VoiceCallState.RINGING) {
@@ -399,7 +433,7 @@ export class VoiceCallsService implements OnModuleDestroy {
     currentUser: JwtAccessPayload,
   ): Promise<boolean> {
     const call = await this.findCall(input.callId);
-    const side = this.sideOf(call, currentUser);
+    const side = await this.sideOf(call, currentUser);
     if (!side || call.voiceState !== VoiceCallState.ACTIVE) {
       throw this.callNotFound();
     }
@@ -429,32 +463,34 @@ export class VoiceCallsService implements OnModuleDestroy {
     currentUser: JwtAccessPayload,
   ): Promise<IntercomCallSession | null> {
     const live = [VoiceCallState.RINGING, VoiceCallState.ACTIVE];
+    const isGuard =
+      !!currentUser.complexId &&
+      !!currentUser.roles?.includes(ValidRoles.SECURITY_ROL);
+    const post = isGuard
+      ? await findGuardSecurityPost(this.callRepo.manager, currentUser.sub)
+      : null;
     const qb = this.callRepo
       .createQueryBuilder('cl')
       .where('cl.voiceState IN (:...live)', { live })
-      .andWhere('(cl.residentUserId = :me OR cl.agentUserId = :me)', {
-        me: currentUser.sub,
-      })
+      .andWhere(
+        `(cl.residentUserId = :me OR cl.agentUserId = :me
+          OR (:isGuard = true AND cl.direction = :incoming
+              AND cl.voiceState = :ringing AND cl.agentUserId IS NULL
+              AND cl.complexId = :complexId
+              AND (cl.securityPostId IS NULL OR cl.securityPostId = :postId)))`,
+        {
+          me: currentUser.sub,
+          isGuard,
+          incoming: CallDirection.INCOMING,
+          ringing: VoiceCallState.RINGING,
+          complexId: currentUser.complexId ?? null,
+          postId: post?.id ?? null,
+        },
+      )
       .orderBy('cl.startedAt', 'DESC');
 
     const call = await qb.getOne();
     return call ? this.session(call, currentUser.sub) : null;
-  }
-
-  /**
-   * Porterías a las que el residente puede llamar. Si hay más de una, la app
-   * le pide escoger; con una sola, llama directo.
-   */
-  async securityContacts(
-    complexId: string,
-    currentUser: JwtAccessPayload,
-  ): Promise<IntercomSecurityContact[]> {
-    const complex = await this.requireInternetComplex(complexId);
-    if (!complex.residentIntercomCallsEnabled) return [];
-    await this.findActiveResident(currentUser.sub, complexId);
-    return (await this.findSecurityContacts(complexId)).filter(
-      (c) => c.userId !== currentUser.sub,
-    );
   }
 
   /** Unidades que quedarían sin citofonía al pasar el conjunto a INTERNET. */
@@ -670,13 +706,17 @@ export class VoiceCallsService implements OnModuleDestroy {
       endedByUserId: endedByUserId ?? '',
       durationSeconds,
     };
-    this.emitToParties(ended, SocketEvent.INTERCOM_CALL_ENDED, data);
+    const ringing =
+      call.voiceState === VoiceCallState.RINGING
+        ? await this.ringingUserIds(call)
+        : [];
+    this.emitToParties(ended, SocketEvent.INTERCOM_CALL_ENDED, data, ringing);
 
     // Si estaba sonando, los equipos con la app cerrada siguen timbrando hasta
     // que algo les diga que paren.
-    if (call.voiceState === VoiceCallState.RINGING) {
+    if (ringing.length > 0) {
       void this.notificationsService.sendCallPush(
-        this.calleeUserIds(call),
+        ringing,
         { type: INTERCOM_PUSH.ENDED, ...this.stringify(data) },
         RING_TIMEOUT_MS,
       );
@@ -707,25 +747,54 @@ export class VoiceCallsService implements OnModuleDestroy {
     return ended;
   }
 
-  /** Avisa a las dos partes: la portería y el residente de la llamada. */
-  private emitToParties(call: CallLog, event: SocketEvent, data: unknown) {
-    for (const userId of [call.residentUserId, call.agentUserId]) {
-      if (userId) this.socketService.emitToUser(userId, event, data);
+  /**
+   * Avisa a las dos partes y, si se pasan, a los equipos que estaban sonando
+   * (para que dejen de timbrar).
+   */
+  private emitToParties(
+    call: CallLog,
+    event: SocketEvent,
+    data: unknown,
+    ringingUserIds: string[] = [],
+  ) {
+    const users = new Set(ringingUserIds);
+    if (call.residentUserId) users.add(call.residentUserId);
+    if (call.agentUserId) users.add(call.agentUserId);
+    this.socketService.emitToUsers([...users], event, data);
+  }
+
+  /**
+   * En qué cuentas estaba sonando. Residente → portería: todo el personal del
+   * conjunto y no solo el de la portería, porque quien estaba en ella pudo
+   * cambiarse mientras sonaba; a quien no le sonaba, el aviso de "paró" no le
+   * hace nada.
+   */
+  private async ringingUserIds(call: CallLog): Promise<string[]> {
+    if (call.direction === CallDirection.OUTGOING) {
+      return call.residentUserId ? [call.residentUserId] : [];
     }
+    return findSecurityUserIds(this.callRepo.manager, call.complexId, null);
   }
 
-  /** A quién le estaba sonando la llamada. */
-  private calleeUserIds(call: CallLog): string[] {
-    const callee =
-      call.direction === CallDirection.OUTGOING
-        ? call.residentUserId
-        : call.agentUserId;
-    return callee ? [callee] : [];
-  }
-
-  private sideOf(call: CallLog, user: JwtAccessPayload): Side | null {
+  private async sideOf(
+    call: CallLog,
+    user: JwtAccessPayload,
+  ): Promise<Side | null> {
     if (call.residentUserId === user.sub) return 'resident';
     if (call.agentUserId === user.sub) return 'agent';
+    // Residente → portería que nadie ha contestado: la toma cualquier
+    // vigilante del conjunto que esté en la portería elegida.
+    if (
+      call.direction === CallDirection.INCOMING &&
+      call.voiceState === VoiceCallState.RINGING &&
+      !call.agentUserId &&
+      user.complexId === call.complexId &&
+      user.roles?.includes(ValidRoles.SECURITY_ROL)
+    ) {
+      if (!call.securityPostId) return 'agent';
+      const post = await findGuardSecurityPost(this.callRepo.manager, user.sub);
+      return post?.id === call.securityPostId ? 'agent' : null;
+    }
     return null;
   }
 
@@ -735,8 +804,11 @@ export class VoiceCallsService implements OnModuleDestroy {
       : side === 'resident';
   }
 
-  private isCallee(call: CallLog, user: JwtAccessPayload): boolean {
-    const side = this.sideOf(call, user);
+  private async isCallee(
+    call: CallLog,
+    user: JwtAccessPayload,
+  ): Promise<boolean> {
+    const side = await this.sideOf(call, user);
     return !!side && !this.isCaller(call, side);
   }
 
@@ -790,32 +862,19 @@ export class VoiceCallsService implements OnModuleDestroy {
     return resident;
   }
 
-  /** Porterías del conjunto con la app instalada (cuentas de vigilante). */
-  private async findSecurityContacts(
-    complexId: string,
-  ): Promise<IntercomSecurityContact[]> {
-    const rows: Array<{ id: string; name: string; last_name: string }> =
-      await this.callRepo.manager.query(
-        `SELECT DISTINCT u.id, u.name, u.last_name
-           FROM users u
-           JOIN user_has_roles ur ON ur.user_id = u.id
-           JOIN roles r ON r.id = ur.role_id
-          WHERE u.complex_id = $1
-            AND u.deleted_at IS NULL
-            AND r.name::text = $2
-            AND r.status = true
-            AND EXISTS (
-              SELECT 1 FROM push_subscriptions ps
-               WHERE ps.user_id::text = u.id::text
-                 AND ps.is_active = true
-                 AND ps.platform::text IN ('ANDROID', 'IOS'))
-          ORDER BY u.name, u.last_name`,
-        [complexId, ValidRoles.SECURITY_ROL],
-      );
-    return rows.map((row) => ({
-      userId: String(row.id),
-      name: this.fullName({ name: row.name, lastName: row.last_name }),
-    }));
+  /** De esos usuarios, los que tienen la app móvil (dónde puede sonar). */
+  private async withMobileApp(userIds: string[]): Promise<string[]> {
+    if (userIds.length === 0) return [];
+    const subs = await this.pushSubRepo.find({
+      where: {
+        userId: In(userIds),
+        platform: In(MOBILE_PLATFORMS),
+        isActive: true,
+      },
+      select: ['userId'],
+    });
+    const withApp = new Set(subs.map((sub) => sub.userId));
+    return userIds.filter((id) => withApp.has(id));
   }
 
   private async hasMobileApp(userIds: string[]): Promise<boolean> {

@@ -686,6 +686,18 @@ export enum IntercomErrorCode {
   INTERCOM_CALL_NOT_FOUND = 'INTERCOM_CALL_NOT_FOUND',
   /** La llamada ya no está en un estado que permita esa acción. */
   INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
-  /** La portería elegida no es del conjunto o no tiene la app. */
-  INTERCOM_SECURITY_NOT_FOUND = 'INTERCOM_SECURITY_NOT_FOUND',
+  /** Nadie de la portería elegida tiene la app abierta. */
+  INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+}
+
+/**
+ * Porterías del conjunto.
+ */
+export enum SecurityPostErrorCode {
+  /** La portería no existe, es de otro conjunto o está inactiva. */
+  SECURITY_POST_NOT_FOUND = 'SECURITY_POST_NOT_FOUND',
+  /** El conjunto tiene varias porterías y no se dijo a cuál. */
+  SECURITY_POST_REQUIRED = 'SECURITY_POST_REQUIRED',
+  /** Ya hay otra portería con ese nombre en el conjunto. */
+  SECURITY_POST_NAME_TAKEN = 'SECURITY_POST_NAME_TAKEN',
 }

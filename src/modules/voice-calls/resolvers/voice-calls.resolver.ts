@@ -15,7 +15,6 @@ import { IntercomSignalInput } from '../dto/inputs/intercom-signal.input';
 import { UpdateIntercomSettingsInput } from '../dto/inputs/intercom-settings.input';
 import { IntercomCallSession } from '../dto/responses/intercom-call-session.response';
 import { IntercomAdoption } from '../dto/responses/intercom-adoption.response';
-import { IntercomSecurityContact } from '../dto/responses/intercom-security-contact.response';
 
 /** Las dos partes posibles de una llamada de citofonía. */
 const CALL_PARTIES = [ValidRoles.SECURITY_ROL, ValidRoles.RESIDENT_ROL];
@@ -26,7 +25,7 @@ const CALL_PARTIES = [ValidRoles.SECURITY_ROL, ValidRoles.RESIDENT_ROL];
  * Flujo de una llamada:
  * 1. Quien llama: `startResidentIntercomCall` (portería elige al residente) o
  *    `startSecurityIntercomCall` (el residente elige la portería de
- *    `intercomSecurityContacts`). Solo a quien se eligió le llega
+ *    `securityPosts`). Solo a quien se eligió le llega
  *    `intercom:call:incoming` por socket y un push data-only.
  * 2. Quien recibe: `answerIntercomCall` → a quien llama le llega
  *    `intercom:call:accepted` y arma la oferta WebRTC.
@@ -114,19 +113,6 @@ export class VoiceCallsResolver {
     @CurrentUser() currentUser: JwtAccessPayload,
   ): Promise<IntercomCallSession | null> {
     return this.voiceCalls.currentCall(currentUser);
-  }
-
-  @Query(() => [IntercomSecurityContact], {
-    name: 'intercomSecurityContacts',
-    description:
-      'Porterías a las que el residente puede llamar por la app (vacío si el conjunto no lo permite)',
-  })
-  @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
-  securityContacts(
-    @Args('complexId') complexId: string,
-    @CurrentUser() currentUser: JwtAccessPayload,
-  ): Promise<IntercomSecurityContact[]> {
-    return this.voiceCalls.securityContacts(complexId, currentUser);
   }
 
   @Query(() => IntercomAdoption, {

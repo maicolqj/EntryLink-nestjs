@@ -45,6 +45,7 @@ import { NotesModule } from './modules/notes/notes.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { CallLogsModule } from './modules/call-logs/call-logs.module';
 import { VoiceCallsModule } from './modules/voice-calls/voice-calls.module';
+import { SecurityPostsModule } from './modules/security-posts/security-posts.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { SupervisorVisitsModule } from './modules/supervisor-visits/supervisor-visits.module';
 import { MailModule } from './mail/mail.module';
@@ -259,6 +260,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     MessagesModule,
     CallLogsModule,
     VoiceCallsModule,
+    SecurityPostsModule,
     AuditModule,
     SupervisorVisitsModule,
     SpecialNumbersModule,

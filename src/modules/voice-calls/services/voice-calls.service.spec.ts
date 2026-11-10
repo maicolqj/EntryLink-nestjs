@@ -14,7 +14,10 @@ import { CallOutcome } from '../../call-logs/enums/call-outcome.enum';
 import { VoiceCallState } from '../../call-logs/enums/voice-call-state.enum';
 import { IntercomMode } from '../../residential-complex/enums/intercom-mode.enum';
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
-import { IntercomErrorCode } from '../../shared/constans/error-codes.constants';
+import {
+  IntercomErrorCode,
+  SecurityPostErrorCode,
+} from '../../shared/constans/error-codes.constants';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 
@@ -61,6 +64,8 @@ function liveCall(overrides: Partial<CallLog> = {}): CallLog {
     unitId: 'unit-1',
     unitNumber: '101',
     buildingName: 'Torre 1',
+    securityPostId: null,
+    securityPostName: null,
     startedAt: new Date('2026-11-10T15:00:00Z'),
     answeredAt: null,
     endedAt: null,
@@ -79,7 +84,30 @@ function setup(options?: {
   busy?: number;
   updateAffected?: number;
   securityIds?: string[];
+  posts?: Array<{ id: string; name: string }>;
+  /** userId → portería en la que está */
+  onDuty?: Record<string, string>;
 }) {
+  const securityIds = options?.securityIds ?? [GUARD_ID, GUARD_2_ID];
+  const posts = options?.posts ?? [];
+  const onDuty = options?.onDuty ?? {};
+  // Responde cada consulta SQL del enrutamiento de porterías según su forma.
+  const query = jest.fn((sql: string, params: string[]) => {
+    if (sql.includes('FROM security_posts')) return Promise.resolve(posts);
+    if (sql.includes('FROM security_post_guards spg')) {
+      const post = posts.find((p) => p.id === onDuty[params[0]]);
+      return Promise.resolve(post ? [post] : []);
+    }
+    if (sql.includes('FROM users u')) {
+      const postId = params[2];
+      return Promise.resolve(
+        securityIds
+          .filter((id) => !postId || onDuty[id] === postId)
+          .map((id) => ({ id })),
+      );
+    }
+    return Promise.resolve([]);
+  });
   const callRepo = {
     findOne: jest.fn().mockResolvedValue(options?.call ?? null),
     find: jest.fn().mockResolvedValue([]),
@@ -91,15 +119,7 @@ function setup(options?: {
     update: jest
       .fn()
       .mockResolvedValue({ affected: options?.updateAffected ?? 1 }),
-    manager: {
-      query: jest.fn().mockResolvedValue(
-        (options?.securityIds ?? [GUARD_ID, GUARD_2_ID]).map((id) => ({
-          id,
-          name: id === GUARD_ID ? 'PORTERÍA' : 'PORTERÍA',
-          last_name: id === GUARD_ID ? 'NORTE' : 'SUR',
-        })),
-      ),
-    },
+    manager: { query },
   };
   const complexRepo = {
     findOne: jest.fn().mockResolvedValue({
@@ -128,6 +148,13 @@ function setup(options?: {
   };
   const pushSubRepo = {
     count: jest.fn().mockResolvedValue(options?.hasApp === false ? 0 : 1),
+    find: jest.fn(() =>
+      Promise.resolve(
+        options?.hasApp === false
+          ? []
+          : [...securityIds, RESIDENT_ID].map((userId) => ({ userId })),
+      ),
+    ),
   };
   const complexService = {
     assertComplexAccess: jest.fn().mockResolvedValue(undefined),
@@ -138,6 +165,7 @@ function setup(options?: {
   const auditService = { log: jest.fn().mockResolvedValue(undefined) };
   const socketService = {
     emitToUser: jest.fn(),
+    emitToUsers: jest.fn(),
     emitToRole: jest.fn(),
     emitToComplex: jest.fn(),
   };
@@ -266,8 +294,8 @@ describe('VoiceCallsService', () => {
           outcome: CallOutcome.MISSED,
         }),
       );
-      expect(socketService.emitToUser).toHaveBeenCalledWith(
-        GUARD_ID,
+      expect(socketService.emitToUsers).toHaveBeenCalledWith(
+        expect.arrayContaining([GUARD_ID, RESIDENT_ID]),
         SocketEvent.INTERCOM_CALL_ENDED,
         expect.objectContaining({ reason: IntercomEndReason.MISSED }),
       );
@@ -275,36 +303,44 @@ describe('VoiceCallsService', () => {
   });
 
   describe('startSecurityCall (residente → portería)', () => {
-    const input = { complexId: COMPLEX_ID, securityUserId: GUARD_2_ID };
+    const NORTE = { id: 'post-norte', name: 'PORTERÍA NORTE' };
+    const SUR = { id: 'post-sur', name: 'PORTERÍA SUR' };
+    const twoPosts = {
+      posts: [NORTE, SUR],
+      onDuty: { [GUARD_ID]: NORTE.id, [GUARD_2_ID]: SUR.id },
+    };
 
     it('es opcional: apagado en el conjunto, no deja llamar', async () => {
       const { service } = make({ residentCallsEnabled: false });
       await expect(
-        service.startSecurityCall(input, resident()),
+        service.startSecurityCall({ complexId: COMPLEX_ID }, resident()),
       ).rejects.toMatchObject({
         errorCode: IntercomErrorCode.INTERCOM_RESIDENT_CALLS_DISABLED,
       });
     });
 
-    it('suena solo en la portería que eligió el residente', async () => {
-      const { service, callRepo, socketService, notificationsService } = make();
+    it('con varias porterías timbra solo en la elegida', async () => {
+      const { service, callRepo, socketService, notificationsService } =
+        make(twoPosts);
 
-      await service.startSecurityCall(input, resident());
+      await service.startSecurityCall(
+        { complexId: COMPLEX_ID, securityPostId: SUR.id },
+        resident(),
+      );
 
       expect(callRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           direction: CallDirection.INCOMING,
-          agentUserId: GUARD_2_ID,
-          residentUserId: RESIDENT_ID,
+          agentUserId: null,
+          securityPostId: SUR.id,
+          securityPostName: SUR.name,
         }),
       );
-      expect(socketService.emitToUser).toHaveBeenCalledTimes(1);
-      expect(socketService.emitToUser).toHaveBeenCalledWith(
-        GUARD_2_ID,
+      expect(socketService.emitToUsers).toHaveBeenCalledWith(
+        [GUARD_2_ID],
         SocketEvent.INTERCOM_CALL_INCOMING,
         expect.objectContaining({ callerName: 'ANA GÓMEZ' }),
       );
-      expect(socketService.emitToRole).not.toHaveBeenCalled();
       expect(notificationsService.sendCallPush).toHaveBeenCalledWith(
         [GUARD_2_ID],
         expect.anything(),
@@ -312,31 +348,74 @@ describe('VoiceCallsService', () => {
       );
     });
 
-    it('una portería de otro conjunto o sin la app no se puede llamar', async () => {
-      const { service, callRepo } = make({ securityIds: [GUARD_ID] });
+    it('con varias porterías hay que elegir', async () => {
+      const { service } = make(twoPosts);
       await expect(
-        service.startSecurityCall(input, resident()),
+        service.startSecurityCall({ complexId: COMPLEX_ID }, resident()),
       ).rejects.toMatchObject({
-        errorCode: IntercomErrorCode.INTERCOM_SECURITY_NOT_FOUND,
+        errorCode: SecurityPostErrorCode.SECURITY_POST_REQUIRED,
+      });
+    });
+
+    it('una portería de otro conjunto no existe', async () => {
+      const { service } = make(twoPosts);
+      await expect(
+        service.startSecurityCall(
+          { complexId: COMPLEX_ID, securityPostId: 'post-ajena' },
+          resident(),
+        ),
+      ).rejects.toMatchObject({
+        errorCode: SecurityPostErrorCode.SECURITY_POST_NOT_FOUND,
+      });
+    });
+
+    it('portería elegida sin nadie conectado: avisa en vez de sonar en otra', async () => {
+      const { service, callRepo } = make({
+        ...twoPosts,
+        onDuty: { [GUARD_ID]: NORTE.id },
+      });
+      await expect(
+        service.startSecurityCall(
+          { complexId: COMPLEX_ID, securityPostId: SUR.id },
+          resident(),
+        ),
+      ).rejects.toMatchObject({
+        errorCode: IntercomErrorCode.INTERCOM_NO_SECURITY,
       });
       expect(callRepo.save).not.toHaveBeenCalled();
     });
 
-    it('lista las porterías para que el residente escoja', async () => {
-      const { service } = make();
-      await expect(
-        service.securityContacts(COMPLEX_ID, resident()),
-      ).resolves.toEqual([
-        { userId: GUARD_ID, name: 'PORTERÍA NORTE' },
-        { userId: GUARD_2_ID, name: 'PORTERÍA SUR' },
-      ]);
+    it('sin porterías creadas: una sola, timbra en todo el personal', async () => {
+      const { service, socketService } = make();
+      await service.startSecurityCall({ complexId: COMPLEX_ID }, resident());
+      expect(socketService.emitToUsers).toHaveBeenCalledWith(
+        [GUARD_ID, GUARD_2_ID],
+        SocketEvent.INTERCOM_CALL_INCOMING,
+        expect.anything(),
+      );
     });
 
-    it('sin llamadas del residente habilitadas, la lista va vacía', async () => {
-      const { service } = make({ residentCallsEnabled: false });
+    it('solo el vigilante de la portería elegida puede contestar', async () => {
+      const call = liveCall({
+        direction: CallDirection.INCOMING,
+        agentUserId: null,
+        agentName: SUR.name,
+        securityPostId: SUR.id,
+        securityPostName: SUR.name,
+      });
+      const { service, callRepo } = make({ ...twoPosts, call });
+
       await expect(
-        service.securityContacts(COMPLEX_ID, resident()),
-      ).resolves.toEqual([]);
+        service.answer({ callId: CALL_ID }, guard(GUARD_ID)),
+      ).rejects.toMatchObject({
+        errorCode: IntercomErrorCode.INTERCOM_CALL_NOT_FOUND,
+      });
+
+      await service.answer({ callId: CALL_ID }, guard(GUARD_2_ID));
+      expect(callRepo.update).toHaveBeenCalledWith(
+        { id: CALL_ID, voiceState: VoiceCallState.RINGING },
+        expect.objectContaining({ agentUserId: GUARD_2_ID }),
+      );
     });
   });
 
@@ -370,8 +449,8 @@ describe('VoiceCallsService', () => {
           outcome: CallOutcome.ANSWERED,
         }),
       );
-      expect(socketService.emitToUser).toHaveBeenCalledWith(
-        GUARD_ID,
+      expect(socketService.emitToUsers).toHaveBeenCalledWith(
+        expect.arrayContaining([GUARD_ID]),
         SocketEvent.INTERCOM_CALL_ACCEPTED,
         expect.objectContaining({ deviceId: 'cel-1' }),
       );
@@ -387,27 +466,20 @@ describe('VoiceCallsService', () => {
       });
     });
 
-    it('la portería elegida contesta; otra portería no puede', async () => {
+    it('un vigilante de otro conjunto no puede tomarla', async () => {
       const call = liveCall({
         direction: CallDirection.INCOMING,
-        agentUserId: GUARD_2_ID,
-        agentName: 'PORTERÍA SUR',
+        agentUserId: null,
       });
-      const { service, socketService } = make({ call });
-
+      const { service } = make({ call });
       await expect(
-        service.answer({ callId: CALL_ID }, guard(GUARD_ID)),
+        service.answer(
+          { callId: CALL_ID },
+          user(GUARD_2_ID, [ValidRoles.SECURITY_ROL], 'otro-conjunto'),
+        ),
       ).rejects.toMatchObject({
         errorCode: IntercomErrorCode.INTERCOM_CALL_NOT_FOUND,
       });
-
-      await service.answer({ callId: CALL_ID }, guard(GUARD_2_ID));
-      expect(socketService.emitToUser).toHaveBeenCalledWith(
-        RESIDENT_ID,
-        SocketEvent.INTERCOM_CALL_ACCEPTED,
-        expect.objectContaining({ answeredByUserId: GUARD_2_ID }),
-      );
-      expect(socketService.emitToRole).not.toHaveBeenCalled();
     });
   });
 

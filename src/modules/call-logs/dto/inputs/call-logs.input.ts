@@ -42,6 +42,11 @@ export class CallLogsInput {
   @IsEnum(CallChannel)
   channel?: CallChannel;
 
+  @Field(() => String, { nullable: true, description: 'Solo esa portería' })
+  @IsOptional()
+  @IsString()
+  securityPostId?: string;
+
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsDateString()

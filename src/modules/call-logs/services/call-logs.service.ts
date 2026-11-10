@@ -18,6 +18,7 @@ import { ResidentialComplexService } from '../../residential-complex/services/re
 import { AuditService } from '../../audit/services/audit.service';
 import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
+import { findGuardSecurityPost } from '../../security-posts/security-post-routing';
 
 @Injectable()
 export class CallLogsService {
@@ -59,6 +60,12 @@ export class CallLogsService {
       ? `${agentUser.name} ${agentUser.lastName}`.trim()
       : currentUser.email;
 
+    // Desde qué portería llama (o recibe) el vigilante.
+    const post = await findGuardSecurityPost(
+      this.callLogRepo.manager,
+      currentUser.sub,
+    );
+
     // Auto-resolver datos del residente por número de teléfono dentro del complejo
     const residentData = await this.resolveResidentData(
       input.phoneNumber,
@@ -72,6 +79,8 @@ export class CallLogsService {
       direction: input.direction,
       outcome: input.outcome,
       phoneNumber: input.phoneNumber,
+      securityPostId: post?.id ?? null,
+      securityPostName: post?.name ?? null,
       residentId: residentData?.residentId ?? input.residentId ?? null,
       residentName: residentData?.residentName ?? input.residentName ?? null,
       unitId: residentData?.unitId ?? input.unitId ?? null,
@@ -142,6 +151,11 @@ export class CallLogsService {
 
     if (input.direction) {
       qb.andWhere('cl.direction = :direction', { direction: input.direction });
+    }
+    if (input.securityPostId) {
+      qb.andWhere('cl.securityPostId = :postId', {
+        postId: input.securityPostId,
+      });
     }
     if (input.channel) {
       qb.andWhere('cl.channel = :channel', { channel: input.channel });

@@ -2,9 +2,8 @@ import { Field, InputType } from '@nestjs/graphql';
 import { IsOptional, IsUUID } from 'class-validator';
 
 /**
- * El residente llama a UNA portería de su conjunto desde RemoteLink. Igual que
- * portería elige al residente: si hay varias porterías, el residente escoge a
- * cuál (lista de `intercomSecurityContacts`) y solo esa timbra.
+ * El residente llama a portería desde RemoteLink. Si el conjunto tiene varias
+ * porterías (`securityPosts`), elige a cuál y solo timbra en esa.
  */
 @InputType()
 export class StartSecurityIntercomCallInput {
@@ -13,10 +12,13 @@ export class StartSecurityIntercomCallInput {
   complexId: string;
 
   @Field(() => String, {
-    description: 'Portería a la que llama (cuenta de vigilante)',
+    nullable: true,
+    description:
+      'Portería a la que llama. Obligatoria si el conjunto tiene más de una',
   })
+  @IsOptional()
   @IsUUID()
-  securityUserId: string;
+  securityPostId?: string;
 
   @Field(() => String, {
     nullable: true,

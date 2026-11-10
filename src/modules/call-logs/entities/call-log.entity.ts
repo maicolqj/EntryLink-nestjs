@@ -67,6 +67,24 @@ export class CallLog {
   @Column({ name: 'resident_user_id', type: 'uuid', nullable: true })
   residentUserId: string | null;
 
+  /**
+   * Portería de la llamada: la del vigilante que llamó, o la que eligió el
+   * residente. Null si el conjunto no tiene porterías creadas.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'security_post_id', type: 'uuid', nullable: true })
+  securityPostId: string | null;
+
+  /** Nombre de la portería en ese momento (aunque después la renombren). */
+  @Field(() => String, { nullable: true })
+  @Column({
+    name: 'security_post_name',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
+  securityPostName: string | null;
+
   /** En INTERNET va vacío si el residente no tiene celular registrado. */
   @Field(() => String)
   @Column({ name: 'phone_number', type: 'varchar', length: 30 })

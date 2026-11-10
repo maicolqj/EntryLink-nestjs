@@ -50,6 +50,7 @@ import { NotificationPriority } from '../enums/notification-priority.enum';
 import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../enums/notification-action-result.enum';
 import { PushPlatform } from '../enums/push-platform.enum';
+import { resolveSecurityPostTarget } from '../../security-posts/security-post-routing';
 import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
 import { PanicAlertType } from '../enums/panic-alert-type.enum';
 import { CreateNotificationPayload } from '../dto/inputs/create-notification.input';
@@ -2621,9 +2622,15 @@ export class NotificationsService implements OnModuleInit {
    * del complejo. El teléfono viaja en metadata para que la app de portería
    * ofrezca el botón "Llamar" sin una búsqueda adicional.
    */
+  /**
+   * El residente pide que portería le devuelva la llamada. Con varias
+   * porterías va solo a la que eligió (`securityPostId`); ver
+   * resolveSecurityPostTarget para el caso de una app vieja que no elige.
+   */
   async requestSecurityCall(
     complexId: string,
     currentUser: JwtAccessPayload,
+    securityPostId?: string | null,
   ): Promise<RequestSecurityCallResult> {
     const resident =
       await this.residentsService.findActiveResidentByUserIdInternal(
@@ -2660,21 +2667,28 @@ export class NotificationsService implements OnModuleInit {
       }
     }
 
-    const securityIds = await this.resolveTargetUserIds(complexId, [
-      ValidRoles.SECURITY_ROL,
-    ]);
+    const { post, guardUserIds: securityIds } = await resolveSecurityPostTarget(
+      this.userRepo.manager,
+      complexId,
+      securityPostId,
+      { strict: false },
+    );
 
     if (securityIds.length === 0) {
       this.logger.warn(
-        `SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}`,
+        `SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}, portería ${post?.name ?? '(única)'}`,
       );
       return {
         success: false,
-        message: 'No hay personal de seguridad disponible en este momento.',
+        message: post
+          ? `En ${post.name} no hay nadie conectado en este momento. Prueba con otra portería.`
+          : 'No hay personal de seguridad disponible en este momento.',
       };
     }
 
-    const title = `Solicitud de llamada — ${unitLabel}`;
+    const title = post
+      ? `Solicitud de llamada — ${post.name} — ${unitLabel}`
+      : `Solicitud de llamada — ${unitLabel}`;
     const body = requestedByName
       ? `${requestedByName} (${unitLabel}) solicita que portería se comunique con su unidad.`
       : `${unitLabel} solicita que portería se comunique con su unidad.`;
@@ -2697,6 +2711,8 @@ export class NotificationsService implements OnModuleInit {
         phoneNumber,
         requestedByUserId: currentUser.sub,
         requestedByName,
+        securityPostId: post?.id ?? null,
+        securityPostName: post?.name ?? null,
       },
       createdByUserId: currentUser.sub,
       isActionable: true,
@@ -2710,7 +2726,7 @@ export class NotificationsService implements OnModuleInit {
     );
 
     this.logger.log(
-      `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${securityIds.length} guardia(s)`,
+      `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${post?.name ?? 'portería'}: ${securityIds.length} guardia(s)`,
     );
 
     return { success: true };

@@ -230,17 +230,25 @@ export class NotificationsResolver {
 
   /**
    * Un residente solicita que portería (rol SECURITY) llame a su unidad.
-   * Enruta automáticamente a los guardias del complejo del residente autenticado.
+   * Con varias porterías, a la que elija (`securityPostId`, de `securityPosts`);
+   * sin porterías creadas, a todo el personal de portería.
    */
   @Mutation(() => RequestSecurityCallResult, { name: 'requestSecurityCall' })
   @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
   requestSecurityCall(
     @Args('complexId') complexId: string,
     @CurrentUser() currentUser: JwtAccessPayload,
+    @Args('securityPostId', {
+      type: () => String,
+      nullable: true,
+      description: 'Portería a la que se pide la llamada',
+    })
+    securityPostId?: string | null,
   ): Promise<RequestSecurityCallResult> {
     return this.notificationsService.requestSecurityCall(
       complexId,
       currentUser,
+      securityPostId,
     );
   }
 
