@@ -6,6 +6,7 @@ import {
   IsNull,
   LessThan,
   MoreThan,
+  Raw,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
@@ -42,6 +43,7 @@ import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { SocketService } from '../../../core/infrastructure/socket/socket.service';
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -392,6 +394,7 @@ export class PqrfService {
       where: {
         status: In([PqrfStatus.RADICADO, PqrfStatus.EN_TRAMITE]),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
       take: 200,
     });
@@ -426,6 +429,7 @@ export class PqrfService {
       where: {
         status: In([PqrfStatus.RADICADO, PqrfStatus.EN_TRAMITE]),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
         dueAt: LessThan(new Date()),
       },
       take: 200,
@@ -479,6 +483,7 @@ export class PqrfService {
       where: {
         status: In([PqrfStatus.RADICADO, PqrfStatus.EN_TRAMITE]),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
         dueAt: MoreThan(now),
       },
       relations: ['complex'],

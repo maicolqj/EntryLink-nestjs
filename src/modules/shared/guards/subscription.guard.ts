@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { DataSource, IsNull } from 'typeorm';
@@ -14,7 +15,10 @@ import { BK } from '../../../core/infrastructure/cache/business-cache.constants'
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
 import { SubscriptionStatus } from '../../subscriptions/enums/subscription-status.enum';
-import { computeSubscriptionStatus } from '../../subscriptions/utils/subscription-status';
+import {
+  computeSubscriptionStatus,
+  parseCutMode,
+} from '../../subscriptions/utils/subscription-status';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../utils/errors.utils';
 import {
@@ -28,6 +32,9 @@ import {
  * al revés se armaría un ciclo.
  */
 export const ALLOW_WHEN_SUSPENDED_KEY = 'allow_when_subscription_suspended';
+
+/** Llave de metadata de `@PanicTrigger`: disparar una alerta de pánico. */
+export const PANIC_TRIGGER_KEY = 'subscription_panic_trigger';
 
 /**
  * Roles de la administración del conjunto. Son los únicos a quienes afecta la
@@ -54,6 +61,8 @@ type ComplexAccessState = {
   endsAt: string | null;
   status?: ComplexStatus;
   reason?: string | null;
+  accessCutAt?: string | null;
+  panicCutAt?: string | null;
 };
 
 /** Mensaje de la suspensión manual, con el motivo si lo hay. */
@@ -83,6 +92,12 @@ type SessionUser = {
  * con `@AllowWhenSuspended`. El login sí se permite para que la web pueda
  * mostrar el motivo; residentes y portería tampoco se tocan aquí.
  *
+ * El corte por no renovar sí alcanza a toda la comunidad, solo con la marca que
+ * deja SubscriptionCutService tras los tres avisos y según
+ * `SUBSCRIPTION_CUT_MODE`. Lo marcado con `@AllowWhenSuspended` sigue abierto
+ * para poder explicar el motivo, renovar y atender una alerta ya abierta.
+ * Disparar una alerta nueva solo se bloquea con el corte del pánico.
+ *
  * Igual que ComplexModuleGuard, lee la base directo y cacheada, y falla
  * abierto: si Redis o la base fallan, nadie se queda sin plataforma por eso.
  */
@@ -94,21 +109,33 @@ export class SubscriptionGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
+    private readonly configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const targets = [context.getHandler(), context.getClass()];
     const allowed = this.reflector.getAllAndOverride<boolean>(
       ALLOW_WHEN_SUSPENDED_KEY,
-      [context.getHandler(), context.getClass()],
+      targets,
     );
-    if (allowed) return true;
+    const panicTrigger = this.reflector.getAllAndOverride<boolean>(
+      PANIC_TRIGGER_KEY,
+      targets,
+    );
+    const mode = parseCutMode(
+      this.configService.get<string>('SUBSCRIPTION_CUT_MODE'),
+    );
+    if (allowed && !(panicTrigger && mode === 'access_and_panic')) return true;
 
     const { user, isWrite } = this.resolveContext(context);
     if (!user) return true;
 
     const roles = user.roles ?? [];
     if (roles.some((role) => PLATFORM_ROLES.includes(role))) return true;
-    if (!roles.some((role) => ADMINISTRATION_ROLES.includes(role))) return true;
+    const isAdministration = roles.some((role) =>
+      ADMINISTRATION_ROLES.includes(role),
+    );
+    if (!isAdministration && mode === 'off') return true;
 
     // La cuenta del complejo inicia sesión con sub = complex.id.
     const complexId =
@@ -117,6 +144,29 @@ export class SubscriptionGuard implements CanActivate {
 
     const state = await this.loadState(complexId);
     if (!state) return true;
+
+    if (panicTrigger) {
+      if (mode === 'access_and_panic' && state.panicCutAt) {
+        throw new CustomError({
+          message:
+            'El botón de pánico está inactivo porque la administración no renovó la suscripción. En una emergencia marca 123.',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: SubscriptionErrorCode.SUBSCRIPTION_PANIC_CUT,
+        });
+      }
+      return true;
+    }
+
+    if (mode !== 'off' && state.accessCutAt) {
+      throw new CustomError({
+        message:
+          'La administración del conjunto no renovó la suscripción. El servicio está suspendido hasta que se renueve.',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: SubscriptionErrorCode.SUBSCRIPTION_ACCESS_CUT,
+      });
+    }
+
+    if (!isAdministration) return true;
 
     // Suspensión manual del SUPER_ADMIN: a diferencia de la de pago, bloquea
     // también las lecturas. La web lleva a la pantalla de suspensión con el
@@ -193,6 +243,8 @@ export class SubscriptionGuard implements CanActivate {
             status: true,
             suspensionReason: true,
             subscriptionEndsAt: true,
+            subscriptionAccessCutAt: true,
+            subscriptionPanicCutAt: true,
           },
         });
       const state: ComplexAccessState = {
@@ -201,6 +253,12 @@ export class SubscriptionGuard implements CanActivate {
           : null,
         status: complex?.status,
         reason: complex?.suspensionReason ?? null,
+        accessCutAt: complex?.subscriptionAccessCutAt
+          ? new Date(complex.subscriptionAccessCutAt).toISOString()
+          : null,
+        panicCutAt: complex?.subscriptionPanicCutAt
+          ? new Date(complex.subscriptionPanicCutAt).toISOString()
+          : null,
       };
 
       await this.cacheService.set({

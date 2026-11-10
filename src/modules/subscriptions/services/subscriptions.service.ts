@@ -40,6 +40,7 @@ import { AdjustSubscriptionInput } from '../dto/inputs/adjust-subscription.input
 import { SetPlanPriceInput } from '../dto/inputs/set-plan-price.input';
 import { SubscriptionSummary } from '../dto/responses/subscription-summary.response';
 import { SubscriptionPlanPriceView } from '../dto/responses/subscription-plan-price-view.response';
+import { recordResumeIfNeeded } from './subscription-resume.helper';
 import {
   ANNUAL_MONTHS_CHARGED,
   TRIAL_DAYS,
@@ -336,12 +337,20 @@ export class SubscriptionsService {
         where: { complexId: complex.id },
         order: { endsAt: 'DESC' },
       });
+      const newEndsAt =
+        latest && latest.endsAt > endsAt ? latest.endsAt : endsAt;
       await manager.getRepository(ResidentialComplex).update(complex.id, {
-        subscriptionEndsAt:
-          latest && latest.endsAt > endsAt ? latest.endsAt : endsAt,
+        subscriptionEndsAt: newEndsAt,
         plan: input.plan,
         maxUnits: PLAN_UNIT_LIMITS[input.plan],
       });
+      await recordResumeIfNeeded(
+        manager,
+        complex.id,
+        currentEnd,
+        newEndsAt,
+        now,
+      );
 
       return created;
     });
@@ -660,6 +669,7 @@ export class SubscriptionsService {
       await manager
         .getRepository(ResidentialComplex)
         .update(complex.id, { subscriptionEndsAt: endsAt });
+      await recordResumeIfNeeded(manager, complex.id, currentEnd, endsAt, now);
 
       return created;
     });
@@ -745,10 +755,25 @@ export class SubscriptionsService {
     latest.endsAt = input.endsAt;
 
     await this.dataSource.transaction(async (manager) => {
+      const complex = await manager
+        .getRepository(ResidentialComplex)
+        .createQueryBuilder('c')
+        .setLock('pessimistic_write')
+        .where('c.id = :id', { id: input.complexId })
+        .getOne();
       await manager.getRepository(SubscriptionPeriod).save(latest);
       await manager
         .getRepository(ResidentialComplex)
         .update(input.complexId, { subscriptionEndsAt: input.endsAt });
+      await recordResumeIfNeeded(
+        manager,
+        input.complexId,
+        complex?.subscriptionEndsAt
+          ? new Date(complex.subscriptionEndsAt)
+          : null,
+        input.endsAt,
+        new Date(),
+      );
     });
 
     await this.invalidate(input.complexId);

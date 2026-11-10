@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity';
 import { FinanceService } from '../services/finance.service';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /**
  * Cron diario a las 00:10 AM (Bogotá) que aplica mora automáticamente
@@ -40,6 +41,7 @@ export class AutoApplyMoraCron {
       .innerJoin('cfg.complex', 'complex')
       .where('cfg.autoApplyMora = true')
       .andWhere('complex.status = :status', { status: ComplexStatus.ACTIVE })
+      .andWhere(operableComplexSql('complex.id'))
       .getMany();
 
     if (!configs.length) return;

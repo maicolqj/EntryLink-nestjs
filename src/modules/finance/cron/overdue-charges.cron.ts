@@ -5,6 +5,7 @@ import { LessThan, In, Repository } from 'typeorm';
 
 import { FeeCharge } from '../entities/fee-charge.entity';
 import { ChargeStatus } from '../enums/charge-status.enum';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /**
  * Cron diario que marca como OVERDUE todos los FeeCharges PENDING / PARTIALLY_PAID
@@ -38,7 +39,8 @@ export class OverdueChargesCron {
          AND "earlyPaymentDueDate" IS NOT NULL
          AND "earlyPaymentDueDate" < $1
          AND "status" IN ($2, $3)
-         AND "deletedAt" IS NULL`,
+         AND "deletedAt" IS NULL
+         AND ${operableComplexSql('"complexId"')}`,
       [today, ChargeStatus.PENDING, ChargeStatus.PARTIALLY_PAID],
     );
 
@@ -52,6 +54,7 @@ export class OverdueChargesCron {
       })
       .andWhere('dueDate < :today', { today })
       .andWhere('deletedAt IS NULL')
+      .andWhere(operableComplexSql('"complexId"'))
       .execute();
 
     const affected = result.affected ?? 0;

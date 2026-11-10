@@ -67,6 +67,134 @@ export function computeSubscriptionStatus(
 }
 
 /**
+ * Las automatizaciones del conjunto se pausan cuando termina la gracia: es el
+ * mismo instante en que la administración queda en solo lectura. Con la fecha
+ * vacía no se pausa nada.
+ */
+export function isAutomationPaused(
+  endsAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return (
+    computeSubscriptionStatus(endsAt, now) === SubscriptionStatus.SUSPENDED
+  );
+}
+
+/** Días completos o parciales del rango que cayeron dentro de una pausa. */
+export function pausedDaysBetween(
+  from: Date,
+  to: Date,
+  windows: { pausedAt: Date; resumedAt: Date }[],
+): number {
+  const pausedMs = windows.reduce((total, { pausedAt, resumedAt }) => {
+    const start = Math.max(from.getTime(), pausedAt.getTime());
+    const end = Math.min(to.getTime(), resumedAt.getTime());
+    return total + Math.max(0, end - start);
+  }, 0);
+  return Math.ceil(pausedMs / DAY_MS);
+}
+
+/** Meses que se recuperan como máximo, igual que la emisión de cobros. */
+const MAX_CATCHUP_MONTHS = 12;
+
+/**
+ * Fechas en que un cron diario no corrió por la pausa: del día siguiente al
+ * inicio (ese día ya había corrido) hasta el día de reanudar, en calendario de
+ * Colombia y de la más vieja a la más nueva.
+ */
+export function pausedBillingDates(
+  pausedAt: Date,
+  resumedAt: Date,
+): { period: string; day: number }[] {
+  const dates: { period: string; day: number }[] = [];
+  for (
+    let n = bogotaDayNumber(pausedAt) + 1;
+    n <= bogotaDayNumber(resumedAt);
+    n++
+  ) {
+    const date = new Date(n * DAY_MS);
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    dates.push({
+      period: `${date.getUTCFullYear()}-${month}`,
+      day: date.getUTCDate(),
+    });
+  }
+  const kept = new Set(
+    [...new Set(dates.map((d) => d.period))].slice(-MAX_CATCHUP_MONTHS),
+  );
+  return dates.filter((d) => kept.has(d.period));
+}
+
+/** Días tras el vencimiento en que se avisa a la comunidad. */
+export const RESIDENT_NOTICE_DAYS = [10, 20, 27] as const;
+/** Días mínimos entre un aviso a la comunidad y el siguiente. */
+export const RESIDENT_NOTICE_MIN_GAP_DAYS = [7, 7] as const;
+export const ACCESS_CUT_DAYS = 30;
+/** Días mínimos entre el último aviso y el corte. */
+export const CUT_MIN_GAP_DAYS = 3;
+
+export type SubscriptionCutMode = 'off' | 'access' | 'access_and_panic';
+
+/** Cualquier valor desconocido queda apagado: cortar exige decirlo exacto. */
+export function parseCutMode(value?: string | null): SubscriptionCutMode {
+  return value === 'access' || value === 'access_and_panic' ? value : 'off';
+}
+
+export type CutStep = { kind: 'NOTICE'; index: 0 | 1 | 2 } | { kind: 'CUT' };
+
+/**
+ * Siguiente paso hacia el corte, uno por corrida. `sent` son las fechas de los
+ * tres avisos ya enviados. Cuenta días de calendario: el cron de las 8:00:02
+ * tiene que ver como día completo un aviso enviado ayer a las 8:00:05.
+ */
+export function nextCutStep(
+  endsAt: Date,
+  sent: (Date | null)[],
+  now: Date = new Date(),
+): CutStep | null {
+  const daysSince = (date: Date) => -daysUntil(date, now);
+  const index = sent.findIndex((date) => !date) as -1 | 0 | 1 | 2;
+
+  if (index === -1) {
+    return daysSince(endsAt) >= ACCESS_CUT_DAYS &&
+      daysSince(sent[sent.length - 1] as Date) >= CUT_MIN_GAP_DAYS
+      ? { kind: 'CUT' }
+      : null;
+  }
+
+  if (daysSince(endsAt) < RESIDENT_NOTICE_DAYS[index]) return null;
+  if (
+    index > 0 &&
+    daysSince(sent[index - 1] as Date) < RESIDENT_NOTICE_MIN_GAP_DAYS[index - 1]
+  ) {
+    return null;
+  }
+  return { kind: 'NOTICE', index };
+}
+
+const latest = (a: Date, b: Date): Date => (a > b ? a : b);
+
+/** Primera fecha posible del corte, según los avisos enviados y los que faltan. */
+export function earliestCutDate(
+  endsAt: Date,
+  sent: (Date | null)[],
+  now: Date = new Date(),
+): Date {
+  let previous: Date | null = null;
+  RESIDENT_NOTICE_DAYS.forEach((days, i) => {
+    let at = sent[i] ?? latest(addDays(endsAt, days), now);
+    if (!sent[i] && previous) {
+      at = latest(at, addDays(previous, RESIDENT_NOTICE_MIN_GAP_DAYS[i - 1]));
+    }
+    previous = at;
+  });
+  return latest(
+    addDays(endsAt, ACCESS_CUT_DAYS),
+    addDays(previous as unknown as Date, CUT_MIN_GAP_DAYS),
+  );
+}
+
+/**
  * Suma un mes o un año calendario. Si el día no existe en el mes destino
  * (31 de enero + 1 mes) se queda en el último día de ese mes, no se desborda
  * a marzo.

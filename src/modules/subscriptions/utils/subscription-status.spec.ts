@@ -4,6 +4,12 @@ import {
   computeSubscriptionStatus,
   currentReminderMilestone,
   daysUntil,
+  earliestCutDate,
+  isAutomationPaused,
+  nextCutStep,
+  parseCutMode,
+  pausedBillingDates,
+  pausedDaysBetween,
 } from './subscription-status';
 
 const NOW = new Date('2026-10-01T13:00:00.000Z');
@@ -124,5 +130,167 @@ describe('daysUntil', () => {
   it('el día del vencimiento es 0 ("vence hoy") y después es negativo', () => {
     expect(daysUntil(endsAt, new Date('2026-10-30T14:00:00.000Z'))).toBe(0);
     expect(daysUntil(endsAt, new Date('2026-11-01T14:00:00.000Z'))).toBe(-2);
+  });
+});
+
+describe('isAutomationPaused', () => {
+  it('no pausa con la fecha vacía', () => {
+    expect(isAutomationPaused(null, NOW)).toBe(false);
+  });
+
+  it('no pausa durante la gracia', () => {
+    expect(isAutomationPaused(inDays(-4), NOW)).toBe(false);
+  });
+
+  it('pausa desde el quinto día después de vencer', () => {
+    expect(isAutomationPaused(inDays(-5), NOW)).toBe(true);
+  });
+});
+
+describe('pausedDaysBetween', () => {
+  const windows = [{ pausedAt: inDays(-20), resumedAt: inDays(-10) }];
+
+  it('cuenta solo los días que se cruzan con la pausa', () => {
+    expect(pausedDaysBetween(inDays(-15), NOW, windows)).toBe(5);
+  });
+
+  it('cuenta la pausa completa si el rango la contiene', () => {
+    expect(pausedDaysBetween(inDays(-30), NOW, windows)).toBe(10);
+  });
+
+  it('da cero si el rango empieza después de la pausa', () => {
+    expect(pausedDaysBetween(inDays(-5), NOW, windows)).toBe(0);
+  });
+
+  it('suma varias pausas', () => {
+    const two = [...windows, { pausedAt: inDays(-8), resumedAt: inDays(-6) }];
+    expect(pausedDaysBetween(inDays(-30), NOW, two)).toBe(12);
+  });
+});
+
+describe('pausedBillingDates', () => {
+  it('va del día siguiente a la pausa hasta el día de reanudar', () => {
+    const dates = pausedBillingDates(
+      new Date('2026-09-20T13:00:00.000Z'),
+      new Date('2026-10-02T13:00:00.000Z'),
+    );
+
+    expect(dates[0]).toEqual({ period: '2026-09', day: 21 });
+    expect(dates[dates.length - 1]).toEqual({ period: '2026-10', day: 2 });
+    expect(dates).toHaveLength(12);
+  });
+
+  it('usa el calendario de Colombia', () => {
+    // 11:30 p. m. del 20 en Bogotá: en UTC ya es 21.
+    const dates = pausedBillingDates(
+      new Date('2026-09-21T04:30:00.000Z'),
+      new Date('2026-09-22T13:00:00.000Z'),
+    );
+
+    expect(dates).toEqual([
+      { period: '2026-09', day: 21 },
+      { period: '2026-09', day: 22 },
+    ]);
+  });
+
+  it('no recupera más de 12 meses', () => {
+    const dates = pausedBillingDates(
+      new Date('2024-01-15T13:00:00.000Z'),
+      new Date('2026-10-02T13:00:00.000Z'),
+    );
+
+    const periods = new Set(dates.map((d) => d.period));
+    expect(periods.size).toBe(12);
+    expect(dates[0]).toEqual({ period: '2025-11', day: 1 });
+  });
+});
+
+describe('nextCutStep', () => {
+  const none: (Date | null)[] = [null, null, null];
+
+  it('el día 9 no hace nada', () => {
+    expect(nextCutStep(inDays(-9), none, NOW)).toBeNull();
+  });
+
+  it('el día 10 toca el aviso 1', () => {
+    expect(nextCutStep(inDays(-10), none, NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 0,
+    });
+  });
+
+  it('el día 20 con el aviso 1 de hace 10 días toca el aviso 2', () => {
+    expect(nextCutStep(inDays(-20), [inDays(-10), null, null], NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 1,
+    });
+  });
+
+  it('el día 40 sin avisos solo toca el aviso 1', () => {
+    expect(nextCutStep(inDays(-40), none, NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 0,
+    });
+  });
+
+  it('el día 47 con el aviso 1 de hace 6 días no hace nada', () => {
+    expect(nextCutStep(inDays(-47), [inDays(-6), null, null], NOW)).toBeNull();
+  });
+
+  it('el día 30 con el último aviso de hace 3 días corta', () => {
+    expect(
+      nextCutStep(inDays(-30), [inDays(-20), inDays(-10), inDays(-3)], NOW),
+    ).toEqual({ kind: 'CUT' });
+  });
+
+  it('el día 35 con el último aviso de hace 2 días no corta', () => {
+    expect(
+      nextCutStep(inDays(-35), [inDays(-20), inDays(-10), inDays(-2)], NOW),
+    ).toBeNull();
+  });
+
+  it('no corta antes del día 30', () => {
+    expect(
+      nextCutStep(inDays(-29), [inDays(-20), inDays(-10), inDays(-5)], NOW),
+    ).toBeNull();
+  });
+
+  it('el aviso de ayer a las 08:00:05 cuenta como día completo a las 08:00:02', () => {
+    const ayer = new Date('2026-10-24T13:00:05.000Z');
+    const hoy = new Date('2026-10-31T13:00:02.000Z');
+    const endsAt = new Date('2026-10-01T13:00:00.000Z');
+
+    expect(nextCutStep(endsAt, [ayer, null, null], hoy)).toEqual({
+      kind: 'NOTICE',
+      index: 1,
+    });
+  });
+});
+
+describe('earliestCutDate', () => {
+  it('en el camino normal es el día 30', () => {
+    expect(
+      earliestCutDate(inDays(-10), [null, null, null], NOW).getTime(),
+    ).toBe(inDays(20).getTime());
+  });
+
+  it('un conjunto muy atrasado espera los tres avisos', () => {
+    // Aviso 1 hoy, aviso 2 a los 7 días, aviso 3 a los 14 y corte a los 17.
+    expect(
+      earliestCutDate(inDays(-40), [null, null, null], NOW).getTime(),
+    ).toBe(inDays(17).getTime());
+  });
+});
+
+describe('parseCutMode', () => {
+  it('reconoce los modos válidos', () => {
+    expect(parseCutMode('access')).toBe('access');
+    expect(parseCutMode('access_and_panic')).toBe('access_and_panic');
+  });
+
+  it('cualquier otro valor queda apagado', () => {
+    expect(parseCutMode(undefined)).toBe('off');
+    expect(parseCutMode('')).toBe('off');
+    expect(parseCutMode('todo')).toBe('off');
   });
 });

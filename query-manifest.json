@@ -1060,5 +1060,8 @@
   "6b010df5199dadedcca55a303d5bca94d716c8fa": "mutation RestorePlatformAnnouncements($ids: [ID!]!) { __typename restorePlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }",
   "1a617c2e8418c744330f42084d1ebb0cfb0ee123": "mutation PurgePlatformAnnouncements($ids: [ID!]!) { __typename purgePlatformAnnouncements(ids: $ids) { __typename affected noticesRemoved } }",
   "4a20fdec4a64e0a232a128d7886cfdfbdb0b8958": "mutation RestoreRole($id: String!) { __typename restoreRole(id: $id) { __typename id message name status } }",
-  "75876eb655ebaeea85d9db8de2e98f411cce1d16": "mutation RestorePermission($id: String!) { __typename restorePermission(id: $id) { __typename id name status } }"
+  "75876eb655ebaeea85d9db8de2e98f411cce1d16": "mutation RestorePermission($id: String!) { __typename restorePermission(id: $id) { __typename id name status } }",
+  "946bc1d8c8575275316454363321d8f7c18e78f6": "query MyCommunityAccess { __typename myCommunityAccess { __typename accessCut cutAt panicAvailable } }",
+  "aaef239e8ef85e8b8287369d9faeebcd06b1479558cb8f9be0d7ad530c30300f": "query MyCommunityAccess { __typename myCommunityAccess { __typename accessCut cutAt panicAvailable } }",
+  "9b9308258dc681e71e53c63bb2485241229d4a30a11bbefc40e7fb31735991d9": "query MyCommunityAccess { myCommunityAccess { accessCut cutAt panicAvailable } }"
 }

@@ -30,6 +30,7 @@ import { Public } from '../../shared/decorators/public.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
+import { PanicTrigger } from '../../shared/decorators/panic-trigger.decorator';
 
 // Sesión, pánico y avisos siguen disponibles con la suscripción suspendida.
 @AllowWhenSuspended()
@@ -168,6 +169,7 @@ export class NotificationsResolver {
    * Activa una alerta de pánico. Disponible para cualquier rol con acceso al panel.
    * El routing de destinatarios se determina automáticamente según el rol del activador.
    */
+  @PanicTrigger()
   @Mutation(() => TriggerPanicAlertResult, { name: 'triggerPanicAlert' })
   @Auth({
     roles: [

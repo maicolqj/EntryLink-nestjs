@@ -6,10 +6,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SubscriptionPeriod } from './entities/subscription-period.entity';
 import { SubscriptionPlanPrice } from './entities/subscription-plan-price.entity';
 import { SubscriptionReminder } from './entities/subscription-reminder.entity';
+import { SubscriptionPause } from './entities/subscription-pause.entity';
 import { SubscriptionTax } from './entities/subscription-tax.entity';
 import { Unit } from '../residential-complex/entities/unit.entity';
 import { SubscriptionsService } from './services/subscriptions.service';
 import { SubscriptionRemindersService } from './services/subscription-reminders.service';
+import { SubscriptionCutService } from './services/subscription-cut.service';
 import { SubscriptionsResolver } from './resolvers/subscriptions.resolver';
 import { ComplexSubscriptionFieldsResolver } from './resolvers/complex-subscription-fields.resolver';
 import { SubscriptionsCron } from './cron/subscriptions.cron';
@@ -33,6 +35,7 @@ import { SubscriptionPaymentNotificationDetailProvider } from './providers/subsc
       SubscriptionPeriod,
       SubscriptionPlanPrice,
       SubscriptionReminder,
+      SubscriptionPause,
       SubscriptionTax,
       SubscriptionPaymentSubmission,
       SubscriptionPaymentSettings,
@@ -47,6 +50,7 @@ import { SubscriptionPaymentNotificationDetailProvider } from './providers/subsc
   providers: [
     SubscriptionsService,
     SubscriptionRemindersService,
+    SubscriptionCutService,
     SubscriptionsResolver,
     ComplexSubscriptionFieldsResolver,
     SubscriptionsCron,
