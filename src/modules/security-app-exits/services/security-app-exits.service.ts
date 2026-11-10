@@ -17,6 +17,7 @@ import { PaginationInput } from '../../shared/dto/inputs/pagination.input';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { SecurityAppExitErrorCode } from '../../shared/constans/error-codes.constants';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /** Desfase de reloj tolerado entre el equipo y el servidor. */
 const CLOCK_SKEW_MS = 60 * 1000;
@@ -227,7 +228,8 @@ export class SecurityAppExitsService {
           AND e.alert_sent_at IS NULL
           AND c.guard_exit_alert_enabled = true
           AND e.left_at <= NOW() - make_interval(mins => c.guard_exit_alert_minutes)
-          AND e.left_at > NOW() - INTERVAL '24 hours'`,
+          AND e.left_at > NOW() - INTERVAL '24 hours'
+          AND ${operableComplexSql('e.complex_id')}`,
     );
     return rows.map(({ id }) => id);
   }

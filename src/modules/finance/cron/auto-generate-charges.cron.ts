@@ -7,6 +7,7 @@ import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity'
 import { FeeConfig } from '../entities/fee-config.entity';
 import { FinanceService } from '../services/finance.service';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /**
  * Cron diario 00:05 AM (Bogotá): emite los cargos de los períodos que falten
@@ -45,6 +46,7 @@ export class AutoGenerateChargesCron {
       .innerJoin('cfg.complex', 'complex')
       .where('cfg.autoGenerateCharges = true')
       .andWhere('complex.status = :status', { status: ComplexStatus.ACTIVE })
+      .andWhere(operableComplexSql('complex.id'))
       .select(['cfg.complexId', 'cfg.id'])
       .getMany();
 

@@ -54,6 +54,7 @@ import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { SocketService } from '../../../core/infrastructure/socket/socket.service';
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /** Alta desde el controller: el DTO del REST más las fotos ya subidas a R2. */
 export type CreateListingData = CreateListingDto & { imageUrls: string[] };
@@ -1211,6 +1212,7 @@ export class MarketplaceListingsService {
         status: MarketplaceListingStatus.PUBLISHED,
       })
       .andWhere('l.deletedAt IS NULL')
+      .andWhere(operableComplexSql('c.id'))
       .andWhere('l.expiresAt IS NOT NULL')
       .andWhere('l.expiresAt > :now', { now })
       .andWhere('l.expiresAt <= :limit', { limit })
@@ -1267,6 +1269,7 @@ export class MarketplaceListingsService {
         status: MarketplaceListingStatus.PUBLISHED,
       })
       .andWhere('l.deletedAt IS NULL')
+      .andWhere(operableComplexSql('c.id'))
       .andWhere('l.expiresAt IS NOT NULL')
       .andWhere('l.expiresAt <= :now', { now })
       .getMany();

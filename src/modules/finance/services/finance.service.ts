@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
+import { SubscriptionPause } from '../../subscriptions/entities/subscription-pause.entity';
+import { pausedDaysBetween } from '../../subscriptions/utils/subscription-status';
 
 import { ChargeCategory } from '../entities/charge-category.entity';
 import { ComplexFinanceConfig } from '../entities/complex-finance-config.entity';
@@ -736,6 +738,12 @@ export class FinanceService {
         c.prelacionConcept !== PrelacionConcept.INTEREST_MORA,
     );
 
+    // Los días con la suscripción pausada no cuentan: la administración no
+    // podía emitir ni gestionar esos cobros.
+    const pauses = await this.dataSource
+      .getRepository(SubscriptionPause)
+      .find({ where: { complexId } });
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -761,9 +769,9 @@ export class FinanceService {
         const refDate = charge.dueDate
           ? new Date(charge.dueDate)
           : new Date(chargeYear, chargeMonth, 1); // chargeMonth 1-indexed → mes siguiente en Date
-        const diasVencidos = Math.floor(
-          (now.getTime() - refDate.getTime()) / 86_400_000,
-        );
+        const diasVencidos =
+          Math.floor((now.getTime() - refDate.getTime()) / 86_400_000) -
+          pausedDaysBetween(refDate, now, pauses);
 
         if (diasVencidos <= graceDays) {
           skipped++;

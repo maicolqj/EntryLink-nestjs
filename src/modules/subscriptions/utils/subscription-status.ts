@@ -67,6 +67,65 @@ export function computeSubscriptionStatus(
 }
 
 /**
+ * Las automatizaciones del conjunto se pausan cuando termina la gracia: es el
+ * mismo instante en que la administración queda en solo lectura. Con la fecha
+ * vacía no se pausa nada.
+ */
+export function isAutomationPaused(
+  endsAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return (
+    computeSubscriptionStatus(endsAt, now) === SubscriptionStatus.SUSPENDED
+  );
+}
+
+/** Días completos o parciales del rango que cayeron dentro de una pausa. */
+export function pausedDaysBetween(
+  from: Date,
+  to: Date,
+  windows: { pausedAt: Date; resumedAt: Date }[],
+): number {
+  const pausedMs = windows.reduce((total, { pausedAt, resumedAt }) => {
+    const start = Math.max(from.getTime(), pausedAt.getTime());
+    const end = Math.min(to.getTime(), resumedAt.getTime());
+    return total + Math.max(0, end - start);
+  }, 0);
+  return Math.ceil(pausedMs / DAY_MS);
+}
+
+/** Meses que se recuperan como máximo, igual que la emisión de cobros. */
+const MAX_CATCHUP_MONTHS = 12;
+
+/**
+ * Fechas en que un cron diario no corrió por la pausa: del día siguiente al
+ * inicio (ese día ya había corrido) hasta el día de reanudar, en calendario de
+ * Colombia y de la más vieja a la más nueva.
+ */
+export function pausedBillingDates(
+  pausedAt: Date,
+  resumedAt: Date,
+): { period: string; day: number }[] {
+  const dates: { period: string; day: number }[] = [];
+  for (
+    let n = bogotaDayNumber(pausedAt) + 1;
+    n <= bogotaDayNumber(resumedAt);
+    n++
+  ) {
+    const date = new Date(n * DAY_MS);
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    dates.push({
+      period: `${date.getUTCFullYear()}-${month}`,
+      day: date.getUTCDate(),
+    });
+  }
+  const kept = new Set(
+    [...new Set(dates.map((d) => d.period))].slice(-MAX_CATCHUP_MONTHS),
+  );
+  return dates.filter((d) => kept.has(d.period));
+}
+
+/**
  * Suma un mes o un año calendario. Si el día no existe en el mes destino
  * (31 de enero + 1 mes) se queda en el último día de ese mes, no se desborda
  * a marzo.

@@ -43,6 +43,7 @@ import { ResidentialComplexModule } from '../residential-complex/residential-com
 import { ResidentsModule } from '../residents/residents.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
+import { SubscriptionPause } from '../subscriptions/entities/subscription-pause.entity';
 
 // Directorio temporal para archivos de import de finanzas (saldos de apertura).
 const tmpDir = join(process.cwd(), 'tmp', 'finance-imports');
@@ -55,6 +56,7 @@ try {
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      SubscriptionPause,
       ComplexFinanceConfig,
       ChargeCategory,
       FeeConfig,
