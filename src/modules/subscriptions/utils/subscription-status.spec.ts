@@ -4,7 +4,10 @@ import {
   computeSubscriptionStatus,
   currentReminderMilestone,
   daysUntil,
+  earliestCutDate,
   isAutomationPaused,
+  nextCutStep,
+  parseCutMode,
   pausedBillingDates,
   pausedDaysBetween,
 } from './subscription-status';
@@ -199,5 +202,95 @@ describe('pausedBillingDates', () => {
     const periods = new Set(dates.map((d) => d.period));
     expect(periods.size).toBe(12);
     expect(dates[0]).toEqual({ period: '2025-11', day: 1 });
+  });
+});
+
+describe('nextCutStep', () => {
+  const none: (Date | null)[] = [null, null, null];
+
+  it('el día 9 no hace nada', () => {
+    expect(nextCutStep(inDays(-9), none, NOW)).toBeNull();
+  });
+
+  it('el día 10 toca el aviso 1', () => {
+    expect(nextCutStep(inDays(-10), none, NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 0,
+    });
+  });
+
+  it('el día 20 con el aviso 1 de hace 10 días toca el aviso 2', () => {
+    expect(nextCutStep(inDays(-20), [inDays(-10), null, null], NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 1,
+    });
+  });
+
+  it('el día 40 sin avisos solo toca el aviso 1', () => {
+    expect(nextCutStep(inDays(-40), none, NOW)).toEqual({
+      kind: 'NOTICE',
+      index: 0,
+    });
+  });
+
+  it('el día 47 con el aviso 1 de hace 6 días no hace nada', () => {
+    expect(nextCutStep(inDays(-47), [inDays(-6), null, null], NOW)).toBeNull();
+  });
+
+  it('el día 30 con el último aviso de hace 3 días corta', () => {
+    expect(
+      nextCutStep(inDays(-30), [inDays(-20), inDays(-10), inDays(-3)], NOW),
+    ).toEqual({ kind: 'CUT' });
+  });
+
+  it('el día 35 con el último aviso de hace 2 días no corta', () => {
+    expect(
+      nextCutStep(inDays(-35), [inDays(-20), inDays(-10), inDays(-2)], NOW),
+    ).toBeNull();
+  });
+
+  it('no corta antes del día 30', () => {
+    expect(
+      nextCutStep(inDays(-29), [inDays(-20), inDays(-10), inDays(-5)], NOW),
+    ).toBeNull();
+  });
+
+  it('el aviso de ayer a las 08:00:05 cuenta como día completo a las 08:00:02', () => {
+    const ayer = new Date('2026-10-24T13:00:05.000Z');
+    const hoy = new Date('2026-10-31T13:00:02.000Z');
+    const endsAt = new Date('2026-10-01T13:00:00.000Z');
+
+    expect(nextCutStep(endsAt, [ayer, null, null], hoy)).toEqual({
+      kind: 'NOTICE',
+      index: 1,
+    });
+  });
+});
+
+describe('earliestCutDate', () => {
+  it('en el camino normal es el día 30', () => {
+    expect(
+      earliestCutDate(inDays(-10), [null, null, null], NOW).getTime(),
+    ).toBe(inDays(20).getTime());
+  });
+
+  it('un conjunto muy atrasado espera los tres avisos', () => {
+    // Aviso 1 hoy, aviso 2 a los 7 días, aviso 3 a los 14 y corte a los 17.
+    expect(
+      earliestCutDate(inDays(-40), [null, null, null], NOW).getTime(),
+    ).toBe(inDays(17).getTime());
+  });
+});
+
+describe('parseCutMode', () => {
+  it('reconoce los modos válidos', () => {
+    expect(parseCutMode('access')).toBe('access');
+    expect(parseCutMode('access_and_panic')).toBe('access_and_panic');
+  });
+
+  it('cualquier otro valor queda apagado', () => {
+    expect(parseCutMode(undefined)).toBe('off');
+    expect(parseCutMode('')).toBe('off');
+    expect(parseCutMode('todo')).toBe('off');
   });
 });

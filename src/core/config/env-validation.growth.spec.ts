@@ -136,3 +136,18 @@ describe('redactValues (defensa en Sentry)', () => {
     expect(redactValues('sin valores')).toBe('sin valores');
   });
 });
+
+describe('Corte por suscripción vencida', () => {
+  it('sin variable queda apagado', () => {
+    const { error, value } = validate({});
+
+    expect(error).toBeUndefined();
+    expect(value.SUBSCRIPTION_CUT_MODE).toBe('off');
+  });
+
+  it('vacía también queda apagado', () => {
+    expect(
+      validate({ SUBSCRIPTION_CUT_MODE: '' }).value.SUBSCRIPTION_CUT_MODE,
+    ).toBe('off');
+  });
+});

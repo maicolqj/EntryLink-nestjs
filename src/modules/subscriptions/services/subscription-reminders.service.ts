@@ -15,16 +15,24 @@ import {
   currentReminderMilestone,
   daysUntil,
   graceEndsAt,
+  parseCutMode,
 } from '../utils/subscription-status';
 import { formatBogotaDate, formatCop } from '../utils/format-date';
 import { SubscriptionQuote } from '../dto/responses/subscription-quote.response';
 import { SubscriptionsService } from './subscriptions.service';
 
 const STILL_WORKING =
-  'El botón de pánico, la portería y el control de acceso nunca se suspenden por la suscripción.';
+  'El botón de pánico, la portería y el control de acceso siguen funcionando.';
+
+/** Se usa cuando el corte a la comunidad está activado. */
+const ACCESS_CUT_WARNING =
+  'Si no se renueva, 30 días después del vencimiento se corta el acceso a toda la comunidad.';
 
 /** Complejos que reciben avisos: los que operan. */
-const NOTIFIED_STATUSES = [ComplexStatus.ACTIVE, ComplexStatus.PENDING_SETUP];
+export const NOTIFIED_STATUSES = [
+  ComplexStatus.ACTIVE,
+  ComplexStatus.PENDING_SETUP,
+];
 
 interface Notice {
   type: NotificationType;
@@ -138,7 +146,7 @@ export class SubscriptionRemindersService {
           complexName: complex.name,
           title: notice.title,
           message: notice.body,
-          note: STILL_WORKING,
+          note: this.cutEnabled() ? ACCESS_CUT_WARNING : STILL_WORKING,
           ctaUrl: `${this.configService.get<string>('FRONTEND_URL', '')}/dashboard/suscripcion`,
           tone: notice.tone,
         })
@@ -152,11 +160,18 @@ export class SubscriptionRemindersService {
     return true;
   }
 
+  private cutEnabled(): boolean {
+    return (
+      parseCutMode(this.configService.get<string>('SUBSCRIPTION_CUT_MODE')) !==
+      'off'
+    );
+  }
+
   /** Inserta la fila del aviso; false si otro ya lo había enviado. */
-  private async claim(
+  async claim(
     complexId: string,
     endsAt: Date,
-    milestone: ReminderMilestone,
+    milestone: string,
   ): Promise<boolean> {
     const result = await this.reminderRepo
       .createQueryBuilder()
@@ -188,7 +203,7 @@ export class SubscriptionRemindersService {
         type: NotificationType.SUBSCRIPTION_SUSPENDED,
         priority: NotificationPriority.HIGH,
         title: 'Suscripción suspendida',
-        body: `La suscripción venció el ${endDate} y no se renovó. El panel administrativo quedó en solo lectura: puedes consultar todo, pero para hacer cambios debes renovar. ${renewFor}`,
+        body: `La suscripción venció el ${endDate} y no se renovó. El panel administrativo quedó en solo lectura y las tareas automáticas ya se detuvieron. ${this.cutEnabled() ? `${ACCESS_CUT_WARNING} ` : ''}${renewFor}`,
         tone: 'danger',
         superAdmins: {
           title: 'Suscripción suspendida',

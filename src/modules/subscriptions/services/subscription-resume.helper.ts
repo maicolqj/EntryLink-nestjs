@@ -3,6 +3,7 @@ import { Between, EntityManager, IsNull } from 'typeorm';
 import { AmenityBooking } from '../../amenities/entities/amenity-booking.entity';
 import { AmenityBookingStatus } from '../../amenities/enums/amenity-booking-status.enum';
 import { PqrfStatus } from '../../pqrf/enums/pqrf-status.enum';
+import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { SubscriptionPause } from '../entities/subscription-pause.entity';
 import { graceEndsAt, isAutomationPaused } from '../utils/subscription-status';
 
@@ -35,6 +36,11 @@ export async function recordResumeIfNeeded(
   ) {
     return null;
   }
+
+  await manager.getRepository(ResidentialComplex).update(complexId, {
+    subscriptionAccessCutAt: null,
+    subscriptionPanicCutAt: null,
+  });
 
   const pausedAt = graceEndsAt(previousEndsAt);
   const inserted = await manager
