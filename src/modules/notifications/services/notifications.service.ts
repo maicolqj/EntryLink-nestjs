@@ -2366,6 +2366,95 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * Push de llamada (citofonía por internet) a los equipos móviles de unos
+   * usuarios.
+   *
+   * Data-only y prioridad alta, como el pánico: un bloque `notification` haría
+   * que Android lo pinte solo y se salte el manejador nativo que muestra la
+   * pantalla de llamada con la app cerrada. TTL corto: una llamada que llega
+   * tarde ya no sirve, mejor que no suene. No crea aviso en la bandeja.
+   *
+   * Devuelve cuántos equipos lo aceptó FCM, para saber si la llamada pudo
+   * sonar en algún lado.
+   */
+  async sendCallPush(
+    userIds: string[],
+    data: Record<string, string>,
+    ttlMs: number,
+  ): Promise<number> {
+    if (userIds.length === 0) return 0;
+
+    const subs = await this.pushSubRepo.find({
+      where: {
+        userId: In(userIds),
+        platform: In([PushPlatform.ANDROID, PushPlatform.IOS]),
+        isActive: true,
+      },
+    });
+    const tokens = [
+      ...new Set(
+        subs.map((s) => s.deviceToken).filter((t): t is string => !!t),
+      ),
+    ];
+    if (tokens.length === 0) return 0;
+
+    if (!this.fcmEnabled) {
+      this.logger.warn(
+        `[FCM] DESCARTADO [${data.type ?? 'CALL'}] → ${tokens.length} equipos sin notificar: FCM deshabilitado por falta de credenciales.`,
+      );
+      return 0;
+    }
+
+    try {
+      const response = await getMessaging().sendEach(
+        tokens.map((token) => ({
+          token,
+          data,
+          android: { priority: 'high' as const, ttl: ttlMs },
+          apns: {
+            headers: {
+              'apns-priority': '10',
+              'apns-expiration': String(
+                Math.floor((Date.now() + ttlMs) / 1000),
+              ),
+            },
+            payload: { aps: { 'content-available': 1 } },
+          },
+        })),
+      );
+
+      const invalid: string[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (resp.success) return;
+        const code = resp.error?.code;
+        this.logger.warn(
+          `[FCM] Llamada fallida → ${code ?? 'sin código'} | token ${tokens[idx].slice(0, 12)}…`,
+        );
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          invalid.push(tokens[idx]);
+        }
+      });
+      if (invalid.length > 0) {
+        await this.pushSubRepo.update(
+          { deviceToken: In(invalid) },
+          { isActive: false },
+        );
+      }
+
+      this.logger.log(
+        `[FCM] Llamada [${data.type ?? 'CALL'}] → ${response.successCount} exitosos, ${response.failureCount} fallidos`,
+      );
+      return response.successCount;
+    } catch (err: any) {
+      this.logger.warn(`Error en push de llamada: ${err?.message}`);
+      return 0;
+    }
+  }
+
+  /**
    * El dispositivo confirma que MOSTRÓ la alerta.
    *
    * Es lo que separa "no llegó" de "llegó y nadie respondió". Sin esta señal el

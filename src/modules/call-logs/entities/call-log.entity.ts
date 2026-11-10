@@ -13,6 +13,8 @@ import { User } from '../../users/entities/user.entity';
 import { ResidentialComplex } from '../../residential-complex/entities/residential-complex.entity';
 import { CallDirection } from '../enums/call-direction.enum';
 import { CallOutcome } from '../enums/call-outcome.enum';
+import { CallChannel } from '../enums/call-channel.enum';
+import { VoiceCallState } from '../enums/voice-call-state.enum';
 
 @ObjectType({
   description: 'Registro de llamada realizada o recibida por el guardia',
@@ -21,6 +23,9 @@ import { CallOutcome } from '../enums/call-outcome.enum';
 @Index(['complexId', 'startedAt'])
 @Index(['agentUserId', 'startedAt'])
 @Index(['complexId', 'outcome'])
+@Index('IDX_call_logs_voice_state_started', ['voiceState', 'startedAt'], {
+  where: '"voice_state" IS NOT NULL',
+})
 export class CallLog {
   @Field(() => String)
   @PrimaryGeneratedColumn('uuid')
@@ -36,6 +41,33 @@ export class CallLog {
   @Column({ type: 'varchar', length: 10 })
   outcome: CallOutcome;
 
+  @Field(() => CallChannel, {
+    description: 'SIM = línea del celular de portería; INTERNET = por la app',
+  })
+  @Column({
+    type: 'varchar',
+    length: 10,
+    default: CallChannel.SIM,
+  })
+  channel: CallChannel;
+
+  /**
+   * Solo INTERNET: dónde va la llamada en vivo. Null en las de SIM, que el
+   * marcador registra cuando ya terminaron.
+   */
+  @Field(() => VoiceCallState, { nullable: true })
+  @Column({ name: 'voice_state', type: 'varchar', length: 10, nullable: true })
+  voiceState: VoiceCallState | null;
+
+  /**
+   * Solo INTERNET: el usuario del residente que llama o al que se llama. En
+   * SIM el residente sale del número; aquí no hay número, hay una cuenta.
+   */
+  @Field(() => String, { nullable: true })
+  @Column({ name: 'resident_user_id', type: 'uuid', nullable: true })
+  residentUserId: string | null;
+
+  /** En INTERNET va vacío si el residente no tiene celular registrado. */
   @Field(() => String)
   @Column({ name: 'phone_number', type: 'varchar', length: 30 })
   phoneNumber: string;

@@ -9,6 +9,7 @@ import {
 
 import { CallDirection } from '../../enums/call-direction.enum';
 import { CallOutcome } from '../../enums/call-outcome.enum';
+import { CallChannel } from '../../enums/call-channel.enum';
 import { PaginationInput } from '../../../shared/dto/inputs/pagination.input';
 
 @InputType()
@@ -32,6 +33,14 @@ export class CallLogsInput {
   @IsOptional()
   @IsEnum(CallOutcome)
   outcome?: CallOutcome;
+
+  @Field(() => CallChannel, {
+    nullable: true,
+    description: 'SIM o INTERNET. Sin filtro, las dos',
+  })
+  @IsOptional()
+  @IsEnum(CallChannel)
+  channel?: CallChannel;
 
   @Field(() => String, { nullable: true })
   @IsOptional()

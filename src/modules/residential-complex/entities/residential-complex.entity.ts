@@ -20,6 +20,7 @@ import { ComplexPlan } from '../enums/complex-plan.enum';
 import { ComplexStatus } from '../enums/complex-status.enum';
 import { DpaValidationStatus } from '../enums/dpa-validation-status.enum';
 import { ComplexEngagement } from '../enums/complex-engagement.enum';
+import { IntercomMode } from '../enums/intercom-mode.enum';
 import { Country, User } from '../../users/entities/user.entity';
 import { Building } from './building.entity';
 import { ValidRoles } from '../../roles/enums/valid-roles';
@@ -426,6 +427,38 @@ export class ResidentialComplex {
   })
   @Column({ name: 'maintenance_nfc_enabled', type: 'boolean', default: false })
   maintenanceNfcEnabled: boolean;
+
+  // ==================== CITOFONÍA ====================
+  // Solo el SUPER_ADMIN los cambia (updateComplexIntercomSettings): pasar un
+  // conjunto a INTERNET deja sin citofonía a quien no tenga RemoteLink, así
+  // que no va en updateComplex ni en COMPLEX_EDITABLE_FIELDS.
+
+  @Field(() => IntercomMode, {
+    description:
+      'Citofonía de portería: por la línea del celular o por internet',
+  })
+  @Column({
+    name: 'intercom_mode',
+    type: 'varchar',
+    length: 10,
+    default: IntercomMode.SIM,
+  })
+  intercomMode: IntercomMode;
+
+  /**
+   * Con citofonía por internet, el residente también puede llamar a portería
+   * desde RemoteLink. Opcional: hay porterías que no quieren recibir llamadas
+   * por la app.
+   */
+  @Field(() => Boolean, {
+    description: 'El residente puede llamar a portería por internet',
+  })
+  @Column({
+    name: 'resident_intercom_calls_enabled',
+    type: 'boolean',
+    default: false,
+  })
+  residentIntercomCallsEnabled: boolean;
 
   // ==================== MI CONJUNTO ====================
 

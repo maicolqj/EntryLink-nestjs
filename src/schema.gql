@@ -584,6 +584,10 @@ type ResidentialComplex {
   Valor de la suscripción del conjunto (subtotal, impuestos y total). Solo SUPER_ADMIN y cumplimiento; vacío para los demás.
   """
   subscriptionQuote: SubscriptionQuote
+  """Citofonía de portería: por la línea del celular o por internet"""
+  intercomMode: IntercomMode!
+  """El residente puede llamar a portería por internet"""
+  residentIntercomCallsEnabled: Boolean!
 }
 
 """Tipo de complejo residencial"""
@@ -4347,6 +4351,10 @@ type CallLog {
 
   """Guardia/agente que realizó o recibió la llamada"""
   agent: User
+  """SIM = línea del celular de portería; INTERNET = por la app"""
+  channel: CallChannel!
+  voiceState: VoiceCallState
+  residentUserId: String
 }
 
 """Dirección de la llamada"""
@@ -7266,6 +7274,12 @@ type Query {
 
   """Cuántos comunicados hay en cada carpeta para quien consulta"""
   platformAnnouncementFolderCounts: AnnouncementFolderCounts!
+  """
+  Llamada sonando o en curso de quien pregunta (al abrir la app desde el push)
+  """
+  currentIntercomCall: IntercomCallSession
+  """Unidades que quedarían sin citofonía al pasar a INTERNET"""
+  intercomAdoption(complexId: String!): IntercomAdoption!
 }
 
 input PaginationInput {
@@ -7532,6 +7546,9 @@ input CallLogsInput {
   dateFrom: String
   dateTo: String
   pagination: PaginationInput
+
+  """SIM o INTERNET. Sin filtro, las dos"""
+  channel: CallChannel
 }
 
 input FilterAmenitiesInput {
@@ -8305,6 +8322,17 @@ type Mutation {
 
   """Elimina para siempre lo que está en la papelera"""
   purgePlatformAnnouncements(ids: [ID!]!): AnnouncementBulkResult!
+  """Portería llama por internet a un residente"""
+  startResidentIntercomCall(input: StartResidentIntercomCallInput!): IntercomCallSession!
+  """El residente llama por internet a la portería"""
+  startSecurityIntercomCall(input: StartSecurityIntercomCallInput!): IntercomCallSession!
+  answerIntercomCall(input: AnswerIntercomCallInput!): IntercomCallSession!
+  rejectIntercomCall(callId: String!): CallLog!
+  endIntercomCall(callId: String!): CallLog!
+  """Pasa offer/answer/candidate WebRTC a la otra parte"""
+  sendIntercomSignal(input: IntercomSignalInput!): Boolean!
+  """Citofonía del conjunto (SIM o INTERNET). Solo SUPER_ADMIN"""
+  updateComplexIntercomSettings(input: UpdateIntercomSettingsInput!): ResidentialComplex!
 }
 
 """Credenciales para inicio de sesión con email y contraseña"""
@@ -10933,4 +10961,101 @@ type AnnouncementFolderCounts {
 type AnnouncementBulkResult {
   affected: Int!
   noticesRemoved: Int!
+}
+
+"""Citofonía del conjunto: por línea celular o por internet"""
+enum IntercomMode {
+  SIM
+  INTERNET
+}
+
+"""Canal de la llamada: línea del celular (SIM) o por internet"""
+enum CallChannel {
+  SIM
+  INTERNET
+}
+
+"""Estado en vivo de una llamada por internet"""
+enum VoiceCallState {
+  RINGING
+  ACTIVE
+  ENDED
+}
+
+type IceServer {
+  urls: [String!]!
+  username: String
+  credential: String
+}
+
+type IntercomCallSession {
+  call: CallLog!
+
+  """Servidores STUN/TURN con credenciales temporales"""
+  iceServers: [IceServer!]!
+}
+
+type IntercomUnitAdoption {
+  unitId: String!
+  unitNumber: String!
+  buildingName: String
+
+  """Residentes activos de la unidad"""
+  residents: Int!
+
+  """De ellos, cuántos tienen la app instalada"""
+  residentsWithApp: Int!
+}
+
+type IntercomAdoption {
+  """Unidades con residentes activos"""
+  totalUnits: Int!
+
+  """Unidades con al menos un residente con la app"""
+  unitsWithApp: Int!
+
+  """Unidades donde nadie tiene la app"""
+  unitsWithoutApp: [IntercomUnitAdoption!]!
+}
+
+input StartResidentIntercomCallInput {
+  complexId: String!
+
+  """Usuario del residente al que se llama"""
+  residentUserId: String!
+
+  """
+  Unidad desde la que se eligió al residente (si vive en varias del conjunto)
+  """
+  unitId: String
+}
+
+input StartSecurityIntercomCallInput {
+  complexId: String!
+
+  """Unidad desde la que llama (si vive en varias del conjunto)"""
+  unitId: String
+}
+
+input AnswerIntercomCallInput {
+  callId: String!
+  deviceId: String
+}
+
+input IntercomSignalInput {
+  callId: String!
+
+  """offer | answer | candidate"""
+  kind: String!
+  payload: String!
+}
+
+input UpdateIntercomSettingsInput {
+  complexId: String!
+  mode: IntercomMode!
+
+  """
+  El residente puede llamar a portería por la app (solo aplica en INTERNET)
+  """
+  residentCallsEnabled: Boolean!
 }

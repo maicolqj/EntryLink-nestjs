@@ -667,3 +667,25 @@ export enum PlatformAnnouncementErrorCode {
   /** Se intentó eliminar un comunicado que todavía se está repartiendo. */
   ANNOUNCEMENT_STILL_SENDING = 'ANNOUNCEMENT_STILL_SENDING',
 }
+
+/**
+ * Citofonía por internet.
+ */
+export enum IntercomErrorCode {
+  /** El conjunto está en citofonía por SIM. */
+  INTERCOM_NOT_INTERNET = 'INTERCOM_NOT_INTERNET',
+  /** El conjunto no deja que los residentes llamen a portería por la app. */
+  INTERCOM_RESIDENT_CALLS_DISABLED = 'INTERCOM_RESIDENT_CALLS_DISABLED',
+  /** El residente no vive en el conjunto (o no está activo). */
+  INTERCOM_RESIDENT_NOT_FOUND = 'INTERCOM_RESIDENT_NOT_FOUND',
+  /** El residente no tiene RemoteLink: la llamada no le puede sonar. */
+  INTERCOM_RESIDENT_NO_APP = 'INTERCOM_RESIDENT_NO_APP',
+  /** Quien recibe ya está en otra llamada. */
+  INTERCOM_BUSY = 'INTERCOM_BUSY',
+  /** La llamada no existe o no es de quien la toca. */
+  INTERCOM_CALL_NOT_FOUND = 'INTERCOM_CALL_NOT_FOUND',
+  /** La llamada ya no está en un estado que permita esa acción. */
+  INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
+  /** No hay nadie de portería con sesión en el conjunto. */
+  INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+}
