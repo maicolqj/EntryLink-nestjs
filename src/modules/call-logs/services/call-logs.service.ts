@@ -5,6 +5,8 @@ import { IsNull, In, Repository } from 'typeorm';
 import { CallLog } from '../entities/call-log.entity';
 import { CallOutcome } from '../enums/call-outcome.enum';
 import { CallDirection } from '../enums/call-direction.enum';
+import { CallChannel } from '../enums/call-channel.enum';
+import { VoiceCallState } from '../enums/voice-call-state.enum';
 import { LogCallInput } from '../dto/inputs/log-call.input';
 import { CallLogsInput } from '../dto/inputs/call-logs.input';
 import { CallLogsPage } from '../dto/responses/call-logs-page.response';
@@ -140,11 +142,35 @@ export class CallLogsService {
     const qb = this.callLogRepo
       .createQueryBuilder('cl')
       .leftJoinAndSelect('cl.agent', 'agent')
-      .where('cl.complexId = :complexId', { complexId: input.complexId });
+      .where('cl.complexId = :complexId', { complexId: input.complexId })
+      // Las llamadas por internet que siguen sonando o en curso no son
+      // historial todavía: sonando figuran como MISSED hasta que alguien
+      // conteste, y saldrían como perdidas.
+      .andWhere('(cl.voiceState IS NULL OR cl.voiceState = :ended)', {
+        ended: VoiceCallState.ENDED,
+      });
 
-    // SECURITY_ROL solo ve sus propias llamadas, no las de otros guardias
+    // SECURITY_ROL solo ve sus propias llamadas, no las de otros guardias.
+    // Excepción: la llamada por internet del residente que nadie contestó no
+    // tiene vigilante (se asigna al contestar); la ve quien esté en la
+    // portería a la que se dirigió, o todos si no eligió portería.
     if (this.isSecurityGuard(currentUser) && !this.isSuperAdmin(currentUser)) {
-      qb.andWhere('cl.agentUserId = :agentId', { agentId: currentUser.sub });
+      const post = await findGuardSecurityPost(
+        this.callLogRepo.manager,
+        currentUser.sub,
+      );
+      qb.andWhere(
+        `(cl.agentUserId = :agentId
+          OR (cl.agentUserId IS NULL AND cl.channel = :internet
+              AND cl.direction = :incoming
+              AND (cl.securityPostId IS NULL OR cl.securityPostId = :postId)))`,
+        {
+          agentId: currentUser.sub,
+          internet: CallChannel.INTERNET,
+          incoming: CallDirection.INCOMING,
+          postId: post?.id ?? null,
+        },
+      );
     } else if (input.agentUserId) {
       qb.andWhere('cl.agentUserId = :agentId', { agentId: input.agentUserId });
     }
