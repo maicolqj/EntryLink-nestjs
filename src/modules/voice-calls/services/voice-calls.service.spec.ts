@@ -95,6 +95,8 @@ function setup(options?: {
       query: jest.fn().mockResolvedValue(
         (options?.securityIds ?? [GUARD_ID, GUARD_2_ID]).map((id) => ({
           id,
+          name: id === GUARD_ID ? 'PORTERÍA' : 'PORTERÍA',
+          last_name: id === GUARD_ID ? 'NORTE' : 'SUR',
         })),
       ),
     },
@@ -273,7 +275,7 @@ describe('VoiceCallsService', () => {
   });
 
   describe('startSecurityCall (residente → portería)', () => {
-    const input = { complexId: COMPLEX_ID };
+    const input = { complexId: COMPLEX_ID, securityUserId: GUARD_2_ID };
 
     it('es opcional: apagado en el conjunto, no deja llamar', async () => {
       const { service } = make({ residentCallsEnabled: false });
@@ -284,7 +286,7 @@ describe('VoiceCallsService', () => {
       });
     });
 
-    it('suena en toda la portería del conjunto', async () => {
+    it('suena solo en la portería que eligió el residente', async () => {
       const { service, callRepo, socketService, notificationsService } = make();
 
       await service.startSecurityCall(input, resident());
@@ -292,30 +294,49 @@ describe('VoiceCallsService', () => {
       expect(callRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           direction: CallDirection.INCOMING,
-          agentUserId: null,
+          agentUserId: GUARD_2_ID,
           residentUserId: RESIDENT_ID,
         }),
       );
-      expect(socketService.emitToRole).toHaveBeenCalledWith(
-        ValidRoles.SECURITY_ROL,
-        COMPLEX_ID,
+      expect(socketService.emitToUser).toHaveBeenCalledTimes(1);
+      expect(socketService.emitToUser).toHaveBeenCalledWith(
+        GUARD_2_ID,
         SocketEvent.INTERCOM_CALL_INCOMING,
         expect.objectContaining({ callerName: 'ANA GÓMEZ' }),
       );
+      expect(socketService.emitToRole).not.toHaveBeenCalled();
       expect(notificationsService.sendCallPush).toHaveBeenCalledWith(
-        [GUARD_ID, GUARD_2_ID],
+        [GUARD_2_ID],
         expect.anything(),
         RING_TIMEOUT_MS,
       );
     });
 
-    it('sin nadie de portería con la app, avisa', async () => {
-      const { service } = make({ securityIds: [] });
+    it('una portería de otro conjunto o sin la app no se puede llamar', async () => {
+      const { service, callRepo } = make({ securityIds: [GUARD_ID] });
       await expect(
         service.startSecurityCall(input, resident()),
       ).rejects.toMatchObject({
-        errorCode: IntercomErrorCode.INTERCOM_NO_SECURITY,
+        errorCode: IntercomErrorCode.INTERCOM_SECURITY_NOT_FOUND,
       });
+      expect(callRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('lista las porterías para que el residente escoja', async () => {
+      const { service } = make();
+      await expect(
+        service.securityContacts(COMPLEX_ID, resident()),
+      ).resolves.toEqual([
+        { userId: GUARD_ID, name: 'PORTERÍA NORTE' },
+        { userId: GUARD_2_ID, name: 'PORTERÍA SUR' },
+      ]);
+    });
+
+    it('sin llamadas del residente habilitadas, la lista va vacía', async () => {
+      const { service } = make({ residentCallsEnabled: false });
+      await expect(
+        service.securityContacts(COMPLEX_ID, resident()),
+      ).resolves.toEqual([]);
     });
   });
 
@@ -366,39 +387,27 @@ describe('VoiceCallsService', () => {
       });
     });
 
-    it('el vigilante que toma la llamada a portería queda como agente', async () => {
+    it('la portería elegida contesta; otra portería no puede', async () => {
       const call = liveCall({
         direction: CallDirection.INCOMING,
-        agentUserId: null,
-        agentName: 'Portería',
+        agentUserId: GUARD_2_ID,
+        agentName: 'PORTERÍA SUR',
       });
-      const { service, callRepo } = make({ call });
+      const { service, socketService } = make({ call });
 
-      await service.answer({ callId: CALL_ID }, guard(GUARD_2_ID));
-
-      expect(callRepo.update).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          agentUserId: GUARD_2_ID,
-          agentName: 'PEDRO PÉREZ',
-        }),
-      );
-    });
-
-    it('un vigilante de otro conjunto no puede tomarla', async () => {
-      const call = liveCall({
-        direction: CallDirection.INCOMING,
-        agentUserId: null,
-      });
-      const { service } = make({ call });
       await expect(
-        service.answer(
-          { callId: CALL_ID },
-          user(GUARD_2_ID, [ValidRoles.SECURITY_ROL], 'otro-conjunto'),
-        ),
+        service.answer({ callId: CALL_ID }, guard(GUARD_ID)),
       ).rejects.toMatchObject({
         errorCode: IntercomErrorCode.INTERCOM_CALL_NOT_FOUND,
       });
+
+      await service.answer({ callId: CALL_ID }, guard(GUARD_2_ID));
+      expect(socketService.emitToUser).toHaveBeenCalledWith(
+        RESIDENT_ID,
+        SocketEvent.INTERCOM_CALL_ACCEPTED,
+        expect.objectContaining({ answeredByUserId: GUARD_2_ID }),
+      );
+      expect(socketService.emitToRole).not.toHaveBeenCalled();
     });
   });
 

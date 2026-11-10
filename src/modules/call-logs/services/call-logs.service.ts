@@ -5,7 +5,6 @@ import { IsNull, In, Repository } from 'typeorm';
 import { CallLog } from '../entities/call-log.entity';
 import { CallOutcome } from '../enums/call-outcome.enum';
 import { CallDirection } from '../enums/call-direction.enum';
-import { CallChannel } from '../enums/call-channel.enum';
 import { LogCallInput } from '../dto/inputs/log-call.input';
 import { CallLogsInput } from '../dto/inputs/call-logs.input';
 import { CallLogsPage } from '../dto/responses/call-logs-page.response';
@@ -134,18 +133,9 @@ export class CallLogsService {
       .leftJoinAndSelect('cl.agent', 'agent')
       .where('cl.complexId = :complexId', { complexId: input.complexId });
 
-    // SECURITY_ROL solo ve sus propias llamadas, no las de otros guardias. Más
-    // las que un residente le hizo a portería por la app y nadie tomó: son de
-    // toda la portería, y es la lista de a quién devolverle la llamada.
+    // SECURITY_ROL solo ve sus propias llamadas, no las de otros guardias
     if (this.isSecurityGuard(currentUser) && !this.isSuperAdmin(currentUser)) {
-      qb.andWhere(
-        '(cl.agentUserId = :agentId OR (cl.channel = :internet AND cl.direction = :incoming AND cl.agentUserId IS NULL))',
-        {
-          agentId: currentUser.sub,
-          internet: CallChannel.INTERNET,
-          incoming: CallDirection.INCOMING,
-        },
-      );
+      qb.andWhere('cl.agentUserId = :agentId', { agentId: currentUser.sub });
     } else if (input.agentUserId) {
       qb.andWhere('cl.agentUserId = :agentId', { agentId: input.agentUserId });
     }

@@ -7280,6 +7280,10 @@ type Query {
   currentIntercomCall: IntercomCallSession
   """Unidades que quedarían sin citofonía al pasar a INTERNET"""
   intercomAdoption(complexId: String!): IntercomAdoption!
+  """
+  Porterías a las que el residente puede llamar por la app (vacío si el conjunto no lo permite)
+  """
+  intercomSecurityContacts(complexId: String!): [IntercomSecurityContact!]!
 }
 
 input PaginationInput {
@@ -11035,6 +11039,8 @@ input StartSecurityIntercomCallInput {
 
   """Unidad desde la que llama (si vive en varias del conjunto)"""
   unitId: String
+  """Portería a la que llama (cuenta de vigilante)"""
+  securityUserId: String!
 }
 
 input AnswerIntercomCallInput {
@@ -11058,4 +11064,9 @@ input UpdateIntercomSettingsInput {
   El residente puede llamar a portería por la app (solo aplica en INTERNET)
   """
   residentCallsEnabled: Boolean!
+}
+
+type IntercomSecurityContact {
+  userId: String!
+  name: String!
 }

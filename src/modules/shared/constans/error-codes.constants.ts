@@ -686,6 +686,6 @@ export enum IntercomErrorCode {
   INTERCOM_CALL_NOT_FOUND = 'INTERCOM_CALL_NOT_FOUND',
   /** La llamada ya no está en un estado que permita esa acción. */
   INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
-  /** No hay nadie de portería con sesión en el conjunto. */
-  INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+  /** La portería elegida no es del conjunto o no tiene la app. */
+  INTERCOM_SECURITY_NOT_FOUND = 'INTERCOM_SECURITY_NOT_FOUND',
 }
