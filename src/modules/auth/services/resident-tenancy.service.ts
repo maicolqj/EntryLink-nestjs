@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import { Resident } from '../../residents/entities/resident.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentStatus } from '../../residents/enums/resident-status.enum';
 import { CustomError } from '../../shared/utils/errors.utils';
 import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
@@ -28,6 +29,8 @@ export class ResidentTenancyService {
   constructor(
     @InjectRepository(Resident)
     private readonly residentRepo: Repository<Resident>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   /**
@@ -37,11 +40,20 @@ export class ResidentTenancyService {
    * Cuando hay varias residencias activas —la entidad lo permite, el índice es
    * `userId + complexId + status`— manda la marcada como principal; a igualdad,
    * la de ingreso más reciente. Elegir sola evita pedirle al residente que
-   * escoja un conjunto justo cuando está tratando de entrar; si algún día hace
-   * falta cambiar de conjunto sin cerrar sesión, ese es el lugar donde
-   * engancharlo.
+   * escoja un conjunto justo cuando está tratando de entrar.
+   *
+   * Antes que eso manda el último conjunto que eligió en el selector de
+   * RemoteLink (`users.last_resident_complex_id`), si esa residencia sigue
+   * activa.
    */
   async resolveComplexId(userId: string): Promise<string | undefined> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: { id: true, lastResidentComplexId: true },
+    });
+    const last = user?.lastResidentComplexId;
+    if (last && (await this.hasActiveResidence(userId, last))) return last;
+
     const residence = await this.residentRepo.findOne({
       where: {
         userId,

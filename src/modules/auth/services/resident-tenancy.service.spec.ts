@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { ResidentTenancyService } from './resident-tenancy.service';
 import { Resident } from '../../residents/entities/resident.entity';
+import { User } from '../../users/entities/user.entity';
 import { ResidentStatus } from '../../residents/enums/resident-status.enum';
 import { AuthErrorCode } from '../../shared/constans/error-codes.constants';
 
@@ -30,6 +31,11 @@ describe('ResidentTenancyService', () => {
     count: jest.fn(async (): Promise<number> => 0),
   };
 
+  // El último conjunto que eligió en el selector de RemoteLink.
+  const userRepo = {
+    findOne: jest.fn(async (): Promise<any> => null),
+  };
+
   beforeEach(async () => {
     lastQuery = undefined;
     jest.clearAllMocks();
@@ -38,6 +44,7 @@ describe('ResidentTenancyService', () => {
       providers: [
         ResidentTenancyService,
         { provide: getRepositoryToken(Resident), useValue: residentRepo },
+        { provide: getRepositoryToken(User), useValue: userRepo },
       ],
     }).compile();
 
@@ -124,5 +131,49 @@ describe('ResidentTenancyService', () => {
     await expect(
       service.hasActiveResidence('user-1', 'complex-1'),
     ).resolves.toBe(false);
+  });
+  describe('último conjunto usado', () => {
+    it('prefiere el último conjunto usado si la residencia sigue activa', async () => {
+      userRepo.findOne.mockResolvedValueOnce({ lastResidentComplexId: 'conjunto-b' });
+      residentRepo.count.mockResolvedValueOnce(1); // activa en B
+
+      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-b');
+      expect(residentRepo.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          userId: 'user-1',
+          complexId: 'conjunto-b',
+          status: ResidentStatus.ACTIVE,
+        }),
+      });
+      // No hace falta la búsqueda por principal.
+      expect(residentRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('cae a la regla actual si el último ya no está activo', async () => {
+      userRepo.findOne.mockResolvedValueOnce({ lastResidentComplexId: 'conjunto-b' });
+      residentRepo.count.mockResolvedValueOnce(0); // B suspendida
+      residentRepo.findOne.mockResolvedValueOnce({
+        id: 'res-a',
+        complexId: 'conjunto-a',
+      } as any);
+
+      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-a');
+      expect(residentRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: { isMainResident: 'DESC', startDate: 'DESC' },
+        }),
+      );
+    });
+
+    it('sin último conjunto usa la regla actual', async () => {
+      userRepo.findOne.mockResolvedValueOnce({ lastResidentComplexId: null });
+      residentRepo.findOne.mockResolvedValueOnce({
+        id: 'res-a',
+        complexId: 'conjunto-a',
+      } as any);
+
+      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-a');
+      expect(residentRepo.count).not.toHaveBeenCalled();
+    });
   });
 });
