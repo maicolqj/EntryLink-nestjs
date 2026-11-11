@@ -344,11 +344,20 @@ export class TokenService {
     return refreshToken;
   }
 
+  /**
+   * Rota el refresh token. Con `opts.complexIdOverride` además cambia el
+   * conjunto de la sesión (selector de RemoteLink): misma familia, sesión,
+   * alcance y vigencia; solo para sesiones de residente del mismo usuario y
+   * con residencia activa en el destino. Un cambio rechazado no revoca nada.
+   */
   async rotateRefreshToken(
     currentToken: string,
     deviceInfo: DeviceInfo,
+    opts?: { complexIdOverride?: string; requesterUserId?: string },
   ): Promise<TokenPair> {
     const payload = await this.verifyRefreshToken(currentToken);
+    const switchTo = opts?.complexIdOverride;
+    const switching = !!switchTo;
     const currentTokenHash = this.hashToken(currentToken);
 
     const storedToken = await this.refreshTokenRepo.findOne({
@@ -376,6 +385,15 @@ export class TokenService {
       });
 
       if (gracePayload) {
+        // El par en gracia es del conjunto anterior: devolverlo haría creer
+        // a la app que cambió. Que lo reintente con el refresh nuevo.
+        if (switching) {
+          throw new CustomError({
+            message: 'No se pudo cambiar de conjunto. Intenta de nuevo',
+            statusCode: HttpStatus.CONFLICT,
+            errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+          });
+        }
         return {
           ...gracePayload,
           expiresIn: this.getAccessTokenExpirySeconds(),
@@ -426,10 +444,39 @@ export class TokenService {
       });
     }
 
+    if (switchTo) {
+      const allowed =
+        entityType === 'user' &&
+        !!storedToken.roleScope &&
+        storedToken.user?.id === opts?.requesterUserId;
+      if (!allowed) {
+        throw new CustomError({
+          message: 'Esta sesión no puede cambiar de conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+        });
+      }
+      if (
+        !this.residentTenancy ||
+        !(await this.residentTenancy.hasActiveResidence(
+          storedToken.user.id,
+          switchTo,
+        ))
+      ) {
+        throw new CustomError({
+          message: 'Ya no tienes una residencia activa en ese conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.RESIDENCE_NOT_AVAILABLE,
+        });
+      }
+    }
+    const sessionComplexId = switchTo ?? payload.complexId;
+
     // Una sesión de residente solo se renueva mientras su residencia en ese
     // conjunto siga activa: suspender la ficha corta el acceso a ese conjunto
     // aunque el refresh token sea anterior a la suspensión.
     if (
+      !switching &&
       entityType !== 'complex' &&
       storedToken.roleScope &&
       payload.complexId &&
@@ -514,7 +561,7 @@ export class TokenService {
         storedToken.sessionId,
         'user',
         storedToken.roleScope ?? undefined,
-        payload.complexId,
+        sessionComplexId,
       );
       newRefreshToken = await this.jwtService.signAsync(
         {
@@ -524,7 +571,7 @@ export class TokenService {
           // El complejo de la sesión viaja con la familia de tokens: sin esto,
           // la sesión de residente de quien administra perdería su conjunto en
           // el primer refresh y se quedaría sin unidad ni notificaciones.
-          complexId: payload.complexId,
+          complexId: sessionComplexId,
           sessionId: storedToken.sessionId,
           tokenFamily: payload.tokenFamily,
           deviceFingerprint: deviceInfo.fingerprint,

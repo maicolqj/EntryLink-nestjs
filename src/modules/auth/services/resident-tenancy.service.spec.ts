@@ -134,10 +134,14 @@ describe('ResidentTenancyService', () => {
   });
   describe('último conjunto usado', () => {
     it('prefiere el último conjunto usado si la residencia sigue activa', async () => {
-      userRepo.findOne.mockResolvedValueOnce({ lastResidentComplexId: 'conjunto-b' });
+      userRepo.findOne.mockResolvedValueOnce({
+        lastResidentComplexId: 'conjunto-b',
+      });
       residentRepo.count.mockResolvedValueOnce(1); // activa en B
 
-      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-b');
+      await expect(service.resolveComplexId('user-1')).resolves.toBe(
+        'conjunto-b',
+      );
       expect(residentRepo.count).toHaveBeenCalledWith({
         where: expect.objectContaining({
           userId: 'user-1',
@@ -150,14 +154,18 @@ describe('ResidentTenancyService', () => {
     });
 
     it('cae a la regla actual si el último ya no está activo', async () => {
-      userRepo.findOne.mockResolvedValueOnce({ lastResidentComplexId: 'conjunto-b' });
+      userRepo.findOne.mockResolvedValueOnce({
+        lastResidentComplexId: 'conjunto-b',
+      });
       residentRepo.count.mockResolvedValueOnce(0); // B suspendida
       residentRepo.findOne.mockResolvedValueOnce({
         id: 'res-a',
         complexId: 'conjunto-a',
       } as any);
 
-      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-a');
+      await expect(service.resolveComplexId('user-1')).resolves.toBe(
+        'conjunto-a',
+      );
       expect(residentRepo.findOne).toHaveBeenCalledWith(
         expect.objectContaining({
           order: { isMainResident: 'DESC', startDate: 'DESC' },
@@ -172,7 +180,9 @@ describe('ResidentTenancyService', () => {
         complexId: 'conjunto-a',
       } as any);
 
-      await expect(service.resolveComplexId('user-1')).resolves.toBe('conjunto-a');
+      await expect(service.resolveComplexId('user-1')).resolves.toBe(
+        'conjunto-a',
+      );
       expect(residentRepo.count).not.toHaveBeenCalled();
     });
   });

@@ -17,6 +17,8 @@ export enum AuditAction {
   CALL_MISSED = 'CALL_MISSED',
   CALL_REJECTED = 'CALL_REJECTED',
   EXPORT = 'EXPORT',
+  /** varchar(20) en audit_logs.action: no pasar de 20 caracteres. */
+  COMPLEX_SWITCH = 'COMPLEX_SWITCH',
 }
 
 registerEnumType(AuditAction, {
@@ -39,5 +41,6 @@ registerEnumType(AuditAction, {
     CALL_MISSED: { description: 'Llamada entrante no contestada' },
     CALL_REJECTED: { description: 'Llamada rechazada' },
     EXPORT: { description: 'Descarga de datos o reportes del complejo' },
+    COMPLEX_SWITCH: { description: 'Residente cambió de conjunto en la app' },
   },
 });

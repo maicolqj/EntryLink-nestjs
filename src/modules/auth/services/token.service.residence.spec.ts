@@ -169,4 +169,78 @@ describe('TokenService — renovación con residencia suspendida', () => {
     expect(tenancy.hasActiveResidence).not.toHaveBeenCalled();
     expect(signed.length).toBeGreaterThan(0);
   });
+  describe('cambio de conjunto (complexIdOverride)', () => {
+    const opts = { complexIdOverride: 'complex-2', requesterUserId: 'user-1' };
+
+    it('emite el conjunto nuevo en access y refresh, con la misma familia, sesión y alcance', async () => {
+      const row = stored([ValidRoles.RESIDENT_ROL]);
+      refreshTokenRepo.findOne.mockResolvedValueOnce(row);
+
+      const pair = await service.rotateRefreshToken('rt-viejo', device, opts);
+
+      expect(tenancy.hasActiveResidence).toHaveBeenCalledWith(
+        'user-1',
+        'complex-2',
+      );
+      const access = signed.find((p) => p.type === 'access');
+      const refresh = signed.find((p) => p.type === 'refresh');
+      expect(access.complexId).toBe('complex-2');
+      expect(access.roles).toEqual([ValidRoles.RESIDENT_ROL]);
+      expect(refresh).toMatchObject({
+        complexId: 'complex-2',
+        tokenFamily: 'fam-1',
+        sessionId: 'sess-1',
+      });
+      expect(pair.sessionId).toBe('sess-1');
+      expect(refreshTokenRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roleScope: [ValidRoles.RESIDENT_ROL],
+          tokenFamily: 'fam-1',
+        }),
+      );
+    });
+
+    it('sin residencia activa en el destino: RESIDENCE_NOT_AVAILABLE y no revoca la sesión', async () => {
+      activeResidence = false;
+      refreshTokenRepo.findOne.mockResolvedValueOnce(
+        stored([ValidRoles.RESIDENT_ROL]),
+      );
+
+      const code = await codeOf(
+        service.rotateRefreshToken('rt-viejo', device, opts),
+      );
+
+      expect(code).toBe(AuthErrorCode.RESIDENCE_NOT_AVAILABLE);
+      expect(signed).toHaveLength(0);
+      expect(refreshTokenRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('sesión sin alcance de residente: COMPLEX_SWITCH_NOT_ALLOWED', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(stored(null));
+
+      const code = await codeOf(
+        service.rotateRefreshToken('rt-viejo', device, opts),
+      );
+
+      expect(code).toBe(AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED);
+      expect(signed).toHaveLength(0);
+      expect(refreshTokenRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('refresh de otra persona: COMPLEX_SWITCH_NOT_ALLOWED', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(
+        stored([ValidRoles.RESIDENT_ROL]),
+      );
+
+      const code = await codeOf(
+        service.rotateRefreshToken('rt-viejo', device, {
+          complexIdOverride: 'complex-2',
+          requesterUserId: 'otra-persona',
+        }),
+      );
+
+      expect(code).toBe(AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED);
+      expect(signed).toHaveLength(0);
+    });
+  });
 });

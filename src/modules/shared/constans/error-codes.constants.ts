@@ -67,6 +67,10 @@ export enum AuthErrorCode {
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
   // Residencia del usuario suspendida en el único conjunto donde vive
   RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
+  // Selector de conjunto: el destino no es una residencia activa del usuario
+  RESIDENCE_NOT_AVAILABLE = 'RESIDENCE_NOT_AVAILABLE',
+  // Selector de conjunto: la sesión no es de residente o el refresh no es suyo
+  COMPLEX_SWITCH_NOT_ALLOWED = 'COMPLEX_SWITCH_NOT_ALLOWED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',
