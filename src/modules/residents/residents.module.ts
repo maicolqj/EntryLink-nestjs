@@ -1,3 +1,4 @@
+import { MyResidencesService } from './services/my-residences.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
@@ -46,6 +47,7 @@ try {
   controllers: [ResidentsController],
   providers: [
     ResidentsService,
+    MyResidencesService,
     ResidentsResolver,
     ResidentsImportService,
     ResidentsImportProducer,

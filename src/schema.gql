@@ -1826,6 +1826,9 @@ enum AuditAction {
 
   """Descarga de datos o reportes del complejo"""
   EXPORT
+
+  """Residente cambió de conjunto en la app"""
+  COMPLEX_SWITCH
 }
 
 type Notification {
@@ -6912,6 +6915,11 @@ type Query {
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!
   myResidentProfile: Resident!
+
+  """
+  Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el selector de conjunto de RemoteLink.
+  """
+  myResidences: [MyResidence!]!
   residentByUserId(userId: String!): Resident
   residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
@@ -7762,6 +7770,11 @@ type Mutation {
   Renueva el access token usando el refresh token. Implementa rotación de tokens.
   """
   refreshToken(refreshToken: String!): AuthResponse!
+
+  """
+  Cambia el conjunto de la sesión de residente sin cerrarla. Devuelve tokens nuevos con ese conjunto.
+  """
+  switchResidentComplex(complexId: String!, refreshToken: String!): AuthResponse!
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
@@ -10933,4 +10946,18 @@ type AnnouncementFolderCounts {
 type AnnouncementBulkResult {
   affected: Int!
   noticesRemoved: Int!
+}
+
+"""Un conjunto donde vive la persona, para el selector de RemoteLink."""
+type MyResidence {
+  complexId: String!
+  complexName: String!
+  buildingName: String
+  unitNumber: String
+
+  """Es el conjunto de la sesión actual"""
+  isCurrent: Boolean!
+
+  """Avisos sin leer en ese conjunto"""
+  unreadCount: Int!
 }
