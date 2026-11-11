@@ -95,6 +95,9 @@ describe('ResidentComplexSwitchService', () => {
         previousValue: { complexId: 'complex-1' },
         newValue: { complexId: 'complex-2' },
         complexId: 'complex-2',
+        // RESIDENT_ROL no está entre los roles auditados: sin esto el cambio
+        // nunca quedaba registrado.
+        alwaysAudit: true,
       }),
     );
     expect(res).toEqual(pair);

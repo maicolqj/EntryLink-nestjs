@@ -257,7 +257,11 @@ export class ResidentsResolver {
    * Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el
    * selector de conjunto de RemoteLink.
    */
-  @Query(() => [MyResidence], { name: 'myResidences' })
+  @Query(() => [MyResidence], {
+    name: 'myResidences',
+    description:
+      'Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el selector de conjunto de RemoteLink.',
+  })
   @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
   myResidences(
     @CurrentUser() currentUser: JwtAccessPayload,

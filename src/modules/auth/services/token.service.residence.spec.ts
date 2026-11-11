@@ -51,6 +51,11 @@ describe('TokenService — renovación con residencia suspendida', () => {
     findOne: jest.fn(async (): Promise<any> => null),
     update: jest.fn(async () => ({ affected: 1 })),
   };
+  const cache = {
+    get: jest.fn(async (): Promise<any> => undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  };
   const tenancy = {
     hasActiveResidence: jest.fn(async () => activeResidence),
   };
@@ -96,10 +101,7 @@ describe('TokenService — renovación con residencia suspendida', () => {
               key.endsWith('_SECRET') ? 'secreto-de-prueba' : undefined,
           },
         },
-        {
-          provide: CacheService,
-          useValue: { get: jest.fn(), set: jest.fn(), delete: jest.fn() },
-        },
+        { provide: CacheService, useValue: cache },
         {
           provide: getRepositoryToken(RefreshToken),
           useValue: refreshTokenRepo,
@@ -241,6 +243,106 @@ describe('TokenService — renovación con residencia suspendida', () => {
 
       expect(code).toBe(AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED);
       expect(signed).toHaveLength(0);
+    });
+  });
+  describe('cambio de conjunto — revisión final', () => {
+    const opts = { complexIdOverride: 'complex-2', requesterUserId: 'user-1' };
+    const councilStored = () => {
+      const row: any = stored([
+        ValidRoles.RESIDENT_ROL,
+        ValidRoles.COUNCIL_ROL,
+      ]);
+      row.user.userRoles.push({
+        role: { name: ValidRoles.COUNCIL_ROL, status: true, permissions: [] },
+      });
+      return row;
+    };
+
+    it('el token del conjunto nuevo no lleva COUNCIL_ROL (el consejo no es de ese conjunto)', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(councilStored());
+
+      await service.rotateRefreshToken('rt-viejo', device, opts);
+
+      const access = signed.find((p) => p.type === 'access');
+      expect(access.roles).toEqual([ValidRoles.RESIDENT_ROL]);
+      expect(refreshTokenRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ roleScope: [ValidRoles.RESIDENT_ROL] }),
+      );
+    });
+
+    it('la renovación normal conserva COUNCIL_ROL', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(councilStored());
+
+      await service.rotateRefreshToken('rt-viejo', device);
+
+      const access = signed.find((p) => p.type === 'access');
+      expect(access.roles).toEqual(
+        expect.arrayContaining([
+          ValidRoles.RESIDENT_ROL,
+          ValidRoles.COUNCIL_ROL,
+        ]),
+      );
+    });
+
+    it('marca el refresh anterior con motivo complex_switched', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(
+        stored([ValidRoles.RESIDENT_ROL]),
+      );
+
+      await service.rotateRefreshToken('rt-viejo', device, opts);
+
+      expect(refreshTokenRepo.update).toHaveBeenCalledWith(
+        'rt-1',
+        expect.objectContaining({
+          isRevoked: true,
+          revokedReason: 'complex_switched',
+        }),
+      );
+    });
+
+    it('reintento en la ventana de gracia hacia el mismo conjunto: devuelve el mismo par', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(null);
+      cache.get.mockResolvedValueOnce({
+        accessToken: 'a-g',
+        refreshToken: 'r-g',
+        sessionId: 'sess-1',
+        complexId: 'complex-2',
+      });
+
+      const pair = await service.rotateRefreshToken('rt-viejo', device, opts);
+
+      expect(pair).toMatchObject({ accessToken: 'a-g', refreshToken: 'r-g' });
+    });
+
+    it('par en gracia de otro conjunto: pide reintentar sin revocar', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(null);
+      cache.get.mockResolvedValueOnce({
+        accessToken: 'a-g',
+        refreshToken: 'r-g',
+        sessionId: 'sess-1',
+        complexId: 'complex-1',
+      });
+
+      const code = await codeOf(
+        service.rotateRefreshToken('rt-viejo', device, opts),
+      );
+
+      expect(code).toBe(AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED);
+      expect(refreshTokenRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('guarda el conjunto en el par de gracia', async () => {
+      refreshTokenRepo.findOne.mockResolvedValueOnce(
+        stored([ValidRoles.RESIDENT_ROL]),
+      );
+
+      await service.rotateRefreshToken('rt-viejo', device, opts);
+
+      expect(cache.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ complexId: 'complex-2' }),
+        }),
+      );
     });
   });
 });

@@ -80,6 +80,7 @@ export class ResidentComplexSwitchService {
       performedByRole: 'RESIDENT_ROL',
       complexId,
       description: 'Cambio de conjunto desde RemoteLink',
+      alwaysAudit: true,
     });
 
     this.logger.log(

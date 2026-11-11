@@ -1,7 +1,10 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 /** Un conjunto donde vive la persona, para el selector de RemoteLink. */
-@ObjectType()
+@ObjectType({
+  description:
+    'Un conjunto donde vive la persona, para el selector de RemoteLink.',
+})
 export class MyResidence {
   @Field(() => String)
   complexId: string;
