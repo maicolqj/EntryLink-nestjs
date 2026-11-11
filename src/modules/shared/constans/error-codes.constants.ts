@@ -240,6 +240,9 @@ export enum ResidentErrorCode {
   RESIDENT_REJECTED = 'RESIDENT_REJECTED',
   USER_ALREADY_RESIDENT_IN_COMPLEX = 'USER_ALREADY_RESIDENT_IN_COMPLEX',
   CANNOT_REMOVE_ACTIVE_RESIDENT = 'CANNOT_REMOVE_ACTIVE_RESIDENT',
+  // Alta: el documento (o el teléfono/correo) es de una cuenta cuyos otros
+  // datos no coinciden. No revela dónde existe esa cuenta.
+  ACCOUNT_DATA_MISMATCH = 'ACCOUNT_DATA_MISMATCH',
 }
 
 export enum FinanceErrorCode {
