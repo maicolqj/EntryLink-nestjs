@@ -1,3 +1,4 @@
+import { findAccountForNewResident } from './resident-account-match';
 import {
   HttpStatus,
   Inject,
@@ -153,18 +154,10 @@ export class ResidentsService {
       });
     }
 
-    // 3. Buscar usuario existente (por teléfono, luego por email)
-    let existingUser = await this.userRepo.findOne({
-      where: { phoneNumber: input.phoneNumber.trim() },
-      select: ['id', 'phoneNumber', 'email'],
-    });
-
-    if (!existingUser) {
-      existingUser = await this.userRepo.findOne({
-        where: { email: input.email.toLowerCase().trim() },
-        select: ['id', 'phoneNumber', 'email'],
-      });
-    }
+    // 3. ¿La persona ya tiene cuenta? (vive en otro conjunto o la creó otro
+    //    flujo). Se vincula sin contarle a este conjunto nada del otro; ver
+    //    findAccountForNewResident para cuándo coincide y cuándo no.
+    const existingUser = await findAccountForNewResident(this.userRepo, input);
 
     const userId = existingUser?.id;
 

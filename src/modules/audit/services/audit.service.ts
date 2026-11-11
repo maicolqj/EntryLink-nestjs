@@ -27,6 +27,12 @@ export interface LogParams {
   description?: string;
   /** Marcar true en operaciones masivas — COMPLEX_ROL no las audita */
   isBulk?: boolean;
+  /**
+   * Registrar aunque el rol no esté en AUDITED_ROLES. Para eventos de
+   * seguridad de la cuenta (p. ej. cambio de conjunto del residente) sin
+   * abrir la auditoría a todas las acciones de ese rol.
+   */
+  alwaysAudit?: boolean;
 }
 
 /** Rol con el que se auditan las acciones de procesos automáticos. */
@@ -63,7 +69,11 @@ export class AuditService {
   ]);
 
   async log(params: LogParams): Promise<void> {
-    if (!AuditService.AUDITED_ROLES.has(params.performedByRole)) return;
+    if (
+      !params.alwaysAudit &&
+      !AuditService.AUDITED_ROLES.has(params.performedByRole)
+    )
+      return;
     if (params.performedByRole === ValidRoles.COMPLEX_ROL && params.isBulk)
       return;
 

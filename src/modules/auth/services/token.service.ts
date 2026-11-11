@@ -344,11 +344,20 @@ export class TokenService {
     return refreshToken;
   }
 
+  /**
+   * Rota el refresh token. Con `opts.complexIdOverride` además cambia el
+   * conjunto de la sesión (selector de RemoteLink): misma familia, sesión,
+   * alcance y vigencia; solo para sesiones de residente del mismo usuario y
+   * con residencia activa en el destino. Un cambio rechazado no revoca nada.
+   */
   async rotateRefreshToken(
     currentToken: string,
     deviceInfo: DeviceInfo,
+    opts?: { complexIdOverride?: string; requesterUserId?: string },
   ): Promise<TokenPair> {
     const payload = await this.verifyRefreshToken(currentToken);
+    const switchTo = opts?.complexIdOverride;
+    const switching = !!switchTo;
     const currentTokenHash = this.hashToken(currentToken);
 
     const storedToken = await this.refreshTokenRepo.findOne({
@@ -368,6 +377,7 @@ export class TokenService {
         accessToken: string;
         refreshToken: string;
         sessionId: string;
+        complexId?: string;
       }>({
         key: {
           prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW,
@@ -376,8 +386,20 @@ export class TokenService {
       });
 
       if (gracePayload) {
+        // Reintento del mismo cambio (la respuesta se perdió): mismo par,
+        // igual que una renovación. Si el par en gracia es de otro conjunto,
+        // devolverlo haría creer a la app que cambió: que reintente.
+        if (switching && gracePayload.complexId !== switchTo) {
+          throw new CustomError({
+            message: 'No se pudo cambiar de conjunto. Intenta de nuevo',
+            statusCode: HttpStatus.CONFLICT,
+            errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+          });
+        }
         return {
-          ...gracePayload,
+          accessToken: gracePayload.accessToken,
+          refreshToken: gracePayload.refreshToken,
+          sessionId: gracePayload.sessionId,
           expiresIn: this.getAccessTokenExpirySeconds(),
         };
       }
@@ -426,10 +448,46 @@ export class TokenService {
       });
     }
 
+    if (switchTo) {
+      const allowed =
+        entityType === 'user' &&
+        !!storedToken.roleScope &&
+        storedToken.user?.id === opts?.requesterUserId;
+      if (!allowed) {
+        throw new CustomError({
+          message: 'Esta sesión no puede cambiar de conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+        });
+      }
+      if (
+        !this.residentTenancy ||
+        !(await this.residentTenancy.hasActiveResidence(
+          storedToken.user.id,
+          switchTo,
+        ))
+      ) {
+        throw new CustomError({
+          message: 'Ya no tienes una residencia activa en ese conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.RESIDENCE_NOT_AVAILABLE,
+        });
+      }
+    }
+    const sessionComplexId = switchTo ?? payload.complexId;
+    // COUNCIL_ROL es del usuario, no de un conjunto: no se sabe si es consejero
+    // en el destino, así que el token del otro conjunto sale sin él.
+    const sessionRoleScope = switchTo
+      ? (storedToken.roleScope ?? []).filter(
+          (r) => r !== ValidRoles.COUNCIL_ROL,
+        )
+      : storedToken.roleScope;
+
     // Una sesión de residente solo se renueva mientras su residencia en ese
     // conjunto siga activa: suspender la ficha corta el acceso a ese conjunto
     // aunque el refresh token sea anterior a la suspensión.
     if (
+      !switching &&
       entityType !== 'complex' &&
       storedToken.roleScope &&
       payload.complexId &&
@@ -450,7 +508,7 @@ export class TokenService {
 
     await this.refreshTokenRepo.update(storedToken.id, {
       isRevoked: true,
-      revokedReason: 'rotated',
+      revokedReason: switching ? 'complex_switched' : 'rotated',
       lastUsedAt: new Date(),
     });
     const tokenId = this.generateSecureId();
@@ -513,8 +571,8 @@ export class TokenService {
         storedToken.user,
         storedToken.sessionId,
         'user',
-        storedToken.roleScope ?? undefined,
-        payload.complexId,
+        sessionRoleScope ?? undefined,
+        sessionComplexId,
       );
       newRefreshToken = await this.jwtService.signAsync(
         {
@@ -524,7 +582,7 @@ export class TokenService {
           // El complejo de la sesión viaja con la familia de tokens: sin esto,
           // la sesión de residente de quien administra perdería su conjunto en
           // el primer refresh y se quedaría sin unidad ni notificaciones.
-          complexId: payload.complexId,
+          complexId: sessionComplexId,
           sessionId: storedToken.sessionId,
           tokenFamily: payload.tokenFamily,
           deviceFingerprint: deviceInfo.fingerprint,
@@ -561,7 +619,7 @@ export class TokenService {
       refreshExpiry,
       // El alcance viaja con la familia de tokens: rotar no puede devolverle
       // a una sesión de residente los roles administrativos de la cuenta.
-      roleScope: storedToken.roleScope ?? null,
+      roleScope: sessionRoleScope ?? null,
     });
 
     // Cache the result so concurrent requests with the old token are served idempotently
@@ -575,6 +633,7 @@ export class TokenService {
         accessToken,
         refreshToken: newRefreshToken,
         sessionId: storedToken.sessionId,
+        complexId: sessionComplexId,
       },
       options: { ttl: AUTH_CONSTANTS.CACHE_TTL.GRACE_WINDOW },
     });

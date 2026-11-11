@@ -67,6 +67,10 @@ export enum AuthErrorCode {
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
   // Residencia del usuario suspendida en el único conjunto donde vive
   RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
+  // Selector de conjunto: el destino no es una residencia activa del usuario
+  RESIDENCE_NOT_AVAILABLE = 'RESIDENCE_NOT_AVAILABLE',
+  // Selector de conjunto: la sesión no es de residente o el refresh no es suyo
+  COMPLEX_SWITCH_NOT_ALLOWED = 'COMPLEX_SWITCH_NOT_ALLOWED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',
@@ -236,6 +240,9 @@ export enum ResidentErrorCode {
   RESIDENT_REJECTED = 'RESIDENT_REJECTED',
   USER_ALREADY_RESIDENT_IN_COMPLEX = 'USER_ALREADY_RESIDENT_IN_COMPLEX',
   CANNOT_REMOVE_ACTIVE_RESIDENT = 'CANNOT_REMOVE_ACTIVE_RESIDENT',
+  // Alta: el documento (o el teléfono/correo) es de una cuenta cuyos otros
+  // datos no coinciden. No revela dónde existe esa cuenta.
+  ACCOUNT_DATA_MISMATCH = 'ACCOUNT_DATA_MISMATCH',
 }
 
 export enum FinanceErrorCode {
