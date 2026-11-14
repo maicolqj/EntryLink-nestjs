@@ -1,3 +1,5 @@
+import { MyResidencesService } from '../services/my-residences.service';
+import { MyResidence } from '../dto/responses/my-residence.response';
 import {
   Resolver,
   Query,
@@ -50,7 +52,10 @@ export class ResidentsResolver {
     return this.residentsService.isCouncilUser(resident.userId);
   }
 
-  constructor(private readonly residentsService: ResidentsService) {}
+  constructor(
+    private readonly residentsService: ResidentsService,
+    private readonly myResidencesService: MyResidencesService,
+  ) {}
 
   // ================================================================
   // MUTATIONS — Administración del Complejo
@@ -246,6 +251,22 @@ export class ResidentsResolver {
       currentUser.sub,
       currentUser.complexId,
     );
+  }
+
+  /**
+   * Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el
+   * selector de conjunto de RemoteLink.
+   */
+  @Query(() => [MyResidence], {
+    name: 'myResidences',
+    description:
+      'Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el selector de conjunto de RemoteLink.',
+  })
+  @Auth({ roles: [ValidRoles.RESIDENT_ROL] })
+  myResidences(
+    @CurrentUser() currentUser: JwtAccessPayload,
+  ): Promise<MyResidence[]> {
+    return this.myResidencesService.findMine(currentUser);
   }
 
   /**

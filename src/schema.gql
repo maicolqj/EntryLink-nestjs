@@ -1838,6 +1838,9 @@ enum AuditAction {
 
   """Descarga de datos o reportes del complejo"""
   EXPORT
+
+  """Residente cambió de conjunto en la app"""
+  COMPLEX_SWITCH
 }
 
 type Notification {
@@ -2508,6 +2511,20 @@ type AuditLogDetailResponse {
 
   """Nombre del usuario que revirtió la acción"""
   revertedByName: String
+}
+
+"""Un conjunto donde vive la persona, para el selector de RemoteLink."""
+type MyResidence {
+  complexId: String!
+  complexName: String!
+  buildingName: String
+  unitNumber: String
+
+  """Es el conjunto de la sesión actual"""
+  isCurrent: Boolean!
+
+  """Avisos sin leer en ese conjunto"""
+  unreadCount: Int!
 }
 
 type PaginatedResidentsResponse {
@@ -5834,6 +5851,18 @@ type SubscriptionPlanPriceView {
   updatedAt: DateTime
 }
 
+"""Acceso de la comunidad según la suscripción del conjunto"""
+type CommunityAccess {
+  """La comunidad perdió el acceso por no renovar"""
+  accessCut: Boolean!
+
+  """El botón de pánico sigue funcionando"""
+  panicAvailable: Boolean!
+
+  """Fecha del corte: ya ocurrió si accessCut, si no es la prevista"""
+  cutAt: DateTime
+}
+
 """Conjunto que llegó por una recomendación"""
 type ReferredComplex {
   id: ID!
@@ -7184,6 +7213,11 @@ type Query {
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!
   myResidentProfile: Resident!
+
+  """
+  Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el selector de conjunto de RemoteLink.
+  """
+  myResidences: [MyResidence!]!
   residentByUserId(userId: String!): Resident
   residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
@@ -7402,6 +7436,11 @@ type Query {
 
   """Precios vigentes de los planes pagos."""
   subscriptionPlanPrices: [SubscriptionPlanPriceView!]!
+
+  """
+  Si la comunidad del conjunto de la sesión conserva el acceso y el botón de pánico.
+  """
+  myCommunityAccess: CommunityAccess!
 
   """Suscripción e historial de un complejo. Solo plataforma."""
   complexSubscription(complexId: ID!): SubscriptionSummary!
@@ -8083,6 +8122,11 @@ type Mutation {
   Renueva el access token usando el refresh token. Implementa rotación de tokens.
   """
   refreshToken(refreshToken: String!): AuthResponse!
+
+  """
+  Cambia el conjunto de la sesión de residente sin cerrarla. Devuelve tokens nuevos con ese conjunto.
+  """
+  switchResidentComplex(complexId: String!, refreshToken: String!): AuthResponse!
 
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!

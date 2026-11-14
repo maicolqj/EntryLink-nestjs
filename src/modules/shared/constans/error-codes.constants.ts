@@ -67,6 +67,10 @@ export enum AuthErrorCode {
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
   // Residencia del usuario suspendida en el único conjunto donde vive
   RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
+  // Selector de conjunto: el destino no es una residencia activa del usuario
+  RESIDENCE_NOT_AVAILABLE = 'RESIDENCE_NOT_AVAILABLE',
+  // Selector de conjunto: la sesión no es de residente o el refresh no es suyo
+  COMPLEX_SWITCH_NOT_ALLOWED = 'COMPLEX_SWITCH_NOT_ALLOWED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',
@@ -236,6 +240,9 @@ export enum ResidentErrorCode {
   RESIDENT_REJECTED = 'RESIDENT_REJECTED',
   USER_ALREADY_RESIDENT_IN_COMPLEX = 'USER_ALREADY_RESIDENT_IN_COMPLEX',
   CANNOT_REMOVE_ACTIVE_RESIDENT = 'CANNOT_REMOVE_ACTIVE_RESIDENT',
+  // Alta: el documento (o el teléfono/correo) es de una cuenta cuyos otros
+  // datos no coinciden. No revela dónde existe esa cuenta.
+  ACCOUNT_DATA_MISMATCH = 'ACCOUNT_DATA_MISMATCH',
 }
 
 export enum FinanceErrorCode {
@@ -568,6 +575,10 @@ export enum NotificationActionErrorCode {
 export enum SubscriptionErrorCode {
   /** Pasó la gracia: la administración queda en solo lectura hasta renovar. */
   SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED',
+  /** Tras los tres avisos, la comunidad perdió el acceso hasta renovar. */
+  SUBSCRIPTION_ACCESS_CUT = 'SUBSCRIPTION_ACCESS_CUT',
+  /** Tras tres avisos que lo anunciaban, se apagó el botón de pánico. */
+  SUBSCRIPTION_PANIC_CUT = 'SUBSCRIPTION_PANIC_CUT',
   /** El plan FREE es solo la prueba gratis: no se renueva pagando. */
   SUBSCRIPTION_FREE_NOT_RENEWABLE = 'SUBSCRIPTION_FREE_NOT_RENEWABLE',
   /** La prueba gratis se otorga una sola vez por complejo. */

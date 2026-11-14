@@ -1,11 +1,24 @@
+jest.mock('@nestjs/passport', () => ({
+  AuthGuard: () => class {},
+  PassportStrategy: () => class {},
+}));
+
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-import { SubscriptionGuard } from './subscription.guard';
+import {
+  ALLOW_WHEN_SUSPENDED_KEY,
+  PANIC_TRIGGER_KEY,
+  SubscriptionGuard,
+} from './subscription.guard';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { CustomError } from '../utils/errors.utils';
 import { ComplexStatus } from '../../residential-complex/enums/complex-status.enum';
-import { AuthErrorCode } from '../constans/error-codes.constants';
+import {
+  AuthErrorCode,
+  SubscriptionErrorCode,
+} from '../constans/error-codes.constants';
+import { NotificationsResolver } from '../../notifications/resolvers/notifications.resolver';
 
 /**
  * Con la suscripción suspendida, la administración queda en solo lectura. Lo
@@ -23,9 +36,19 @@ const build = (opts: {
   dbFails?: boolean;
   status?: ComplexStatus;
   reason?: string | null;
+  mode?: string;
+  accessCut?: boolean;
+  panicCut?: boolean;
+  panicTrigger?: boolean;
 }) => {
   const reflector = {
-    getAllAndOverride: jest.fn(() => opts.allowed ?? false),
+    getAllAndOverride: jest.fn((key: string) =>
+      key === ALLOW_WHEN_SUSPENDED_KEY
+        ? (opts.allowed ?? false)
+        : key === PANIC_TRIGGER_KEY
+          ? (opts.panicTrigger ?? false)
+          : false,
+    ),
   } as unknown as Reflector;
   const findOne = jest.fn(async () => {
     if (opts.dbFails) throw new Error('base caída');
@@ -34,12 +57,16 @@ const build = (opts: {
       subscriptionEndsAt: opts.endsAt ?? null,
       status: opts.status ?? ComplexStatus.ACTIVE,
       suspensionReason: opts.reason ?? null,
+      subscriptionAccessCutAt: opts.accessCut ? new Date() : null,
+      subscriptionPanicCutAt: opts.panicCut ? new Date() : null,
     };
   });
   const dataSource = { getRepository: () => ({ findOne }) } as never;
   const cache = { get: jest.fn(async () => null), set: jest.fn() } as never;
   return {
-    guard: new SubscriptionGuard(reflector, dataSource, cache),
+    guard: new SubscriptionGuard(reflector, dataSource, cache, {
+      get: () => opts.mode,
+    } as never),
     findOne,
   };
 };
@@ -204,5 +231,136 @@ describe('SubscriptionGuard', () => {
         ).resolves.toBe(true);
       }
     });
+  });
+});
+
+describe('SubscriptionGuard — corte por no renovar', () => {
+  const resident = {
+    sub: 'u1',
+    complexId: COMPLEX_ID,
+    roles: [ValidRoles.RESIDENT_ROL],
+  };
+  const guardUser = {
+    sub: 'u2',
+    complexId: COMPLEX_ID,
+    roles: [ValidRoles.SECURITY_ROL],
+  };
+  const superAdmin = {
+    sub: 'u3',
+    complexId: COMPLEX_ID,
+    roles: [ValidRoles.SUPER_ADMIN_ROL],
+  };
+
+  const codeOf = async (promise: Promise<boolean>): Promise<string | null> => {
+    try {
+      await promise;
+      return null;
+    } catch (error) {
+      return (error as CustomError).errorCode;
+    }
+  };
+
+  it.each([
+    ['residente', resident],
+    ['portería', guardUser],
+    ['administración', complexAccount],
+  ])('bloquea a %s, también en lectura', async (_name, user) => {
+    const { guard } = build({ mode: 'access', accessCut: true });
+
+    expect(await codeOf(guard.canActivate(gqlContext(user, 'query')))).toBe(
+      SubscriptionErrorCode.SUBSCRIPTION_ACCESS_CUT,
+    );
+  });
+
+  it('deja pasar al SUPER_ADMIN', async () => {
+    const { guard } = build({ mode: 'access', accessCut: true });
+
+    await expect(
+      guard.canActivate(gqlContext(superAdmin, 'mutation')),
+    ).resolves.toBe(true);
+  });
+
+  it('deja pasar lo marcado con @AllowWhenSuspended', async () => {
+    const { guard } = build({
+      mode: 'access_and_panic',
+      accessCut: true,
+      panicCut: true,
+      allowed: true,
+    });
+
+    await expect(
+      guard.canActivate(gqlContext(resident, 'mutation')),
+    ).resolves.toBe(true);
+  });
+
+  it('con el modo apagado ignora la marca de corte', async () => {
+    const { guard, findOne } = build({ mode: 'off', accessCut: true });
+
+    await expect(
+      guard.canActivate(gqlContext(resident, 'query')),
+    ).resolves.toBe(true);
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('disparar el pánico pasa en modo access', async () => {
+    const { guard } = build({
+      mode: 'access',
+      accessCut: true,
+      panicCut: true,
+      allowed: true,
+      panicTrigger: true,
+    });
+
+    await expect(
+      guard.canActivate(gqlContext(resident, 'mutation')),
+    ).resolves.toBe(true);
+  });
+
+  it('disparar el pánico se bloquea con el modo y la marca de pánico', async () => {
+    const { guard } = build({
+      mode: 'access_and_panic',
+      accessCut: true,
+      panicCut: true,
+      allowed: true,
+      panicTrigger: true,
+    });
+
+    expect(
+      await codeOf(guard.canActivate(gqlContext(resident, 'mutation'))),
+    ).toBe(SubscriptionErrorCode.SUBSCRIPTION_PANIC_CUT);
+  });
+
+  it('disparar el pánico pasa si no se ha marcado su corte', async () => {
+    const { guard } = build({
+      mode: 'access_and_panic',
+      accessCut: true,
+      allowed: true,
+      panicTrigger: true,
+    });
+
+    await expect(
+      guard.canActivate(gqlContext(resident, 'mutation')),
+    ).resolves.toBe(true);
+  });
+
+  it('falla abierto si la base no responde', async () => {
+    const { guard } = build({ mode: 'access', dbFails: true });
+
+    await expect(
+      guard.canActivate(gqlContext(resident, 'query')),
+    ).resolves.toBe(true);
+  });
+
+  it('solo disparar lleva la marca: una alerta abierta se sigue atendiendo', () => {
+    const marked = (name: keyof NotificationsResolver) =>
+      Reflect.getMetadata(
+        PANIC_TRIGGER_KEY,
+        NotificationsResolver.prototype[name] as object,
+      );
+
+    expect(marked('triggerPanicAlert')).toBe(true);
+    expect(marked('acknowledgePanicAlert')).toBeUndefined();
+    expect(marked('resolvePanicAlert')).toBeUndefined();
+    expect(marked('activePanicAlerts')).toBeUndefined();
   });
 });
