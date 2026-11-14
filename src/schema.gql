@@ -5759,6 +5759,18 @@ type SubscriptionPlanPriceView {
   updatedAt: DateTime
 }
 
+"""Acceso de la comunidad según la suscripción del conjunto"""
+type CommunityAccess {
+  """La comunidad perdió el acceso por no renovar"""
+  accessCut: Boolean!
+
+  """El botón de pánico sigue funcionando"""
+  panicAvailable: Boolean!
+
+  """Fecha del corte: ya ocurrió si accessCut, si no es la prevista"""
+  cutAt: DateTime
+}
+
 """Conjunto que llegó por una recomendación"""
 type ReferredComplex {
   id: ID!
@@ -7318,6 +7330,11 @@ type Query {
 
   """Precios vigentes de los planes pagos."""
   subscriptionPlanPrices: [SubscriptionPlanPriceView!]!
+
+  """
+  Si la comunidad del conjunto de la sesión conserva el acceso y el botón de pánico.
+  """
+  myCommunityAccess: CommunityAccess!
 
   """Suscripción e historial de un complejo. Solo plataforma."""
   complexSubscription(complexId: ID!): SubscriptionSummary!

@@ -153,6 +153,23 @@ export class ResidentialComplex {
   @Column({ name: 'subscription_ends_at', type: 'timestamptz', nullable: true })
   subscriptionEndsAt?: Date | null;
 
+  // Sin @Field: residentes y portería preguntan por `myCommunityAccess`.
+  /** Corte de acceso por no renovar, tras los tres avisos a la comunidad. */
+  @Column({
+    name: 'subscription_access_cut_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  subscriptionAccessCutAt?: Date | null;
+
+  /** Corte del botón de pánico, tras tres avisos que digan que se apaga. */
+  @Column({
+    name: 'subscription_panic_cut_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  subscriptionPanicCutAt?: Date | null;
+
   // Cobro personalizado del conjunto. Sin @Field a propósito: el complejo lo
   // leen residentes y portería; el precio solo viaja por el módulo de
   // suscripciones, a la plataforma y a la propia administración.

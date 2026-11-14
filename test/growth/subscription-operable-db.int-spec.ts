@@ -32,6 +32,11 @@ import { UserComplexAssignment } from '../../src/modules/users/entities/user-com
 import { VehiclesService } from '../../src/modules/vehicles/services/vehicles.service';
 import { ParkingRotationConfig } from '../../src/modules/vehicles/entities/parking-rotation-config.entity';
 import { SubscriptionPause } from '../../src/modules/subscriptions/entities/subscription-pause.entity';
+import { SubscriptionCutService } from '../../src/modules/subscriptions/services/subscription-cut.service';
+import { SubscriptionReminder } from '../../src/modules/subscriptions/entities/subscription-reminder.entity';
+import { DeviceHealthService } from '../../src/modules/notifications/services/device-health.service';
+import { UserRole } from '../../src/modules/users/entities/user_has_roles.entity';
+import { ResidentialComplex } from '../../src/modules/residential-complex/entities/residential-complex.entity';
 import { recordResumeIfNeeded } from '../../src/modules/subscriptions/services/subscription-resume.helper';
 
 const URL = process.env.GROWTH_IT_DATABASE_URL;
@@ -522,6 +527,96 @@ describeDb('Suscripción vencida: automatizaciones (base real)', () => {
       await cron().run();
 
       expect(await statusNow()).toBe('REMOVED');
+    });
+  });
+
+  describe('corte de acceso', () => {
+    const ID = 'cccccccc-0000-4000-8000-000000000007';
+
+    const cleanup = async () => {
+      await ds.query(
+        `DELETE FROM public.subscription_reminders WHERE complex_id = $1`,
+        [ID],
+      );
+      await ds.query(
+        `DELETE FROM public.subscription_pauses WHERE complex_id = $1`,
+        [ID],
+      );
+      await ds.query(`DELETE FROM public.residential_complexes WHERE id = $1`, [
+        ID,
+      ]);
+    };
+
+    const service = () =>
+      new SubscriptionCutService(
+        ds.getRepository(ResidentialComplex),
+        ds.getRepository(SubscriptionReminder),
+        {
+          claim: () => Promise.resolve(true),
+        } as never,
+        { notifyComplex: () => Promise.resolve() } as never,
+        {
+          findUserIdsByRoles: () => Promise.resolve([]),
+          notify: () => Promise.resolve([]),
+        } as never,
+        { delete: () => Promise.resolve() } as never,
+        { emitToComplex: () => undefined } as never,
+        { get: () => 'access' } as never,
+      );
+
+    beforeEach(async () => {
+      await cleanup();
+      await seedComplex(ID, 'corte', '40 days');
+    });
+    afterAll(cleanup);
+
+    it('toma como candidato al conjunto vencido y omite al ya cortado', async () => {
+      await expect(service().run()).resolves.toBeGreaterThanOrEqual(1);
+
+      await ds.query(
+        `UPDATE public.residential_complexes SET subscription_access_cut_at = now() WHERE id = $1`,
+        [ID],
+      );
+      spy.sql = [];
+      await service().run();
+      expect(spy.sql.join(' ')).toContain('subscription_access_cut_at');
+    });
+
+    it('renovar devuelve el acceso de inmediato', async () => {
+      await ds.query(
+        `UPDATE public.residential_complexes
+            SET subscription_access_cut_at = now(), subscription_panic_cut_at = now()
+          WHERE id = $1`,
+        [ID],
+      );
+      const now = new Date();
+
+      await ds.transaction((m) =>
+        recordResumeIfNeeded(
+          m,
+          ID,
+          new Date(now.getTime() - 40 * 86_400_000),
+          new Date(now.getTime() + 30 * 86_400_000),
+          now,
+        ),
+      );
+
+      const [row] = await ds.query(
+        `SELECT subscription_access_cut_at, subscription_panic_cut_at
+           FROM public.residential_complexes WHERE id = $1`,
+        [ID],
+      );
+      expect(row.subscription_access_cut_at).toBeNull();
+      expect(row.subscription_panic_cut_at).toBeNull();
+    });
+
+    it('la salud de equipos corre con la consulta nueva', async () => {
+      spy.sql = [];
+      await withDeps(DeviceHealthService, {
+        userRoleRepo: ds.getRepository(UserRole),
+      }).findDevicesToMonitor();
+
+      expect(spy.sql.join(' ')).toContain('subscription_panic_cut_at');
     });
   });
 });

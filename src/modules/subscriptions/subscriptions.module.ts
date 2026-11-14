@@ -11,6 +11,7 @@ import { SubscriptionTax } from './entities/subscription-tax.entity';
 import { Unit } from '../residential-complex/entities/unit.entity';
 import { SubscriptionsService } from './services/subscriptions.service';
 import { SubscriptionRemindersService } from './services/subscription-reminders.service';
+import { SubscriptionCutService } from './services/subscription-cut.service';
 import { SubscriptionsResolver } from './resolvers/subscriptions.resolver';
 import { ComplexSubscriptionFieldsResolver } from './resolvers/complex-subscription-fields.resolver';
 import { SubscriptionsCron } from './cron/subscriptions.cron';
@@ -49,6 +50,7 @@ import { SubscriptionPaymentNotificationDetailProvider } from './providers/subsc
   providers: [
     SubscriptionsService,
     SubscriptionRemindersService,
+    SubscriptionCutService,
     SubscriptionsResolver,
     ComplexSubscriptionFieldsResolver,
     SubscriptionsCron,
