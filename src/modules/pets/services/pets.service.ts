@@ -32,6 +32,7 @@ import {
   readBoolean,
   readOptionalBoolean,
 } from '../utils/pets-module.util';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /** Datos de creación: el DTO del REST más la foto ya subida a R2. */
 export type CreatePetData = RegisterPetDto & { photoUrl: string };
@@ -754,6 +755,7 @@ export class PetsService {
       .innerJoinAndSelect('p.complex', 'c')
       .where('p.status = :status', { status: PetStatus.ACTIVE })
       .andWhere('p.deletedAt IS NULL')
+      .andWhere(operableComplexSql('c.id'))
       // Misma regla que el resto de la plataforma: sin lista de módulos, todos
       // están activos. `enabledModules` es un simple-array (texto separado por
       // comas) y ningún otro módulo contiene la palabra, así que el LIKE basta.

@@ -13,6 +13,7 @@ import {
   IsNull,
   LessThan,
   MoreThan,
+  Raw,
   Repository,
 } from 'typeorm';
 import { randomBytes } from 'node:crypto';
@@ -73,6 +74,7 @@ import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { SocketService } from '../../../core/infrastructure/socket/socket.service';
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -1049,6 +1051,7 @@ export class AmenityBookingsService {
       .where('status = :status', { status: AmenityBookingStatus.PENDING })
       .andWhere('startAt < :now', { now: new Date() })
       .andWhere('deletedAt IS NULL')
+      .andWhere(operableComplexSql('complex_id'))
       .execute();
 
     return result.affected ?? 0;
@@ -1065,6 +1068,7 @@ export class AmenityBookingsService {
         status: AmenityBookingStatus.APPROVED,
         endAt: LessThan(new Date()),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
       relations: ['amenity'],
       take: 500,
@@ -1100,6 +1104,7 @@ export class AmenityBookingsService {
         status: AmenityBookingStatus.CHECKED_IN,
         endAt: LessThan(new Date()),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
       relations: ['amenity'],
       take: 500,
@@ -1128,6 +1133,7 @@ export class AmenityBookingsService {
         startAt: Between(now, horizon),
         reminderSentAt: IsNull(),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
       relations: ['amenity'],
       take: 500,

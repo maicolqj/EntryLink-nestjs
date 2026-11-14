@@ -6,6 +6,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SubscriptionPeriod } from './entities/subscription-period.entity';
 import { SubscriptionPlanPrice } from './entities/subscription-plan-price.entity';
 import { SubscriptionReminder } from './entities/subscription-reminder.entity';
+import { SubscriptionPause } from './entities/subscription-pause.entity';
 import { SubscriptionTax } from './entities/subscription-tax.entity';
 import { Unit } from '../residential-complex/entities/unit.entity';
 import { SubscriptionsService } from './services/subscriptions.service';
@@ -33,6 +34,7 @@ import { SubscriptionPaymentNotificationDetailProvider } from './providers/subsc
       SubscriptionPeriod,
       SubscriptionPlanPrice,
       SubscriptionReminder,
+      SubscriptionPause,
       SubscriptionTax,
       SubscriptionPaymentSubmission,
       SubscriptionPaymentSettings,
