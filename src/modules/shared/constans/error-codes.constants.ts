@@ -699,6 +699,8 @@ export enum IntercomErrorCode {
   INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
   /** Nadie de la portería elegida tiene la app abierta. */
   INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+  /** No hay servidor TURN configurado: no se puede activar INTERNET. */
+  INTERCOM_RELAY_NOT_CONFIGURED = 'INTERCOM_RELAY_NOT_CONFIGURED',
 }
 
 /**

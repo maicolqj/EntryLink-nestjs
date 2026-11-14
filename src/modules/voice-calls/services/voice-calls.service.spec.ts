@@ -170,7 +170,10 @@ function setup(options?: {
     emitToComplex: jest.fn(),
   };
   const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
-  const iceServers = { forUser: jest.fn().mockReturnValue([]) };
+  const iceServers = {
+    forUser: jest.fn().mockReturnValue([]),
+    hasRelay: jest.fn().mockReturnValue(true),
+  };
 
   const service = new VoiceCallsService(
     callRepo as never,
@@ -195,6 +198,7 @@ function setup(options?: {
     socketService,
     cacheService,
     auditService,
+    iceServers,
   };
 }
 
@@ -602,6 +606,41 @@ describe('VoiceCallsService', () => {
         expect.objectContaining({ intercomMode: IntercomMode.SIM }),
       );
     });
+
+    it('sin servidor TURN no deja pasar el conjunto a INTERNET', async () => {
+      const { service, complexRepo, iceServers } = make();
+      iceServers.hasRelay.mockReturnValue(false);
+
+      await expect(
+        service.updateSettings(
+          {
+            complexId: COMPLEX_ID,
+            mode: IntercomMode.INTERNET,
+            residentCallsEnabled: false,
+          },
+          user(OTHER_ID, [ValidRoles.SUPER_ADMIN_ROL], undefined),
+        ),
+      ).rejects.toMatchObject({
+        errorCode: IntercomErrorCode.INTERCOM_RELAY_NOT_CONFIGURED,
+      });
+      expect(complexRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('sin servidor TURN sí deja volver a SIM', async () => {
+      const { service, complexRepo, iceServers } = make();
+      iceServers.hasRelay.mockReturnValue(false);
+
+      await service.updateSettings(
+        {
+          complexId: COMPLEX_ID,
+          mode: IntercomMode.SIM,
+          residentCallsEnabled: false,
+        },
+        user(OTHER_ID, [ValidRoles.SUPER_ADMIN_ROL], undefined),
+      );
+
+      expect(complexRepo.update).toHaveBeenCalled();
+    });
   });
 });
 
@@ -647,5 +686,16 @@ describe('IceServersService', () => {
       config({ INTERCOM_TURN_URLS: 'turn:turn.alternaqj.com:3478' }),
     );
     expect(service.forUser(RESIDENT_ID)).toEqual([]);
+  });
+
+  it('hasRelay: solo con URLs de TURN y secreto', () => {
+    const urls = { INTERCOM_TURN_URLS: 'turn:turn.alternaqj.com:3478' };
+    expect(new IceServersService(config({})).hasRelay()).toBe(false);
+    expect(new IceServersService(config(urls)).hasRelay()).toBe(false);
+    expect(
+      new IceServersService(
+        config({ ...urls, INTERCOM_TURN_SECRET: 'secreto-de-prueba' }),
+      ).hasRelay(),
+    ).toBe(true);
   });
 });

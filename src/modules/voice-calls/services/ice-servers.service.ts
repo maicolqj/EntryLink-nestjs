@@ -50,6 +50,18 @@ export class IceServersService {
     return servers;
   }
 
+  /**
+   * Hay servidor TURN configurado. Sin él, las llamadas por datos móviles
+   * (CGNAT) casi nunca conectan, así que no se deja activar la citofonía por
+   * internet.
+   */
+  hasRelay(): boolean {
+    return (
+      this.list('INTERCOM_TURN_URLS').length > 0 &&
+      !!this.config.get<string>('INTERCOM_TURN_SECRET')
+    );
+  }
+
   private list(key: string): string[] {
     return (this.config.get<string>(key) ?? '')
       .split(',')

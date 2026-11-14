@@ -564,6 +564,14 @@ export class VoiceCallsService implements OnModuleDestroy {
       );
     }
 
+    if (input.mode === IntercomMode.INTERNET && !this.iceServers.hasRelay()) {
+      throw this.error(
+        'La citofonía por internet necesita el servidor de llamadas (TURN), que aún no está configurado. El conjunto sigue por la línea del celular.',
+        HttpStatus.CONFLICT,
+        IntercomErrorCode.INTERCOM_RELAY_NOT_CONFIGURED,
+      );
+    }
+
     const previous = {
       intercomMode: complex.intercomMode,
       residentIntercomCallsEnabled: complex.residentIntercomCallsEnabled,
