@@ -13,6 +13,7 @@ import {
   ResidentImportError,
 } from '../queues/residents-import.constants';
 import { Resident } from '../entities/resident.entity';
+import { findAccountForNewResident } from './resident-account-match';
 import { ResidentStatus } from '../enums/resident-status.enum';
 import { ResidentType } from '../enums/resident-type.enum';
 
@@ -360,28 +361,13 @@ export class ResidentsImportService {
     seen.claim('teléfono', phone, email, row.rowIndex);
     seen.claim('cédula', identity, email, row.rowIndex);
 
-    let existingUser = await manager.findOne(User, {
-      where: { email },
-      select: ['id', 'email', 'phoneNumber'],
-    });
-    if (!existingUser && phone) {
-      existingUser = await manager.findOne(User, {
-        where: { phoneNumber: phone },
-        select: ['id', 'email', 'phoneNumber'],
-      });
-    }
-
-    if (!existingUser && identity) {
-      const identityOwner = await manager.findOne(User, {
-        where: { identity, deletedAt: IsNull() },
-        select: ['id'],
-      });
-      if (identityOwner) {
-        throw new Error(
-          `la cédula '${identity}' ya pertenece a otra cuenta del sistema`,
-        );
-      }
-    }
+    // Misma regla que el alta desde la web: la cédula sola no vincula una
+    // cuenta existente y un correo/teléfono de una cuenta con OTRA cédula es
+    // otra persona. Si no coinciden, error genérico (no dice dónde vive).
+    const existingUser = await findAccountForNewResident(
+      { findOne: (opts) => manager.findOne(User, opts) },
+      { identityNumber: identity, phoneNumber: phone, email },
+    );
 
     seen.claimUnit(email, unit.id, row.unitNumber, row.rowIndex);
 
@@ -510,10 +496,7 @@ export class ResidentsImportService {
     );
   }
 
-  private rowError(
-    row: ResidentImportRowData,
-    err: any,
-  ): ResidentImportError {
+  private rowError(row: ResidentImportRowData, err: any): ResidentImportError {
     const identifier = row.email || row.name || `fila ${row.rowIndex}`;
     this.logger.warn(
       `Error fila ${row.rowIndex} (${identifier}): ${err?.message}`,

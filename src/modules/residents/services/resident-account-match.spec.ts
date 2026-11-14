@@ -25,8 +25,8 @@ describe('findAccountForNewResident', () => {
   };
   const input = (
     over: Partial<{
-      identityNumber: string;
-      phoneNumber: string;
+      identityNumber: string | undefined;
+      phoneNumber: string | undefined;
       email: string;
     }>,
   ) => ({
@@ -117,5 +117,40 @@ describe('findAccountForNewResident', () => {
     );
     expect(found?.id).toBe('u-sin-doc');
     users.pop();
+  });
+
+  // ── Campos opcionales (importación por Excel) ──────────────────────────────
+
+  it('sin documento: vincula por correo como antes (no hay con qué contradecir)', async () => {
+    const found = await findAccountForNewResident(
+      repo as any,
+      input({ identityNumber: undefined, email: 'ana@x.co' }),
+    );
+    expect(found?.id).toBe('u-ana');
+  });
+
+  it('documento existente y teléfono vacío en ambos lados: el vacío no cuenta como coincidencia', async () => {
+    users.push({
+      id: 'u-sin-tel',
+      identity: '4040',
+      phoneNumber: null as any,
+      email: 'st@x.co',
+    });
+    const code = await codeOf(
+      findAccountForNewResident(
+        repo as any,
+        input({ identityNumber: '4040', phoneNumber: undefined }),
+      ),
+    );
+    expect(code).toBe(ResidentErrorCode.ACCOUNT_DATA_MISMATCH);
+    users.pop();
+  });
+
+  it('teléfono vacío no busca cuentas por teléfono', async () => {
+    await findAccountForNewResident(repo as any, input({ phoneNumber: '  ' }));
+    const fields = repo.findOne.mock.calls.map(
+      ([o]: any) => Object.keys(o.where)[0],
+    );
+    expect(fields).not.toContain('phoneNumber');
   });
 });

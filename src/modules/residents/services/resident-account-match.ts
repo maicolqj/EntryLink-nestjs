@@ -29,12 +29,16 @@ const mismatch = () =>
  *   cuenta de un desconocido en el conjunto).
  * - Sin cuenta con ese documento: por teléfono y luego por correo, como
  *   antes, salvo que esa cuenta tenga OTRO documento (es otra persona).
+ *
+ * Los campos pueden venir vacíos (la importación por Excel no exige documento
+ * ni teléfono). Un vacío nunca cuenta como coincidencia, y sin documento no
+ * hay con qué contradecir la cuenta encontrada por teléfono o correo.
  */
 export async function findAccountForNewResident(
-  userRepo: Repository<User>,
-  input: { identityNumber: string; phoneNumber: string; email: string },
+  userRepo: Pick<Repository<User>, 'findOne'>,
+  input: { identityNumber?: string; phoneNumber?: string; email?: string },
 ): Promise<AccountLookup | null> {
-  const identity = input.identityNumber.trim();
+  const identity = (input.identityNumber ?? '').trim();
   const phone = normPhone(input.phoneNumber);
   const email = normEmail(input.email);
   const select: (keyof User)[] = ['id', 'identity', 'phoneNumber', 'email'];
@@ -44,16 +48,22 @@ export async function findAccountForNewResident(
     : null;
   if (byIdentity) {
     const sameContact =
-      normPhone(byIdentity.phoneNumber) === phone ||
-      normEmail(byIdentity.email) === email;
+      (!!phone && normPhone(byIdentity.phoneNumber) === phone) ||
+      (!!email && normEmail(byIdentity.email) === email);
     if (!sameContact) throw mismatch();
     return byIdentity;
   }
 
   const byContact =
-    (await userRepo.findOne({ where: { phoneNumber: phone }, select })) ??
-    (await userRepo.findOne({ where: { email }, select }));
-  if (byContact?.identity && byContact.identity.trim() !== identity) {
+    (phone
+      ? await userRepo.findOne({ where: { phoneNumber: phone }, select })
+      : null) ??
+    (email ? await userRepo.findOne({ where: { email }, select }) : null);
+  if (
+    identity &&
+    byContact?.identity &&
+    byContact.identity.trim() !== identity
+  ) {
     throw mismatch();
   }
   return byContact;
