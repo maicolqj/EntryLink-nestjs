@@ -2,7 +2,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { UnitAsset } from '../../residential-complex/entities/unit-asset.entity';
 import { UnitAssetType } from '../../residential-complex/enums/unit-asset-type.enum';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
+import { In, IsNull, LessThanOrEqual, Not, Raw, Repository } from 'typeorm';
 
 import { Vehicle } from '../entities/vehicle.entity';
 import { VehicleStatus } from '../enums/vehicle-status.enum';
@@ -51,6 +51,7 @@ import {
   BK,
   filterKey,
 } from '../../../core/infrastructure/cache/business-cache.constants';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 // Tipos de vehículo que NO ocupan cupo de parqueadero vehicular
 const NON_PARKING_TYPES = new Set([
@@ -1055,6 +1056,7 @@ export class VehiclesService {
         isActive: true,
         nextExecutionAt: LessThanOrEqual(now),
         lastExecutedAt: Not(IsNull()),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
     });
   }

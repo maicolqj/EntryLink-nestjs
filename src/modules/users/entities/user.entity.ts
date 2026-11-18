@@ -409,6 +409,14 @@ export class User {
   })
   complexId?: string;
 
+  /**
+   * Último conjunto que eligió como residente en el selector de RemoteLink.
+   * Al iniciar sesión por un canal de residente entra a este si la residencia
+   * sigue activa. No se expone en GraphQL.
+   */
+  @Column({ name: 'last_resident_complex_id', type: 'uuid', nullable: true })
+  lastResidentComplexId?: string | null;
+
   @Column({
     name: 'company_card_url',
     type: 'varchar',

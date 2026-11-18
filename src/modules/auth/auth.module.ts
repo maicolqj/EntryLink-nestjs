@@ -50,6 +50,7 @@ import { UserRole } from '../users/entities/user_has_roles.entity';
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 import { AuditModule } from '../audit/audit.module';
+import { ResidentComplexSwitchService } from './services/resident-complex-switch.service';
 
 @Module({
   controllers: [SupervisorsController, WhatsAppWebhookController],
@@ -93,6 +94,7 @@ import { AuditModule } from '../audit/audit.module';
     AuthService,
     TokenService,
     SessionService,
+    ResidentComplexSwitchService,
     AccessTokenValidatorService,
     AccountAccessService,
     OtpService,

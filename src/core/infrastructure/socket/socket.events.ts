@@ -86,6 +86,24 @@ export enum SocketEvent {
    */
   SECURITY_APP_EXIT_UPDATED = 'security:app-exit:updated',
 
+  // Citofonía por internet. Van a `user:{id}`: solo a las partes de la llamada.
+  /** Una llamada entra: suena en los equipos de quien la recibe. */
+  INTERCOM_CALL_INCOMING = 'intercom:call:incoming',
+  /** Quien recibe contestó: el que llama arma la oferta WebRTC. */
+  INTERCOM_CALL_ACCEPTED = 'intercom:call:accepted',
+  /** La llamada terminó (colgada, rechazada, perdida o tomada por otro equipo). */
+  INTERCOM_CALL_ENDED = 'intercom:call:ended',
+  /** Oferta, respuesta o candidato ICE de la otra parte, tal cual. */
+  INTERCOM_SIGNAL = 'intercom:signal',
+  /** El SUPER_ADMIN cambió la citofonía del conjunto. Va a la sala del complejo. */
+  INTERCOM_SETTINGS_UPDATED = 'intercom:settings:updated',
+
+  /**
+   * Se creó, cambió o borró una portería. Va a la sala del complejo: el
+   * residente la elige y el vigilante dice en cuál está.
+   */
+  SECURITY_POSTS_UPDATED = 'security:posts:updated',
+
   // Resident bulk import
   RESIDENT_IMPORT_PROGRESS = 'resident:import:progress',
   RESIDENT_IMPORT_DONE = 'resident:import:done',

@@ -96,6 +96,10 @@ export const envValidationSchema = Joi.object({
   // ── Trusted Documents sync (solo requerido en producción) ─────────────────
   GRAPHQL_SYNC_SECRET: prodRequired(Joi.string().min(32)),
 
+  // Corte por suscripción vencida: off | access | access_and_panic. Un valor
+  // desconocido queda apagado y no impide arrancar (ver parseCutMode).
+  SUBSCRIPTION_CUT_MODE: Joi.string().empty('').default('off'),
+
   // ── Growth Suite (apagada por defecto) ────────────────────────────────────
   // Solo con GROWTH_ENABLED=true se registra el módulo (src/modules/growth).
   // `.empty('')`: docker compose pasa '' cuando la variable no está definida.
