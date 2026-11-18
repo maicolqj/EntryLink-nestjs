@@ -112,7 +112,10 @@ describe('resident-base-role.util', () => {
   });
 
   it('falla claro si el seed de roles no corrió', async () => {
-    (manager.findOne as jest.Mock).mockResolvedValueOnce(null);
+    // Ni la fila del seed ni ninguna otra con ese nombre.
+    (manager.findOne as jest.Mock)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
 
     await expect(ensureResidentRole(manager, 'user-1')).rejects.toThrow(
       /RESIDENT_ROL/,

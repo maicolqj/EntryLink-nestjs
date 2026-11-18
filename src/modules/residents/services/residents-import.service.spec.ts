@@ -79,7 +79,9 @@ const build = (
 
   const service = new ResidentsImportService(
     {} as never, // userRepo
-    { findOne: jest.fn(async () => ({ id: 'role-resident' })) } as never,
+    {
+      manager: { findOne: jest.fn(async () => ({ id: 'role-resident' })) },
+    } as never,
     {} as never, // unitRepo
     {} as never, // buildingRepo
     {} as never, // residentRepo

@@ -1,6 +1,7 @@
 import { ValidPermissions } from '../../../../modules/permissions/enums/valid-permissions';
 import { ValidRoles } from '../../../../modules/roles/enums/valid-roles';
 import { GROWTH_ROLES } from '../../../../modules/growth/shared/growth-access.catalog';
+import { RESIDENT_ROLE_ID } from '../../../../modules/roles/utils/resident-base-role.util';
 
 export interface RoleSeedData {
   id: string;
@@ -70,7 +71,7 @@ export const ROLES_TO_SEED: RoleSeedData[] = [
     hierarchyLevel: 1,
   },
   {
-    id: 'd8e9f0a1-b2c3-4d4e-af6a-7b8c9d0e1f2c',
+    id: RESIDENT_ROLE_ID,
     name: ValidRoles.RESIDENT_ROL,
     description: 'Usuario final del complejo residencial',
     permissions: [
