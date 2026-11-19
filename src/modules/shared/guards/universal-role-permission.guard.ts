@@ -18,10 +18,11 @@ import { PermissionStatusService } from '../../permissions/services/permission-s
  *
  * Los permisos del token no bastan: un permiso **inactivo** no autoriza
  * aunque venga en un token emitido antes de desactivarlo (estado vigente en
- * PermissionStatusService, 30 s de caché). SUPER_ADMIN conserva su paso,
- * pero cada uso de un permiso inactivo queda en el log; este guard no salta
- * ninguna otra verificación (sesión y versión del token se validan antes,
- * en la estrategia JWT, y los demás guards siguen aplicando).
+ * PermissionStatusService, 30 s de caché), tampoco para SUPER_ADMIN, que
+ * conserva su paso solo con permisos activos. Un rol inactivo no cuenta.
+ * Este guard no salta ninguna otra verificación (sesión, cuenta activa y
+ * versión del token se validan antes, en la estrategia JWT, y los demás
+ * guards siguen aplicando). Política completa: docs/SUPER-ADMIN-POLITICA.md.
  */
 @Injectable()
 export class UniversalRolePermissionGuard implements CanActivate {
@@ -76,14 +77,14 @@ export class UniversalRolePermissionGuard implements CanActivate {
       Array.isArray(user.roles) ? (user.roles as string[]) : []
     ).filter((r) => !inactiveRoles.has(r));
 
-    // 🔹 Super Admin bypass (con traza si usa un permiso inactivo)
-    if (activeRoles.includes(ValidRoles.SUPER_ADMIN_ROL)) {
-      if (inactiveRequired.length) {
-        this.logger.warn(
-          `SUPER_ADMIN ${user.sub} usó ${context.getClass().name}.${context.getHandler().name} ` +
-            `con permisos inactivos: [${inactiveRequired.join(', ')}]`,
-        );
-      }
+    // 🔹 SUPER_ADMIN: pasa sin tener los roles ni los permisos exigidos,
+    // pero solo si todos esos permisos están activos. Un permiso inactivo
+    // está apagado para todos: si lo necesita, primero se activa (queda
+    // registrado al activarlo). Ya no hay paso «con traza».
+    if (
+      activeRoles.includes(ValidRoles.SUPER_ADMIN_ROL) &&
+      !inactiveRequired.length
+    ) {
       this.logger.debug(`SUPER_USER access granted for user: ${user.email}`);
       return true;
     }

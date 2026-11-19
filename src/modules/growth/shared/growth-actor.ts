@@ -1,23 +1,31 @@
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
-import { isPermissionInactive } from '../../shared/permission-status/permission-status.registry';
+import {
+  isPermissionInactive,
+  isRoleInactive,
+} from '../../shared/permission-status/permission-status.registry';
 
 /**
- * Mismo criterio que UniversalRolePermissionGuard: SUPER_ADMIN pasa siempre;
- * los demás necesitan el permiso en el token y que siga activo (un permiso
- * desactivado no vale aunque venga en un token emitido antes). El estado lo
- * deja al día el guard en cada operación.
+ * Mismo criterio que UniversalRolePermissionGuard: un permiso inactivo no
+ * autoriza a nadie, tampoco a SUPER_ADMIN (si lo necesita, primero se
+ * activa). Con el permiso activo, SUPER_ADMIN pasa aunque no lo tenga en el
+ * token; los demás lo necesitan en el token. El estado lo deja al día el
+ * guard en cada operación; si no es confiable, todo permiso cuenta como
+ * inactivo (falla cerrado).
  */
 export function actorHas(
   actor: JwtAccessPayload,
   permission: ValidPermissions,
 ): boolean {
-  if (actor.roles?.includes(ValidRoles.SUPER_ADMIN_ROL)) return true;
-  return (
-    !!actor.permissions?.includes(permission) &&
-    !isPermissionInactive(permission)
-  );
+  if (isPermissionInactive(permission)) return false;
+  if (
+    actor.roles?.includes(ValidRoles.SUPER_ADMIN_ROL) &&
+    !isRoleInactive(ValidRoles.SUPER_ADMIN_ROL)
+  ) {
+    return true;
+  }
+  return !!actor.permissions?.includes(permission);
 }
 
 /**
