@@ -2,6 +2,7 @@ import { Resolver, Mutation, Query, Args, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './services/auth.service';
+import { ResidentComplexSwitchService } from './services/resident-complex-switch.service';
 import { buildDeviceInfo, extractIp } from './utils/device-info.util';
 import { LoginEmailInput } from './dto/inputs/login-email.input';
 import { LoginSystemCodeInput } from './dto/inputs/login-system-code.input';
@@ -35,6 +36,7 @@ export class AuthResolver {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly complexSwitch: ResidentComplexSwitchService,
   ) {}
 
   // ── Login por email (SUPER_ADMIN, COMPLIANCE_OFFICER, COMPLEX_ROL) ──────
@@ -281,6 +283,28 @@ export class AuthResolver {
   ): Promise<AuthResponse> {
     const deviceInfo = this.extractDeviceInfo(context);
     return this.authService.refreshToken(refreshToken, deviceInfo);
+  }
+
+  // ── Selector de conjunto (RemoteLink) ────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Mutation(() => AuthResponse, {
+    name: 'switchResidentComplex',
+    description:
+      'Cambia el conjunto de la sesión de residente sin cerrarla. Devuelve tokens nuevos con ese conjunto.',
+  })
+  async switchResidentComplex(
+    @CurrentUser() payload: JwtAccessPayload,
+    @Args('complexId', { type: () => String }) complexId: string,
+    @Args('refreshToken', { type: () => String }) refreshToken: string,
+    @Context() context: any,
+  ): Promise<AuthResponse> {
+    return this.complexSwitch.switchComplex(
+      payload,
+      refreshToken,
+      complexId,
+      this.extractDeviceInfo(context),
+    );
   }
 
   // ── Logout ───────────────────────────────────────────────────────────────

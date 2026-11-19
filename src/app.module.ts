@@ -1,5 +1,6 @@
 import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -19,13 +20,14 @@ import './core/infrastructure/graphql/date-time.scalar'; // patch GraphQLISODate
 import databaseConfig from './core/config/database.config';
 import redisConfig from './core/config/redis.config';
 import r2Config from './core/config/r2.config';
-import { envValidationSchema } from './core/config/env-validation';
+import { validateEnv } from './core/config/env-validation';
 
 import { CacheModule } from './core/infrastructure/cache/cache.module';
 import { BullConfigModule } from './core/config/bull-config';
 import { R2Module } from './core/infrastructure/r2/r2.module';
 
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { PermissionStatusModule } from './modules/permissions/permission-status.module';
 import { SharedModule } from './modules/shared/shared.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SeedModule } from './core/database/seeds/seed.module';
@@ -42,6 +44,8 @@ import { VisitorParkingModule } from './modules/visitor-parking/visitor-parking.
 import { NotesModule } from './modules/notes/notes.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { CallLogsModule } from './modules/call-logs/call-logs.module';
+import { VoiceCallsModule } from './modules/voice-calls/voice-calls.module';
+import { SecurityPostsModule } from './modules/security-posts/security-posts.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { SupervisorVisitsModule } from './modules/supervisor-visits/supervisor-visits.module';
 import { MailModule } from './mail/mail.module';
@@ -63,6 +67,8 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
 import { SecurityAppExitsModule } from './modules/security-app-exits/security-app-exits.module';
+import { GrowthLoaderModule } from './modules/growth/growth.loader';
+import { PlatformAnnouncementsModule } from './modules/platform-announcements/platform-announcements.module';
 
 /** Apollo genera errores propios (CSRF, parse, validación de esquema, rate limit) que traen
  *  `code` pero no `statusCode`. Sin este mapeo caían al default 500 y se reportaban como
@@ -82,14 +88,18 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
 
 @Module({
   imports: [
+    // ── Observabilidad (Sentry); el SDK se inicia en src/instrument.ts ───
+    SentryModule.forRoot(),
+
     // ── Configuración global ─────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
       load: [redisConfig, databaseConfig, r2Config],
       envFilePath: ['.env'],
       expandVariables: true,
-      validationSchema: envValidationSchema,
-      validationOptions: { abortEarly: false },
+      // validateEnv y no validationSchema: los errores de Joi traen el valor
+      // rechazado y terminaban en los logs (ver env-validation.ts).
+      validate: validateEnv,
     }),
 
     // ── Base de datos ─────────────────────────────────────────────────────
@@ -233,6 +243,7 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     // ── Módulos de la aplicación ──────────────────────────────────────────
     SharedModule,
     PermissionsModule,
+    PermissionStatusModule,
     RolesModule,
     SeedModule,
     UsersModule,
@@ -248,6 +259,8 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     NotesModule,
     MessagesModule,
     CallLogsModule,
+    VoiceCallsModule,
+    SecurityPostsModule,
     AuditModule,
     SupervisorVisitsModule,
     SpecialNumbersModule,
@@ -265,6 +278,9 @@ const APOLLO_CODE_STATUS: Record<string, number> = {
     MarketplaceModule,
     DataExportModule,
     SecurityAppExitsModule,
+    PlatformAnnouncementsModule,
+    // Growth Suite: solo con GROWTH_ENABLED=true explícito (ver growth.loader.ts).
+    GrowthLoaderModule.register(),
     MailModule,
     BullBoardAppModule,
     HealthModule,

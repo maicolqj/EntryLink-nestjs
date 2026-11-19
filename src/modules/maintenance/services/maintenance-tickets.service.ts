@@ -6,6 +6,7 @@ import {
   IsNull,
   LessThan,
   MoreThanOrEqual,
+  Raw,
   Repository,
 } from 'typeorm';
 
@@ -75,6 +76,7 @@ import { AuditAction } from '../../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../../audit/enums/audit-entity-type.enum';
 import { SocketService } from '../../../core/infrastructure/socket/socket.service';
 import { SocketEvent } from '../../../core/infrastructure/socket/socket.events';
+import { operableComplexSql } from '../../subscriptions/utils/operable-complex.sql';
 
 /** Datos de radicación: el DTO del REST más la evidencia ya subida a R2. */
 export type CreateTicketData = CreateMaintenanceTicketDto & {
@@ -1738,6 +1740,7 @@ export class MaintenanceTicketsService {
         slaDueAt: LessThan(now),
         slaBreachedAt: IsNull(),
         deletedAt: IsNull(),
+        complexId: Raw((alias) => operableComplexSql(alias)),
       },
       // Con relaciones: el aviso de incumplimiento tiene que decir DÓNDE, que
       // es lo que decide si alguien sale a mirarlo ahora o mañana.
@@ -1796,6 +1799,7 @@ export class MaintenanceTicketsService {
         `t.resolved_at < now() - (COALESCE(c.maintenance_auto_close_days, 7) * interval '1 day')`,
       )
       .andWhere('t.deletedAt IS NULL')
+      .andWhere(operableComplexSql('c.id'))
       .take(500)
       .getMany();
 
@@ -1831,6 +1835,7 @@ export class MaintenanceTicketsService {
       .andWhere('t.resolvedAt BETWEEN :from AND :to', { from, to })
       .andWhere('t.reportedByUserId IS NOT NULL')
       .andWhere('t.deletedAt IS NULL')
+      .andWhere(operableComplexSql('t.complexId'))
       .take(300)
       .getMany();
 

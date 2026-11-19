@@ -20,12 +20,17 @@ import { SubscriptionQuote } from '../dto/responses/subscription-quote.response'
 import { SubscriptionTax } from '../entities/subscription-tax.entity';
 import { ComplexPlan } from '../../residential-complex/enums/complex-plan.enum';
 import { BillingCycle } from '../enums/billing-cycle.enum';
+import { CommunityAccess } from '../dto/responses/community-access.response';
+import { SubscriptionCutService } from '../services/subscription-cut.service';
 
 /** La suscripción se consulta y se renueva aunque esté suspendida. */
 @AllowWhenSuspended()
 @Resolver()
 export class SubscriptionsResolver {
-  constructor(private readonly service: SubscriptionsService) {}
+  constructor(
+    private readonly service: SubscriptionsService,
+    private readonly cutService: SubscriptionCutService,
+  ) {}
 
   // ── Administración del conjunto ──────────────────────────────────
 
@@ -59,6 +64,27 @@ export class SubscriptionsResolver {
   })
   subscriptionPlanPrices(): Promise<SubscriptionPlanPriceView[]> {
     return this.service.listPrices();
+  }
+
+  @Query(() => CommunityAccess, {
+    name: 'myCommunityAccess',
+    description:
+      'Si la comunidad del conjunto de la sesión conserva el acceso y el botón de pánico.',
+  })
+  @Auth()
+  myCommunityAccess(
+    @CurrentUser() user: JwtAccessPayload,
+  ): Promise<CommunityAccess> {
+    const complexId =
+      user.complexId ?? (user.entityType === 'complex' ? user.sub : undefined);
+    if (!complexId) {
+      return Promise.resolve({
+        accessCut: false,
+        panicAvailable: true,
+        cutAt: null,
+      });
+    }
+    return this.cutService.communityAccess(complexId);
   }
 
   // ── SUPER_ADMIN ──────────────────────────────────────────────────

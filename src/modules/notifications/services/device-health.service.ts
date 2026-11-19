@@ -212,13 +212,21 @@ export class DeviceHealthService {
       .innerJoin(
         PushSubscription,
         'ps',
-        'ps.user_id = u.id AND ps.is_active = true AND ps.platform = :platform',
+        // push_subscriptions.user_id es varchar y users.id es uuid.
+        'ps.user_id = u.id::text AND ps.is_active = true AND ps.platform = :platform',
         { platform: PushPlatform.ANDROID },
       )
       .where('r.name IN (:...roles)', {
         roles: [ValidRoles.SECURITY_ROL, ValidRoles.SUPERVISOR_ROL],
       })
       .andWhere('u.deleted_at IS NULL')
+      // Sigue vigilando mientras el pánico funcione, aunque el acceso esté
+      // cortado: si el botón sigue activo, el aviso tiene que llegar.
+      .andWhere(
+        `NOT EXISTS (SELECT 1 FROM residential_complexes cut_c
+          WHERE cut_c.id = u.complex_id
+            AND cut_c.subscription_panic_cut_at IS NOT NULL)`,
+      )
       .select('ps.id', 'subscriptionId')
       .distinct(true)
       .getRawMany<{ subscriptionId: string }>();

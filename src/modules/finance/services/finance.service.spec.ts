@@ -98,3 +98,86 @@ describe('FinanceService — fechas de vencimiento', () => {
     });
   });
 });
+
+describe('FinanceService — mora y pausas de la suscripción', () => {
+  const DAY = 86_400_000;
+  const daysAgo = (d: number) => new Date(Date.now() - d * DAY);
+
+  const run = async (
+    dueDaysAgo: number,
+    pauses: { pausedAt: Date; resumedAt: Date }[],
+  ) => {
+    // Antes de llamar al servicio: si se calcula después de su `now`, el cargo
+    // queda milisegundos por debajo de los días exactos.
+    const dueDate = daysAgo(dueDaysAgo);
+    const saved: { amount: number }[] = [];
+    const manager = {
+      findOne: async () => null,
+      create: (_entity: unknown, row: { amount: number }) => row,
+      save: async (_entity: unknown, row: { amount: number }) => {
+        saved.push(row);
+        return row;
+      },
+    };
+    const queryRunner = {
+      connect: async () => undefined,
+      startTransaction: async () => undefined,
+      commitTransaction: async () => undefined,
+      rollbackTransaction: async () => undefined,
+      release: async () => undefined,
+      manager,
+    };
+    const service = Object.assign(Object.create(FinanceService.prototype), {
+      logger: { log: jest.fn(), warn: jest.fn() },
+      chargeRepo: {
+        find: async () => [
+          {
+            id: 'ch1',
+            complexId: 'c',
+            unitId: 'u',
+            period: '2020-01',
+            dueDate,
+            amount: 1000,
+            paidAmount: 0,
+            description: 'Cuota',
+          },
+        ],
+      },
+      dataSource: {
+        createQueryRunner: () => queryRunner,
+        getRepository: () => ({ find: async () => pauses }),
+      },
+      accountingService: {
+        emitMoraNote: async () => undefined,
+        recomputeUnitStatus: async () => undefined,
+      },
+      notifyMoraApplied: async () => undefined,
+    });
+
+    const result = await service.applyMoraInternal('c', '2026-11', 3, 0);
+    return { result, saved };
+  };
+
+  it('sin pausas cobra todos los días vencidos', async () => {
+    const { saved } = await run(60, []);
+
+    expect(saved[0].amount).toBe(60);
+  });
+
+  it('no cobra mora por los días pausados', async () => {
+    const { saved } = await run(60, [
+      { pausedAt: daysAgo(50), resumedAt: daysAgo(10) },
+    ]);
+
+    expect(saved[0].amount).toBe(20);
+  });
+
+  it('un cargo que venció en la pausa no genera mora al renovar', async () => {
+    const { result } = await run(10, [
+      { pausedAt: daysAgo(35), resumedAt: new Date() },
+    ]);
+
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+});

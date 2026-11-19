@@ -36,6 +36,23 @@ import {
 } from '../shared/constans/error-codes.constants';
 import { PaginationReponse } from '../shared/dto/responses/pagination-object.response';
 import { UserRole } from '../users/entities/user_has_roles.entity';
+import { UserStatus } from '../users/enums/user.enums';
+import { PermissionStatusService } from '../permissions/services/permission-status.service';
+import {
+  findResidentRole,
+  RESIDENT_ROLE_ID,
+} from './utils/resident-base-role.util';
+
+/**
+ * Roles que nunca se inactivan: sin SUPER_ADMIN_ROL el sistema queda sin
+ * administración, y RESIDENT_ROL y COMPLEX_ROL son la base de toda cuenta de
+ * residente y de complejo.
+ */
+export const NON_DEACTIVATABLE_ROLES: readonly ValidRoles[] = [
+  ValidRoles.SUPER_ADMIN_ROL,
+  ValidRoles.RESIDENT_ROL,
+  ValidRoles.COMPLEX_ROL,
+];
 
 @Injectable()
 export class RolesService {
@@ -50,32 +67,37 @@ export class RolesService {
     private readonly permissionsRepository: Repository<Permission>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly permissionStatus: PermissionStatusService,
   ) {}
 
   async onModuleInit() {
     this.defaultUserRole = await this.findOrCreateDefaultUserRole();
   }
 
+  /**
+   * Antes creaba una fila RESIDENT_ROL «Usuario» si al arrancar no encontraba
+   * ninguna, y lo hacía antes del seed: así nació la fila duplicada y vacía de
+   * producción. Ahora busca la del seed y, si no hay ninguna, la crea con el
+   * mismo id del seed para que el seed la complete en vez de duplicarla.
+   */
   private async findOrCreateDefaultUserRole(): Promise<Role> {
-    let userRole = await this.rolesRepository.findOne({
-      where: { name: this.DEFAULT_USER_ROLE_NAME },
-      relations: ['permissions'],
-    });
+    const existing = await findResidentRole(this.rolesRepository.manager, [
+      'permissions',
+    ]);
+    if (existing) return existing;
 
-    if (!userRole) {
-      userRole = this.rolesRepository.create({
+    return this.rolesRepository.save(
+      this.rolesRepository.create({
+        id: RESIDENT_ROLE_ID,
         name: this.DEFAULT_USER_ROLE_NAME,
-        frontName: 'Usuario',
-        description: 'Rol básico para usuarios finales',
-        icon: 'person',
+        frontName: 'Residente',
+        description: 'Usuario final del complejo residencial',
+        icon: 'home',
         hierarchyLevel: 4,
         status: true,
         isSystem: true,
-      });
-      userRole = await this.rolesRepository.save(userRole);
-    }
-
-    return userRole;
+      }),
+    );
   }
 
   getDefaultUserRole(): Role {
@@ -1500,12 +1522,14 @@ export class RolesService {
       // 1. Verificar si el rol existe
       const existingRole = await queryRunner.manager.findOne(Role, {
         where: { id },
+        // `userRoles` (antes 'UserRoles', que no existe: TypeORM rechazaba la
+        // consulta y ningún rol se podía inactivar).
         relations: [
           'parent',
           'children',
           'permissions',
-          'UserRoles',
-          'UserRoles.user',
+          'userRoles',
+          'userRoles.user',
         ],
       });
 
@@ -1533,7 +1557,10 @@ export class RolesService {
       }
 
       // 3. Verificar si es un rol del sistema crítico
-      if (existingRole.isSystem) {
+      if (
+        existingRole.isSystem ||
+        NON_DEACTIVATABLE_ROLES.includes(existingRole.name)
+      ) {
         this.logger.warn(
           `Intento de eliminar rol crítico del sistema: ${existingRole.name}`,
         );
@@ -1565,9 +1592,11 @@ export class RolesService {
       }
 
       // 5. Verificar si hay usuarios activos asignados a este rol
+      // Cuenta solo quien está activo: `user.status` es un texto y antes
+      // cualquier estado (también 'suspended') contaba como activo.
       const activeUserAssignments =
         existingRole.userRoles?.filter(
-          (UserRole) => UserRole.user.status && UserRole.role.status,
+          (ur) => ur.user?.status === UserStatus.ACTIVE,
         ) || [];
 
       if (activeUserAssignments.length > 0) {
@@ -1632,7 +1661,14 @@ export class RolesService {
         relations: ['parent', 'permissions'],
       });
 
+      // Quien lo tenga (aunque no esté activo) renueva sin él.
+      const holders = await this.permissionStatus.bumpRoleHolders(
+        id,
+        queryRunner.manager,
+      );
+
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Rol eliminado exitosamente (soft delete): ${deletedRole.id} - ${deletedRole.name}`,
@@ -1788,7 +1824,15 @@ export class RolesService {
         await this.updateParentRolesWithInheritedPermissions(restoredRole);
       }
 
+      // Reactivar no reactiva sesiones: quien lo tenga lo recibe en el token
+      // siguiente, con los permisos activos que tenga el rol hoy.
+      const holders = await this.permissionStatus.bumpRoleHolders(
+        id,
+        queryRunner.manager,
+      );
+
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Rol restaurado exitosamente: ${restoredRole.id} - ${restoredRole.name}`,

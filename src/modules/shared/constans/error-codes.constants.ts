@@ -37,6 +37,10 @@ export enum UserErrorCode {
   USER_SUSPENDED = 'USER_SUSPENDED',
   USER_DELETED = 'USER_DELETED',
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  CANNOT_SUSPEND_SELF = 'CANNOT_SUSPEND_SELF',
+  CANNOT_SUSPEND_SUPER_ADMIN = 'CANNOT_SUSPEND_SUPER_ADMIN',
+  CANNOT_DELETE_SELF = 'CANNOT_DELETE_SELF',
+  LAST_SUPER_ADMIN = 'LAST_SUPER_ADMIN',
 
   // Verification
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
@@ -61,6 +65,12 @@ export enum AuthErrorCode {
   // Estado del complejo en login
   COMPLEX_INACTIVE = 'COMPLEX_INACTIVE',
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
+  // Residencia del usuario suspendida en el único conjunto donde vive
+  RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
+  // Selector de conjunto: el destino no es una residencia activa del usuario
+  RESIDENCE_NOT_AVAILABLE = 'RESIDENCE_NOT_AVAILABLE',
+  // Selector de conjunto: la sesión no es de residente o el refresh no es suyo
+  COMPLEX_SWITCH_NOT_ALLOWED = 'COMPLEX_SWITCH_NOT_ALLOWED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',
@@ -141,6 +151,8 @@ export enum RolesErrorCode {
 export enum PermissionErrorCode {
   // Errores de registro y creación de usuario
   PERMISSION_ALREADY_EXISTS = 'PERMISSION_ALREADY_EXISTS',
+  /** No se pudo verificar el estado de los permisos (base sin responder): se niega. */
+  PERMISSION_STATUS_UNAVAILABLE = 'PERMISSION_STATUS_UNAVAILABLE',
   PERMISSION_NOT_EXISTS = 'PERMISSION_NOT_EXISTS',
   PERMISSION_CREATION_FAILED = 'PERMISSION_CREATION_FAILED',
   PERMISSION_IS_NOT_ACTIVE = 'PERMISSION_IS_NOT_ACTIVE',
@@ -228,6 +240,9 @@ export enum ResidentErrorCode {
   RESIDENT_REJECTED = 'RESIDENT_REJECTED',
   USER_ALREADY_RESIDENT_IN_COMPLEX = 'USER_ALREADY_RESIDENT_IN_COMPLEX',
   CANNOT_REMOVE_ACTIVE_RESIDENT = 'CANNOT_REMOVE_ACTIVE_RESIDENT',
+  // Alta: el documento (o el teléfono/correo) es de una cuenta cuyos otros
+  // datos no coinciden. No revela dónde existe esa cuenta.
+  ACCOUNT_DATA_MISMATCH = 'ACCOUNT_DATA_MISMATCH',
 }
 
 export enum FinanceErrorCode {
@@ -560,6 +575,10 @@ export enum NotificationActionErrorCode {
 export enum SubscriptionErrorCode {
   /** Pasó la gracia: la administración queda en solo lectura hasta renovar. */
   SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED',
+  /** Tras los tres avisos, la comunidad perdió el acceso hasta renovar. */
+  SUBSCRIPTION_ACCESS_CUT = 'SUBSCRIPTION_ACCESS_CUT',
+  /** Tras tres avisos que lo anunciaban, se apagó el botón de pánico. */
+  SUBSCRIPTION_PANIC_CUT = 'SUBSCRIPTION_PANIC_CUT',
   /** El plan FREE es solo la prueba gratis: no se renueva pagando. */
   SUBSCRIPTION_FREE_NOT_RENEWABLE = 'SUBSCRIPTION_FREE_NOT_RENEWABLE',
   /** La prueba gratis se otorga una sola vez por complejo. */
@@ -581,6 +600,19 @@ export enum SubscriptionErrorCode {
   REFERRAL_ALREADY_REWARDED = 'REFERRAL_ALREADY_REWARDED',
   /** Un conjunto no se recomienda a sí mismo. */
   REFERRAL_SELF = 'REFERRAL_SELF',
+  /** El botón de renovar se abre en los últimos días o ya vencida. */
+  SUBSCRIPTION_RENEWAL_NOT_OPEN = 'SUBSCRIPTION_RENEWAL_NOT_OPEN',
+  /** El valor declarado no cubre la cotización del conjunto. */
+  SUBSCRIPTION_PAYMENT_INCOMPLETE = 'SUBSCRIPTION_PAYMENT_INCOMPLETE',
+  /** Ya hay un soporte esperando revisión. */
+  SUBSCRIPTION_PAYMENT_PENDING_EXISTS = 'SUBSCRIPTION_PAYMENT_PENDING_EXISTS',
+  /** El soporte ya fue aprobado o rechazado. */
+  SUBSCRIPTION_PAYMENT_NOT_PENDING = 'SUBSCRIPTION_PAYMENT_NOT_PENDING',
+  SUBSCRIPTION_PAYMENT_NOT_FOUND = 'SUBSCRIPTION_PAYMENT_NOT_FOUND',
+  /** Falta el comprobante o el formato no se acepta. */
+  SUBSCRIPTION_PAYMENT_RECEIPT_REQUIRED = 'SUBSCRIPTION_PAYMENT_RECEIPT_REQUIRED',
+  /** La plataforma todavía no publicó el QR de pago. */
+  SUBSCRIPTION_PAYMENT_QR_NOT_SET = 'SUBSCRIPTION_PAYMENT_QR_NOT_SET',
 }
 
 export enum ComplexInfoErrorCode {
@@ -627,4 +659,58 @@ export enum SecurityAppExitErrorCode {
   SECURITY_APP_EXIT_NO_COMPLEX = 'SECURITY_APP_EXIT_NO_COMPLEX',
   /** La hora enviada por el equipo está en el futuro o es de hace más de un día. */
   SECURITY_APP_EXIT_INVALID_TIME = 'SECURITY_APP_EXIT_INVALID_TIME',
+}
+
+/**
+ * Comunicados de la plataforma a los conjuntos.
+ */
+export enum PlatformAnnouncementErrorCode {
+  /** El campo `payload` del multipart no es JSON o no pasa la validación. */
+  ANNOUNCEMENT_INVALID_PAYLOAD = 'ANNOUNCEMENT_INVALID_PAYLOAD',
+  /** Los filtros elegidos no dejan ningún conjunto. */
+  ANNOUNCEMENT_NO_TARGETS = 'ANNOUNCEMENT_NO_TARGETS',
+  /** Más imágenes de las permitidas por comunicado. */
+  ANNOUNCEMENT_TOO_MANY_IMAGES = 'ANNOUNCEMENT_TOO_MANY_IMAGES',
+  /** Se pidió solo correo y ningún conjunto destino tiene email registrado. */
+  ANNOUNCEMENT_NO_EMAILS = 'ANNOUNCEMENT_NO_EMAILS',
+  /** Imagen o adjunto por encima del tamaño, o demasiados adjuntos. */
+  ANNOUNCEMENT_FILES_LIMIT = 'ANNOUNCEMENT_FILES_LIMIT',
+  /** Se intentó eliminar un comunicado que todavía se está repartiendo. */
+  ANNOUNCEMENT_STILL_SENDING = 'ANNOUNCEMENT_STILL_SENDING',
+}
+
+/**
+ * Citofonía por internet.
+ */
+export enum IntercomErrorCode {
+  /** El conjunto está en citofonía por SIM. */
+  INTERCOM_NOT_INTERNET = 'INTERCOM_NOT_INTERNET',
+  /** El conjunto no deja que los residentes llamen a portería por la app. */
+  INTERCOM_RESIDENT_CALLS_DISABLED = 'INTERCOM_RESIDENT_CALLS_DISABLED',
+  /** El residente no vive en el conjunto (o no está activo). */
+  INTERCOM_RESIDENT_NOT_FOUND = 'INTERCOM_RESIDENT_NOT_FOUND',
+  /** El residente no tiene RemoteLink: la llamada no le puede sonar. */
+  INTERCOM_RESIDENT_NO_APP = 'INTERCOM_RESIDENT_NO_APP',
+  /** Quien recibe ya está en otra llamada. */
+  INTERCOM_BUSY = 'INTERCOM_BUSY',
+  /** La llamada no existe o no es de quien la toca. */
+  INTERCOM_CALL_NOT_FOUND = 'INTERCOM_CALL_NOT_FOUND',
+  /** La llamada ya no está en un estado que permita esa acción. */
+  INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
+  /** Nadie de la portería elegida tiene la app abierta. */
+  INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+  /** No hay servidor TURN configurado: no se puede activar INTERNET. */
+  INTERCOM_RELAY_NOT_CONFIGURED = 'INTERCOM_RELAY_NOT_CONFIGURED',
+}
+
+/**
+ * Porterías del conjunto.
+ */
+export enum SecurityPostErrorCode {
+  /** La portería no existe, es de otro conjunto o está inactiva. */
+  SECURITY_POST_NOT_FOUND = 'SECURITY_POST_NOT_FOUND',
+  /** El conjunto tiene varias porterías y no se dijo a cuál. */
+  SECURITY_POST_REQUIRED = 'SECURITY_POST_REQUIRED',
+  /** Ya hay otra portería con ese nombre en el conjunto. */
+  SECURITY_POST_NAME_TAKEN = 'SECURITY_POST_NAME_TAKEN',
 }

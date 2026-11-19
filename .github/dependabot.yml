@@ -17,6 +17,11 @@ updates:
       # Agrupa updates menores/parche en un solo PR para reducir ruido
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # Los majors de NestJS se hacen a mano, con todos los @nestjs/* juntos y
+      # con ensayo previo: mezclar majors dejó producción caída el 2026-09-16.
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
 
   # Acciones de GitHub Actions
   - package-ecosystem: github-actions

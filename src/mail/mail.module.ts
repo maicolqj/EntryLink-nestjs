@@ -21,6 +21,10 @@ import { MailProcessor } from './mail.processor';
           host: config.get<string>('MAIL_HOST', 'localhost'),
           port: config.get<number>('MAIL_PORT', 1025),
           secure: config.get<string>('MAILER_SECURE') === 'true',
+          // Por defecto nodemailer espera 2 min a que abra la conexión: con el
+          // puerto bloqueado cada intento tardaba eso antes de fallar.
+          connectionTimeout: 15_000,
+          greetingTimeout: 15_000,
           auth: config.get<string>('MAIL_USER')
             ? {
                 user: config.get<string>('MAIL_USER'),

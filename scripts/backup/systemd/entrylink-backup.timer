@@ -1,0 +1,10 @@
+[Unit]
+Description=EntryLink: respaldo diario (03:15 Bogotá)
+
+[Timer]
+OnCalendar=*-*-* 08:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

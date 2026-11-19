@@ -1,3 +1,4 @@
+import { findAccountForNewResident } from './resident-account-match';
 import {
   HttpStatus,
   Inject,
@@ -43,10 +44,15 @@ import {
   ResidentErrorCode,
   GeneralErrorCode,
   ComplexErrorCode,
+  UserErrorCode,
 } from '../../shared/constans/error-codes.constants';
+import { AccountAccessService } from '../../auth/services/account-access.service';
 import { JwtAccessPayload } from '../../shared/interfaces/jwt-payload.interface';
 import { ValidRoles } from '../../roles/enums/valid-roles';
-import { ensureResidentRole } from '../../roles/utils/resident-base-role.util';
+import {
+  ensureResidentRole,
+  findResidentRole,
+} from '../../roles/utils/resident-base-role.util';
 import { ResidentialComplexService } from '../../residential-complex/services/residential-complex.service';
 import { UnitService } from '../../residential-complex/services/unit.service';
 import { UnitStatus } from '../../residential-complex/enums/unit-status.enum';
@@ -86,6 +92,8 @@ export class ResidentsService {
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => AccountAccessService))
+    private readonly accountAccess: AccountAccessService,
   ) {}
 
   // ================================================================
@@ -149,18 +157,10 @@ export class ResidentsService {
       });
     }
 
-    // 3. Buscar usuario existente (por teléfono, luego por email)
-    let existingUser = await this.userRepo.findOne({
-      where: { phoneNumber: input.phoneNumber.trim() },
-      select: ['id', 'phoneNumber', 'email'],
-    });
-
-    if (!existingUser) {
-      existingUser = await this.userRepo.findOne({
-        where: { email: input.email.toLowerCase().trim() },
-        select: ['id', 'phoneNumber', 'email'],
-      });
-    }
+    // 3. ¿La persona ya tiene cuenta? (vive en otro conjunto o la creó otro
+    //    flujo). Se vincula sin contarle a este conjunto nada del otro; ver
+    //    findAccountForNewResident para cuándo coincide y cuándo no.
+    const existingUser = await findAccountForNewResident(this.userRepo, input);
 
     const userId = existingUser?.id;
 
@@ -202,9 +202,7 @@ export class ResidentsService {
 
       // El rol se necesita en las dos ramas: tanto el usuario nuevo como el que
       // ya existía tienen que quedar con RESIDENT_ROL.
-      const residentRole = await queryRunner.manager.findOne(Role, {
-        where: { name: ValidRoles.RESIDENT_ROL },
-      });
+      const residentRole = await findResidentRole(queryRunner.manager);
 
       if (!residentRole) {
         throw new CustomError({
@@ -674,6 +672,16 @@ export class ResidentsService {
   ): Promise<Resident> {
     const resident = await this.findById(residentId, currentUser);
 
+    // Nadie suspende su propia ficha: le cerraría la sesión desde la que
+    // podría deshacerlo.
+    if (resident.userId && resident.userId === currentUser.sub) {
+      throw new CustomError({
+        message: 'No puedes suspender tu propia ficha de residente',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SELF,
+      });
+    }
+
     if (resident.status !== ResidentStatus.ACTIVE) {
       throw new CustomError({
         message: 'Solo se pueden suspender residentes activos',
@@ -689,12 +697,27 @@ export class ResidentsService {
       BK.resident.prefix(resident.complexId),
     );
 
+    // La ficha suspendida deja de dar acceso a este conjunto: se cierran las
+    // sesiones y, al volver a entrar, la residencia suspendida ya no se elige
+    // (si vive en otro conjunto, entra a ese; si no, el login lo rechaza).
+    const access = resident.userId
+      ? await this.accountAccess.forceRelogin(
+          resident.userId,
+          'resident_suspended',
+        )
+      : { closed: 0, complete: true };
+
     void this.auditService.log({
       entityType: AuditEntityType.Resident,
       entityId: residentId,
       action: AuditAction.SUSPEND,
       previousValue: { status: ResidentStatus.ACTIVE },
-      newValue: { status: ResidentStatus.SUSPENDED, reason },
+      newValue: {
+        status: ResidentStatus.SUSPENDED,
+        reason,
+        sessionsClosed: access.closed,
+        sessionsCutComplete: access.complete,
+      },
       performedById: currentUser.sub,
       performedByName: currentUser.email,
       performedByRole: currentUser.roles?.[0] ?? '',

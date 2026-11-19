@@ -50,6 +50,7 @@ import { NotificationPriority } from '../enums/notification-priority.enum';
 import { NotificationActionType } from '../enums/notification-action-type.enum';
 import { NotificationActionResult } from '../enums/notification-action-result.enum';
 import { PushPlatform } from '../enums/push-platform.enum';
+import { resolveSecurityPostTarget } from '../../security-posts/security-post-routing';
 import { PanicAlertStatus } from '../enums/panic-alert-status.enum';
 import { PanicAlertType } from '../enums/panic-alert-type.enum';
 import { CreateNotificationPayload } from '../dto/inputs/create-notification.input';
@@ -2366,6 +2367,95 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /**
+   * Push de llamada (citofonía por internet) a los equipos móviles de unos
+   * usuarios.
+   *
+   * Data-only y prioridad alta, como el pánico: un bloque `notification` haría
+   * que Android lo pinte solo y se salte el manejador nativo que muestra la
+   * pantalla de llamada con la app cerrada. TTL corto: una llamada que llega
+   * tarde ya no sirve, mejor que no suene. No crea aviso en la bandeja.
+   *
+   * Devuelve cuántos equipos lo aceptó FCM, para saber si la llamada pudo
+   * sonar en algún lado.
+   */
+  async sendCallPush(
+    userIds: string[],
+    data: Record<string, string>,
+    ttlMs: number,
+  ): Promise<number> {
+    if (userIds.length === 0) return 0;
+
+    const subs = await this.pushSubRepo.find({
+      where: {
+        userId: In(userIds),
+        platform: In([PushPlatform.ANDROID, PushPlatform.IOS]),
+        isActive: true,
+      },
+    });
+    const tokens = [
+      ...new Set(
+        subs.map((s) => s.deviceToken).filter((t): t is string => !!t),
+      ),
+    ];
+    if (tokens.length === 0) return 0;
+
+    if (!this.fcmEnabled) {
+      this.logger.warn(
+        `[FCM] DESCARTADO [${data.type ?? 'CALL'}] → ${tokens.length} equipos sin notificar: FCM deshabilitado por falta de credenciales.`,
+      );
+      return 0;
+    }
+
+    try {
+      const response = await getMessaging().sendEach(
+        tokens.map((token) => ({
+          token,
+          data,
+          android: { priority: 'high' as const, ttl: ttlMs },
+          apns: {
+            headers: {
+              'apns-priority': '10',
+              'apns-expiration': String(
+                Math.floor((Date.now() + ttlMs) / 1000),
+              ),
+            },
+            payload: { aps: { 'content-available': 1 } },
+          },
+        })),
+      );
+
+      const invalid: string[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (resp.success) return;
+        const code = resp.error?.code;
+        this.logger.warn(
+          `[FCM] Llamada fallida → ${code ?? 'sin código'} | token ${tokens[idx].slice(0, 12)}…`,
+        );
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          invalid.push(tokens[idx]);
+        }
+      });
+      if (invalid.length > 0) {
+        await this.pushSubRepo.update(
+          { deviceToken: In(invalid) },
+          { isActive: false },
+        );
+      }
+
+      this.logger.log(
+        `[FCM] Llamada [${data.type ?? 'CALL'}] → ${response.successCount} exitosos, ${response.failureCount} fallidos`,
+      );
+      return response.successCount;
+    } catch (err: any) {
+      this.logger.warn(`Error en push de llamada: ${err?.message}`);
+      return 0;
+    }
+  }
+
+  /**
    * El dispositivo confirma que MOSTRÓ la alerta.
    *
    * Es lo que separa "no llegó" de "llegó y nadie respondió". Sin esta señal el
@@ -2532,9 +2622,15 @@ export class NotificationsService implements OnModuleInit {
    * del complejo. El teléfono viaja en metadata para que la app de portería
    * ofrezca el botón "Llamar" sin una búsqueda adicional.
    */
+  /**
+   * El residente pide que portería le devuelva la llamada. Con varias
+   * porterías va solo a la que eligió (`securityPostId`); ver
+   * resolveSecurityPostTarget para el caso de una app vieja que no elige.
+   */
   async requestSecurityCall(
     complexId: string,
     currentUser: JwtAccessPayload,
+    securityPostId?: string | null,
   ): Promise<RequestSecurityCallResult> {
     const resident =
       await this.residentsService.findActiveResidentByUserIdInternal(
@@ -2571,21 +2667,28 @@ export class NotificationsService implements OnModuleInit {
       }
     }
 
-    const securityIds = await this.resolveTargetUserIds(complexId, [
-      ValidRoles.SECURITY_ROL,
-    ]);
+    const { post, guardUserIds: securityIds } = await resolveSecurityPostTarget(
+      this.userRepo.manager,
+      complexId,
+      securityPostId,
+      { strict: false },
+    );
 
     if (securityIds.length === 0) {
       this.logger.warn(
-        `SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}`,
+        `SECURITY CALL REQUEST sin destinatarios — complejo ${complexId}, unidad ${unit.number}, portería ${post?.name ?? '(única)'}`,
       );
       return {
         success: false,
-        message: 'No hay personal de seguridad disponible en este momento.',
+        message: post
+          ? `En ${post.name} no hay nadie conectado en este momento. Prueba con otra portería.`
+          : 'No hay personal de seguridad disponible en este momento.',
       };
     }
 
-    const title = `Solicitud de llamada — ${unitLabel}`;
+    const title = post
+      ? `Solicitud de llamada — ${post.name} — ${unitLabel}`
+      : `Solicitud de llamada — ${unitLabel}`;
     const body = requestedByName
       ? `${requestedByName} (${unitLabel}) solicita que portería se comunique con su unidad.`
       : `${unitLabel} solicita que portería se comunique con su unidad.`;
@@ -2608,6 +2711,8 @@ export class NotificationsService implements OnModuleInit {
         phoneNumber,
         requestedByUserId: currentUser.sub,
         requestedByName,
+        securityPostId: post?.id ?? null,
+        securityPostName: post?.name ?? null,
       },
       createdByUserId: currentUser.sub,
       isActionable: true,
@@ -2621,7 +2726,7 @@ export class NotificationsService implements OnModuleInit {
     );
 
     this.logger.log(
-      `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${securityIds.length} guardia(s)`,
+      `SECURITY CALL REQUEST — complejo ${complexId}, unidad ${unit.number}, por ${currentUser.sub} → ${post?.name ?? 'portería'}: ${securityIds.length} guardia(s)`,
     );
 
     return { success: true };

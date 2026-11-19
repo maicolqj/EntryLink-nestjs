@@ -15,6 +15,8 @@ import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.contro
 import { AuthService } from './services/auth.service';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
+import { AccessTokenValidatorService } from './services/access-token-validator.service';
+import { AccountAccessService } from './services/account-access.service';
 import { RefreshTokensCleanupCron } from './cron/refresh-tokens-cleanup.cron';
 import { OtpService } from './services/otp.service';
 import { ResidentDeviceService } from './services/resident-device.service';
@@ -48,6 +50,7 @@ import { UserRole } from '../users/entities/user_has_roles.entity';
 // CacheService se asume provisto por SharedModule o importado directamente
 import { CacheModule } from '../../core/infrastructure/cache/cache.module';
 import { AuditModule } from '../audit/audit.module';
+import { ResidentComplexSwitchService } from './services/resident-complex-switch.service';
 
 @Module({
   controllers: [SupervisorsController, WhatsAppWebhookController],
@@ -91,6 +94,9 @@ import { AuditModule } from '../audit/audit.module';
     AuthService,
     TokenService,
     SessionService,
+    ResidentComplexSwitchService,
+    AccessTokenValidatorService,
+    AccountAccessService,
     OtpService,
     ResidentDeviceService,
     WhatsAppService,
@@ -114,6 +120,8 @@ import { AuditModule } from '../audit/audit.module';
     AuthService,
     TokenService,
     SessionService,
+    AccessTokenValidatorService,
+    AccountAccessService,
     JwtModule,
     PassportModule,
   ],

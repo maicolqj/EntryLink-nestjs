@@ -1,0 +1,3 @@
+# Corren en Linux (VPS): con CRLF bash no los puede ejecutar.
+*.sh text eol=lf
+scripts/backup/** text eol=lf

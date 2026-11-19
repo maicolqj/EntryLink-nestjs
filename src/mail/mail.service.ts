@@ -8,6 +8,7 @@ import {
   SendEmailVerificationJobPayload,
   SendPanicAlertJobPayload,
   SendSubscriptionNoticeJobPayload,
+  SendPlatformAnnouncementJobPayload,
 } from './constants/mail.constants';
 
 @Injectable()
@@ -81,5 +82,23 @@ export class MailService {
     this.logger.log(
       `Subscription notice email job enqueued for complex: ${payload.complexId}`,
     );
+  }
+
+  /**
+   * Encola el comunicado para un conjunto. `delayMs` escalona el envío: los
+   * proveedores SMTP limitan los correos por segundo (Resend: 2) y un
+   * comunicado a todos los conjuntos sale de golpe.
+   */
+  async queuePlatformAnnouncementEmail(
+    payload: SendPlatformAnnouncementJobPayload,
+    delayMs = 0,
+  ): Promise<void> {
+    await this.mailQueue.add(MAIL_JOBS.SEND_PLATFORM_ANNOUNCEMENT, payload, {
+      delay: delayMs,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 10_000 },
+      removeOnComplete: { count: 500 },
+      removeOnFail: { count: 200 },
+    });
   }
 }

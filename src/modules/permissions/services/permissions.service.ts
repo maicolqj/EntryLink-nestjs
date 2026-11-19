@@ -5,6 +5,7 @@ import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, In, SelectQueryBuilder } from 'typeorm';
 import { Permission } from '../entities/permission.entity';
 import { PermissionDependencyService } from './permission-dependecy.service';
+import { PermissionStatusService } from './permission-status.service';
 import { CreatePermissionResponse } from '../dto/responses/create-permission-response';
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
@@ -30,6 +31,7 @@ export class PermissionsService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly dependencyService: PermissionDependencyService,
+    private readonly permissionStatus: PermissionStatusService,
   ) {}
 
   async create(
@@ -177,7 +179,9 @@ export class PermissionsService {
       // va directo al ORDER BY.
       const field =
         sort?.field &&
-        this.permissionsRepository.metadata.findColumnWithPropertyName(sort.field)
+        this.permissionsRepository.metadata.findColumnWithPropertyName(
+          sort.field,
+        )
           ? sort.field
           : 'createdAt';
 
@@ -348,6 +352,7 @@ export class PermissionsService {
         relations: ['dependsOn'],
       });
 
+      const previousStatus = existingPermission?.status;
       if (!existingPermission) {
         this.logger.warn(`Intento de actualizar permiso inexistente: ${id}`);
         throw new CustomError({
@@ -514,7 +519,14 @@ export class PermissionsService {
         relations: ['dependsOn'],
       });
 
+      // Cambió el estado: los tokens de quien lo tiene se renuevan ya.
+      const holders =
+        finalPermission && finalPermission.status !== previousStatus
+          ? await this.permissionStatus.bumpHolders(id, queryRunner.manager)
+          : [];
+
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Permiso actualizado exitosamente: ${finalPermission.id} - ${finalPermission.name}`,
@@ -676,7 +688,13 @@ export class PermissionsService {
         relations: ['dependsOn'],
       });
 
+      // Inactivo: deja de autorizar ya, aunque siga asignado a roles.
+      const holders = await this.permissionStatus.bumpHolders(
+        id,
+        queryRunner.manager,
+      );
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Permiso eliminado exitosamente (soft delete): ${deletedPermission.id} - ${deletedPermission.name}`,
@@ -777,7 +795,13 @@ export class PermissionsService {
         relations: ['dependsOn'],
       });
 
+      // Activo otra vez: quien lo tiene lo recibe en su próximo token.
+      const holders = await this.permissionStatus.bumpHolders(
+        id,
+        queryRunner.manager,
+      );
       await queryRunner.commitTransaction();
+      await this.permissionStatus.afterCommit(holders);
 
       this.logger.log(
         `Permiso restaurado exitosamente: ${restoredPermission.id} - ${restoredPermission.name}`,

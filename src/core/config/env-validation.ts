@@ -88,6 +88,75 @@ export const envValidationSchema = Joi.object({
   BULL_REMOVE_ON_FAIL: Joi.number().integer().default(5),
   BULL_ATTEMPTS: Joi.number().integer().default(3),
 
+  // ── Sentry (opcional: sin DSN no se envía nada) ──────────────────────────
+  SENTRY_DSN: Joi.string().uri().allow('').optional(),
+  SENTRY_ENVIRONMENT: Joi.string().allow('').optional(),
+  SENTRY_TRACES_SAMPLE_RATE: Joi.number().min(0).max(1).optional(),
+
   // ── Trusted Documents sync (solo requerido en producción) ─────────────────
   GRAPHQL_SYNC_SECRET: prodRequired(Joi.string().min(32)),
+
+  // Corte por suscripción vencida: off | access | access_and_panic. Un valor
+  // desconocido queda apagado y no impide arrancar (ver parseCutMode).
+  SUBSCRIPTION_CUT_MODE: Joi.string().empty('').default('off'),
+
+  // ── Growth Suite (apagada por defecto) ────────────────────────────────────
+  // Solo con GROWTH_ENABLED=true se registra el módulo (src/modules/growth).
+  // `.empty('')`: docker compose pasa '' cuando la variable no está definida.
+  GROWTH_ENABLED: Joi.boolean().empty('').default(false),
+  // Llavero HMAC versionado de la lista de exclusión: "1:<base64>,2:<base64>".
+  // Solo se valida (y es obligatorio) con la suite encendida. Apagada, se
+  // descarta: un error de formato en una variable de Growth no debe impedir
+  // que arranque la API (caída del 2026-11-01). Ver docs/growth/ACTIVATION.md.
+  GROWTH_SUPPRESSION_HMAC_KEYS: Joi.when('GROWTH_ENABLED', {
+    is: true,
+    then: Joi.string()
+      .empty('')
+      .pattern(/^\d+:[A-Za-z0-9+/=]{43,}(,\d+:[A-Za-z0-9+/=]{43,})*$/)
+      .required(),
+    otherwise: Joi.any().strip(),
+  }),
+  GROWTH_SUPPRESSION_HMAC_ACTIVE_VERSION: Joi.when('GROWTH_ENABLED', {
+    is: true,
+    then: Joi.number().empty('').integer().min(1).required(),
+    otherwise: Joi.any().strip(),
+  }),
 }).options({ allowUnknown: true }); // permite vars de OS que no son del proyecto
+
+/** Qué falla, sin el valor: se usa en mensajes que terminan en los logs. */
+const PROBLEM: Record<string, string> = {
+  'any.required': 'es obligatoria',
+  'string.empty': 'no puede estar vacía',
+  'string.pattern.base': 'no tiene el formato esperado',
+  'string.min': 'es demasiado corta',
+  'string.base': 'debe ser texto',
+  'number.base': 'debe ser un número',
+  'number.integer': 'debe ser un número entero',
+  'number.min': 'es menor que el mínimo permitido',
+  'number.max': 'es mayor que el máximo permitido',
+  'boolean.base': 'debe ser true o false',
+  'any.only': 'no es uno de los valores permitidos',
+};
+
+/**
+ * Valida el entorno sin poner nunca un valor en el error. Los mensajes de Joi
+ * incluyen el valor rechazado («with value "…"»), y Nest los imprime al
+ * fallar el arranque: así quedó una llave HMAC en los logs el 2026-11-01. El
+ * error solo nombra la variable y el problema.
+ */
+export function validateEnv(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const { error, value } = envValidationSchema.validate(config, {
+    abortEarly: false,
+    allowUnknown: true,
+  });
+  if (error) {
+    const problems = error.details.map(
+      (d) =>
+        `${d.path.join('.') || '(entorno)'} ${PROBLEM[d.type] ?? `no es válida (${d.type})`}`,
+    );
+    throw new Error(`Configuración inválida: ${problems.join('; ')}`);
+  }
+  return value as Record<string, unknown>;
+}

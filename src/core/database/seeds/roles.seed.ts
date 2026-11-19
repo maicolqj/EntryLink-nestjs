@@ -37,6 +37,7 @@ export const seedRoles = async (dataSource: DataSource): Promise<void> => {
           frontName: roleData.frontName,
           icon: roleData.icon,
           description: roleData.description,
+          status: roleData.status ?? true,
           permissions: assignedPermissions,
         });
         await roleRepository.save(role);

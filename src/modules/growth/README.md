@@ -1,0 +1,84 @@
+# EntryLink Growth Suite
+
+Suite comercial interna de Alterna QJ: prospectos, equipo comercial, fuentes y
+cumplimiento de protección de datos. **No es parte de la operación de los
+conjuntos** y no toca datos de residentes.
+
+- Se carga solo con `GROWTH_ENABLED=true` (`growth.loader.ts`, import dinámico).
+- Tablas en el esquema PostgreSQL `growth`.
+- Activación: `docs/growth/ACTIVATION.md`. Protección de datos:
+  `docs/growth/DATA-PROTECTION.md`. Pruebas: `docs/growth/TESTING.md`.
+
+## Reglas de aislamiento (verificadas por `growth-isolation.spec.ts`)
+
+1. Desde aquí solo se importa `modules/shared/**` y los enums de
+   `modules/roles` y `modules/permissions`. Nada de residentes, conjuntos,
+   finanzas, notificaciones…
+2. Fuera de la suite solo se importa `shared/growth-access.catalog` (seeds y
+   el bloqueo de roles inactivos). `app.module.ts` importa únicamente
+   `growth.loader`.
+3. El único acceso a `public` es `shared/identity-directory.service.ts`, y solo
+   a la identidad (`users`, `user_has_roles`, `roles`,
+   `user_complex_assignments`). Es el puerto a reemplazar si la suite se
+   extrae a un servicio aparte.
+4. La única FK que sale del esquema apunta a `public.users(id)`.
+5. Ningún input usa un campo llamado `complexId`: `ComplexModuleGuard` lo
+   interpretaría como un conjunto.
+
+## EntryLink Prospect (`prospects/`, entrega 1A)
+
+- Empresas, personas y copropiedades con canales, vínculos laborales e historial de administración, evidencias por campo, asignaciones con historial y validación humana.
+- `ProspectGuardsService` concentra:
+  - fuente ACTIVE obligatoria;
+  - visibilidad (sin `VIEW_ALL_GROWTH_PROSPECTS` solo lo propio o asignado; lo ajeno responde NOT_FOUND);
+  - separación de funciones con la excepción de SUPER_ADMIN, auditada y desactivable.
+- `LegalBasisService` es el único que cambia la base jurídica y la autorización de contacto. La base lo respalda con CHECK.
+- Los datos personales (canales y evidencias de personas) se enmascaran en los resolvers de campo, no en la interfaz.
+
+## Deduplicación y scoring (entrega 1B)
+
+- `DedupeService` **propone** pares (`duplicate_candidates`) con señales exactas (SQL) y similitud de nombres por trigramas (en la aplicación, sin `pg_trgm`). Nunca fusiona.
+- `MergeService` fusiona a mano, con un valor elegido por campo. Traslada relaciones, evidencias y asignaciones, deja al absorbido `DUPLICATE` con `merged_into_id` y escribe `merge_log` (append-only).
+- `ScoringService` usa una lista cerrada de predicados con parámetros validados; cada regla del desglose dice si se evaluó con datos `VERIFIED` o `ESTIMATED`. El puntaje no valida ni autoriza contacto.
+- Los trabajos van por la cola `growth-prospects` (`ProspectEventsService` → `ProspectJobsProcessor`), encolados por los resolvers después del commit.
+
+## Importaciones (`imports/`, entrega 1C)
+
+- Subida REST (`GrowthImportsController`, multipart en memoria) → `ImportsService.upload`: lee el archivo (`shared/file-reader.ts`: CSV propio RFC 4180 o `exceljs` con revisión del zip) redacta los correos y teléfonos excluidos (`ImportRedactionService`, consulta por lotes) y guarda el lote y las filas crudas. El archivo original no se guarda.
+- `growthMapImportColumns` → cola `growth-imports` → `ImportValidationService`: normaliza con los normalizadores de 1A, cruza exclusiones y duplicados exactos y propone `CREATE` / `SKIP` / `LINK_EXISTING`.
+- `growthCommitImport` → `ImportCommitService`: fila por fila con los servicios de 1A (cada una en su transacción, idempotente). Todo nace `NEW`; luego se encolan duplicados y scoring de 1B.
+- `growthCommitImport` toma un lock consultivo por lote: dos trabajos no confirman el mismo lote a la vez.
+- `ImportPurgeService`: cierra lotes inactivos 7 días y purga a 30 días (ajuste D).
+- El estado del lote lo vigila un trigger; un lote purgado no cambia.
+
+## Ampliación de API (entrega 1E-0)
+
+- `growthSimulateScoring` (MANAGE_GROWTH_SCORING): `ScoringSimulationService` aplica los cambios en memoria y calcula el puntaje vigente y el propuesto con el mismo motor que el recálculo (`computeScore` + `ScoringService.factsFor`, hechos por lotes en 3 consultas por tipo). Corre en una transacción `READ ONLY`: no sube versión, no registra actividad, no encola recálculos. Los nombres de los prospectos solo salen con VIEW_ALL_GROWTH_PROSPECTS; sin él, solo agregados (`itemsHidden`).
+- `growthActivity` filtra además por `actions` (lista) y por periodo `from` (incluido) / `to` (excluido), con la misma paginación. Índices `(action, created_at)` y `(created_at)`.
+- `growthTeamWorkload` (ASSIGN_GROWTH_PROSPECTS): una consulta. Cuenta asignaciones vigentes (`ended_at IS NULL`), lo mismo que el tope de `assign`. Cortes por tipo, por estado de validación y de prioridad alta, más `staleAssignments` (vigentes sobre un registro borrado o fusionado). Las cifras suman al total.
+- `growthMergePreview` (MERGE_GROWTH_DUPLICATES): vista previa de la fusión con la misma lógica que `merge` — `loadPair`, `planMergeFields`, `needsRevalidation` y la lista de traslados `movesFor` (UPDATE en la fusión, count en la vista previa). Transacción `READ ONLY`, sin bloqueos. `merge_log.moved.candidatesClosed` ya no cuenta el par fusionado.
+- Ver `docs/growth/ACTIVITY.md`: qué representa un evento y la limitación de los intentos fallidos.
+
+## Integridad
+
+- Toda escritura registra su evento en `growth.activity_events` dentro de la
+  misma transacción (`ActivityLogService.record(manager, …)`).
+- `activity_events` y `suppression_hashes`: append-only (trigger).
+  `suppressions`: no se borra; solo ACTIVE → LIFTED con soporte (trigger).
+- `changes` del registro de actividad: usar `safeDiff`. Los campos personales
+  quedan como `"modificado"`.
+
+## Agregar un dominio (fase 1 en adelante)
+
+1. Carpeta propia (`prospects/`, `crm/`…) con `entities/`, `dto/`,
+   `services/`, `resolvers/`.
+2. Entidades con `@Entity({ schema: 'growth', … })` y `@ObjectType('Growth…')`.
+3. Migración con CHECK (no enums nativos) y FK solo dentro de `growth`, o a
+   `public.users`.
+4. Nuevos tipos de entidad: `GrowthEntityType` + el CHECK de
+   `activity_events.entity_type` y `legal_holds.entity_type` + el mapa
+   `HOLDABLE` de `LegalHoldsService`.
+5. Permisos nuevos: `ValidPermissions` + `growth-access.catalog.ts` + una
+   migración de enum (fuera de transacción) y otra de datos (inactivos).
+6. Operaciones con `@Auth({ permissions: [...] })` y nombre `growth…`. La
+   matriz de `growth-authorization.spec.ts` debe listar la operación nueva.

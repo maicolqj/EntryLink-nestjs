@@ -15,6 +15,10 @@ import { JwtAccessPayload } from '../shared/interfaces/jwt-payload.interface';
  * repositorio de mentira, y se vuelve a leer. Lo que importa de un respaldo es
  * lo que queda en el archivo.
  */
+// Arma Excel de verdad con exceljs y la metadata real de TypeORM. Bajo la
+// carga de la suite completa pasaba de los 5 s por defecto (intermitente).
+jest.setTimeout(30_000);
+
 describe('DataExportService', () => {
   let metadataSource: DataSource;
 
@@ -26,7 +30,9 @@ describe('DataExportService', () => {
     await (
       metadataSource as unknown as { buildMetadatas: () => Promise<void> }
     ).buildMetadatas();
-  });
+    // Carga y transpila TODAS las entidades del proyecto: con la suite completa
+    // en paralelo supera el límite por defecto de 5 s.
+  }, 30_000);
 
   const admin = {
     sub: 'complex-1',

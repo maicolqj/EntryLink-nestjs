@@ -46,6 +46,7 @@ import { ExcelImportProducer } from './queues/excel-import.producer';
 import { RolesService } from '../roles/roles.service';
 import { Role } from '../roles/entities/role.entity';
 import { ValidRoles } from '../roles/enums/valid-roles';
+import { isInactiveGrowthRole } from '../growth/shared/growth-access.catalog';
 import {
   ensureResidentRole,
   roleNeedsResidentBase,
@@ -67,6 +68,8 @@ import { AuditAction } from '../audit/enums/audit-action.enum';
 import { AuditEntityType } from '../audit/enums/audit-entity-type.enum';
 import { NotificationsService } from '../notifications/services/notifications.service';
 import { TokenService } from '../auth/services/token.service';
+import { SessionService } from '../auth/services/session.service';
+import { SocketService } from '../../core/infrastructure/socket/socket.service';
 import { SetPasswordResponse } from '../auth/dto/responses/set-password.response';
 
 /** Roles que inician sesión con email + contraseña */
@@ -144,6 +147,8 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
     private readonly tokenService: TokenService,
     private readonly configService: ConfigService,
+    private readonly sessionService: SessionService,
+    private readonly socketService: SocketService,
   ) {}
 
   // ── Consultas ────────────────────────────────────────────────────────────
@@ -1114,7 +1119,23 @@ export class UsersService {
       });
     }
 
-    if (callerComplexId && user.complexId !== callerComplexId) {
+    // Suspenderse a uno mismo cierra la sesión desde la que se podría
+    // deshacer. El 2026-11-05 el único SUPER_ADMIN se suspendió a sí mismo y
+    // hubo que reactivarlo por SQL.
+    if (currentUser?.sub === userId) {
+      throw new CustomError({
+        message: 'No puedes suspender tu propia cuenta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SELF,
+      });
+    }
+
+    const callerIsSuperAdmin = this.isSuperAdminCaller(currentUser);
+    if (
+      !callerIsSuperAdmin &&
+      callerComplexId &&
+      user.complexId !== callerComplexId
+    ) {
       throw new CustomError({
         message: 'No tienes permisos para suspender usuarios de otro complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -1133,18 +1154,41 @@ export class UsersService {
       });
     }
 
-    user.status = UserStatus.SUSPENDED;
-    user.suspensionReason = reason;
-    const updated = await this.userRepo.save(user);
-    this.logger.warn(`Usuario suspendido: ${userId} — motivo: ${reason}`);
+    await this.assertSuperAdminCanBeRemoved(
+      userId,
+      callerIsSuperAdmin,
+      'suspender',
+    );
+
+    const previousStatus = user.status;
+    // Estado y versión del token en una sola escritura: desde aquí ningún
+    // access token anterior pasa (la versión no coincide) y la renovación ve
+    // la cuenta suspendida.
+    await this.userRepo.update(userId, {
+      status: UserStatus.SUSPENDED,
+      suspensionReason: reason,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+    const sessions = await this.cutUserAccess(userId, 'user_suspended');
+    const updated = await this.userRepo.findOneOrFail({
+      where: { id: userId },
+    });
+    this.logger.warn(
+      `Usuario suspendido: ${userId} — sesiones cerradas: ${sessions.closed}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
         entityType: AuditEntityType.User,
         entityId: userId,
         action: AuditAction.SUSPEND,
-        previousValue: { status: UserStatus.ACTIVE },
-        newValue: { status: UserStatus.SUSPENDED, reason },
+        previousValue: { status: previousStatus },
+        newValue: {
+          status: UserStatus.SUSPENDED,
+          reason,
+          sessionsClosed: sessions.closed,
+          sessionsCutComplete: sessions.complete,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -1154,6 +1198,103 @@ export class UsersService {
     }
 
     return updated;
+  }
+
+  /**
+   * SUPER_ADMIN opera sobre toda la plataforma: el chequeo de complejo no le
+   * aplica. Su sesión puede traer el `complexId` de su ficha de residente,
+   * mientras que `users.complex_id` de una cuenta de administración es NULL;
+   * sin esta excepción no podía reactivar a otro SUPER_ADMIN (ni a sí mismo).
+   */
+  private isSuperAdminCaller(currentUser?: JwtAccessPayload): boolean {
+    return !!currentUser?.roles?.includes(ValidRoles.SUPER_ADMIN_ROL);
+  }
+
+  /**
+   * Un SUPER_ADMIN solo lo suspende o elimina otro SUPER_ADMIN, y nunca al
+   * último activo: sin ninguno, nadie puede reactivar cuentas ni administrar
+   * la plataforma.
+   */
+  private async assertSuperAdminCanBeRemoved(
+    userId: string,
+    callerIsSuperAdmin: boolean,
+    action: 'suspender' | 'eliminar',
+  ): Promise<void> {
+    const superAdmins = () =>
+      this.userRepo
+        .createQueryBuilder('u')
+        .innerJoin('u.userRoles', 'ur')
+        .innerJoin('ur.role', 'r')
+        .where('r.name = :role', { role: ValidRoles.SUPER_ADMIN_ROL })
+        .andWhere('r.status = true');
+
+    const targetIsSuperAdmin =
+      (await superAdmins().andWhere('u.id = :userId', { userId }).getCount()) >
+      0;
+    if (!targetIsSuperAdmin) return;
+
+    if (!callerIsSuperAdmin) {
+      throw new CustomError({
+        message: `Solo un SUPER_ADMIN puede ${action} a otro SUPER_ADMIN`,
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_SUSPEND_SUPER_ADMIN,
+      });
+    }
+
+    const otherActive = await superAdmins()
+      .andWhere('u.id != :userId', { userId })
+      .andWhere('u.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere('u.deletedAt IS NULL')
+      .getCount();
+    if (otherActive === 0) {
+      throw new CustomError({
+        message: `No se puede ${action} al último SUPER_ADMIN activo: la plataforma quedaría sin administrador`,
+        statusCode: HttpStatus.CONFLICT,
+        errorCode: UserErrorCode.LAST_SUPER_ADMIN,
+      });
+    }
+  }
+
+  /**
+   * Corta todo acceso vivo de una cuenta: cierra sus sesiones (y con ellas los
+   * refresh tokens), revoca los que queden, borra la versión cacheada del token
+   * y desconecta sus sockets en todas las instancias.
+   *
+   * No lanza: el estado y la versión del token ya se guardaron, y con eso
+   * ningún token viejo pasa. Si Redis falla aquí, la versión cacheada vence
+   * sola en 5 minutos; queda registrado en la auditoría (`complete: false`).
+   */
+  private async cutUserAccess(
+    userId: string,
+    reason: string,
+  ): Promise<{ closed: number; complete: boolean }> {
+    let closed = 0;
+    let complete = true;
+    try {
+      closed = await this.sessionService.terminateAllUserSessions(userId);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron cerrar las sesiones de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    try {
+      await this.tokenService.invalidateUserSessions(userId, reason);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron revocar los tokens de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    try {
+      this.socketService.disconnectUser(userId);
+    } catch (err) {
+      complete = false;
+      this.logger.error(
+        `No se pudieron cerrar los sockets de ${userId}: ${(err as Error).message}`,
+      );
+    }
+    return { closed, complete };
   }
 
   async reactivateUser(
@@ -1171,7 +1312,11 @@ export class UsersService {
       });
     }
 
-    if (callerComplexId && user.complexId !== callerComplexId) {
+    if (
+      !this.isSuperAdminCaller(currentUser) &&
+      callerComplexId &&
+      user.complexId !== callerComplexId
+    ) {
       throw new CustomError({
         message: 'No tienes permisos para reactivar usuarios de otro complejo',
         statusCode: HttpStatus.FORBIDDEN,
@@ -1187,9 +1332,19 @@ export class UsersService {
       });
     }
 
-    user.status = UserStatus.ACTIVE;
-    user.suspensionReason = null;
-    const updated = await this.userRepo.save(user);
+    // Reactivar no devuelve las sesiones viejas: se cerraron al suspender y la
+    // versión del token sube otra vez, así que solo sirve un login nuevo.
+    await this.userRepo.update(userId, {
+      status: UserStatus.ACTIVE,
+      suspensionReason: null,
+      tokenVersion: () => '"tokenVersion" + 1',
+    });
+    await this.tokenService
+      .clearUserTokenVersionCache(userId)
+      .catch(() => undefined);
+    const updated = await this.userRepo.findOneOrFail({
+      where: { id: userId },
+    });
     this.logger.log(`Usuario reactivado: ${userId}`);
 
     if (currentUser) {
@@ -1270,6 +1425,14 @@ export class UsersService {
       });
     }
 
+    if (currentUser?.sub === userId) {
+      throw new CustomError({
+        message: 'No puedes eliminar tu propia cuenta',
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: UserErrorCode.CANNOT_DELETE_SELF,
+      });
+    }
+
     if (user.status === UserStatus.DELETED) {
       throw new CustomError({
         message: 'El usuario ya fue eliminado',
@@ -1278,11 +1441,23 @@ export class UsersService {
       });
     }
 
+    await this.assertSuperAdminCanBeRemoved(
+      userId,
+      this.isSuperAdminCaller(currentUser),
+      'eliminar',
+    );
+
+    const previousStatus = user.status;
     user.status = UserStatus.DELETED;
     user.deletedAt = new Date();
 
     const updated = await this.dataSource.transaction(async (manager) => {
       const saved = await manager.save(User, user);
+      // Como al suspender: ningún token anterior pasa desde aquí. Se sube en
+      // SQL para no depender de que la entidad cargada traiga la versión.
+      await manager.update(User, userId, {
+        tokenVersion: () => '"tokenVersion" + 1',
+      });
 
       // Limpiar legalRepresentativeId solo si el complejo aún apunta a este usuario.
       // Si el frontend ya asignó un nuevo representante antes de llamar deleteUser,
@@ -1296,15 +1471,24 @@ export class UsersService {
       return saved;
     });
 
-    this.logger.warn(`Usuario eliminado (soft): ${userId}`);
+    // Una cuenta eliminada no conserva sesiones, refresh tokens ni sockets.
+    const sessions = await this.cutUserAccess(userId, 'user_deleted');
+    this.logger.warn(
+      `Usuario eliminado (soft): ${userId} — sesiones cerradas: ${sessions.closed}`,
+    );
 
     if (currentUser) {
       void this.auditService.log({
         entityType: AuditEntityType.User,
         entityId: userId,
         action: AuditAction.DELETE,
-        previousValue: { status: user.status },
-        newValue: { status: UserStatus.DELETED, deletedAt: updated.deletedAt },
+        previousValue: { status: previousStatus },
+        newValue: {
+          status: UserStatus.DELETED,
+          deletedAt: updated.deletedAt,
+          sessionsClosed: sessions.closed,
+          sessionsCutComplete: sessions.complete,
+        },
         performedById: currentUser.sub,
         performedByName: currentUser.email,
         performedByRole: currentUser.roles?.[0] ?? '',
@@ -1590,7 +1774,22 @@ export class UsersService {
       );
     }
 
+    this.assertGrowthRoleActive(role);
     return role;
+  }
+
+  /**
+   * Un rol inactivo no se asigna (antes solo se cuidaban los de la Growth
+   * Suite). Aunque se asignara por SQL, el token no lo incluiría.
+   */
+  private assertGrowthRoleActive(role: Role): void {
+    if (isInactiveGrowthRole(role) || role.status === false) {
+      throw new CustomError({
+        message: `El rol '${role.name}' está inactivo y no se puede asignar`,
+        statusCode: HttpStatus.FORBIDDEN,
+        errorCode: GeneralErrorCode.FORBIDDEN,
+      });
+    }
   }
 
   // ── Cargo del usuario ────────────────────────────────────────────────────
@@ -1636,6 +1835,7 @@ export class UsersService {
         errorCode: GeneralErrorCode.BAD_REQUEST,
       });
     }
+    this.assertGrowthRoleActive(role);
 
     const current = user.userRoles ?? [];
     const jobRoles = current.filter(

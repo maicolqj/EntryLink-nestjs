@@ -1,5 +1,5 @@
 // modules/auth/services/token.service.ts
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, Optional } from '@nestjs/common';
 import { CustomError } from '../../shared/utils/errors.utils';
 import {
   AuthErrorCode,
@@ -27,6 +27,8 @@ import {
 import { ValidRoles } from '../../roles/enums/valid-roles';
 import { ValidPermissions } from '../../permissions/enums/valid-permissions';
 import { v4 as uuidv4 } from 'uuid';
+import { isUserStatusOperable } from '../utils/user-status.util';
+import { ResidentTenancyService } from './resident-tenancy.service';
 
 @Injectable()
 export class TokenService {
@@ -44,6 +46,10 @@ export class TokenService {
     private readonly roleRepo: Repository<Role>,
     @InjectRepository(UserPermissionOverride)
     private readonly permissionOverrideRepo: Repository<UserPermissionOverride>,
+    // Opcional para no obligar a las pruebas que arman TokenService a mano;
+    // en la app siempre está (mismo módulo).
+    @Optional()
+    private readonly residentTenancy?: ResidentTenancyService,
   ) {}
 
   /**
@@ -138,7 +144,14 @@ export class TokenService {
       relations: ['permissions'],
     });
 
-    const permissions: ValidPermissions[] = (complexRole?.permissions ?? [])
+    // Un permiso inactivo no entra al token aunque el rol lo tenga asignado.
+    // COMPLEX_ROL no se puede inactivar (RolesService); si lo estuviera por
+    // SQL, la cuenta sale sin rol ni permisos, igual que un usuario.
+    const complexRoleActive = !!complexRole && complexRole.status !== false;
+    const permissions: ValidPermissions[] = (
+      complexRoleActive ? complexRole.permissions : []
+    )
+      .filter((p) => p.status !== false)
       .map((p) => p.name)
       .filter((p) => Object.values(ValidPermissions).includes(p));
 
@@ -149,7 +162,7 @@ export class TokenService {
       entityType: 'complex',
       tokenVersion: complex.tokenVersion ?? 0,
       sessionId,
-      roles: [ValidRoles.COMPLEX_ROL],
+      roles: complexRoleActive ? [ValidRoles.COMPLEX_ROL] : [],
       permissions,
       complexId: complex.id,
     };
@@ -195,9 +208,14 @@ export class TokenService {
     overrides: readonly UserPermissionOverride[] = [],
   ): ValidPermissions[] {
     const perms = new Set<ValidPermissions>();
+    // Un permiso inactivo no entra al token, ni por un rol (aunque esté
+    // asignado) ni por una excepción GRANT. DENY sigue quitando siempre.
     this.scopedUserRoles(user, roleScope).forEach((ur) => {
       ur.role?.permissions?.forEach((p) => {
-        if (Object.values(ValidPermissions).includes(p.name)) {
+        if (
+          p.status !== false &&
+          Object.values(ValidPermissions).includes(p.name)
+        ) {
           perms.add(p.name);
         }
       });
@@ -207,17 +225,22 @@ export class TokenService {
       const name = o.permission?.name;
       if (!name || !Object.values(ValidPermissions).includes(name)) continue;
       if (o.effect === PermissionOverrideEffect.DENY) perms.delete(name);
-      else if (!roleScope) perms.add(name);
+      else if (!roleScope && o.permission?.status !== false) perms.add(name);
     }
     return Array.from(perms);
   }
 
-  /** Roles del usuario ya filtrados por el alcance de la sesión. */
+  /**
+   * Roles del usuario ya filtrados por el alcance de la sesión. Un rol
+   * inactivo no entra: ni su nombre ni sus permisos van en el token (al
+   * emitir ni al renovar). Una excepción GRANT no lo reactiva: solo agrega su
+   * propio permiso, si está activo.
+   */
   private scopedUserRoles(user: User, roleScope?: readonly ValidRoles[]) {
     if (!user.userRoles?.length) return [];
 
     return user.userRoles
-      .filter((ur) => ur.role)
+      .filter((ur) => ur.role && ur.role.status !== false)
       .filter(
         (ur) => !roleScope || roleScope.includes(ur.role.name as ValidRoles),
       );
@@ -321,11 +344,20 @@ export class TokenService {
     return refreshToken;
   }
 
+  /**
+   * Rota el refresh token. Con `opts.complexIdOverride` además cambia el
+   * conjunto de la sesión (selector de RemoteLink): misma familia, sesión,
+   * alcance y vigencia; solo para sesiones de residente del mismo usuario y
+   * con residencia activa en el destino. Un cambio rechazado no revoca nada.
+   */
   async rotateRefreshToken(
     currentToken: string,
     deviceInfo: DeviceInfo,
+    opts?: { complexIdOverride?: string; requesterUserId?: string },
   ): Promise<TokenPair> {
     const payload = await this.verifyRefreshToken(currentToken);
+    const switchTo = opts?.complexIdOverride;
+    const switching = !!switchTo;
     const currentTokenHash = this.hashToken(currentToken);
 
     const storedToken = await this.refreshTokenRepo.findOne({
@@ -345,6 +377,7 @@ export class TokenService {
         accessToken: string;
         refreshToken: string;
         sessionId: string;
+        complexId?: string;
       }>({
         key: {
           prefix: AUTH_CONSTANTS.CACHE_PREFIX.GRACE_WINDOW,
@@ -353,8 +386,20 @@ export class TokenService {
       });
 
       if (gracePayload) {
+        // Reintento del mismo cambio (la respuesta se perdió): mismo par,
+        // igual que una renovación. Si el par en gracia es de otro conjunto,
+        // devolverlo haría creer a la app que cambió: que reintente.
+        if (switching && gracePayload.complexId !== switchTo) {
+          throw new CustomError({
+            message: 'No se pudo cambiar de conjunto. Intenta de nuevo',
+            statusCode: HttpStatus.CONFLICT,
+            errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+          });
+        }
         return {
-          ...gracePayload,
+          accessToken: gracePayload.accessToken,
+          refreshToken: gracePayload.refreshToken,
+          sessionId: gracePayload.sessionId,
           expiresIn: this.getAccessTokenExpirySeconds(),
         };
       }
@@ -384,13 +429,88 @@ export class TokenService {
       });
     }
 
+    const entityType = payload.entityType ?? 'user';
+
+    // La renovación mira el estado vigente de la cuenta, igual que el login:
+    // sin esto, un usuario suspendido seguía renovando su sesión hasta que el
+    // refresh token vencía (hasta 180 días).
+    if (
+      entityType !== 'complex' &&
+      (!storedToken.user ||
+        storedToken.user.deletedAt ||
+        !isUserStatusOperable(storedToken.user.status))
+    ) {
+      await this.revokeTokenFamily(payload.tokenFamily, 'user_not_active');
+      throw new CustomError({
+        message: 'Tu cuenta no está activa. Contacta al administrador',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_TERMINATED,
+      });
+    }
+
+    if (switchTo) {
+      const allowed =
+        entityType === 'user' &&
+        !!storedToken.roleScope &&
+        storedToken.user?.id === opts?.requesterUserId;
+      if (!allowed) {
+        throw new CustomError({
+          message: 'Esta sesión no puede cambiar de conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.COMPLEX_SWITCH_NOT_ALLOWED,
+        });
+      }
+      if (
+        !this.residentTenancy ||
+        !(await this.residentTenancy.hasActiveResidence(
+          storedToken.user.id,
+          switchTo,
+        ))
+      ) {
+        throw new CustomError({
+          message: 'Ya no tienes una residencia activa en ese conjunto',
+          statusCode: HttpStatus.FORBIDDEN,
+          errorCode: AuthErrorCode.RESIDENCE_NOT_AVAILABLE,
+        });
+      }
+    }
+    const sessionComplexId = switchTo ?? payload.complexId;
+    // COUNCIL_ROL es del usuario, no de un conjunto: no se sabe si es consejero
+    // en el destino, así que el token del otro conjunto sale sin él.
+    const sessionRoleScope = switchTo
+      ? (storedToken.roleScope ?? []).filter(
+          (r) => r !== ValidRoles.COUNCIL_ROL,
+        )
+      : storedToken.roleScope;
+
+    // Una sesión de residente solo se renueva mientras su residencia en ese
+    // conjunto siga activa: suspender la ficha corta el acceso a ese conjunto
+    // aunque el refresh token sea anterior a la suspensión.
+    if (
+      !switching &&
+      entityType !== 'complex' &&
+      storedToken.roleScope &&
+      payload.complexId &&
+      this.residentTenancy &&
+      !(await this.residentTenancy.hasActiveResidence(
+        storedToken.user.id,
+        payload.complexId,
+      ))
+    ) {
+      await this.revokeTokenFamily(payload.tokenFamily, 'residence_not_active');
+      throw new CustomError({
+        message:
+          'Tu residencia en este conjunto está suspendida. Contacta a la administración',
+        statusCode: HttpStatus.UNAUTHORIZED,
+        errorCode: AuthErrorCode.SESSION_TERMINATED,
+      });
+    }
+
     await this.refreshTokenRepo.update(storedToken.id, {
       isRevoked: true,
-      revokedReason: 'rotated',
+      revokedReason: switching ? 'complex_switched' : 'rotated',
       lastUsedAt: new Date(),
     });
-
-    const entityType = payload.entityType ?? 'user';
     const tokenId = this.generateSecureId();
 
     // La vigencia con la que nació la sesión manda sobre el default: rotar no
@@ -451,8 +571,8 @@ export class TokenService {
         storedToken.user,
         storedToken.sessionId,
         'user',
-        storedToken.roleScope ?? undefined,
-        payload.complexId,
+        sessionRoleScope ?? undefined,
+        sessionComplexId,
       );
       newRefreshToken = await this.jwtService.signAsync(
         {
@@ -462,7 +582,7 @@ export class TokenService {
           // El complejo de la sesión viaja con la familia de tokens: sin esto,
           // la sesión de residente de quien administra perdería su conjunto en
           // el primer refresh y se quedaría sin unidad ni notificaciones.
-          complexId: payload.complexId,
+          complexId: sessionComplexId,
           sessionId: storedToken.sessionId,
           tokenFamily: payload.tokenFamily,
           deviceFingerprint: deviceInfo.fingerprint,
@@ -499,7 +619,7 @@ export class TokenService {
       refreshExpiry,
       // El alcance viaja con la familia de tokens: rotar no puede devolverle
       // a una sesión de residente los roles administrativos de la cuenta.
-      roleScope: storedToken.roleScope ?? null,
+      roleScope: sessionRoleScope ?? null,
     });
 
     // Cache the result so concurrent requests with the old token are served idempotently
@@ -513,6 +633,7 @@ export class TokenService {
         accessToken,
         refreshToken: newRefreshToken,
         sessionId: storedToken.sessionId,
+        complexId: sessionComplexId,
       },
       options: { ttl: AUTH_CONSTANTS.CACHE_TTL.GRACE_WINDOW },
     });

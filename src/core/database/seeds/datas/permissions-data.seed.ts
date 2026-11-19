@@ -1,4 +1,8 @@
 import { ValidPermissions } from '../../../../modules/permissions/enums/valid-permissions';
+import {
+  GROWTH_PERMISSION_GROUP,
+  GROWTH_PERMISSIONS,
+} from '../../../../modules/growth/shared/growth-access.catalog';
 
 export const PERMISSIONS_TO_SEED = [
   // STAFF
@@ -849,4 +853,20 @@ export const PERMISSIONS_TO_SEED = [
     level: 'HIGH',
     dependsOn: [ValidPermissions.VIEW_MARKETPLACE],
   },
+
+  // Growth Suite: activos solo si la suite está encendida. Volver a correr el
+  // seed con GROWTH_ENABLED apagada los deja inactivos otra vez.
+  ...GROWTH_PERMISSIONS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    label: p.label,
+    group: GROWTH_PERMISSION_GROUP,
+    isSystem: false,
+    // Los de activación manual nacen inactivos y el seed no les toca el estado.
+    status: p.manualActivation ? false : process.env.GROWTH_ENABLED === 'true',
+    preserveStatus: p.manualActivation === true,
+    description: p.description,
+    level: p.level,
+    dependsOn: p.dependsOn,
+  })),
 ];
