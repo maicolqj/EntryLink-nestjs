@@ -38,6 +38,10 @@ import { PaginationReponse } from '../shared/dto/responses/pagination-object.res
 import { UserRole } from '../users/entities/user_has_roles.entity';
 import { UserStatus } from '../users/enums/user.enums';
 import { PermissionStatusService } from '../permissions/services/permission-status.service';
+import {
+  findResidentRole,
+  RESIDENT_ROLE_ID,
+} from './utils/resident-base-role.util';
 
 /**
  * Roles que nunca se inactivan: sin SUPER_ADMIN_ROL el sistema queda sin
@@ -70,26 +74,30 @@ export class RolesService {
     this.defaultUserRole = await this.findOrCreateDefaultUserRole();
   }
 
+  /**
+   * Antes creaba una fila RESIDENT_ROL «Usuario» si al arrancar no encontraba
+   * ninguna, y lo hacía antes del seed: así nació la fila duplicada y vacía de
+   * producción. Ahora busca la del seed y, si no hay ninguna, la crea con el
+   * mismo id del seed para que el seed la complete en vez de duplicarla.
+   */
   private async findOrCreateDefaultUserRole(): Promise<Role> {
-    let userRole = await this.rolesRepository.findOne({
-      where: { name: this.DEFAULT_USER_ROLE_NAME },
-      relations: ['permissions'],
-    });
+    const existing = await findResidentRole(this.rolesRepository.manager, [
+      'permissions',
+    ]);
+    if (existing) return existing;
 
-    if (!userRole) {
-      userRole = this.rolesRepository.create({
+    return this.rolesRepository.save(
+      this.rolesRepository.create({
+        id: RESIDENT_ROLE_ID,
         name: this.DEFAULT_USER_ROLE_NAME,
-        frontName: 'Usuario',
-        description: 'Rol básico para usuarios finales',
-        icon: 'person',
+        frontName: 'Residente',
+        description: 'Usuario final del complejo residencial',
+        icon: 'home',
         hierarchyLevel: 4,
         status: true,
         isSystem: true,
-      });
-      userRole = await this.rolesRepository.save(userRole);
-    }
-
-    return userRole;
+      }),
+    );
   }
 
   getDefaultUserRole(): Role {

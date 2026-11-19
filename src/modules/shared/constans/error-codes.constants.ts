@@ -67,6 +67,10 @@ export enum AuthErrorCode {
   COMPLEX_SUSPENDED = 'COMPLEX_SUSPENDED',
   // Residencia del usuario suspendida en el único conjunto donde vive
   RESIDENCE_SUSPENDED = 'RESIDENCE_SUSPENDED',
+  // Selector de conjunto: el destino no es una residencia activa del usuario
+  RESIDENCE_NOT_AVAILABLE = 'RESIDENCE_NOT_AVAILABLE',
+  // Selector de conjunto: la sesión no es de residente o el refresh no es suyo
+  COMPLEX_SWITCH_NOT_ALLOWED = 'COMPLEX_SWITCH_NOT_ALLOWED',
   COMPLEX_OWNER_NOT_FOUND = 'COMPLEX_OWNER_NOT_FOUND',
   // QR login
   QR_TOKEN_INVALID = 'QR_TOKEN_INVALID',
@@ -236,6 +240,9 @@ export enum ResidentErrorCode {
   RESIDENT_REJECTED = 'RESIDENT_REJECTED',
   USER_ALREADY_RESIDENT_IN_COMPLEX = 'USER_ALREADY_RESIDENT_IN_COMPLEX',
   CANNOT_REMOVE_ACTIVE_RESIDENT = 'CANNOT_REMOVE_ACTIVE_RESIDENT',
+  // Alta: el documento (o el teléfono/correo) es de una cuenta cuyos otros
+  // datos no coinciden. No revela dónde existe esa cuenta.
+  ACCOUNT_DATA_MISMATCH = 'ACCOUNT_DATA_MISMATCH',
 }
 
 export enum FinanceErrorCode {
@@ -568,6 +575,10 @@ export enum NotificationActionErrorCode {
 export enum SubscriptionErrorCode {
   /** Pasó la gracia: la administración queda en solo lectura hasta renovar. */
   SUBSCRIPTION_SUSPENDED = 'SUBSCRIPTION_SUSPENDED',
+  /** Tras los tres avisos, la comunidad perdió el acceso hasta renovar. */
+  SUBSCRIPTION_ACCESS_CUT = 'SUBSCRIPTION_ACCESS_CUT',
+  /** Tras tres avisos que lo anunciaban, se apagó el botón de pánico. */
+  SUBSCRIPTION_PANIC_CUT = 'SUBSCRIPTION_PANIC_CUT',
   /** El plan FREE es solo la prueba gratis: no se renueva pagando. */
   SUBSCRIPTION_FREE_NOT_RENEWABLE = 'SUBSCRIPTION_FREE_NOT_RENEWABLE',
   /** La prueba gratis se otorga una sola vez por complejo. */
@@ -666,4 +677,40 @@ export enum PlatformAnnouncementErrorCode {
   ANNOUNCEMENT_FILES_LIMIT = 'ANNOUNCEMENT_FILES_LIMIT',
   /** Se intentó eliminar un comunicado que todavía se está repartiendo. */
   ANNOUNCEMENT_STILL_SENDING = 'ANNOUNCEMENT_STILL_SENDING',
+}
+
+/**
+ * Citofonía por internet.
+ */
+export enum IntercomErrorCode {
+  /** El conjunto está en citofonía por SIM. */
+  INTERCOM_NOT_INTERNET = 'INTERCOM_NOT_INTERNET',
+  /** El conjunto no deja que los residentes llamen a portería por la app. */
+  INTERCOM_RESIDENT_CALLS_DISABLED = 'INTERCOM_RESIDENT_CALLS_DISABLED',
+  /** El residente no vive en el conjunto (o no está activo). */
+  INTERCOM_RESIDENT_NOT_FOUND = 'INTERCOM_RESIDENT_NOT_FOUND',
+  /** El residente no tiene RemoteLink: la llamada no le puede sonar. */
+  INTERCOM_RESIDENT_NO_APP = 'INTERCOM_RESIDENT_NO_APP',
+  /** Quien recibe ya está en otra llamada. */
+  INTERCOM_BUSY = 'INTERCOM_BUSY',
+  /** La llamada no existe o no es de quien la toca. */
+  INTERCOM_CALL_NOT_FOUND = 'INTERCOM_CALL_NOT_FOUND',
+  /** La llamada ya no está en un estado que permita esa acción. */
+  INTERCOM_CALL_NOT_AVAILABLE = 'INTERCOM_CALL_NOT_AVAILABLE',
+  /** Nadie de la portería elegida tiene la app abierta. */
+  INTERCOM_NO_SECURITY = 'INTERCOM_NO_SECURITY',
+  /** No hay servidor TURN configurado: no se puede activar INTERNET. */
+  INTERCOM_RELAY_NOT_CONFIGURED = 'INTERCOM_RELAY_NOT_CONFIGURED',
+}
+
+/**
+ * Porterías del conjunto.
+ */
+export enum SecurityPostErrorCode {
+  /** La portería no existe, es de otro conjunto o está inactiva. */
+  SECURITY_POST_NOT_FOUND = 'SECURITY_POST_NOT_FOUND',
+  /** El conjunto tiene varias porterías y no se dijo a cuál. */
+  SECURITY_POST_REQUIRED = 'SECURITY_POST_REQUIRED',
+  /** Ya hay otra portería con ese nombre en el conjunto. */
+  SECURITY_POST_NAME_TAKEN = 'SECURITY_POST_NAME_TAKEN',
 }

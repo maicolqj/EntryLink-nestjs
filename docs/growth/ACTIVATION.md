@@ -179,6 +179,8 @@ los contactos que la suite conoce en claro.
 
 Algunos permisos nacen **inactivos y sin asignar a ningún rol**. No los activa ninguna migración ni seed: el seed los crea con `status = false` y nunca les cambia el estado (`preserveStatus`).
 
+> **Actualización (0.42.16, migración `1781011700000-ActivateGrowthPermissions`):** por decisión del dueño de la plataforma, que opera solo, **todos** los permisos del grupo GROWTH quedan activos, incluidos estos dos, para que SUPER_ADMIN haga todo en la suite (también validar lo que él registra, con la excepción auditada). La migración solo cambia `permissions.status`: no asigna permisos a roles ni activa los roles de la suite. Cuando entre un segundo integrante, se asignan por rol con el SQL de abajo (la parte del `UPDATE` ya no hace falta) y se revisa si `APPROVE_GROWTH_SCORING` debe quedar solo en un aprobador distinto de quien configura.
+
 | Permiso | Para qué | Se asigna a |
 |---|---|---|
 | `MANAGE_GROWTH_IMPORT_TEMPLATES` | Crear, compartir, editar y archivar las plantillas de importación del **equipo** | `GROWTH_MANAGER_ROL` |

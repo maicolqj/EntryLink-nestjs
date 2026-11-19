@@ -430,6 +430,12 @@ type ResidentialComplex {
   """Las apps ofrecen leer el chip NFC del sitio"""
   maintenanceNfcEnabled: Boolean!
 
+  """Citofonía de portería: por la línea del celular o por internet"""
+  intercomMode: IntercomMode!
+
+  """El residente puede llamar a portería por internet"""
+  residentIntercomCallsEnabled: Boolean!
+
   """
   Mi Conjunto muestra "Llamar"
   """
@@ -620,6 +626,12 @@ enum ComplexStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+"""Citofonía del conjunto: por línea celular o por internet"""
+enum IntercomMode {
+  SIM
+  INTERNET
 }
 
 """Estado de validación del DPA firmado subido por un complejo"""
@@ -1826,6 +1838,9 @@ enum AuditAction {
 
   """Descarga de datos o reportes del complejo"""
   EXPORT
+
+  """Residente cambió de conjunto en la app"""
+  COMPLEX_SWITCH
 }
 
 type Notification {
@@ -2212,6 +2227,35 @@ enum SupervisorVisitStatus {
   CLOSED
 }
 
+type DeviceInfo {
+  userAgent: String!
+  ip: String!
+  platform: String!
+  deviceId: String
+  appVersion: String
+}
+
+"""Permiso dado o quitado a un usuario por encima de sus roles"""
+type UserPermissionOverride {
+  id: String!
+  userId: String!
+  permissionId: String!
+  effect: PermissionOverrideEffect!
+
+  """Por qué se dio o se quitó, para quien lo revise después"""
+  reason: String
+  createdById: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  permission: Permission!
+}
+
+"""GRANT da un permiso extra; DENY quita uno de los de sus roles"""
+enum PermissionOverrideEffect {
+  GRANT
+  DENY
+}
+
 """Impuesto aplicado a un cobro"""
 type SubscriptionTaxLine {
   name: String!
@@ -2333,35 +2377,6 @@ enum FreePeriodReason {
 
   """Otro motivo (explicarlo en las notas)"""
   OTHER
-}
-
-type DeviceInfo {
-  userAgent: String!
-  ip: String!
-  platform: String!
-  deviceId: String
-  appVersion: String
-}
-
-"""Permiso dado o quitado a un usuario por encima de sus roles"""
-type UserPermissionOverride {
-  id: String!
-  userId: String!
-  permissionId: String!
-  effect: PermissionOverrideEffect!
-
-  """Por qué se dio o se quitó, para quien lo revise después"""
-  reason: String
-  createdById: String
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  permission: Permission!
-}
-
-"""GRANT da un permiso extra; DENY quita uno de los de sus roles"""
-enum PermissionOverrideEffect {
-  GRANT
-  DENY
 }
 
 type ChangePasswordResponse {
@@ -2496,6 +2511,20 @@ type AuditLogDetailResponse {
 
   """Nombre del usuario que revirtió la acción"""
   revertedByName: String
+}
+
+"""Un conjunto donde vive la persona, para el selector de RemoteLink."""
+type MyResidence {
+  complexId: String!
+  complexName: String!
+  buildingName: String
+  unitNumber: String
+
+  """Es el conjunto de la sesión actual"""
+  isCurrent: Boolean!
+
+  """Avisos sin leer en ese conjunto"""
+  unreadCount: Int!
 }
 
 type PaginatedResidentsResponse {
@@ -2638,121 +2667,6 @@ type PaginatedBuildingsResponse {
 type PaginatedUnitsResponse {
   items: [Unit!]!
   pagination: PaginationReponse!
-}
-
-type PushHealthCheckResult {
-  healthId: String!
-  sentAt: DateTime!
-}
-
-type DevicePushHealthStatus {
-  healthId: String!
-  isHealthy: Boolean!
-  lastCheckAcknowledged: Boolean!
-  lastTestSentAt: DateTime
-  lastTestAckAt: DateTime
-  consecutiveFailures: Int!
-  onboardingCompletedAt: DateTime
-}
-
-type PaginatedNotificationsResponse {
-  items: [Notification!]!
-  pagination: PaginationReponse!
-}
-
-type UnreadCountResponse {
-  count: Int!
-}
-
-type PushSubscriptionResult {
-  success: Boolean!
-}
-
-type SendNotificationResult {
-  id: ID!
-  title: String!
-  body: String!
-  createdAt: DateTime!
-}
-
-"""Notificación masiva enviada por el administrador"""
-type SentNotification {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-
-  """Total de destinatarios al momento del envío"""
-  recipientsCount: Int!
-
-  """Roles destinatarios. Vacío = todos los usuarios."""
-  targetRoles: [String!]
-  createdAt: DateTime!
-}
-
-type SentNotificationPaginatedResult {
-  items: [SentNotification!]!
-  pagination: PaginationReponse!
-}
-
-type TriggerPanicAlertResult {
-  success: Boolean!
-  panicAlertId: String
-}
-
-type RequestSecurityCallResult {
-  success: Boolean!
-  message: String
-}
-
-type NotificationUserInfo {
-  id: ID!
-  name: String!
-  lastName: String!
-  fullName: String!
-  email: String!
-  phoneNumber: String
-  identity: String
-  profilePicture: String
-  roles: [String!]!
-}
-
-type NotificationDetailResponse {
-  id: ID!
-  type: NotificationType!
-  priority: NotificationPriority!
-  title: String!
-  body: String!
-  metadata: JSON
-  isBroadcast: Boolean!
-  targetRoles: [String!]
-  isRead: Boolean!
-  readAt: DateTime
-  recipientUserId: String
-  recipientUser: NotificationUserInfo
-  complexId: String!
-  entityId: String
-  entityType: String
-  entity: NotificationEntitySnapshot
-  createdByUserId: String
-  createdByUser: NotificationUserInfo
-  isStarred: Boolean!
-  isActionable: Boolean!
-  actionType: NotificationActionType
-  actionLabel: String
-  actionTakenAt: DateTime
-  actionTakenByUserId: String
-  actionTakenByUser: NotificationUserInfo
-  actionResult: NotificationActionResult
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""Resultado de una acción en lote sobre la bandeja"""
-type BulkNotificationActionResult {
-  affected: Int!
-  skipped: Int!
 }
 
 """Respuesta de autenticación exitosa con tokens JWT"""
@@ -2920,6 +2834,121 @@ type PendingDeviceApproval {
   requestedFromIp: String
   expiresAt: DateTime!
   createdAt: DateTime!
+}
+
+type PushHealthCheckResult {
+  healthId: String!
+  sentAt: DateTime!
+}
+
+type DevicePushHealthStatus {
+  healthId: String!
+  isHealthy: Boolean!
+  lastCheckAcknowledged: Boolean!
+  lastTestSentAt: DateTime
+  lastTestAckAt: DateTime
+  consecutiveFailures: Int!
+  onboardingCompletedAt: DateTime
+}
+
+type PaginatedNotificationsResponse {
+  items: [Notification!]!
+  pagination: PaginationReponse!
+}
+
+type UnreadCountResponse {
+  count: Int!
+}
+
+type PushSubscriptionResult {
+  success: Boolean!
+}
+
+type SendNotificationResult {
+  id: ID!
+  title: String!
+  body: String!
+  createdAt: DateTime!
+}
+
+"""Notificación masiva enviada por el administrador"""
+type SentNotification {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+
+  """Total de destinatarios al momento del envío"""
+  recipientsCount: Int!
+
+  """Roles destinatarios. Vacío = todos los usuarios."""
+  targetRoles: [String!]
+  createdAt: DateTime!
+}
+
+type SentNotificationPaginatedResult {
+  items: [SentNotification!]!
+  pagination: PaginationReponse!
+}
+
+type TriggerPanicAlertResult {
+  success: Boolean!
+  panicAlertId: String
+}
+
+type RequestSecurityCallResult {
+  success: Boolean!
+  message: String
+}
+
+type NotificationUserInfo {
+  id: ID!
+  name: String!
+  lastName: String!
+  fullName: String!
+  email: String!
+  phoneNumber: String
+  identity: String
+  profilePicture: String
+  roles: [String!]!
+}
+
+type NotificationDetailResponse {
+  id: ID!
+  type: NotificationType!
+  priority: NotificationPriority!
+  title: String!
+  body: String!
+  metadata: JSON
+  isBroadcast: Boolean!
+  targetRoles: [String!]
+  isRead: Boolean!
+  readAt: DateTime
+  recipientUserId: String
+  recipientUser: NotificationUserInfo
+  complexId: String!
+  entityId: String
+  entityType: String
+  entity: NotificationEntitySnapshot
+  createdByUserId: String
+  createdByUser: NotificationUserInfo
+  isStarred: Boolean!
+  isActionable: Boolean!
+  actionType: NotificationActionType
+  actionLabel: String
+  actionTakenAt: DateTime
+  actionTakenByUserId: String
+  actionTakenByUser: NotificationUserInfo
+  actionResult: NotificationActionResult
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Resultado de una acción en lote sobre la bandeja"""
+type BulkNotificationActionResult {
+  affected: Int!
+  skipped: Int!
 }
 
 """Permiso que el usuario recibe de sus roles"""
@@ -4328,6 +4357,13 @@ type CallLog {
   id: String!
   direction: CallDirection!
   outcome: CallOutcome!
+
+  """SIM = línea del celular de portería; INTERNET = por la app"""
+  channel: CallChannel!
+  voiceState: VoiceCallState
+  residentUserId: String
+  securityPostId: String
+  securityPostName: String
   phoneNumber: String!
   agentName: String!
   agentUserId: String
@@ -4363,11 +4399,84 @@ enum CallOutcome {
   FAILED
 }
 
+"""Canal de la llamada: línea del celular (SIM) o por internet"""
+enum CallChannel {
+  SIM
+  INTERNET
+}
+
+"""Estado en vivo de una llamada por internet"""
+enum VoiceCallState {
+  RINGING
+  ACTIVE
+  ENDED
+}
+
 type CallLogsPage {
   items: [CallLog!]!
   totalItems: Int!
   totalPages: Int!
   currentPage: Int!
+}
+
+type IceServer {
+  urls: [String!]!
+  username: String
+  credential: String
+}
+
+type IntercomCallSession {
+  call: CallLog!
+
+  """Servidores STUN/TURN con credenciales temporales"""
+  iceServers: [IceServer!]!
+}
+
+type IntercomUnitAdoption {
+  unitId: String!
+  unitNumber: String!
+  buildingName: String
+
+  """Residentes activos de la unidad"""
+  residents: Int!
+
+  """De ellos, cuántos tienen la app instalada"""
+  residentsWithApp: Int!
+}
+
+type IntercomAdoption {
+  """Unidades con residentes activos"""
+  totalUnits: Int!
+
+  """Unidades con al menos un residente con la app"""
+  unitsWithApp: Int!
+
+  """Unidades donde nadie tiene la app"""
+  unitsWithoutApp: [IntercomUnitAdoption!]!
+}
+
+"""Portería del conjunto"""
+type SecurityPost {
+  id: String!
+  complexId: String!
+
+  """Nombre que ve el residente"""
+  name: String!
+  phoneNumber: String
+
+  """Orden en la lista (ascendente)"""
+  sortOrder: Int!
+
+  """Inactiva: no aparece para elegir ni recibe nada"""
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  """Vigilantes que dijeron estar en esta portería"""
+  guardsOnDuty: Int!
+
+  """De ellos, cuántos pueden recibir llamadas por internet (tienen la app)"""
+  guardsWithApp: Int!
 }
 
 """Documento legal público del sistema"""
@@ -5742,6 +5851,18 @@ type SubscriptionPlanPriceView {
   updatedAt: DateTime
 }
 
+"""Acceso de la comunidad según la suscripción del conjunto"""
+type CommunityAccess {
+  """La comunidad perdió el acceso por no renovar"""
+  accessCut: Boolean!
+
+  """El botón de pánico sigue funcionando"""
+  panicAvailable: Boolean!
+
+  """Fecha del corte: ya ocurrió si accessCut, si no es la prevista"""
+  cutAt: DateTime
+}
+
 """Conjunto que llegó por una recomendación"""
 type ReferredComplex {
   id: ID!
@@ -5772,6 +5893,60 @@ type ComplexReferralSummary {
 
   """Conjuntos que se registraron con su código"""
   referrals: [ReferredComplex!]!
+}
+
+"""Soporte de pago enviado por el conjunto"""
+type SubscriptionPaymentSubmission {
+  id: ID!
+  complexId: String!
+  complex: ResidentialComplex
+  plan: ComplexPlan!
+  cycle: BillingCycle!
+
+  """Lo que debía pagar según su cotización"""
+  amountDue: Float!
+
+  """Valor que el conjunto dice haber pagado"""
+  amountPaid: Float!
+  paidAt: DateTime!
+  reference: String
+  receiptName: String!
+  receiptMimeType: String!
+  status: SubscriptionPaymentStatus!
+
+  """Motivo del rechazo"""
+  reviewNote: String
+  reviewedByUserId: String
+  reviewedAt: DateTime
+
+  """Periodo pagado que se creó al aprobar"""
+  periodId: String
+  submittedByUserId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""Estado del soporte de pago enviado por el conjunto"""
+enum SubscriptionPaymentStatus {
+  """Pendiente de revisión"""
+  PENDING
+
+  """Aprobado: suscripción renovada"""
+  APPROVED
+
+  """Rechazado con motivo"""
+  REJECTED
+}
+
+"""Datos para pagar la suscripción"""
+type SubscriptionPaymentInfo {
+  qrImageUrl: String
+
+  """Cuenta, titular y lo que haga falta saber para pagar"""
+  instructions: String
+
+  """Días antes del vencimiento desde los que se puede renovar"""
+  renewalWindowDays: Int!
 }
 
 """Versión mínima obligatoria de una app"""
@@ -6864,6 +7039,132 @@ type PaginatedSecurityAppExitsResponse {
   pagination: PaginationReponse!
 }
 
+type AnnouncementAttachment {
+  name: String!
+  mimeType: String!
+  size: Int!
+}
+
+"""Comunicado de la plataforma a los conjuntos"""
+type PlatformAnnouncement {
+  id: ID!
+  category: AnnouncementCategory!
+  title: String!
+  body: String!
+  imageUrls: [String!]!
+  attachments: [AnnouncementAttachment!]!
+  channels: [AnnouncementChannel!]!
+  audience: AnnouncementAudience!
+  targetMode: AnnouncementTargetMode!
+  complexIds: [String!]!
+  targetPlans: [String!]!
+  targetStatuses: [String!]!
+  targetEngagements: [String!]!
+  status: AnnouncementStatus!
+  complexesCount: Int!
+  recipientsCount: Int!
+  emailsCount: Int!
+  sentAt: DateTime
+  createdByUserId: String
+  createdBy: User
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  isStarred: Boolean!
+  isArchived: Boolean!
+}
+
+"""Tipo de comunicado de la plataforma"""
+enum AnnouncementCategory {
+  """Informativo"""
+  INFORMATIVE
+
+  """Promoción"""
+  PROMOTION
+
+  """Noticia"""
+  NEWS
+
+  """Otro"""
+  OTHER
+}
+
+"""Canal por el que sale el comunicado"""
+enum AnnouncementChannel {
+  """Aviso en el panel/app y push"""
+  NOTIFICATION
+
+  """Correo al email registrado del conjunto"""
+  EMAIL
+}
+
+"""Destinatarios del comunicado dentro de cada conjunto"""
+enum AnnouncementAudience {
+  """Solo la administración del conjunto"""
+  ADMINISTRATION
+
+  """Solo los residentes activos"""
+  RESIDENTS
+
+  """Administración y residentes"""
+  ALL
+}
+
+"""Cómo se eligen los conjuntos que reciben el comunicado"""
+enum AnnouncementTargetMode {
+  """Todos los conjuntos aprobados"""
+  ALL_COMPLEXES
+
+  """Los conjuntos elegidos uno a uno"""
+  SELECTED
+
+  """Los conjuntos que cumplen plan/estado/vinculación"""
+  FILTERED
+}
+
+"""Estado del reparto del comunicado"""
+enum AnnouncementStatus {
+  SENDING
+  SENT
+  FAILED
+}
+
+type AnnouncementTargetComplex {
+  id: ID!
+  name: String!
+}
+
+type AnnouncementTargetPreview {
+  complexesCount: Int!
+  withEmailCount: Int!
+  complexes: [AnnouncementTargetComplex!]!
+}
+
+type AnnouncementRecipientComplex {
+  id: ID!
+  name: String!
+  email: String
+  noticesCount: Int!
+  readCount: Int!
+}
+
+type PlatformAnnouncementPaginatedResult {
+  items: [PlatformAnnouncement!]!
+  pagination: PaginationReponse!
+}
+
+type AnnouncementFolderCounts {
+  sent: Int!
+  starred: Int!
+  archived: Int!
+  trash: Int!
+}
+
+type AnnouncementBulkResult {
+  affected: Int!
+  noticesRemoved: Int!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -6912,6 +7213,11 @@ type Query {
   vapidPublicKey: String!
   activePanicAlerts(complexId: String!): [Notification!]!
   myResidentProfile: Resident!
+
+  """
+  Conjuntos donde vive el residente, con sus avisos sin leer. Alimenta el selector de conjunto de RemoteLink.
+  """
+  myResidences: [MyResidence!]!
   residentByUserId(userId: String!): Resident
   residentStats(complexId: String!): ResidentStatsResponse!
   residents(complexId: String!, pagination: PaginationInput, filters: FilterResidentsInput): PaginatedResidentsResponse!
@@ -7041,6 +7347,20 @@ type Query {
   myAssignedComplexes: [ResidentialComplex!]!
   sentMessages(complexId: String!, pagination: PaginationInput): PaginatedSentMessagesResponse!
   callLogs(input: CallLogsInput!): CallLogsPage!
+
+  """
+  Llamada sonando o en curso de quien pregunta (al abrir la app desde el push)
+  """
+  currentIntercomCall: IntercomCallSession
+
+  """Unidades que quedarían sin citofonía al pasar a INTERNET"""
+  intercomAdoption(complexId: String!): IntercomAdoption!
+
+  """Porterías del conjunto. Vacío = una sola portería, no hay que elegir"""
+  securityPosts(complexId: String!): [SecurityPost!]!
+
+  """Portería en la que está el vigilante"""
+  mySecurityPost: SecurityPost
   specialNumbers(complexId: String!): [SpecialNumber!]!
 
   """
@@ -7117,6 +7437,11 @@ type Query {
   """Precios vigentes de los planes pagos."""
   subscriptionPlanPrices: [SubscriptionPlanPriceView!]!
 
+  """
+  Si la comunidad del conjunto de la sesión conserva el acceso y el botón de pánico.
+  """
+  myCommunityAccess: CommunityAccess!
+
   """Suscripción e historial de un complejo. Solo plataforma."""
   complexSubscription(complexId: ID!): SubscriptionSummary!
 
@@ -7139,6 +7464,20 @@ type Query {
   Código de recomendación de un complejo, quién lo recomendó y a quiénes recomendó. Solo plataforma.
   """
   complexReferral(complexId: ID!): ComplexReferralSummary!
+
+  """QR e instrucciones para pagar la suscripción"""
+  subscriptionPaymentInfo: SubscriptionPaymentInfo!
+
+  """
+  Lo que el conjunto de la sesión debe pagar para renovar (el valor contra el que se valida el soporte)
+  """
+  myRenewalQuote: SubscriptionQuote!
+
+  """Soportes de pago enviados por el conjunto de la sesión"""
+  mySubscriptionPayments: [SubscriptionPaymentSubmission!]!
+
+  """Soportes de pago de un conjunto (personal de la plataforma)"""
+  complexSubscriptionPayments(complexId: ID!): [SubscriptionPaymentSubmission!]!
 
   """
   ¿La versión instalada debe actualizarse obligatoriamente? (cambios que rompen compatibilidad)
@@ -7238,34 +7577,20 @@ type Query {
   """
   securityAppExits(complexId: String!, pagination: PaginationInput, filters: FilterSecurityAppExitsInput): PaginatedSecurityAppExitsResponse!
 
-  """Verifica conectividad con el backend. Siempre retorna "pong"."""
-  ping: String!
-
   """Historial de comunicados enviados a los conjuntos"""
   platformAnnouncements(pagination: PaginationInput, filter: PlatformAnnouncementFilterInput): PlatformAnnouncementPaginatedResult!
+
+  """Cuántos comunicados hay en cada carpeta para quien consulta"""
+  platformAnnouncementFolderCounts: AnnouncementFolderCounts!
 
   """Conjuntos que recibirían el comunicado con estos filtros"""
   platformAnnouncementTargetPreview(target: AnnouncementTargetInput!): AnnouncementTargetPreview!
 
-  """QR e instrucciones para pagar la suscripción"""
-  subscriptionPaymentInfo: SubscriptionPaymentInfo!
-
-  """
-  Lo que el conjunto de la sesión debe pagar para renovar (el valor contra el que se valida el soporte)
-  """
-  myRenewalQuote: SubscriptionQuote!
-
-  """Soportes de pago enviados por el conjunto de la sesión"""
-  mySubscriptionPayments: [SubscriptionPaymentSubmission!]!
-
-  """Soportes de pago de un conjunto (personal de la plataforma)"""
-  complexSubscriptionPayments(complexId: ID!): [SubscriptionPaymentSubmission!]!
-
   """Conjuntos que recibieron el comunicado, con avisos creados y leídos"""
   platformAnnouncementRecipients(id: ID!): [AnnouncementRecipientComplex!]!
 
-  """Cuántos comunicados hay en cada carpeta para quien consulta"""
-  platformAnnouncementFolderCounts: AnnouncementFolderCounts!
+  """Verifica conectividad con el backend. Siempre retorna "pong"."""
+  ping: String!
 }
 
 input PaginationInput {
@@ -7529,6 +7854,12 @@ input CallLogsInput {
   agentUserId: String
   direction: CallDirection
   outcome: CallOutcome
+
+  """SIM o INTERNET. Sin filtro, las dos"""
+  channel: CallChannel
+
+  """Solo esa portería"""
+  securityPostId: String
   dateFrom: String
   dateTo: String
   pagination: PaginationInput
@@ -7687,6 +8018,35 @@ input FilterSecurityAppExitsInput {
   onlyOpen: Boolean
 }
 
+input PlatformAnnouncementFilterInput {
+  folder: AnnouncementFolder! = SENT
+  search: String
+  channel: AnnouncementChannel
+}
+
+"""Carpeta del historial de comunicados"""
+enum AnnouncementFolder {
+  """Enviados (sin archivados ni borrados)"""
+  SENT
+
+  """Destacados por quien consulta"""
+  STARRED
+
+  """Archivados por quien consulta"""
+  ARCHIVED
+
+  """Papelera: se eliminan solos a los 30 días"""
+  TRASH
+}
+
+input AnnouncementTargetInput {
+  mode: AnnouncementTargetMode!
+  complexIds: [String!]
+  plans: [ComplexPlan!]
+  statuses: [ComplexStatus!]
+  engagements: [ComplexEngagement!]
+}
+
 type Mutation {
   """
   Inicia sesión con email y contraseña. Disponible para: SUPER_ADMIN_ROL, COMPILANCE_OFFICER_ROL, COMPLEX_ROL, ACCOUNTANT_ROL
@@ -7763,6 +8123,11 @@ type Mutation {
   """
   refreshToken(refreshToken: String!): AuthResponse!
 
+  """
+  Cambia el conjunto de la sesión de residente sin cerrarla. Devuelve tokens nuevos con ese conjunto.
+  """
+  switchResidentComplex(complexId: String!, refreshToken: String!): AuthResponse!
+
   """Cierra la sesión actual e invalida los tokens."""
   logout: Boolean!
 
@@ -7831,7 +8196,12 @@ type Mutation {
   savePushSubscription(input: SavePushSubscriptionInput!): PushSubscriptionResult!
   triggerPanicAlert(complexId: String!): TriggerPanicAlertResult!
   reportPanicLocation(input: ReportPanicLocationInput!): PanicAlert!
-  requestSecurityCall(complexId: String!): RequestSecurityCallResult!
+  requestSecurityCall(
+    complexId: String!
+
+    """Portería a la que se pide la llamada"""
+    securityPostId: String
+  ): RequestSecurityCallResult!
   acknowledgePanicAlert(notificationId: String!): Notification!
   resolvePanicAlert(panicAlertId: String!, resolutionNotes: String, falseAlarm: Boolean): PanicAlert!
   deleteNotification(notificationId: String!): Boolean!
@@ -8072,6 +8442,29 @@ type Mutation {
   rejectAccessRequest(input: RejectAccessRequestInput!): SupervisorAccessRequest!
   saveSentMessage(input: SaveSentMessageInput!): SentMessage!
   logCall(input: LogCallInput!): CallLog!
+
+  """Portería llama por internet a un residente"""
+  startResidentIntercomCall(input: StartResidentIntercomCallInput!): IntercomCallSession!
+
+  """El residente llama por internet a la portería"""
+  startSecurityIntercomCall(input: StartSecurityIntercomCallInput!): IntercomCallSession!
+  answerIntercomCall(input: AnswerIntercomCallInput!): IntercomCallSession!
+  rejectIntercomCall(callId: String!): CallLog!
+  endIntercomCall(callId: String!): CallLog!
+
+  """Pasa offer/answer/candidate WebRTC a la otra parte"""
+  sendIntercomSignal(input: IntercomSignalInput!): Boolean!
+
+  """Citofonía del conjunto (SIM o INTERNET). Solo SUPER_ADMIN"""
+  updateComplexIntercomSettings(input: UpdateIntercomSettingsInput!): ResidentialComplex!
+
+  """
+  El vigilante dice en qué portería está (null = en ninguna). Solo le llega lo de esa portería
+  """
+  selectSecurityPost(securityPostId: String): SecurityPost
+  createSecurityPost(input: CreateSecurityPostInput!): SecurityPost!
+  updateSecurityPost(input: UpdateSecurityPostInput!): SecurityPost!
+  removeSecurityPost(id: String!): Boolean!
   createSpecialNumber(input: CreateSpecialNumberInput!): SpecialNumber!
   updateSpecialNumber(input: UpdateSpecialNumberInput!): SpecialNumber!
   removeSpecialNumber(id: String!): Boolean!
@@ -8193,6 +8586,12 @@ type Mutation {
   """
   setComplexReferrer(input: SetComplexReferrerInput!): ComplexReferralSummary!
 
+  """Aprueba el soporte: registra el pago y renueva"""
+  approveSubscriptionPayment(id: ID!): SubscriptionPaymentSubmission!
+
+  """Rechaza el soporte con motivo; el conjunto puede reenviar"""
+  rejectSubscriptionPayment(id: ID!, reason: String!): SubscriptionPaymentSubmission!
+
   """
   Fija la versión mínima: las instalaciones anteriores quedan bloqueadas hasta actualizar.
   """
@@ -8282,12 +8681,6 @@ type Mutation {
   EntryLink volvió a primer plano (o arrancó). Cierra la salida abierta del vigilante; null si no había ninguna.
   """
   reportAppForeground(input: ReportAppStateInput): SecurityAppExit
-
-  """Aprueba el soporte: registra el pago y renueva"""
-  approveSubscriptionPayment(id: ID!): SubscriptionPaymentSubmission!
-
-  """Rechaza el soporte con motivo; el conjunto puede reenviar"""
-  rejectSubscriptionPayment(id: ID!, reason: String!): SubscriptionPaymentSubmission!
 
   """Destaca o quita el destacado (solo para quien lo hace)"""
   starPlatformAnnouncements(ids: [ID!]!, starred: Boolean!): AnnouncementBulkResult!
@@ -9762,6 +10155,74 @@ input LogCallInput {
   notes: String
 }
 
+input StartResidentIntercomCallInput {
+  complexId: String!
+
+  """Usuario del residente al que se llama"""
+  residentUserId: String!
+
+  """
+  Unidad desde la que se eligió al residente (si vive en varias del conjunto)
+  """
+  unitId: String
+}
+
+input StartSecurityIntercomCallInput {
+  complexId: String!
+
+  """Portería a la que llama. Obligatoria si el conjunto tiene más de una"""
+  securityPostId: String
+
+  """Unidad desde la que llama (si vive en varias del conjunto)"""
+  unitId: String
+}
+
+input AnswerIntercomCallInput {
+  callId: String!
+  deviceId: String
+}
+
+input IntercomSignalInput {
+  callId: String!
+
+  """offer | answer | candidate"""
+  kind: String!
+  payload: String!
+}
+
+input UpdateIntercomSettingsInput {
+  complexId: String!
+  mode: IntercomMode!
+
+  """
+  El residente puede llamar a portería por la app (solo aplica en INTERNET)
+  """
+  residentCallsEnabled: Boolean!
+}
+
+input CreateSecurityPostInput {
+  complexId: String!
+
+  """
+  Ej. "Portería norte"
+  """
+  name: String!
+
+  """Línea del celular de esa portería (opcional)"""
+  phoneNumber: String
+  sortOrder: Int
+}
+
+input UpdateSecurityPostInput {
+  id: String!
+  name: String
+
+  """Vacío ("") para quitar el teléfono"""
+  phoneNumber: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
 input CreateSpecialNumberInput {
   """
   Requerido para números de complejo; omitir para números globales (solo SUPER_ADMIN)
@@ -10725,212 +11186,4 @@ input ReportAppStateInput {
   Hora del cambio en el equipo. Solo para eventos que quedaron en cola sin conexión; si no se envía se usa la hora del servidor
   """
   occurredAt: DateTime
-}
-"""Comunicado de la plataforma a los conjuntos"""
-type PlatformAnnouncement {
-  id: ID!
-  category: AnnouncementCategory!
-  title: String!
-  body: String!
-  imageUrls: [String!]!
-  attachments: [AnnouncementAttachment!]!
-  channels: [AnnouncementChannel!]!
-  audience: AnnouncementAudience!
-  targetMode: AnnouncementTargetMode!
-  complexIds: [String!]!
-  targetPlans: [String!]!
-  targetStatuses: [String!]!
-  targetEngagements: [String!]!
-  status: AnnouncementStatus!
-  complexesCount: Int!
-  recipientsCount: Int!
-  emailsCount: Int!
-  sentAt: DateTime
-  createdByUserId: String
-  createdBy: User
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  deletedAt: DateTime
-  isStarred: Boolean!
-  isArchived: Boolean!
-}
-
-"""Tipo de comunicado de la plataforma"""
-enum AnnouncementCategory {
-  """Informativo"""
-  INFORMATIVE
-
-  """Promoción"""
-  PROMOTION
-
-  """Noticia"""
-  NEWS
-
-  """Otro"""
-  OTHER
-}
-
-"""Destinatarios del comunicado dentro de cada conjunto"""
-enum AnnouncementAudience {
-  """Solo la administración del conjunto"""
-  ADMINISTRATION
-
-  """Solo los residentes activos"""
-  RESIDENTS
-
-  """Administración y residentes"""
-  ALL
-}
-
-"""Cómo se eligen los conjuntos que reciben el comunicado"""
-enum AnnouncementTargetMode {
-  """Todos los conjuntos aprobados"""
-  ALL_COMPLEXES
-
-  """Los conjuntos elegidos uno a uno"""
-  SELECTED
-
-  """Los conjuntos que cumplen plan/estado/vinculación"""
-  FILTERED
-}
-
-"""Estado del reparto del comunicado"""
-enum AnnouncementStatus {
-  SENDING
-  SENT
-  FAILED
-}
-
-type AnnouncementTargetComplex {
-  id: ID!
-  name: String!
-}
-
-type AnnouncementTargetPreview {
-  complexesCount: Int!
-  withEmailCount: Int!
-  complexes: [AnnouncementTargetComplex!]!
-}
-
-type PlatformAnnouncementPaginatedResult {
-  items: [PlatformAnnouncement!]!
-  pagination: PaginationReponse!
-}
-
-input AnnouncementTargetInput {
-  mode: AnnouncementTargetMode!
-  complexIds: [String!]
-  plans: [ComplexPlan!]
-  statuses: [ComplexStatus!]
-  engagements: [ComplexEngagement!]
-}
-
-type AnnouncementAttachment {
-  name: String!
-  mimeType: String!
-  size: Int!
-}
-
-"""Canal por el que sale el comunicado"""
-enum AnnouncementChannel {
-  """Aviso en el panel/app y push"""
-  NOTIFICATION
-
-  """Correo al email registrado del conjunto"""
-  EMAIL
-}
-
-"""Soporte de pago enviado por el conjunto"""
-type SubscriptionPaymentSubmission {
-  id: ID!
-  complexId: String!
-  complex: ResidentialComplex
-  plan: ComplexPlan!
-  cycle: BillingCycle!
-
-  """Lo que debía pagar según su cotización"""
-  amountDue: Float!
-
-  """Valor que el conjunto dice haber pagado"""
-  amountPaid: Float!
-  paidAt: DateTime!
-  reference: String
-  receiptName: String!
-  receiptMimeType: String!
-  status: SubscriptionPaymentStatus!
-
-  """Motivo del rechazo"""
-  reviewNote: String
-  reviewedByUserId: String
-  reviewedAt: DateTime
-
-  """Periodo pagado que se creó al aprobar"""
-  periodId: String
-  submittedByUserId: String
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""Estado del soporte de pago enviado por el conjunto"""
-enum SubscriptionPaymentStatus {
-  """Pendiente de revisión"""
-  PENDING
-
-  """Aprobado: suscripción renovada"""
-  APPROVED
-
-  """Rechazado con motivo"""
-  REJECTED
-}
-
-"""Datos para pagar la suscripción"""
-type SubscriptionPaymentInfo {
-  qrImageUrl: String
-
-  """Cuenta, titular y lo que haga falta saber para pagar"""
-  instructions: String
-
-  """Días antes del vencimiento desde los que se puede renovar"""
-  renewalWindowDays: Int!
-}
-
-type AnnouncementRecipientComplex {
-  id: ID!
-  name: String!
-  email: String
-  noticesCount: Int!
-  readCount: Int!
-}
-
-"""Carpeta del historial de comunicados"""
-enum AnnouncementFolder {
-  """Enviados (sin archivados ni borrados)"""
-  SENT
-
-  """Destacados por quien consulta"""
-  STARRED
-
-  """Archivados por quien consulta"""
-  ARCHIVED
-
-  """Papelera: se eliminan solos a los 30 días"""
-  TRASH
-}
-
-input PlatformAnnouncementFilterInput {
-  folder: AnnouncementFolder! = SENT
-  search: String
-  channel: AnnouncementChannel
-}
-
-type AnnouncementFolderCounts {
-  sent: Int!
-  starred: Int!
-  archived: Int!
-  trash: Int!
-}
-
-type AnnouncementBulkResult {
-  affected: Int!
-  noticesRemoved: Int!
 }
